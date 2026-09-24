@@ -107,6 +107,7 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
     borderBrush_     = CreateBrush(context_.Get(), config_.colors.border);
     foregroundBrush_ = CreateBrush(context_.Get(), config_.colors.foreground);
     accentBrush_     = CreateBrush(context_.Get(), config_.colors.accent);
+    alertBrush_      = CreateBrush(context_.Get(), config_.colors.alert);
 
     ThrowIfFailed(graphics_.composition->CreateTargetForHwnd(window_, TRUE, &compositionTarget_), "IDCompositionDevice::CreateTargetForHwnd");
     ThrowIfFailed(graphics_.composition->CreateVisual(&visual_), "IDCompositionDevice::CreateVisual");
@@ -245,6 +246,7 @@ RenderContext Bar::FrameContext() const {
                          .textFormat   = textFormat_.Get(),
                          .foreground   = foregroundBrush_.Get(),
                          .accent       = accentBrush_.Get(),
+                         .alert        = alertBrush_.Get(),
                          .iconSizeDips = config_.font.iconSizeDips};
 }
 

@@ -10,5 +10,6 @@ struct RenderContext {
     IDWriteTextFormat*    textFormat;
     ID2D1SolidColorBrush* foreground;
     ID2D1SolidColorBrush* accent;
+    ID2D1SolidColorBrush* alert;
     float                 iconSizeDips;
 };

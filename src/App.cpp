@@ -36,7 +36,7 @@ namespace {
         UINT dpiX = 0;
         UINT dpiY = 0;
         ThrowIfFailed(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY), "GetDpiForMonitor");
-        return BarPlacement{.monitorRect = info.rcMonitor, .dpi = dpiX};
+        return BarPlacement{.monitor = monitor, .monitorRect = info.rcMonitor, .dpi = dpiX};
     }
 
     std::vector<BarPlacement> PlacementsForAllMonitors() {
@@ -141,7 +141,7 @@ LRESULT App::HandleControlMessage(HWND window, UINT message, WPARAM wParam, LPAR
 
 void App::CreateBars() {
     for (const BarPlacement& placement : PlacementsForAllMonitors()) {
-        bars_.push_back(std::make_unique<Bar>(instance_, graphics_, *config_, ModuleSources{.windowManager = *windowManager_}, placement, state_));
+        bars_.push_back(std::make_unique<Bar>(instance_, graphics_, *config_, ModuleSources{.windowManager = *windowManager_, .monitor = placement.monitor}, placement, state_));
         if (state_.error) {
             std::rethrow_exception(state_.error);
         }

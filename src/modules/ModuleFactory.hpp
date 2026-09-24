@@ -5,11 +5,14 @@
 #include "modules/IModule.hpp"
 #include "wm/IWindowManager.hpp"
 
+#include <windows.h>
+
 #include <memory>
 
-// Data sources that outlive every bar and that modules read from.
+// What a module reads beyond its own config: shared data sources, and the monitor of the bar it belongs to.
 struct ModuleSources {
     const IWindowManager& windowManager;
+    HMONITOR              monitor;
 };
 
 std::unique_ptr<IModule> CreateModule(ModuleKind kind, const Config& config, const ModuleSources& sources);

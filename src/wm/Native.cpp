@@ -1,39 +1,48 @@
-#include "wm/NativeWindowManager.hpp"
+#include "wm/Native.hpp"
 
 #include "platform/Errors.hpp"
 
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 
 namespace {
 
-    NativeWindowManager* activeInstance = nullptr;
+    Native* activeInstance = nullptr;
 
 } // namespace
 
-NativeWindowManager::ActiveInstance::ActiveInstance(NativeWindowManager* instance) {
+Native::ActiveInstance::ActiveInstance(Native* instance) {
     if (activeInstance != nullptr) {
-        throw std::logic_error("a NativeWindowManager already exists, destroy it before creating another");
+        throw std::logic_error("a Native backend already exists, destroy it before creating another");
     }
     activeInstance = instance;
 }
 
-NativeWindowManager::ActiveInstance::~ActiveInstance() {
+Native::ActiveInstance::~ActiveInstance() {
     activeInstance = nullptr;
 }
 
-NativeWindowManager::NativeWindowManager(HWND target, UINT changedMessage) :
+Native::Native(HWND target, UINT changedMessage) :
     active_(this), target_(target), changedMessage_(changedMessage), foreground_(GetForegroundWindow()), foregroundHook_(HookEvent(EVENT_SYSTEM_FOREGROUND)),
     nameHook_(HookEvent(EVENT_OBJECT_NAMECHANGE)) {}
 
-std::optional<FocusedWindow> NativeWindowManager::Focused() const {
+std::optional<FocusedWindow> Native::Focused() const {
     if (foreground_ == nullptr) {
         return std::nullopt;
     }
     return FocusedWindow{.title = WindowTitle(foreground_)};
 }
 
-NativeWindowManager::UniqueHook NativeWindowManager::HookEvent(DWORD event) {
+std::vector<Workspace> Native::Workspaces() const {
+    return {};
+}
+
+WindowManagerStatus Native::Status() const {
+    return WindowManagerStatus{.name = L"Windows", .connection = Connection::Connected, .detail = ""};
+}
+
+Native::UniqueHook Native::HookEvent(DWORD event) {
     HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (hook == nullptr) {
         ThrowLastError("SetWinEventHook");
@@ -41,7 +50,7 @@ NativeWindowManager::UniqueHook NativeWindowManager::HookEvent(DWORD event) {
     return UniqueHook(hook);
 }
 
-void CALLBACK NativeWindowManager::OnWinEvent(HWINEVENTHOOK, DWORD event, HWND window, LONG object, LONG, DWORD, DWORD) {
+void CALLBACK Native::OnWinEvent(HWINEVENTHOOK, DWORD event, HWND window, LONG object, LONG, DWORD, DWORD) {
     if (activeInstance == nullptr || object != OBJID_WINDOW) {
         return;
     }
@@ -52,9 +61,11 @@ void CALLBACK NativeWindowManager::OnWinEvent(HWINEVENTHOOK, DWORD event, HWND w
 }
 
 // Only records the change and posts: this runs inside a WinEvent callback, where an exception could not be caught.
-void NativeWindowManager::Refocus(HWND window) {
+void Native::Refocus(HWND window) {
     foreground_ = window;
-    PostMessageW(target_, changedMessage_, 0, 0);
+    if (!PostMessageW(target_, changedMessage_, 0, 0)) {
+        std::fprintf(stderr, "intarsia: warning component=native event=post_failed error=%lu\n", GetLastError());
+    }
 }
 
 std::wstring WindowTitle(HWND window) {

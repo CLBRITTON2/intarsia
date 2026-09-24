@@ -17,12 +17,14 @@ return {
         border = "#6e6a8640",
         foreground = "#e0def4",
         accent = "#c4a7e7",
+        alert = "#eb6f92", -- needs attention, such as a disconnected window manager
     },
 
-    -- windows: no window manager, windows and focus come from Windows itself
-    window_manager = "windows",
+    -- glazewm: workspaces and focus over GlazeWM's IPC, retried while GlazeWM is down
+    -- windows: no window manager, windows and focus come from Windows itself (no workspaces module)
+    window_manager = "glazewm",
 
-    modules_left = { "window" },
+    modules_left = { "workspaces", "window" },
     modules_center = { "clock" },
     modules_right = {},
 

@@ -18,7 +18,7 @@ namespace {
 return {
     bar = { edge = "top", thickness = 54, border = 1, spacing = 8 },
     font = { family = "Some Font", text_size = 15, icon_size = 18 },
-    colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7" },
+    colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7", alert = "#eb6f92" },
     window_manager = "windows",
     modules_left = { "window" },
     modules_center = { "clock" },
@@ -159,7 +159,15 @@ TEST(Config, WindowManagerAndWindowModuleParse) {
 
 TEST(Config, WindowManagerMustBeAKnownBackend) {
     EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(window_manager = "windows")", R"(window_manager = "i3")")); },
-                ConfigErrorWith("window_manager must be one of windows, got 'i3'"));
+                ConfigErrorWith("window_manager must be one of windows, glazewm, got 'i3'"));
+}
+
+TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
+    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "window" })", R"({ "workspaces" })")); }, ConfigErrorWith("window_manager 'windows' has none"));
+    const Config config =
+        LoadText(ValidConfigWith("window_manager = \"windows\",\n    modules_left = { \"window\" },", "window_manager = \"glazewm\",\n    modules_left = { \"workspaces\" },"));
+    EXPECT_EQ(config.windowManager, WindowManagerKind::GlazeWm);
+    EXPECT_EQ(config.modules.left, std::vector<ModuleKind>{ModuleKind::Workspaces});
 }
 
 TEST(Config, WindowModuleNeedsItsTableAndAWholeMaxLength) {

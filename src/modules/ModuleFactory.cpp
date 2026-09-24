@@ -2,6 +2,7 @@
 
 #include "modules/Clock.hpp"
 #include "modules/Window.hpp"
+#include "modules/Workspaces.hpp"
 
 #include <format>
 #include <optional>
@@ -24,6 +25,7 @@ std::unique_ptr<IModule> CreateModule(ModuleKind kind, const Config& config, con
     switch (kind) {
         case ModuleKind::Clock: return std::make_unique<Clock>(RequireModuleConfig(config.clock, "clock"));
         case ModuleKind::Window: return std::make_unique<Window>(RequireModuleConfig(config.window, "window"), sources.windowManager);
+        case ModuleKind::Workspaces: return std::make_unique<Workspaces>(sources.windowManager, sources.monitor);
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
 }

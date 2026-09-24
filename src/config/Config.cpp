@@ -162,7 +162,9 @@ namespace {
         const std::string value = table.String(key);
         if (value == "windows")
             return WindowManagerKind::Windows;
-        throw table.Error(std::format("{} must be one of windows, got '{}'", table.KeyPath(key), value));
+        if (value == "glazewm")
+            return WindowManagerKind::GlazeWm;
+        throw table.Error(std::format("{} must be one of windows, glazewm, got '{}'", table.KeyPath(key), value));
     }
 
     Edge ParseEdge(const TableReader& table, std::string_view key) {
@@ -210,7 +212,11 @@ namespace {
                 kinds.push_back(ModuleKind::Window);
                 continue;
             }
-            throw table.Error(std::format("{} lists unknown module '{}', known modules are: clock, window", table.KeyPath(key), name));
+            if (name == "workspaces") {
+                kinds.push_back(ModuleKind::Workspaces);
+                continue;
+            }
+            throw table.Error(std::format("{} lists unknown module '{}', known modules are: clock, window, workspaces", table.KeyPath(key), name));
         }
         return kinds;
     }
@@ -313,15 +319,21 @@ Config LoadConfig(const std::filesystem::path& path) {
     FontConfig        fontConfig{.family = ToWide(font.String("family")), .textSizeDips = PositiveNumber(font, "text_size"), .iconSizeDips = PositiveNumber(font, "icon_size")};
 
     const TableReader colors = root.Table("colors");
-    colors.RejectUnknownKeys({"background", "border", "foreground", "accent"});
-    const ColorConfig colorConfig{
-        .background = ReadColor(colors, "background"), .border = ReadColor(colors, "border"), .foreground = ReadColor(colors, "foreground"), .accent = ReadColor(colors, "accent")};
+    colors.RejectUnknownKeys({"background", "border", "foreground", "accent", "alert"});
+    const ColorConfig       colorConfig{.background = ReadColor(colors, "background"),
+                                        .border     = ReadColor(colors, "border"),
+                                        .foreground = ReadColor(colors, "foreground"),
+                                        .accent     = ReadColor(colors, "accent"),
+                                        .alert      = ReadColor(colors, "alert")};
 
     const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
     Sections<ModuleKind>    modules{.left = ReadModuleList(root, "modules_left"), .center = ReadModuleList(root, "modules_center"), .right = ReadModuleList(root, "modules_right")};
     std::optional<ClockConfig>  clock  = ReadModuleConfig<ClockConfig>(root, modules, ModuleKind::Clock, "clock", ReadClockConfig);
     std::optional<WindowConfig> window = ReadModuleConfig<WindowConfig>(root, modules, ModuleKind::Window, "window", ReadWindowConfig);
+    if (windowManager == WindowManagerKind::Windows && ListsModule(modules, ModuleKind::Workspaces)) {
+        throw root.Error("workspaces needs a window manager that has workspaces, window_manager 'windows' has none");
+    }
 
     return Config{.bar           = barConfig,
                   .font          = std::move(fontConfig),

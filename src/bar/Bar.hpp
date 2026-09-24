@@ -13,8 +13,9 @@
 #include <memory>
 
 struct BarPlacement {
-    RECT monitorRect;
-    UINT dpi;
+    HMONITOR monitor;
+    RECT     monitorRect;
+    UINT     dpi;
 };
 
 // Process-wide state the window procedures report into, since exceptions cannot unwind through user32.
@@ -63,6 +64,7 @@ class Bar {
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> borderBrush_;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> foregroundBrush_;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> accentBrush_;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> alertBrush_;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.
     HWND window_;

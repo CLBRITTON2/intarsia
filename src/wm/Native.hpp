@@ -8,21 +8,27 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 // Backend for running without a window manager. Follows the foreground window and its title through WinEvent hooks,
 // which Windows delivers on the thread that installed them. WinEvent callbacks carry no context pointer, so only one
 // instance may exist at a time: destroy the old one before creating its replacement.
-class NativeWindowManager final : public IWindowManager {
+class Native final : public IWindowManager {
   public:
-    NativeWindowManager(HWND target, UINT changedMessage);
+    Native(HWND target, UINT changedMessage);
 
     std::optional<FocusedWindow> Focused() const override;
+    // Windows has no public API that lists virtual desktops, so there are never any. The config loader rejects a
+    // workspaces module with this backend.
+    std::vector<Workspace> Workspaces() const override;
+    // Always connected: the WinEvents come from the OS itself.
+    WindowManagerStatus Status() const override;
 
   private:
     // Registers the instance the callbacks reach for as long as it lives, and refuses a second one.
     class ActiveInstance {
       public:
-        explicit ActiveInstance(NativeWindowManager* instance);
+        explicit ActiveInstance(Native* instance);
         ~ActiveInstance();
         ActiveInstance(const ActiveInstance&)            = delete;
         ActiveInstance& operator=(const ActiveInstance&) = delete;

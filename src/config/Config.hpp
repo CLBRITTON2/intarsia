@@ -29,15 +29,18 @@ struct ColorConfig {
     D2D1_COLOR_F border;
     D2D1_COLOR_F foreground;
     D2D1_COLOR_F accent;
+    D2D1_COLOR_F alert; // for states that need attention, such as a disconnected window manager
 };
 
 enum class WindowManagerKind {
-    Windows // no window manager: the native backend reads windows and focus from Win32 events
+    Windows, // no window manager: the native backend reads windows and focus from Win32 events
+    GlazeWm
 };
 
 enum class ModuleKind {
     Clock,
-    Window
+    Window,
+    Workspaces
 };
 
 struct ClockConfig {

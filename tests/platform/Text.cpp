@@ -31,3 +31,17 @@ TEST(Text, ToUtf8RejectsALoneSurrogate) {
     const std::wstring loneHigh(1, static_cast<wchar_t>(0xD800));
     EXPECT_THROW(ToUtf8(loneHigh), Win32Error);
 }
+
+TEST(Text, LogExcerptEscapesQuotesBackslashesAndControlBytes) {
+    EXPECT_EQ(LogExcerpt("a\"b\\c\nd\x7F", 100), "a\\\"b\\\\c\\x0ad\\x7f");
+}
+
+TEST(Text, LogExcerptCutsLongTextAndSaysHowMuchWasDropped) {
+    EXPECT_EQ(LogExcerpt("abcdef", 4), "abcd...(2 more bytes)");
+    EXPECT_EQ(LogExcerpt("abc", 4), "abc");
+}
+
+TEST(Text, LogExcerptNeverSplitsAUtf8Sequence) {
+    // "a" then U+00E9 (two bytes): a cut after its first byte backs off to before it.
+    EXPECT_EQ(LogExcerpt("a\xC3\xA9z", 2), "a...(3 more bytes)");
+}

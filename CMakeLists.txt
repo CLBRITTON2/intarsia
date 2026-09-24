@@ -12,7 +12,12 @@ FetchContent_Declare(lua
   URL_HASH SHA256=1c4b4068d67061f2a2231ad2b5422e77acea1487ea9890f6320af614f4373dce
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-FetchContent_MakeAvailable(lua)
+FetchContent_Declare(json
+  URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+  URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(lua json)
 
 file(GLOB LUA_SOURCES ${lua_SOURCE_DIR}/src/*.c)
 list(REMOVE_ITEM LUA_SOURCES ${lua_SOURCE_DIR}/src/lua.c ${lua_SOURCE_DIR}/src/luac.c)
@@ -30,19 +35,24 @@ add_library(intarsia_core STATIC
   src/modules/Clock.cpp
   src/modules/ModuleFactory.cpp
   src/modules/Window.cpp
+  src/modules/Workspaces.cpp
   src/platform/AppBar.cpp
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
   src/platform/Handle.cpp
+  src/platform/PeerProcess.cpp
   src/platform/Text.cpp
+  src/platform/WebSocket.cpp
   src/render/Graphics.cpp
-  src/wm/NativeWindowManager.cpp
+  src/wm/GlazeWm.cpp
+  src/wm/GlazeWmProtocol.cpp
+  src/wm/Native.cpp
   src/wm/WindowManagerFactory.cpp
 )
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua d3d11 dxgi d2d1 dwrite dcomp shcore)
+target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi)
 
 add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest)
 target_link_libraries(intarsia PRIVATE intarsia_core)
@@ -67,6 +77,8 @@ if(BUILD_TESTING)
     tests/config/Config.cpp
     tests/modules/Clock.cpp
     tests/modules/Window.cpp
+    tests/modules/Workspaces.cpp
+    tests/wm/GlazeWmProtocol.cpp
     tests/platform/AppBar.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/Text.cpp
