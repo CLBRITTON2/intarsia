@@ -10,3 +10,6 @@ jobs:
       - name: clang-format and clang-tidy
         shell: pwsh
         run: ./scripts/lint.ps1
+      - name: unit and config tests
+        shell: pwsh
+        run: ./scripts/test.ps1

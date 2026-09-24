@@ -42,9 +42,10 @@ $clangTidy   = Join-Path $llvmBin 'clang-tidy.exe'
 Assert-LlvmMajor $clangFormat $pinnedLlvmMajor
 Assert-LlvmMajor $clangTidy $pinnedLlvmMajor
 
-$sources = @(Get-ChildItem -Path (Join-Path $repoRoot 'src') -Recurse -Include '*.cpp', '*.hpp' | ForEach-Object FullName)
+$sourceDirs = @((Join-Path $repoRoot 'src'), (Join-Path $repoRoot 'tests'))
+$sources    = @(Get-ChildItem -Path $sourceDirs -Recurse -Include '*.cpp', '*.hpp' | ForEach-Object FullName)
 if ($sources.Count -eq 0) {
-    throw "No sources found under $repoRoot\src"
+    throw "No sources found under $($sourceDirs -join ', ')"
 }
 
 Invoke-Checked 'clang-format' { & $clangFormat --dry-run --Werror $sources }
