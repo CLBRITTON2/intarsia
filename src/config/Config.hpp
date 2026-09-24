@@ -31,8 +31,13 @@ struct ColorConfig {
     D2D1_COLOR_F accent;
 };
 
+enum class WindowManagerKind {
+    Windows // no window manager: the native backend reads windows and focus from Win32 events
+};
+
 enum class ModuleKind {
-    Clock
+    Clock,
+    Window
 };
 
 struct ClockConfig {
@@ -41,13 +46,19 @@ struct ClockConfig {
     std::chrono::seconds interval;
 };
 
+struct WindowConfig {
+    size_t maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
+};
+
 struct Config {
     BarConfig            bar;
     FontConfig           font;
     ColorConfig          colors;
+    WindowManagerKind    windowManager;
     Sections<ModuleKind> modules;
-    // Present whenever a section lists the module, the loader rejects a config that lists it without its table.
-    std::optional<ClockConfig> clock;
+    // Each is present whenever a section lists its module, the loader rejects a config that lists one without its table.
+    std::optional<ClockConfig>  clock;
+    std::optional<WindowConfig> window;
 };
 
 class ConfigError : public std::runtime_error {

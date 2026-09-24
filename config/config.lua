@@ -19,7 +19,10 @@ return {
         accent = "#c4a7e7",
     },
 
-    modules_left = {},
+    -- windows: no window manager, windows and focus come from Windows itself
+    window_manager = "windows",
+
+    modules_left = { "window" },
     modules_center = { "clock" },
     modules_right = {},
 
@@ -27,5 +30,8 @@ return {
         format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
         icon = "\u{F1441}",
         interval = 60, -- seconds between redraws, aligned to the clock
+    },
+    window = {
+        max_length = 80, -- longer titles are cut with an ellipsis
     },
 }

@@ -150,12 +150,19 @@ namespace {
         return value;
     }
 
-    std::chrono::seconds PositiveSeconds(const TableReader& table, std::string_view key) {
+    long long PositiveWholeNumber(const TableReader& table, std::string_view key) {
         const float value = PositiveNumber(table, key);
         if (value != std::floor(value)) {
-            throw table.Error(std::format("{} must be a whole number of seconds, got {}", table.KeyPath(key), value));
+            throw table.Error(std::format("{} must be a whole number, got {}", table.KeyPath(key), value));
         }
-        return std::chrono::seconds(static_cast<long long>(value));
+        return static_cast<long long>(value);
+    }
+
+    WindowManagerKind ParseWindowManager(const TableReader& table, std::string_view key) {
+        const std::string value = table.String(key);
+        if (value == "windows")
+            return WindowManagerKind::Windows;
+        throw table.Error(std::format("{} must be one of windows, got '{}'", table.KeyPath(key), value));
     }
 
     Edge ParseEdge(const TableReader& table, std::string_view key) {
@@ -199,7 +206,11 @@ namespace {
                 kinds.push_back(ModuleKind::Clock);
                 continue;
             }
-            throw table.Error(std::format("{} lists unknown module '{}', known modules are: clock", table.KeyPath(key), name));
+            if (name == "window") {
+                kinds.push_back(ModuleKind::Window);
+                continue;
+            }
+            throw table.Error(std::format("{} lists unknown module '{}', known modules are: clock, window", table.KeyPath(key), name));
         }
         return kinds;
     }
@@ -209,10 +220,26 @@ namespace {
             std::ranges::find(modules.right, kind) != modules.right.end();
     }
 
-    ClockConfig ReadClockConfig(const TableReader& root) {
-        const TableReader clock = root.Table("clock");
+    ClockConfig ReadClockConfig(const TableReader& clock) {
         clock.RejectUnknownKeys({"format", "icon", "interval"});
-        return ClockConfig{.format = clock.String("format"), .icon = ToWide(clock.String("icon")), .interval = PositiveSeconds(clock, "interval")};
+        return ClockConfig{.format = clock.String("format"), .icon = ToWide(clock.String("icon")), .interval = std::chrono::seconds(PositiveWholeNumber(clock, "interval"))};
+    }
+
+    WindowConfig ReadWindowConfig(const TableReader& window) {
+        window.RejectUnknownKeys({"max_length"});
+        return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length"))};
+    }
+
+    // A module's table is read when present, and required when a section lists the module.
+    template <typename ModuleConfig, typename Read>
+    std::optional<ModuleConfig> ReadModuleConfig(const TableReader& root, const Sections<ModuleKind>& modules, ModuleKind kind, std::string_view name, Read read) {
+        if (root.Has(name)) {
+            return read(root.Table(name));
+        }
+        if (ListsModule(modules, kind)) {
+            throw root.Error(std::format("{} is listed in a modules_ list but has no {} table", name, name));
+        }
+        return std::nullopt;
     }
 
     std::string ReadFile(const std::filesystem::path& path) {
@@ -272,7 +299,7 @@ Config LoadConfig(const std::filesystem::path& path) {
     }
 
     const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
-    root.RejectUnknownKeys({"bar", "font", "colors", "modules_left", "modules_center", "modules_right", "clock"});
+    root.RejectUnknownKeys({"bar", "font", "colors", "window_manager", "modules_left", "modules_center", "modules_right", "clock", "window"});
 
     const TableReader bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "thickness", "border", "spacing"});
@@ -290,14 +317,17 @@ Config LoadConfig(const std::filesystem::path& path) {
     const ColorConfig colorConfig{
         .background = ReadColor(colors, "background"), .border = ReadColor(colors, "border"), .foreground = ReadColor(colors, "foreground"), .accent = ReadColor(colors, "accent")};
 
-    Sections<ModuleKind> modules{.left = ReadModuleList(root, "modules_left"), .center = ReadModuleList(root, "modules_center"), .right = ReadModuleList(root, "modules_right")};
+    const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
-    std::optional<ClockConfig> clock;
-    if (root.Has("clock")) {
-        clock = ReadClockConfig(root);
-    } else if (ListsModule(modules, ModuleKind::Clock)) {
-        throw root.Error("clock is listed in a modules_ list but has no clock table");
-    }
+    Sections<ModuleKind>    modules{.left = ReadModuleList(root, "modules_left"), .center = ReadModuleList(root, "modules_center"), .right = ReadModuleList(root, "modules_right")};
+    std::optional<ClockConfig>  clock  = ReadModuleConfig<ClockConfig>(root, modules, ModuleKind::Clock, "clock", ReadClockConfig);
+    std::optional<WindowConfig> window = ReadModuleConfig<WindowConfig>(root, modules, ModuleKind::Window, "window", ReadWindowConfig);
 
-    return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig, .modules = std::move(modules), .clock = std::move(clock)};
+    return Config{.bar           = barConfig,
+                  .font          = std::move(fontConfig),
+                  .colors        = colorConfig,
+                  .windowManager = windowManager,
+                  .modules       = std::move(modules),
+                  .clock         = std::move(clock),
+                  .window        = window};
 }

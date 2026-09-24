@@ -23,15 +23,21 @@ target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
 
 # Everything but the entry point, so the tests link the same code the bar runs.
 add_library(intarsia_core STATIC
+  src/App.cpp
   src/bar/Bar.cpp
   src/bar/Layout.cpp
   src/config/Config.cpp
   src/modules/Clock.cpp
   src/modules/ModuleFactory.cpp
+  src/modules/Window.cpp
   src/platform/AppBar.cpp
   src/platform/Errors.cpp
+  src/platform/FileWatcher.cpp
+  src/platform/Handle.cpp
   src/platform/Text.cpp
   src/render/Graphics.cpp
+  src/wm/NativeWindowManager.cpp
+  src/wm/WindowManagerFactory.cpp
 )
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -60,7 +66,9 @@ if(BUILD_TESTING)
     tests/bar/Sections.cpp
     tests/config/Config.cpp
     tests/modules/Clock.cpp
+    tests/modules/Window.cpp
     tests/platform/AppBar.cpp
+    tests/platform/FileWatcher.cpp
     tests/platform/Text.cpp
   )
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main)

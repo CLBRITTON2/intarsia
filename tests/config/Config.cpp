@@ -19,10 +19,12 @@ return {
     bar = { edge = "top", thickness = 54, border = 1, spacing = 8 },
     font = { family = "Some Font", text_size = 15, icon_size = 18 },
     colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7" },
-    modules_left = {},
+    window_manager = "windows",
+    modules_left = { "window" },
     modules_center = { "clock" },
     modules_right = {},
     clock = { format = "{:%H:%M}", icon = "x", interval = 60 },
+    window = { max_length = 80 },
 }
 )lua";
 
@@ -143,6 +145,26 @@ TEST(Config, ListedModuleNeedsItsTableUnlistedMayKeepIt) {
     EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(clock = { format = "{:%H:%M}", icon = "x", interval = 60 },)", "")); },
                 ConfigErrorWith("clock is listed in a modules_ list but has no clock table"));
     EXPECT_TRUE(LoadText(ValidConfigWith(R"({ "clock" })", "{}")).clock.has_value());
+}
+
+TEST(Config, WindowManagerAndWindowModuleParse) {
+    const Config config = LoadText(kValidConfig);
+    EXPECT_EQ(config.windowManager, WindowManagerKind::Windows);
+    EXPECT_EQ(config.modules.left, std::vector<ModuleKind>{ModuleKind::Window});
+    ASSERT_TRUE(config.window.has_value());
+    if (config.window.has_value()) {
+        EXPECT_EQ(config.window->maxLength, 80u);
+    }
+}
+
+TEST(Config, WindowManagerMustBeAKnownBackend) {
+    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(window_manager = "windows")", R"(window_manager = "i3")")); },
+                ConfigErrorWith("window_manager must be one of windows, got 'i3'"));
+}
+
+TEST(Config, WindowModuleNeedsItsTableAndAWholeMaxLength) {
+    EXPECT_THAT([] { return LoadText(ValidConfigWith("window = { max_length = 80 },", "")); }, ConfigErrorWith("window is listed in a modules_ list but has no window table"));
+    EXPECT_THAT([] { return LoadText(ValidConfigWith("max_length = 80", "max_length = 2.5")); }, ConfigErrorWith("window.max_length must be a whole number"));
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {

@@ -95,9 +95,8 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
     }
 }
 
-Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const BarPlacement& placement, AppState& state) :
-    graphics_(graphics), config_(config), state_(state), placement_(placement), modules_(CreateModules(config)), window_(CreateBarWindow(instance, this)) {
-    ++state_.liveBars;
+Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, const BarPlacement& placement, AppState& state) :
+    graphics_(graphics), config_(config), state_(state), placement_(placement), modules_(CreateModules(config, sources)), window_(CreateBarWindow(instance, this)) {
     RequireFontFamily(graphics_.dwrite.Get(), config_.font.family.c_str());
     ThrowIfFailed(graphics_.dwrite->CreateTextFormat(config_.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                      config_.font.textSizeDips, L"en-us", &textFormat_),
@@ -182,16 +181,14 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 Dock();
             }
             return 0;
-        case WM_CLOSE: DestroyWindow(window); return 0;
+        // Closing any bar (taskkill, Alt+F4) quits the app. A config reload destroys bars without WM_CLOSE.
+        case WM_CLOSE: PostQuitMessage(0); return 0;
         case WM_DESTROY:
             KillTimer(window, kChangeTimer);
             UnregisterAppBar(window);
             // Later messages such as WM_NCDESTROY go straight to DefWindowProcW.
             SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             window_ = nullptr;
-            if (--state_.liveBars == 0) {
-                PostQuitMessage(0);
-            }
             return 0;
         default: return DefWindowProcW(window, message, wParam, lParam);
     }
