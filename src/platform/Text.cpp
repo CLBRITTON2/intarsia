@@ -1,6 +1,6 @@
-#include "text.h"
+#include "platform/Text.hpp"
 
-#include "errors.h"
+#include "platform/Errors.hpp"
 
 #include <windows.h>
 

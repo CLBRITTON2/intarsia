@@ -7,7 +7,7 @@
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
-// Shared by every bar window: one D3D device feeds all swap chains and one DComp device commits all visuals.
+// Shared by every bar: one D3D device feeds all swap chains and one DComp device commits all visuals.
 struct GraphicsDevice {
     Microsoft::WRL::ComPtr<ID3D11Device>        d3d;
     Microsoft::WRL::ComPtr<IDXGIFactory2>       dxgiFactory;

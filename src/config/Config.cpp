@@ -1,7 +1,7 @@
-#include "config.h"
+#include "config/Config.hpp"
 
-#include "errors.h"
-#include "text.h"
+#include "platform/Errors.hpp"
+#include "platform/Text.hpp"
 
 #include <lua.hpp>
 #include <shlobj.h>
@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cmath>
 #include <format>
 #include <fstream>
 #include <initializer_list>
@@ -16,6 +17,7 @@
 #include <sstream>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -26,6 +28,13 @@ namespace {
       public:
         TableReader(lua_State* lua, int index, std::string source, std::string path) : lua_(lua), index_(index), source_(std::move(source)), path_(std::move(path)) {}
 
+        bool Has(std::string_view key) const {
+            lua_pushlstring(lua_, key.data(), key.size());
+            const int type = lua_rawget(lua_, index_);
+            lua_pop(lua_, 1);
+            return type != LUA_TNIL;
+        }
+
         TableReader Table(std::string_view key) const {
             PushField(key, LUA_TTABLE, "a table");
             return TableReader(lua_, lua_gettop(lua_), source_, KeyPath(key));
@@ -33,9 +42,7 @@ namespace {
 
         std::string String(std::string_view key) const {
             PushField(key, LUA_TSTRING, "a string");
-            size_t      length = 0;
-            const char* data   = lua_tolstring(lua_, -1, &length);
-            std::string value(data, length);
+            std::string value = StringAt(-1);
             lua_pop(lua_, 1);
             return value;
         }
@@ -47,15 +54,34 @@ namespace {
             return value;
         }
 
+        // A sequence of strings such as { "clock", "cpu" }.
+        std::vector<std::string> StringList(std::string_view key) const {
+            PushField(key, LUA_TTABLE, "a list of strings");
+            const int                listIndex = lua_gettop(lua_);
+            const auto               length    = static_cast<lua_Integer>(lua_rawlen(lua_, listIndex));
+            std::vector<std::string> values;
+            values.reserve(static_cast<size_t>(length));
+            for (lua_Integer position = 1; position <= length; ++position) {
+                if (lua_rawgeti(lua_, listIndex, position) != LUA_TSTRING) {
+                    throw Error(std::format("{}[{}] must be a string, got {}", KeyPath(key), position, luaL_typename(lua_, -1)));
+                }
+                values.push_back(StringAt(-1));
+                lua_pop(lua_, 1);
+            }
+            if (CountKeys(listIndex) != static_cast<size_t>(length)) {
+                throw Error(std::format("{} must be a plain list, it has keys other than 1 to {}", KeyPath(key), length));
+            }
+            lua_pop(lua_, 1);
+            return values;
+        }
+
         void RejectUnknownKeys(std::initializer_list<std::string_view> known) const {
             lua_pushnil(lua_);
             while (lua_next(lua_, index_) != 0) {
                 if (lua_type(lua_, -2) != LUA_TSTRING) {
-                    throw Error(std::format("{} has a key that is not a string", Describe()));
+                    throw Error(std::format("{} has a key that is not a string", path_.empty() ? std::string("the returned table") : path_));
                 }
-                size_t                 length = 0;
-                const char*            data   = lua_tolstring(lua_, -2, &length);
-                const std::string_view key(data, length);
+                const std::string key = StringAt(-2);
                 if (std::ranges::find(known, key) == known.end()) {
                     throw Error(std::format("{} is not a known key", KeyPath(key)));
                 }
@@ -72,8 +98,20 @@ namespace {
         }
 
       private:
-        std::string Describe() const {
-            return path_.empty() ? std::string("the returned table") : path_;
+        std::string StringAt(int index) const {
+            size_t      length = 0;
+            const char* data   = lua_tolstring(lua_, index, &length);
+            return {data, length};
+        }
+
+        size_t CountKeys(int tableIndex) const {
+            size_t count = 0;
+            lua_pushnil(lua_);
+            while (lua_next(lua_, tableIndex) != 0) {
+                ++count;
+                lua_pop(lua_, 1);
+            }
+            return count;
         }
 
         void PushField(std::string_view key, int expectedType, std::string_view expectedName) const {
@@ -109,6 +147,14 @@ namespace {
         return value;
     }
 
+    std::chrono::seconds PositiveSeconds(const TableReader& table, std::string_view key) {
+        const float value = PositiveNumber(table, key);
+        if (value != std::floor(value)) {
+            throw table.Error(std::format("{} must be a whole number of seconds, got {}", table.KeyPath(key), value));
+        }
+        return std::chrono::seconds(static_cast<long long>(value));
+    }
+
     Edge ParseEdge(const TableReader& table, std::string_view key) {
         const std::string value = table.String(key);
         if (value == "top")
@@ -141,6 +187,29 @@ namespace {
             channels.at(channel) = static_cast<float>(value) / 255.0f;
         }
         return D2D1_COLOR_F{.r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3]};
+    }
+
+    std::vector<ModuleKind> ReadModuleList(const TableReader& table, std::string_view key) {
+        std::vector<ModuleKind> kinds;
+        for (const std::string& name : table.StringList(key)) {
+            if (name == "clock") {
+                kinds.push_back(ModuleKind::Clock);
+                continue;
+            }
+            throw table.Error(std::format("{} lists unknown module '{}', known modules are: clock", table.KeyPath(key), name));
+        }
+        return kinds;
+    }
+
+    bool ListsModule(const Sections<ModuleKind>& modules, ModuleKind kind) {
+        return std::ranges::find(modules.left, kind) != modules.left.end() || std::ranges::find(modules.center, kind) != modules.center.end() ||
+            std::ranges::find(modules.right, kind) != modules.right.end();
+    }
+
+    ClockConfig ReadClockConfig(const TableReader& root) {
+        const TableReader clock = root.Table("clock");
+        clock.RejectUnknownKeys({"format", "icon", "interval"});
+        return ClockConfig{.format = clock.String("format"), .icon = ToWide(clock.String("icon")), .interval = PositiveSeconds(clock, "interval")};
     }
 
     std::string ReadFile(const std::filesystem::path& path) {
@@ -200,11 +269,14 @@ Config LoadConfig(const std::filesystem::path& path) {
     }
 
     const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
-    root.RejectUnknownKeys({"bar", "font", "colors"});
+    root.RejectUnknownKeys({"bar", "font", "colors", "modules_left", "modules_center", "modules_right", "clock"});
 
     const TableReader bar = root.Table("bar");
-    bar.RejectUnknownKeys({"edge", "thickness", "border"});
-    const BarConfig   barConfig{.edge = ParseEdge(bar, "edge"), .thicknessDips = PositiveNumber(bar, "thickness"), .borderDips = NonNegativeNumber(bar, "border")};
+    bar.RejectUnknownKeys({"edge", "thickness", "border", "spacing"});
+    const BarConfig   barConfig{.edge          = ParseEdge(bar, "edge"),
+                                .thicknessDips = PositiveNumber(bar, "thickness"),
+                                .borderDips    = NonNegativeNumber(bar, "border"),
+                                .spacingDips   = NonNegativeNumber(bar, "spacing")};
 
     const TableReader font = root.Table("font");
     font.RejectUnknownKeys({"family", "text_size", "icon_size"});
@@ -215,5 +287,14 @@ Config LoadConfig(const std::filesystem::path& path) {
     const ColorConfig colorConfig{
         .background = ReadColor(colors, "background"), .border = ReadColor(colors, "border"), .foreground = ReadColor(colors, "foreground"), .accent = ReadColor(colors, "accent")};
 
-    return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig};
+    Sections<ModuleKind> modules{.left = ReadModuleList(root, "modules_left"), .center = ReadModuleList(root, "modules_center"), .right = ReadModuleList(root, "modules_right")};
+
+    std::optional<ClockConfig> clock;
+    if (root.Has("clock")) {
+        clock = ReadClockConfig(root);
+    } else if (ListsModule(modules, ModuleKind::Clock)) {
+        throw root.Error("clock is listed in a modules_ list but has no clock table");
+    }
+
+    return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig, .modules = std::move(modules), .clock = std::move(clock)};
 }

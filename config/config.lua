@@ -4,6 +4,7 @@ return {
         edge = "top", -- top, bottom, left or right
         thickness = 54, -- DIPs, scaled by each monitor's DPI
         border = 1,
+        spacing = 8, -- between modules and at both ends of the bar
     },
     font = {
         -- Propo keeps icon glyphs at their natural width, the plain Nerd Font squeezes them into one cell.
@@ -16,5 +17,15 @@ return {
         border = "#6e6a8640",
         foreground = "#e0def4",
         accent = "#c4a7e7",
+    },
+
+    modules_left = {},
+    modules_center = { "clock" },
+    modules_right = {},
+
+    clock = {
+        format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
+        icon = "\u{F1441}",
+        interval = 60, -- seconds between redraws, aligned to the clock
     },
 }

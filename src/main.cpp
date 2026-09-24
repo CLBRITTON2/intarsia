@@ -1,8 +1,8 @@
-#include "bar_window.h"
-#include "config.h"
-#include "errors.h"
-#include "graphics.h"
-#include "win32_cast.h"
+#include "bar/Bar.hpp"
+#include "config/Config.hpp"
+#include "platform/Errors.hpp"
+#include "platform/Win32Cast.hpp"
+#include "render/Graphics.hpp"
 
 #include <windows.h>
 #include <shellscalingapi.h>
@@ -50,12 +50,12 @@ namespace {
     int Run(HINSTANCE instance) {
         const Config         config   = LoadConfig(DefaultConfigPath());
         const GraphicsDevice graphics = CreateGraphicsDevice();
-        BarWindow::RegisterWindowClass(instance);
+        Bar::RegisterWindowClass(instance);
 
-        AppState                                state{.liveBars = 0, .error = nullptr};
-        std::vector<std::unique_ptr<BarWindow>> bars;
+        AppState                          state{.liveBars = 0, .error = nullptr};
+        std::vector<std::unique_ptr<Bar>> bars;
         for (const BarPlacement& placement : PlacementsForAllMonitors()) {
-            bars.push_back(std::make_unique<BarWindow>(instance, graphics, config, placement, state));
+            bars.push_back(std::make_unique<Bar>(instance, graphics, config, placement, state));
             if (state.error) {
                 std::rethrow_exception(state.error);
             }

@@ -1,6 +1,4 @@
-#include "appbar.h"
-
-#include "errors.h"
+#include "platform/AppBar.hpp"
 
 #include <shellapi.h>
 

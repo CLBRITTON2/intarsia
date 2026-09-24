@@ -1,7 +1,7 @@
-#include "graphics.h"
+#include "render/Graphics.hpp"
 
-#include "errors.h"
-#include "text.h"
+#include "platform/Errors.hpp"
+#include "platform/Text.hpp"
 
 #include <format>
 #include <stdexcept>

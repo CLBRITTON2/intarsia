@@ -56,7 +56,7 @@ $clangTidy   = Join-Path $llvmBin 'clang-tidy.exe'
 Assert-LlvmMajor $clangFormat $pinnedLlvmMajor
 Assert-LlvmMajor $clangTidy $pinnedLlvmMajor
 
-$sources = @(Get-ChildItem -Path (Join-Path $repoRoot 'src') -Recurse -Include '*.cpp', '*.h' | ForEach-Object FullName)
+$sources = @(Get-ChildItem -Path (Join-Path $repoRoot 'src') -Recurse -Include '*.cpp', '*.hpp' | ForEach-Object FullName)
 if ($sources.Count -eq 0) {
     throw "No sources found under $repoRoot\src"
 }

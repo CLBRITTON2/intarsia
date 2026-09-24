@@ -105,7 +105,7 @@ WarningsAsErrors: >
   -readability-inconsistent-declaration-parameter-name,
   -clang-diagnostic-error,
 
-HeaderFilterRegex: '.*\.h'
+HeaderFilterRegex: '.*[\\/]src[\\/].*\.hpp'
 FormatStyle: file
 
 Checks: >
