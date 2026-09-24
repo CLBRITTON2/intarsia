@@ -1,27 +1,12 @@
 #include "graphics.h"
 
 #include "errors.h"
+#include "text.h"
 
 #include <format>
 #include <stdexcept>
-#include <string>
-#include <string_view>
 
 using Microsoft::WRL::ComPtr;
-
-namespace {
-
-    std::string ToUtf8(std::wstring_view text) {
-        const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-        if (length == 0) {
-            ThrowLastError("WideCharToMultiByte");
-        }
-        std::string utf8(static_cast<size_t>(length), '\0');
-        WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), length, nullptr, nullptr);
-        return utf8;
-    }
-
-} // namespace
 
 GraphicsDevice CreateGraphicsDevice() {
     GraphicsDevice device;

@@ -2,7 +2,6 @@
 
 #include "clock.h"
 #include "errors.h"
-#include "theme.h"
 #include "win32_cast.h"
 
 #include <shellapi.h>
@@ -25,12 +24,12 @@ namespace {
     }
 
     // The border sits on the side facing the rest of the desktop.
-    D2D1_RECT_F BorderRect(const D2D1_SIZE_F& size, Edge edge) {
+    D2D1_RECT_F BorderRect(const D2D1_SIZE_F& size, Edge edge, float border) {
         switch (edge) {
-            case Edge::Top: return D2D1::RectF(0, size.height - theme::kBorderDips, size.width, size.height);
-            case Edge::Bottom: return D2D1::RectF(0, 0, size.width, theme::kBorderDips);
-            case Edge::Left: return D2D1::RectF(size.width - theme::kBorderDips, 0, size.width, size.height);
-            case Edge::Right: return D2D1::RectF(0, 0, theme::kBorderDips, size.height);
+            case Edge::Top: return D2D1::RectF(0, size.height - border, size.width, size.height);
+            case Edge::Bottom: return D2D1::RectF(0, 0, size.width, border);
+            case Edge::Left: return D2D1::RectF(size.width - border, 0, size.width, size.height);
+            case Edge::Right: return D2D1::RectF(0, 0, border, size.height);
         }
         throw std::invalid_argument(std::format("unknown edge {}", static_cast<int>(edge)));
     }
@@ -65,21 +64,21 @@ void BarWindow::RegisterWindowClass(HINSTANCE instance) {
     }
 }
 
-BarWindow::BarWindow(HINSTANCE instance, const GraphicsDevice& graphics, const BarPlacement& placement, AppState& state) :
-    graphics_(graphics), state_(state), placement_(placement), window_(CreateBarWindow(instance, this)) {
+BarWindow::BarWindow(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const BarPlacement& placement, AppState& state) :
+    graphics_(graphics), config_(config), state_(state), placement_(placement), window_(CreateBarWindow(instance, this)) {
     ++state_.liveBars;
-    RequireFontFamily(graphics_.dwrite.Get(), theme::kFontFamily);
-    ThrowIfFailed(graphics_.dwrite->CreateTextFormat(theme::kFontFamily, nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                                     theme::kTextSizeDips, L"en-us", &textFormat_),
+    RequireFontFamily(graphics_.dwrite.Get(), config_.font.family.c_str());
+    ThrowIfFailed(graphics_.dwrite->CreateTextFormat(config_.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                                     config_.font.textSizeDips, L"en-us", &textFormat_),
                   "IDWriteFactory::CreateTextFormat");
     ThrowIfFailed(textFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER), "IDWriteTextFormat::SetTextAlignment");
     ThrowIfFailed(textFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER), "IDWriteTextFormat::SetParagraphAlignment");
 
     ThrowIfFailed(graphics_.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &context_), "ID2D1Device::CreateDeviceContext");
-    backgroundBrush_ = CreateBrush(context_.Get(), theme::kBackground);
-    borderBrush_     = CreateBrush(context_.Get(), theme::kBorder);
-    foregroundBrush_ = CreateBrush(context_.Get(), theme::kForeground);
-    iconBrush_       = CreateBrush(context_.Get(), theme::kAccentAlt);
+    backgroundBrush_ = CreateBrush(context_.Get(), config_.colors.background);
+    borderBrush_     = CreateBrush(context_.Get(), config_.colors.border);
+    foregroundBrush_ = CreateBrush(context_.Get(), config_.colors.foreground);
+    iconBrush_       = CreateBrush(context_.Get(), config_.colors.accent);
 
     ThrowIfFailed(graphics_.composition->CreateTargetForHwnd(window_, TRUE, &compositionTarget_), "IDCompositionDevice::CreateTargetForHwnd");
     ThrowIfFailed(graphics_.composition->CreateVisual(&visual_), "IDCompositionDevice::CreateVisual");
@@ -172,8 +171,8 @@ LRESULT BarWindow::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARA
 }
 
 void BarWindow::Dock() {
-    const int  thickness = DipsToPixels(theme::kThicknessDips, placement_.dpi);
-    const RECT rect      = ReserveAppBarRect(window_, placement_.monitorRect, placement_.edge, thickness);
+    const int  thickness = DipsToPixels(config_.bar.thicknessDips, placement_.dpi);
+    const RECT rect      = ReserveAppBarRect(window_, placement_.monitorRect, config_.bar.edge, thickness);
     if (!MoveWindow(window_, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }
@@ -231,13 +230,13 @@ void BarWindow::Render() {
     ThrowIfFailed(graphics_.dwrite->CreateTextLayout(text.c_str(), static_cast<UINT32>(text.size()), textFormat_.Get(), size.width, size.height, &layout),
                   "IDWriteFactory::CreateTextLayout");
     const DWRITE_TEXT_RANGE iconRange{.startPosition = 0, .length = static_cast<UINT32>(icon.size())};
-    ThrowIfFailed(layout->SetFontSize(theme::kIconSizeDips, iconRange), "IDWriteTextLayout::SetFontSize");
+    ThrowIfFailed(layout->SetFontSize(config_.font.iconSizeDips, iconRange), "IDWriteTextLayout::SetFontSize");
     ThrowIfFailed(layout->SetDrawingEffect(iconBrush_.Get(), iconRange), "IDWriteTextLayout::SetDrawingEffect");
 
     context_->BeginDraw();
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
     context_->FillRectangle(D2D1::RectF(0, 0, size.width, size.height), backgroundBrush_.Get());
-    context_->FillRectangle(BorderRect(size, placement_.edge), borderBrush_.Get());
+    context_->FillRectangle(BorderRect(size, config_.bar.edge, config_.bar.borderDips), borderBrush_.Get());
     context_->DrawTextLayout(D2D1::Point2F(0, 0), layout.Get(), foregroundBrush_.Get());
     ThrowIfFailed(context_->EndDraw(), "ID2D1DeviceContext::EndDraw");
 

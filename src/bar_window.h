@@ -1,6 +1,6 @@
 #pragma once
 
-#include "appbar.h"
+#include "config.h"
 #include "graphics.h"
 
 #include <windows.h>
@@ -10,7 +10,6 @@
 struct BarPlacement {
     RECT monitorRect;
     UINT dpi;
-    Edge edge;
 };
 
 // Process-wide state the window procedures report into, since exceptions cannot unwind through user32.
@@ -21,7 +20,7 @@ struct AppState {
 
 class BarWindow {
   public:
-    BarWindow(HINSTANCE instance, const GraphicsDevice& graphics, const BarPlacement& placement, AppState& state);
+    BarWindow(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const BarPlacement& placement, AppState& state);
     ~BarWindow();
     BarWindow(const BarWindow&)             = delete;
     BarWindow&  operator=(const BarWindow&) = delete;
@@ -40,6 +39,7 @@ class BarWindow {
     void                                         ScheduleClockTick();
 
     const GraphicsDevice&                        graphics_;
+    const Config&                                config_;
     AppState&                                    state_;
     BarPlacement                                 placement_;
 

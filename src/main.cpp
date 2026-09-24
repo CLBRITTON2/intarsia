@@ -1,4 +1,5 @@
 #include "bar_window.h"
+#include "config.h"
 #include "errors.h"
 #include "graphics.h"
 #include "win32_cast.h"
@@ -19,7 +20,7 @@ namespace {
         return TRUE;
     }
 
-    BarPlacement PlacementForMonitor(HMONITOR monitor, Edge edge) {
+    BarPlacement PlacementForMonitor(HMONITOR monitor) {
         MONITORINFO info{};
         info.cbSize = sizeof(info);
         if (!GetMonitorInfoW(monitor, &info)) {
@@ -29,10 +30,10 @@ namespace {
         UINT dpiX = 0;
         UINT dpiY = 0;
         ThrowIfFailed(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY), "GetDpiForMonitor");
-        return BarPlacement{.monitorRect = info.rcMonitor, .dpi = dpiX, .edge = edge};
+        return BarPlacement{.monitorRect = info.rcMonitor, .dpi = dpiX};
     }
 
-    std::vector<BarPlacement> PlacementsForAllMonitors(Edge edge) {
+    std::vector<BarPlacement> PlacementsForAllMonitors() {
         std::vector<HMONITOR> monitors;
         if (!EnumDisplayMonitors(nullptr, nullptr, CollectMonitor, reinterpret_cast<LPARAM>(&monitors))) {
             ThrowLastError("EnumDisplayMonitors");
@@ -41,19 +42,20 @@ namespace {
         std::vector<BarPlacement> placements;
         placements.reserve(monitors.size());
         for (HMONITOR monitor : monitors) {
-            placements.push_back(PlacementForMonitor(monitor, edge));
+            placements.push_back(PlacementForMonitor(monitor));
         }
         return placements;
     }
 
     int Run(HINSTANCE instance) {
+        const Config         config   = LoadConfig(DefaultConfigPath());
         const GraphicsDevice graphics = CreateGraphicsDevice();
         BarWindow::RegisterWindowClass(instance);
 
         AppState                                state{.liveBars = 0, .error = nullptr};
         std::vector<std::unique_ptr<BarWindow>> bars;
-        for (const BarPlacement& placement : PlacementsForAllMonitors(Edge::Top)) {
-            bars.push_back(std::make_unique<BarWindow>(instance, graphics, placement, state));
+        for (const BarPlacement& placement : PlacementsForAllMonitors()) {
+            bars.push_back(std::make_unique<BarWindow>(instance, graphics, config, placement, state));
             if (state.error) {
                 std::rethrow_exception(state.error);
             }
