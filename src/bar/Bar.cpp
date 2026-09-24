@@ -7,6 +7,7 @@
 #include "platform/Win32Cast.hpp"
 
 #include <shellapi.h>
+#include <windowsx.h>
 
 #include <algorithm>
 #include <cmath>
@@ -175,6 +176,7 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+        case WM_LBUTTONUP: Click(lParam); return 0;
         case WM_ACTIVATE: NotifyAppBarActivated(window); return 0;
         case WM_WINDOWPOSCHANGED: NotifyAppBarMoved(window); return DefWindowProcW(window, message, wParam, lParam);
         case kAppBarCallback:
@@ -269,19 +271,38 @@ void Bar::Render() {
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
     context_->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), backgroundBrush_.Get());
     context_->FillRectangle(BorderRect(barSize, edge, config_.bar.borderDips), borderBrush_.Get());
-    DrawSection(render, modules_.left, sizes.left, offsets.left, barSize);
-    DrawSection(render, modules_.center, sizes.center, offsets.center, barSize);
-    DrawSection(render, modules_.right, sizes.right, offsets.right, barSize);
+    hitBoxes_.clear();
+    for (const auto& boxes : {DrawSection(render, modules_.left, sizes.left, offsets.left, barSize), DrawSection(render, modules_.center, sizes.center, offsets.center, barSize),
+                              DrawSection(render, modules_.right, sizes.right, offsets.right, barSize)}) {
+        hitBoxes_.insert(hitBoxes_.end(), boxes.begin(), boxes.end());
+    }
     ThrowIfFailed(context_->EndDraw(), "ID2D1DeviceContext::EndDraw");
 
     ThrowIfFailed(swapChain_->Present(1, 0), "IDXGISwapChain1::Present");
     ScheduleNextChange();
 }
 
-void Bar::DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes, const std::vector<float>& offsets,
-                      D2D1_SIZE_F barSize) const {
+std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
+                                          const std::vector<float>& offsets, D2D1_SIZE_F barSize) const {
+    std::vector<HitBox> boxes;
+    boxes.reserve(modules.size());
     for (size_t index = 0; index < modules.size(); ++index) {
-        modules[index]->Draw(render, ModuleOrigin(config_.bar.edge, offsets[index], sizes[index], barSize));
+        const D2D1_POINT_2F origin = ModuleOrigin(config_.bar.edge, offsets[index], sizes[index], barSize);
+        modules[index]->Draw(render, origin);
+        boxes.push_back(HitBox{.module = modules[index].get(), .bounds = D2D1::RectF(origin.x, origin.y, origin.x + sizes[index].width, origin.y + sizes[index].height)});
+    }
+    return boxes;
+}
+
+// Mouse messages carry client pixels, and modules lay out in DIPs.
+void Bar::Click(LPARAM position) {
+    const float         scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(placement_.dpi);
+    const D2D1_POINT_2F point = D2D1::Point2F(static_cast<float>(GET_X_LPARAM(position)) * scale, static_cast<float>(GET_Y_LPARAM(position)) * scale);
+    for (const HitBox& box : hitBoxes_) {
+        if (point.x >= box.bounds.left && point.x < box.bounds.right && point.y >= box.bounds.top && point.y < box.bounds.bottom) {
+            box.module->Click(D2D1::Point2F(point.x - box.bounds.left, point.y - box.bounds.top));
+            return;
+        }
     }
 }
 

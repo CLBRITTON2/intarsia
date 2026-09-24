@@ -45,18 +45,26 @@ class Bar {
     void                    ResizeSwapChain(UINT width, UINT height);
     void                    BindRenderTarget();
     RenderContext           FrameContext() const;
-    void DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes, const std::vector<float>& offsets,
-                     D2D1_SIZE_F barSize) const;
-    void ScheduleNextChange();
+    // Where a module was last drawn, for routing clicks to it.
+    struct HitBox {
+        IModule*    module;
+        D2D1_RECT_F bounds;
+    };
 
-    const GraphicsDevice&                        graphics_;
-    const Config&                                config_;
-    AppState&                                    state_;
-    BarPlacement                                 placement_;
-    Sections<std::unique_ptr<IModule>>           modules_;
+    std::vector<HitBox>                        DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
+                                                           const std::vector<float>& offsets, D2D1_SIZE_F barSize) const;
+    void                                       ScheduleNextChange();
+    void                                       Click(LPARAM position);
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain1>      swapChain_;
-    Microsoft::WRL::ComPtr<ID2D1DeviceContext>   context_;
+    const GraphicsDevice&                      graphics_;
+    const Config&                              config_;
+    AppState&                                  state_;
+    BarPlacement                               placement_;
+    Sections<std::unique_ptr<IModule>>         modules_;
+    std::vector<HitBox>                        hitBoxes_;
+
+    Microsoft::WRL::ComPtr<IDXGISwapChain1>    swapChain_;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> context_;
     Microsoft::WRL::ComPtr<IDCompositionTarget>  compositionTarget_;
     Microsoft::WRL::ComPtr<IDCompositionVisual>  visual_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat>    textFormat_;

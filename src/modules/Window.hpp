@@ -18,6 +18,7 @@ class Window final : public IModule {
     D2D1_SIZE_F         Size() const override;
     void                Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     std::optional<UINT> MillisecondsUntilChange() const override;
+    void                Click(D2D1_POINT_2F point) override;
 
   private:
     WindowConfig                              config_;

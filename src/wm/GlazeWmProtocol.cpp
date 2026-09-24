@@ -47,7 +47,8 @@ namespace glazewm {
             const nlohmann::json& displayName = Field(workspace, "displayName", "workspace");
             const std::string     label =
                 displayName.is_string() && !displayName.get<std::string>().empty() ? displayName.get<std::string>() : StringField(workspace, "name", "workspace");
-            return Workspace{.label = ToWide(label), .focused = BoolField(workspace, "hasFocus", "workspace"), .monitor = monitor};
+            return Workspace{
+                .label = ToWide(label), .name = StringField(workspace, "name", "workspace"), .focused = BoolField(workspace, "hasFocus", "workspace"), .monitor = monitor};
         }
 
     } // namespace
@@ -59,6 +60,22 @@ namespace glazewm {
             command += event;
         }
         return command;
+    }
+
+    std::string FocusWorkspaceCommand(std::string_view name) {
+        const bool unsafe = std::ranges::any_of(name, [](char character) {
+            const auto byte = static_cast<unsigned char>(character);
+            return byte <= 0x20u || byte == 0x7Fu;
+        });
+        if (name.empty() || unsafe) {
+            throw ProtocolError(
+                std::format("workspace name \"{}\" cannot be sent to GlazeWM: it is empty or holds whitespace or control characters", LogExcerpt(name, kExcerptBytes)));
+        }
+        return std::format("command focus --workspace {}", name);
+    }
+
+    bool IsCommand(std::string_view clientMessage) {
+        return clientMessage.starts_with("command ");
     }
 
     ServerMessage ParseServerMessage(std::string_view text) {

@@ -44,6 +44,13 @@ namespace glazewm {
     // "sub --events focus_changed workspace_activated ...", for kWorkspaceEvents.
     std::string SubscribeCommand();
 
+    // "command focus --workspace <name>". GlazeWM splits messages on whitespace with no quoting, so a name holding
+    // whitespace or control characters could smuggle in extra arguments: those throw ProtocolError instead.
+    std::string FocusWorkspaceCommand(std::string_view name);
+
+    // Whether a response answers a command, whose failure is the command's own and leaves the connection usable.
+    bool IsCommand(std::string_view clientMessage);
+
     // Throws ProtocolError when the text is not JSON or lacks the fields every server message has.
     ServerMessage ParseServerMessage(std::string_view text);
 

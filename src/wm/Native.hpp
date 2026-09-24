@@ -23,6 +23,8 @@ class Native final : public IWindowManager {
     std::vector<Workspace> Workspaces() const override;
     // Always connected: the WinEvents come from the OS itself.
     WindowManagerStatus Status() const override;
+    // Throws std::logic_error: there are no workspaces to focus.
+    void FocusWorkspace(const std::string& name) override;
 
   private:
     // Registers the instance the callbacks reach for as long as it lives, and refuses a second one.

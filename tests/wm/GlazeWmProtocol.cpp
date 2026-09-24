@@ -56,6 +56,7 @@ TEST(GlazeWmProtocol, WorkspacesCarryTheirMonitorAndPreferTheDisplayName) {
     EXPECT_EQ(workspaces[0].monitor, 65537);
     EXPECT_FALSE(workspaces[0].focused);
     EXPECT_EQ(workspaces[1].label, L"web");
+    EXPECT_EQ(workspaces[1].name, "5");
     EXPECT_TRUE(workspaces[1].focused);
     // An empty display name falls back to the name, as a null one does.
     EXPECT_EQ(workspaces[2].label, L"9");
@@ -98,6 +99,19 @@ TEST(GlazeWmProtocol, GateSendsTheFirstQueryAndHoldsTheRestOfABurst) {
     EXPECT_TRUE(gate.Answered());
     EXPECT_FALSE(gate.Answered());
     EXPECT_TRUE(gate.RequestQuery());
+}
+
+TEST(GlazeWmProtocol, FocusCommandAddressesTheWorkspaceByName) {
+    EXPECT_EQ(glazewm::FocusWorkspaceCommand("5"), "command focus --workspace 5");
+    EXPECT_TRUE(glazewm::IsCommand(glazewm::FocusWorkspaceCommand("5")));
+    EXPECT_FALSE(glazewm::IsCommand(glazewm::kQueryMonitors));
+}
+
+TEST(GlazeWmProtocol, FocusCommandRefusesNamesThatWouldSplitIntoMoreArguments) {
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1 --workspace 2"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\tclose"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\n"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand(""), glazewm::ProtocolError);
 }
 
 TEST(GlazeWmProtocol, GateSendsNothingMoreWhenTheBurstIsOver) {

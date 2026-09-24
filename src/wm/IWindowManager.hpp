@@ -11,6 +11,7 @@ struct FocusedWindow {
 
 struct Workspace {
     std::wstring  label; // the display name when the manager has one, else the name
+    std::string   name;  // what commands address the workspace by
     bool          focused;
     std::intptr_t monitor; // the HMONITOR the workspace is on
 
@@ -39,4 +40,7 @@ class IWindowManager {
     virtual std::optional<FocusedWindow> Focused() const    = 0;
     virtual std::vector<Workspace>       Workspaces() const = 0;
     virtual WindowManagerStatus          Status() const     = 0;
+
+    // Asks the manager to focus a workspace from Workspaces(). Returns at once: the result arrives as a change.
+    virtual void FocusWorkspace(const std::string& name) = 0;
 };

@@ -44,6 +44,8 @@ std::optional<UINT> Window::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+void         Window::Click(D2D1_POINT_2F) {}
+
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {
     if (title.size() <= maxLength) {
         return std::wstring(title);

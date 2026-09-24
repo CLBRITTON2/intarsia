@@ -3,12 +3,12 @@
 #include <windows.h>
 #include <winhttp.h>
 
-#include <atomic>
 #include <memory>
 #include <string>
 #include <string_view>
 
-// A blocking WebSocket client over WinHTTP. One thread sends and receives, and any thread may Abort to unblock it.
+// A blocking WebSocket client over WinHTTP. WinHTTP allows one send while a receive is pending, so one thread may
+// receive while another sends, but sends must not overlap each other. Close may come from any thread.
 class WebSocket {
   public:
     // Connects and completes the upgrade, throwing Win32Error with the failing WinHTTP call.
@@ -19,11 +19,12 @@ class WebSocket {
 
     void       Send(std::string_view text);
 
-    // One whole message as text. Throws when the connection fails, is aborted, or the server closes it.
+    // One whole message as text. Throws when the connection fails, is closed, or the server closes it.
     std::string Receive();
 
-    // Closes the socket so a Receive blocked on another thread returns with an error.
-    void Abort();
+    // Sends a close frame, which cancels a Receive pending on another thread (ERROR_WINHTTP_OPERATION_CANCELLED).
+    // Fails if a Send is still pending, so callers stop sending first. The handle stays open until destruction.
+    void Close();
 
   private:
     struct InternetCloser {
@@ -35,6 +36,5 @@ class WebSocket {
 
     UniqueInternet session_;
     UniqueInternet connection_;
-    // Atomic because Abort takes it from another thread while Receive may be using it.
-    std::atomic<HINTERNET> socket_;
+    UniqueInternet socket_;
 };

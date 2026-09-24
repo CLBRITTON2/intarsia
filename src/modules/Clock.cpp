@@ -45,6 +45,8 @@ std::optional<UINT> Clock::MillisecondsUntilChange() const {
     return static_cast<UINT>(TimeUntilNextTick(std::chrono::system_clock::now(), config_.interval).count());
 }
 
+void        Clock::Click(D2D1_POINT_2F) {}
+
 std::string FormatLocalTime(const std::string& format, std::chrono::system_clock::time_point now) {
     const std::chrono::zoned_time local(std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(now));
     return std::vformat(format, std::make_format_args(local));

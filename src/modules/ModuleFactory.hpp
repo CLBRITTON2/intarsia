@@ -11,8 +11,8 @@
 
 // What a module reads beyond its own config: shared data sources, and the monitor of the bar it belongs to.
 struct ModuleSources {
-    const IWindowManager& windowManager;
-    HMONITOR              monitor;
+    IWindowManager& windowManager;
+    HMONITOR        monitor;
 };
 
 std::unique_ptr<IModule> CreateModule(ModuleKind kind, const Config& config, const ModuleSources& sources);

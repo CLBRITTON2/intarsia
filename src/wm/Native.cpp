@@ -42,6 +42,10 @@ WindowManagerStatus Native::Status() const {
     return WindowManagerStatus{.name = L"Windows", .connection = Connection::Connected, .detail = ""};
 }
 
+void Native::FocusWorkspace(const std::string& name) {
+    throw std::logic_error("the native backend has no workspaces, cannot focus '" + name + "'");
+}
+
 Native::UniqueHook Native::HookEvent(DWORD event) {
     HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (hook == nullptr) {
