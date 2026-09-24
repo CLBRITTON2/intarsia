@@ -12,17 +12,7 @@ $ErrorActionPreference = 'Stop'
 $pinnedLlvmMajor = 19
 $repoRoot        = Split-Path -Parent $PSScriptRoot
 
-function Get-Vs2022Path {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (-not (Test-Path $vswhere)) {
-        throw "vswhere not found at $vswhere, install Visual Studio 2022"
-    }
-    $path = & $vswhere -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    if (-not $path) {
-        throw 'No Visual Studio 2022 install has the x64 C++ build tools (Microsoft.VisualStudio.Component.VC.Tools.x86.x64)'
-    }
-    return @($path)[0]
-}
+. (Join-Path $PSScriptRoot 'VsDevShell.ps1')
 
 function Assert-LlvmMajor([string] $tool, [int] $major) {
     if (-not (Test-Path $tool)) {
@@ -44,11 +34,7 @@ function Invoke-Checked([string] $what, [scriptblock] $command) {
     }
 }
 
-$vsPath = Get-Vs2022Path
-# VsDevCmd shells out to vswhere by bare name and prints an error when it is not on PATH.
-$env:PATH = "$(Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer');$env:PATH"
-Import-Module (Join-Path $vsPath 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
-Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+$vsPath = Enter-Vs2022DevShell
 
 $llvmBin     = Join-Path $vsPath 'VC\Tools\Llvm\x64\bin'
 $clangFormat = Join-Path $llvmBin 'clang-format.exe'

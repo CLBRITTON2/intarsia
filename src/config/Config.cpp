@@ -3,7 +3,9 @@
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
-#include <lua.hpp>
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
 #include <shlobj.h>
 
 #include <algorithm>
@@ -23,7 +25,8 @@ namespace {
 
     using LuaState = std::unique_ptr<lua_State, decltype(&lua_close)>;
 
-    // Reads one Lua table with raw access only: metamethods could raise a Lua error, which longjmps past C++ frames.
+    // Reads one Lua table with raw access only: a metamethod raising an error outside lua_pcall hits Lua's panic handler,
+    // which aborts the process.
     class TableReader {
       public:
         TableReader(lua_State* lua, int index, std::string source, std::string path) : lua_(lua), index_(index), source_(std::move(source)), path_(std::move(path)) {}
