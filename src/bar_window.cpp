@@ -87,6 +87,11 @@ BarWindow::BarWindow(HINSTANCE instance, const GraphicsDevice& graphics, const B
 
     RegisterAppBar(window_, kAppBarCallback);
     Dock();
+    RECT client{};
+    if (!GetClientRect(window_, &client)) {
+        ThrowLastError("GetClientRect");
+    }
+    CreateSwapChain(static_cast<UINT>(client.right), static_cast<UINT>(client.bottom));
     ShowWindow(window_, SW_SHOWNOACTIVATE);
     Render();
     ScheduleClockTick();
