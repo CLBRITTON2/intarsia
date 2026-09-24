@@ -1,0 +1,12 @@
+name: lint
+
+on: push
+
+jobs:
+  lint:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - name: clang-format and clang-tidy
+        shell: pwsh
+        run: ./scripts/lint.ps1

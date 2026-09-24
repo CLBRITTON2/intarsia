@@ -1,0 +1,29 @@
+#include "errors.h"
+
+#include <format>
+#include <string>
+#include <system_error>
+
+namespace {
+
+    std::string DescribeFailure(std::string_view call, HRESULT result) {
+        return std::format("{} failed with 0x{:08X}: {}", call, static_cast<unsigned long>(result), std::system_category().message(result));
+    }
+
+} // namespace
+
+Win32Error::Win32Error(std::string_view call, HRESULT result) : std::runtime_error(DescribeFailure(call, result)), result_(result) {}
+
+HRESULT Win32Error::Result() const {
+    return result_;
+}
+
+void ThrowIfFailed(HRESULT result, std::string_view call) {
+    if (FAILED(result)) {
+        throw Win32Error(call, result);
+    }
+}
+
+void ThrowLastError(std::string_view call) {
+    throw Win32Error(call, HRESULT_FROM_WIN32(GetLastError()));
+}
