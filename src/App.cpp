@@ -141,7 +141,8 @@ LRESULT App::HandleControlMessage(HWND window, UINT message, WPARAM wParam, LPAR
 
 void App::CreateBars() {
     for (const BarPlacement& placement : PlacementsForAllMonitors()) {
-        bars_.push_back(std::make_unique<Bar>(instance_, graphics_, *config_, ModuleSources{.windowManager = *windowManager_, .monitor = placement.monitor}, placement, state_));
+        bars_.push_back(
+            std::make_unique<Bar>(instance_, graphics_, *config_, ModuleSources{.windowManager = *windowManager_, .monitor = placement.monitor}, launcher_, placement, state_));
         if (state_.error) {
             std::rethrow_exception(state_.error);
         }

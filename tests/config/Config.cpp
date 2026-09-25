@@ -137,7 +137,8 @@ TEST(Config, SizesMustBePositiveAndIntervalWholeSeconds) {
 
 TEST(Config, ModuleListsMustBePlainListsOfKnownModules) {
     EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", R"({ "clock", x = 1 })")); }, ConfigErrorWith("modules_center must be a plain list"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", R"({ "cpu" })")); }, ConfigErrorWith("unknown module 'cpu'"));
+    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", R"({ "teapot" })")); },
+                ConfigErrorWith("unknown module 'teapot', known modules are: clock, window, workspaces, cpu, memory"));
     EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", "{ 7 }")); }, ConfigErrorWith("modules_center[1] must be a string"));
 }
 
@@ -173,6 +174,54 @@ TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
 TEST(Config, WindowModuleNeedsItsTableAndAWholeMaxLength) {
     EXPECT_THAT([] { return LoadText(ValidConfigWith("window = { max_length = 80 },", "")); }, ConfigErrorWith("window is listed in a modules_ list but has no window table"));
     EXPECT_THAT([] { return LoadText(ValidConfigWith("max_length = 80", "max_length = 2.5")); }, ConfigErrorWith("window.max_length must be a whole number"));
+}
+
+TEST(Config, CpuAndMemoryShareTheTextModuleShape) {
+    const Config config = LoadText(ValidConfigWith("modules_right = {},", R"(modules_right = { "cpu", "memory" },
+    cpu = { format = "{}%", icon = "c", interval = 1 },
+    memory = { format = "{:.1f} GB", icon = "m", interval = 2 },)"));
+    EXPECT_EQ(config.modules.right, (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Memory}));
+    ASSERT_TRUE(config.cpu.has_value() && config.memory.has_value());
+    if (config.cpu.has_value() && config.memory.has_value()) {
+        EXPECT_EQ(config.cpu->format, "{}%");
+        EXPECT_EQ(config.memory->interval, std::chrono::seconds(2));
+    }
+    EXPECT_THAT([] { return LoadText(ValidConfigWith("modules_right = {},", R"(modules_right = { "cpu" },)")); },
+                ConfigErrorWith("cpu is listed in a modules_ list but has no cpu table"));
+}
+
+TEST(Config, ActionsResolveToAbsoluteExecutables) {
+    const Config config = LoadText(ValidConfigWith("interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" } })"));
+    ASSERT_TRUE(config.clock.has_value());
+    if (config.clock.has_value()) {
+        const ModuleActions& actions = config.clock->actions;
+        ASSERT_TRUE(actions.click.has_value());
+        if (actions.click.has_value()) {
+            EXPECT_TRUE(actions.click->program.is_absolute());
+            EXPECT_EQ(actions.click->arguments, (std::vector<std::wstring>{L"/c", L"exit 0"}));
+        }
+        EXPECT_TRUE(actions.scrollUp.has_value());
+        EXPECT_FALSE(actions.rightClick.has_value());
+        EXPECT_FALSE(actions.scrollDown.has_value());
+    }
+}
+
+TEST(Config, ActionsMustNameAnExistingExecutable) {
+    EXPECT_THAT([] { return LoadText(ValidConfigWith("interval = 60 }", "interval = 60, on_click = {} }")); }, ConfigErrorWith("clock.on_click must name a program"));
+    EXPECT_THAT([] { return LoadText(ValidConfigWith("interval = 60 }", R"(interval = 60, on_click = { "intarsia-no-such-program" } })")); },
+                ConfigErrorWith("not an existing file or a program on PATH"));
+}
+
+TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
+    const std::filesystem::path script = std::filesystem::temp_directory_path() / "intarsia-test-action.bat";
+    std::ofstream(script) << "@echo off\n";
+    std::string escaped = script.string();
+    for (size_t position = escaped.find('\\'); position != std::string::npos; position = escaped.find('\\', position + 2)) {
+        escaped.insert(position, "\\");
+    }
+    const std::string config = ValidConfigWith("interval = 60 }", "interval = 60, on_click = { \"" + escaped + "\" } }");
+    EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("which is not an .exe"));
+    std::filesystem::remove(script);
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {

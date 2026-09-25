@@ -26,7 +26,7 @@ return {
 
     modules_left = { "workspaces", "window" },
     modules_center = { "clock" },
-    modules_right = {},
+    modules_right = { "cpu", "memory" },
 
     clock = {
         format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
@@ -35,5 +35,20 @@ return {
     },
     window = {
         max_length = 80, -- longer titles are cut with an ellipsis
+    },
+    -- Any text module takes optional on_click, on_right_click, on_scroll_up and on_scroll_down commands:
+    -- { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config loads),
+    -- and it starts without a shell, so arguments reach it exactly as written.
+    cpu = {
+        format = "{}%", -- the value is an integer percent
+        icon = "\u{F4BC}",
+        interval = 1,
+        on_click = { "C:\\Windows\\System32\\Taskmgr.exe" },
+    },
+    memory = {
+        format = "{:.1f} GB", -- the value is gibibytes in use, as a double
+        icon = "\u{EFC5}",
+        interval = 1,
+        on_click = { "C:\\Windows\\System32\\resmon.exe" },
     },
 }

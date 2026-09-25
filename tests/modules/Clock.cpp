@@ -11,20 +11,11 @@ namespace {
         return std::chrono::system_clock::time_point(std::chrono::milliseconds(milliseconds));
     }
 
+    TextModuleConfig ClockWithFormat(std::string format) {
+        return TextModuleConfig{.format = std::move(format), .icon = L"", .interval = std::chrono::seconds(60), .actions = {}};
+    }
+
 } // namespace
-
-TEST(Clock, TickWaitsAFullIntervalOnABoundary) {
-    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'000), std::chrono::seconds(60)), std::chrono::milliseconds(60'000));
-}
-
-TEST(Clock, TickWaitsUntilTheNextBoundaryJustAfterOne) {
-    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'001), std::chrono::seconds(60)), std::chrono::milliseconds(59'999));
-}
-
-TEST(Clock, TickAlignsToEachInterval) {
-    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(1'250), std::chrono::seconds(1)), std::chrono::milliseconds(750));
-    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(3'599'000), std::chrono::seconds(3600)), std::chrono::milliseconds(1'000));
-}
 
 TEST(Clock, FormatRendersLiteralTextAroundTheSpec) {
     const std::string text = FormatLocalTime("at {:%Y}!", AtMilliseconds(0));
@@ -38,4 +29,9 @@ TEST(Clock, FormatKeepsMinutesTwoDigitsWide) {
 
 TEST(Clock, FormatThrowsOnAnInvalidSpec) {
     EXPECT_THROW(FormatLocalTime("{:%Q}", AtMilliseconds(0)), std::format_error);
+}
+
+TEST(Clock, AnInvalidSpecFailsWhenTheModuleIsBuilt) {
+    EXPECT_THROW(Clock(ClockWithFormat("{:%Q}")), ConfigError);
+    EXPECT_NO_THROW(Clock(ClockWithFormat("{:%H:%M}")));
 }

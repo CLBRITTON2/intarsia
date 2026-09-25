@@ -67,6 +67,11 @@ void Workspaces::Click(D2D1_POINT_2F point) {
     }
 }
 
+const ModuleActions& Workspaces::Actions() const {
+    static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
+    return kNone;
+}
+
 WorkspaceLine JoinWorkspaces(const std::vector<Workspace>& workspaces, std::intptr_t monitor) {
     WorkspaceLine line{.text = {}, .runs = {}};
     for (const Workspace& workspace : workspaces) {

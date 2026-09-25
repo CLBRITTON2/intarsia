@@ -3,6 +3,7 @@
 #include "bar/Bar.hpp"
 #include "config/Config.hpp"
 #include "platform/FileWatcher.hpp"
+#include "platform/Process.hpp"
 #include "render/Graphics.hpp"
 #include "wm/IWindowManager.hpp"
 
@@ -38,6 +39,8 @@ class App {
     AppState                     state_;
     HWND                         control_;
     std::unique_ptr<FileWatcher> watcher_;
+    // Starts the commands bound to module inputs, off the UI thread.
+    Launcher launcher_;
     // Modules read the window manager, so it is created before the bars and destroyed after them.
     std::unique_ptr<IWindowManager>   windowManager_;
     std::vector<std::unique_ptr<Bar>> bars_;

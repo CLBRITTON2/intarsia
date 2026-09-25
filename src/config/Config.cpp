@@ -201,22 +201,36 @@ namespace {
         return D2D1_COLOR_F{.r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3]};
     }
 
+    struct ModuleName {
+        std::string_view name;
+        ModuleKind       kind;
+    };
+
+    constexpr std::array<ModuleName, 5> kModuleNames{{
+        {.name = "clock", .kind = ModuleKind::Clock},
+        {.name = "window", .kind = ModuleKind::Window},
+        {.name = "workspaces", .kind = ModuleKind::Workspaces},
+        {.name = "cpu", .kind = ModuleKind::Cpu},
+        {.name = "memory", .kind = ModuleKind::Memory},
+    }};
+
+    std::string                         KnownModuleNames() {
+        std::string names;
+        for (const ModuleName& module : kModuleNames) {
+            names += names.empty() ? "" : ", ";
+            names += module.name;
+        }
+        return names;
+    }
+
     std::vector<ModuleKind> ReadModuleList(const TableReader& table, std::string_view key) {
         std::vector<ModuleKind> kinds;
         for (const std::string& name : table.StringList(key)) {
-            if (name == "clock") {
-                kinds.push_back(ModuleKind::Clock);
-                continue;
+            const auto module = std::ranges::find(kModuleNames, name, &ModuleName::name);
+            if (module == kModuleNames.end()) {
+                throw table.Error(std::format("{} lists unknown module '{}', known modules are: {}", table.KeyPath(key), name, KnownModuleNames()));
             }
-            if (name == "window") {
-                kinds.push_back(ModuleKind::Window);
-                continue;
-            }
-            if (name == "workspaces") {
-                kinds.push_back(ModuleKind::Workspaces);
-                continue;
-            }
-            throw table.Error(std::format("{} lists unknown module '{}', known modules are: clock, window, workspaces", table.KeyPath(key), name));
+            kinds.push_back(module->kind);
         }
         return kinds;
     }
@@ -226,14 +240,50 @@ namespace {
             std::ranges::find(modules.right, kind) != modules.right.end();
     }
 
-    ClockConfig ReadClockConfig(const TableReader& clock) {
-        clock.RejectUnknownKeys({"format", "icon", "interval"});
-        return ClockConfig{.format = clock.String("format"), .icon = ToWide(clock.String("icon")), .interval = std::chrono::seconds(PositiveWholeNumber(clock, "interval"))};
+    // An action is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
+    // cmd.exe, which parses the arguments again as shell syntax.
+    std::optional<Command> ReadCommand(const TableReader& module, std::string_view key) {
+        if (!module.Has(key)) {
+            return std::nullopt;
+        }
+        const std::vector<std::string> argv = module.StringList(key);
+        if (argv.empty()) {
+            throw module.Error(std::format("{} must name a program, as {{ \"taskmgr.exe\" }}", module.KeyPath(key)));
+        }
+        const std::optional<std::filesystem::path> program = ResolveProgram(ToWide(argv.front()));
+        if (!program.has_value()) {
+            throw module.Error(std::format("{} names '{}', which is not an existing file or a program on PATH", module.KeyPath(key), argv.front()));
+        }
+        std::wstring extension = program->extension().wstring();
+        if (CompareStringOrdinal(extension.c_str(), static_cast<int>(extension.size()), L".exe", 4, TRUE) != CSTR_EQUAL) {
+            throw module.Error(std::format("{} resolves to {}, which is not an .exe", module.KeyPath(key), ToUtf8(program->wstring())));
+        }
+        std::vector<std::wstring> arguments;
+        arguments.reserve(argv.size() - 1);
+        for (size_t index = 1; index < argv.size(); ++index) {
+            arguments.push_back(ToWide(argv[index]));
+        }
+        return Command{.program = *program, .arguments = std::move(arguments)};
+    }
+
+    ModuleActions ReadActions(const TableReader& module) {
+        return ModuleActions{.click      = ReadCommand(module, "on_click"),
+                             .rightClick = ReadCommand(module, "on_right_click"),
+                             .scrollUp   = ReadCommand(module, "on_scroll_up"),
+                             .scrollDown = ReadCommand(module, "on_scroll_down")};
+    }
+
+    TextModuleConfig ReadTextModuleConfig(const TableReader& module) {
+        module.RejectUnknownKeys({"format", "icon", "interval", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        return TextModuleConfig{.format   = module.String("format"),
+                                .icon     = ToWide(module.String("icon")),
+                                .interval = std::chrono::seconds(PositiveWholeNumber(module, "interval")),
+                                .actions  = ReadActions(module)};
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {
-        window.RejectUnknownKeys({"max_length"});
-        return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length"))};
+        window.RejectUnknownKeys({"max_length", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .actions = ReadActions(window)};
     }
 
     // A module's table is read when present, and required when a section lists the module.
@@ -305,7 +355,7 @@ Config LoadConfig(const std::filesystem::path& path) {
     }
 
     const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
-    root.RejectUnknownKeys({"bar", "font", "colors", "window_manager", "modules_left", "modules_center", "modules_right", "clock", "window"});
+    root.RejectUnknownKeys({"bar", "font", "colors", "window_manager", "modules_left", "modules_center", "modules_right", "clock", "window", "cpu", "memory"});
 
     const TableReader bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "thickness", "border", "spacing"});
@@ -329,8 +379,10 @@ Config LoadConfig(const std::filesystem::path& path) {
     const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
     Sections<ModuleKind>    modules{.left = ReadModuleList(root, "modules_left"), .center = ReadModuleList(root, "modules_center"), .right = ReadModuleList(root, "modules_right")};
-    std::optional<ClockConfig>  clock  = ReadModuleConfig<ClockConfig>(root, modules, ModuleKind::Clock, "clock", ReadClockConfig);
-    std::optional<WindowConfig> window = ReadModuleConfig<WindowConfig>(root, modules, ModuleKind::Window, "window", ReadWindowConfig);
+    std::optional<TextModuleConfig> clock  = ReadModuleConfig<TextModuleConfig>(root, modules, ModuleKind::Clock, "clock", ReadTextModuleConfig);
+    std::optional<WindowConfig>     window = ReadModuleConfig<WindowConfig>(root, modules, ModuleKind::Window, "window", ReadWindowConfig);
+    std::optional<TextModuleConfig> cpu    = ReadModuleConfig<TextModuleConfig>(root, modules, ModuleKind::Cpu, "cpu", ReadTextModuleConfig);
+    std::optional<TextModuleConfig> memory = ReadModuleConfig<TextModuleConfig>(root, modules, ModuleKind::Memory, "memory", ReadTextModuleConfig);
     if (windowManager == WindowManagerKind::Windows && ListsModule(modules, ModuleKind::Workspaces)) {
         throw root.Error("workspaces needs a window manager that has workspaces, window_manager 'windows' has none");
     }
@@ -341,5 +393,7 @@ Config LoadConfig(const std::filesystem::path& path) {
                   .windowManager = windowManager,
                   .modules       = std::move(modules),
                   .clock         = std::move(clock),
-                  .window        = window};
+                  .window        = window,
+                  .cpu           = std::move(cpu),
+                  .memory        = std::move(memory)};
 }

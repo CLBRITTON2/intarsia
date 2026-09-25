@@ -1,6 +1,8 @@
 #include "modules/ModuleFactory.hpp"
 
 #include "modules/Clock.hpp"
+#include "modules/Cpu.hpp"
+#include "modules/Memory.hpp"
 #include "modules/Window.hpp"
 #include "modules/Workspaces.hpp"
 
@@ -26,6 +28,8 @@ std::unique_ptr<IModule> CreateModule(ModuleKind kind, const Config& config, con
         case ModuleKind::Clock: return std::make_unique<Clock>(RequireModuleConfig(config.clock, "clock"));
         case ModuleKind::Window: return std::make_unique<Window>(RequireModuleConfig(config.window, "window"), sources.windowManager);
         case ModuleKind::Workspaces: return std::make_unique<Workspaces>(sources.windowManager, sources.monitor);
+        case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireModuleConfig(config.cpu, "cpu"));
+        case ModuleKind::Memory: return std::make_unique<Memory>(RequireModuleConfig(config.memory, "memory"));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
 }

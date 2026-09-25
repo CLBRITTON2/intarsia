@@ -2,6 +2,7 @@
 
 #include "bar/Sections.hpp"
 #include "platform/AppBar.hpp"
+#include "platform/Process.hpp"
 
 #include <d2d1.h>
 
@@ -40,17 +41,31 @@ enum class WindowManagerKind {
 enum class ModuleKind {
     Clock,
     Window,
-    Workspaces
+    Workspaces,
+    Cpu,
+    Memory
 };
 
-struct ClockConfig {
-    std::string          format; // std::format chrono spec, "{:%a %d %b %Y, %H:%M}"
+// What a module runs for each input, from the optional on_click, on_right_click, on_scroll_up and on_scroll_down keys.
+// An input with a command replaces the module's own handling of it.
+struct ModuleActions {
+    std::optional<Command> click;
+    std::optional<Command> rightClick;
+    std::optional<Command> scrollUp;
+    std::optional<Command> scrollDown;
+};
+
+// A module that shows an icon and one formatted value, redrawn every interval: clock, cpu, memory.
+struct TextModuleConfig {
+    std::string          format; // std::format spec for the module's value, such as "{:%H:%M}" or "{}%"
     std::wstring         icon;
     std::chrono::seconds interval;
+    ModuleActions        actions;
 };
 
 struct WindowConfig {
-    size_t maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
+    size_t        maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
+    ModuleActions actions;
 };
 
 struct Config {
@@ -60,8 +75,10 @@ struct Config {
     WindowManagerKind    windowManager;
     Sections<ModuleKind> modules;
     // Each is present whenever a section lists its module, the loader rejects a config that lists one without its table.
-    std::optional<ClockConfig>  clock;
-    std::optional<WindowConfig> window;
+    std::optional<TextModuleConfig> clock;
+    std::optional<WindowConfig>     window;
+    std::optional<TextModuleConfig> cpu;
+    std::optional<TextModuleConfig> memory;
 };
 
 class ConfigError : public std::runtime_error {

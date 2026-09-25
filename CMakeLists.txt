@@ -33,7 +33,11 @@ add_library(intarsia_core STATIC
   src/bar/Layout.cpp
   src/config/Config.cpp
   src/modules/Clock.cpp
+  src/modules/Cpu.cpp
+  src/modules/IconText.cpp
+  src/modules/Memory.cpp
   src/modules/ModuleFactory.cpp
+  src/modules/Ticks.cpp
   src/modules/Window.cpp
   src/modules/Workspaces.cpp
   src/platform/AppBar.cpp
@@ -41,6 +45,7 @@ add_library(intarsia_core STATIC
   src/platform/FileWatcher.cpp
   src/platform/Handle.cpp
   src/platform/PeerProcess.cpp
+  src/platform/Process.cpp
   src/platform/Text.cpp
   src/platform/WebSocket.cpp
   src/render/Graphics.cpp
@@ -76,11 +81,15 @@ if(BUILD_TESTING)
     tests/bar/Sections.cpp
     tests/config/Config.cpp
     tests/modules/Clock.cpp
+    tests/modules/Cpu.cpp
+    tests/modules/Memory.cpp
+    tests/modules/Ticks.cpp
     tests/modules/Window.cpp
     tests/modules/Workspaces.cpp
     tests/wm/GlazeWmProtocol.cpp
     tests/platform/AppBar.cpp
     tests/platform/FileWatcher.cpp
+    tests/platform/Process.cpp
     tests/platform/Text.cpp
   )
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main)

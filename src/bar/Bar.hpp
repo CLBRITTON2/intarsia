@@ -4,6 +4,7 @@
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
+#include "platform/Process.hpp"
 #include "render/Graphics.hpp"
 #include "render/RenderContext.hpp"
 
@@ -11,6 +12,16 @@
 
 #include <exception>
 #include <memory>
+
+enum class ModuleInput {
+    LeftClick,
+    RightClick,
+    ScrollUp,
+    ScrollDown
+};
+
+// The command an input runs, or nullopt when the config binds none to it.
+const std::optional<Command>& CommandFor(const ModuleActions& actions, ModuleInput input);
 
 struct BarPlacement {
     HMONITOR monitor;
@@ -26,7 +37,7 @@ struct AppState {
 // One appbar window docked to one edge of one monitor, drawing its own module instances.
 class Bar {
   public:
-    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, const BarPlacement& placement, AppState& state);
+    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -51,20 +62,22 @@ class Bar {
         D2D1_RECT_F bounds;
     };
 
-    std::vector<HitBox>                        DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
-                                                           const std::vector<float>& offsets, D2D1_SIZE_F barSize) const;
-    void                                       ScheduleNextChange();
-    void                                       Click(LPARAM position);
+    std::vector<HitBox> DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
+                                    const std::vector<float>& offsets, D2D1_SIZE_F barSize) const;
+    void                ScheduleNextChange();
+    // Runs the module's command for the input, or for a left click without one, lets the module handle it.
+    void                                         HandleInput(POINT client, ModuleInput input);
 
-    const GraphicsDevice&                      graphics_;
-    const Config&                              config_;
-    AppState&                                  state_;
-    BarPlacement                               placement_;
-    Sections<std::unique_ptr<IModule>>         modules_;
-    std::vector<HitBox>                        hitBoxes_;
+    const GraphicsDevice&                        graphics_;
+    const Config&                                config_;
+    Launcher&                                    launcher_;
+    AppState&                                    state_;
+    BarPlacement                                 placement_;
+    Sections<std::unique_ptr<IModule>>           modules_;
+    std::vector<HitBox>                          hitBoxes_;
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain1>    swapChain_;
-    Microsoft::WRL::ComPtr<ID2D1DeviceContext> context_;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1>      swapChain_;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext>   context_;
     Microsoft::WRL::ComPtr<IDCompositionTarget>  compositionTarget_;
     Microsoft::WRL::ComPtr<IDCompositionVisual>  visual_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat>    textFormat_;

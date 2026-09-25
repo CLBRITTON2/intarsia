@@ -96,8 +96,10 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
     }
 }
 
-Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, const BarPlacement& placement, AppState& state) :
-    graphics_(graphics), config_(config), state_(state), placement_(placement), modules_(CreateModules(config, sources)), window_(CreateBarWindow(instance, this)) {
+Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
+         AppState& state) :
+    graphics_(graphics), config_(config), launcher_(launcher), state_(state), placement_(placement), modules_(CreateModules(config, sources)),
+    window_(CreateBarWindow(instance, this)) {
     RequireFontFamily(graphics_.dwrite.Get(), config_.font.family.c_str());
     ThrowIfFailed(graphics_.dwrite->CreateTextFormat(config_.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                      config_.font.textSizeDips, L"en-us", &textFormat_),
@@ -176,7 +178,17 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
-        case WM_LBUTTONUP: Click(lParam); return 0;
+        case WM_LBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::LeftClick); return 0;
+        case WM_RBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::RightClick); return 0;
+        case WM_MOUSEWHEEL: {
+            // Wheel messages carry screen coordinates, unlike button messages.
+            POINT point{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)};
+            if (!ScreenToClient(window, &point)) {
+                ThrowLastError("ScreenToClient");
+            }
+            HandleInput(point, GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? ModuleInput::ScrollUp : ModuleInput::ScrollDown);
+            return 0;
+        }
         case WM_ACTIVATE: NotifyAppBarActivated(window); return 0;
         case WM_WINDOWPOSCHANGED: NotifyAppBarMoved(window); return DefWindowProcW(window, message, wParam, lParam);
         case kAppBarCallback:
@@ -294,16 +306,32 @@ std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std
     return boxes;
 }
 
-// Mouse messages carry client pixels, and modules lay out in DIPs.
-void Bar::Click(LPARAM position) {
+// Mouse positions are client pixels, and modules lay out in DIPs.
+void Bar::HandleInput(POINT client, ModuleInput input) {
     const float         scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(placement_.dpi);
-    const D2D1_POINT_2F point = D2D1::Point2F(static_cast<float>(GET_X_LPARAM(position)) * scale, static_cast<float>(GET_Y_LPARAM(position)) * scale);
+    const D2D1_POINT_2F point = D2D1::Point2F(static_cast<float>(client.x) * scale, static_cast<float>(client.y) * scale);
     for (const HitBox& box : hitBoxes_) {
-        if (point.x >= box.bounds.left && point.x < box.bounds.right && point.y >= box.bounds.top && point.y < box.bounds.bottom) {
-            box.module->Click(D2D1::Point2F(point.x - box.bounds.left, point.y - box.bounds.top));
-            return;
+        if (point.x < box.bounds.left || point.x >= box.bounds.right || point.y < box.bounds.top || point.y >= box.bounds.bottom) {
+            continue;
         }
+        const std::optional<Command>& command = CommandFor(box.module->Actions(), input);
+        if (command.has_value()) {
+            launcher_.Launch(*command);
+        } else if (input == ModuleInput::LeftClick) {
+            box.module->Click(D2D1::Point2F(point.x - box.bounds.left, point.y - box.bounds.top));
+        }
+        return;
     }
+}
+
+const std::optional<Command>& CommandFor(const ModuleActions& actions, ModuleInput input) {
+    switch (input) {
+        case ModuleInput::LeftClick: return actions.click;
+        case ModuleInput::RightClick: return actions.rightClick;
+        case ModuleInput::ScrollUp: return actions.scrollUp;
+        case ModuleInput::ScrollDown: return actions.scrollDown;
+    }
+    throw std::invalid_argument(std::format("unknown module input {}", static_cast<int>(input)));
 }
 
 void Bar::ScheduleNextChange() {
