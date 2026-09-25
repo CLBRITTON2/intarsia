@@ -69,15 +69,19 @@ return {
             interval = 1,
             on_click = { "C:\\Windows\\System32\\resmon.exe" },
         },
-        -- A custom module runs its command every interval and shows the first line it printed. The command follows
-        -- the same rules as on_click, runs with no window, and is killed with everything it started after timeout
-        -- seconds. A failed run shows its reason in the alert color. Add "weather" to a list to show it.
+        -- A custom module runs its command every interval and shows what it printed. The command follows the same
+        -- rules as on_click, runs with no window, and is killed with everything it started after timeout seconds.
+        -- output = "text" shows the first line. output = "json" reads one object, { "text": "...", "tooltip": "...",
+        -- "alert": true }, where only text is required, tooltip may span lines, and alert draws the text in the alert
+        -- color. Control characters (other than line breaks in a tooltip) fail the run, as does a failed command, and
+        -- either shows its reason in the alert color. Add "weather" to a list to show it.
         -- weather = {
         --     type = "custom",
         --     -- Absolute, so another curl.exe earlier on PATH (such as MSYS2's) is never picked instead.
         --     command = { "C:\\Windows\\System32\\curl.exe", "--silent", "--fail", "https://wttr.in/?format=%c%t" },
         --     timeout = 10,
-        --     format = "{}", -- the value is the output's first line, as a string
+        --     output = "text",
+        --     format = "{}", -- the value is the output's text, as a string
         --     icon = "",
         --     interval = 900,
         -- },

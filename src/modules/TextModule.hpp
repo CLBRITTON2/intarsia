@@ -22,7 +22,7 @@ class TextModule : public IModule {
     std::optional<UINT>         MillisecondsUntilChange() const override;
     void                        Click(D2D1_POINT_2F point) final;
     const ModuleActions&        Actions() const final;
-    std::optional<std::wstring> TooltipText() final;
+    std::optional<std::wstring> TooltipText() override;
 
   protected:
     explicit TextModule(TextModuleConfig config);

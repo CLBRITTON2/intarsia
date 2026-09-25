@@ -15,8 +15,6 @@
 #include <stdexcept>
 #include <string>
 
-using Microsoft::WRL::ComPtr;
-
 namespace {
 
     constexpr wchar_t  kWindowClass[]  = L"IntarsiaBar";

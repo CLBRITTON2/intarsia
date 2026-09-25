@@ -6,6 +6,8 @@
 #include "platform/Process.hpp"
 #include "platform/Text.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <format>
 #include <stdexcept>
@@ -17,6 +19,74 @@ namespace {
     // Far more than one line on a bar needs. Output past it fails the run instead of growing without bound.
     constexpr size_t kMaxOutputBytes = size_t{64} * 1024;
 
+    // Output that fails its run. The message never quotes the output, so it is always safe to draw and log.
+    class OutputError : public std::runtime_error {
+      public:
+        using std::runtime_error::runtime_error;
+    };
+
+    // Controls (C0, DEL, C1) and the bidirectional embeddings, overrides and isolates, which can make drawn text read
+    // as something other than what it holds (Trojan Source, CVE-2021-42574). All are single UTF-16 units.
+    bool IsUnsafeCharacter(wchar_t unit) {
+        return unit < 0x20 || (unit >= 0x7F && unit <= 0x9F) || (unit >= 0x202A && unit <= 0x202E) || (unit >= 0x2066 && unit <= 0x2069);
+    }
+
+    // Throws OutputError naming field when text is not UTF-8 or holds an unsafe character other than those in allowed.
+    void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed) {
+        std::wstring wide;
+        try {
+            wide = ToWide(text);
+        } catch (const Win32Error&) { throw OutputError(std::format("{} is not UTF-8", field)); }
+        const auto unsafe = std::ranges::find_if(wide, [allowed](wchar_t unit) { return IsUnsafeCharacter(unit) && allowed.find(unit) == std::wstring_view::npos; });
+        if (unsafe != wide.end()) {
+            throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<unsigned int>(*unsafe)));
+        }
+    }
+
+    CommandResult ParseText(std::string_view output) {
+        const std::string_view line = FirstLine(output);
+        RequireDrawable(line, "output", L"");
+        return CommandResult{.outcome = CommandOutcome::Succeeded, .text = std::string(line), .tooltip = std::nullopt, .alert = false, .detail = {}};
+    }
+
+    CommandResult ParseJson(std::string_view output) {
+        const nlohmann::json value = nlohmann::json::parse(output.begin(), output.end(), nullptr, false);
+        if (value.is_discarded()) {
+            throw OutputError("printed invalid JSON");
+        }
+        if (!value.is_object()) {
+            throw OutputError("printed JSON that is not an object");
+        }
+        for (const auto& [key, field] : value.items()) {
+            if (key != "text" && key != "tooltip" && key != "alert") {
+                throw OutputError("printed a JSON field other than text, tooltip and alert");
+            }
+        }
+        const auto text = value.find("text");
+        if (text == value.end() || !text->is_string()) {
+            throw OutputError("printed JSON without a text string");
+        }
+        const auto tooltip = value.find("tooltip");
+        if (tooltip != value.end() && !tooltip->is_string()) {
+            throw OutputError("printed a JSON tooltip that is not a string");
+        }
+        const auto alert = value.find("alert");
+        if (alert != value.end() && !alert->is_boolean()) {
+            throw OutputError("printed a JSON alert that is not true or false");
+        }
+
+        CommandResult result{.outcome = CommandOutcome::Succeeded,
+                             .text    = text->get<std::string>(),
+                             .tooltip = tooltip == value.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
+                             .alert   = alert != value.end() && alert->get<bool>(),
+                             .detail  = {}};
+        RequireDrawable(result.text, "text", L"");
+        if (result.tooltip.has_value()) {
+            RequireDrawable(*result.tooltip, "tooltip", L"\n");
+        }
+        return result;
+    }
+
 } // namespace
 
 std::string_view FirstLine(std::string_view text) {
@@ -27,10 +97,22 @@ std::string_view FirstLine(std::string_view text) {
     return line;
 }
 
+CommandResult ParseOutput(std::string_view output, CustomOutput format) {
+    try {
+        switch (format) {
+            case CustomOutput::Text: return ParseText(output);
+            case CustomOutput::Json: return ParseJson(output);
+        }
+    } catch (const OutputError& error) {
+        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .detail = error.what()};
+    }
+    throw std::invalid_argument(std::format("unknown custom output {}", static_cast<int>(format)));
+}
+
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, HWND target, UINT changedMessage) :
-    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _target(target), _changedMessage(changedMessage),
-    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")), _result{.outcome = CommandOutcome::Pending, .text = {}, .detail = {}},
-    _thread([this] { Run(); }) {}
+    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _target(target),
+    _changedMessage(changedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")),
+    _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .detail = {}}, _thread([this] { Run(); }) {}
 
 CommandPoller::~CommandPoller() {
     SetEvent(_stopEvent.get());
@@ -63,15 +145,13 @@ CommandResult CommandPoller::RunOnce() const {
     std::string output;
     try {
         output = CaptureOutput(_command, _timeout, kMaxOutputBytes, _stopEvent.get());
-    } catch (const CommandError& error) { return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .detail = error.what()}; } catch (const Win32Error& error) {
-        return CommandResult{.outcome = CommandOutcome::Failed, .text = "could not run", .detail = error.what()};
+    } catch (const CommandError& error) {
+        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .detail = error.what()};
+    } catch (const Win32Error& error) {
+        return CommandResult{.outcome = CommandOutcome::Failed, .text = "could not run", .tooltip = std::nullopt, .alert = false, .detail = error.what()};
     }
-    const std::string_view line = FirstLine(output);
-    // Checked here so the UI thread never meets text it cannot convert.
-    try {
-        ToWide(line);
-    } catch (const Win32Error& error) { return CommandResult{.outcome = CommandOutcome::Failed, .text = "printed text that is not UTF-8", .detail = error.what()}; }
-    return CommandResult{.outcome = CommandOutcome::Succeeded, .text = std::string(line), .detail = {}};
+    // Parsed here so the UI thread only ever meets text it can draw.
+    return ParseOutput(output, _output);
 }
 
 // Posts and logs only on a change, so a command that keeps failing the same way logs once.

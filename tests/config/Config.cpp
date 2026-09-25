@@ -259,18 +259,31 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
 }
 
 TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
-    const Config config = LoadText(
-        WithRightModules(R"({ "hello" })", R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, format = "{}", icon = "", interval = 30 },)"));
+    const Config        config = LoadText(WithRightModules(
+        R"({ "hello" })", R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, output = "json", format = "{}", icon = "", interval = 30 },)"));
     const CustomConfig& custom = SettingsOf<CustomConfig>(config.modules.right, 0);
     EXPECT_EQ(custom.command.program.filename(), L"cmd.exe");
     EXPECT_EQ(custom.command.arguments, (std::vector<std::wstring>{L"/c", L"echo hi"}));
     EXPECT_EQ(custom.timeout, std::chrono::seconds(5));
+    EXPECT_EQ(custom.output, CustomOutput::Json);
     EXPECT_EQ(custom.text.interval, std::chrono::seconds(30));
 }
 
 TEST(Config, CustomModulesNeedACommand) {
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "hello" })", R"(        hello = { type = "custom", timeout = 5, format = "{}", icon = "", interval = 30 },)")); },
-                ConfigErrorWith("modules.hello.command is missing"));
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithRightModules(R"({ "hello" })", R"(        hello = { type = "custom", timeout = 5, output = "text", format = "{}", icon = "", interval = 30 },)"));
+        },
+        ConfigErrorWith("modules.hello.command is missing"));
+}
+
+TEST(Config, CustomOutputIsTextOrJson) {
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithRightModules(R"({ "hello" })",
+                                             R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", format = "{}", icon = "", interval = 30 },)"));
+        },
+        ConfigErrorWith("modules.hello.output must be one of text, json, got 'xml'"));
 }
 
 TEST(Config, TheConfigCannotReadFiles) {

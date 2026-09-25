@@ -362,9 +362,21 @@ namespace {
         return ReadTextFields(module);
     }
 
+    CustomOutput ParseCustomOutput(const TableReader& module, std::string_view key) {
+        const std::string value = module.String(key);
+        if (value == "text")
+            return CustomOutput::Text;
+        if (value == "json")
+            return CustomOutput::Json;
+        throw module.Error(std::format("{} must be one of text, json, got '{}'", module.KeyPath(key), value));
+    }
+
     CustomConfig ReadCustomConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "format", "icon", "interval"}));
-        return CustomConfig{.command = ReadCommand(module, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")), .text = ReadTextFields(module)};
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "output", "format", "icon", "interval"}));
+        return CustomConfig{.command = ReadCommand(module, "command"),
+                            .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")),
+                            .output  = ParseCustomOutput(module, "output"),
+                            .text    = ReadTextFields(module)};
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {

@@ -79,10 +79,17 @@ struct WindowConfig {
     ModuleActions              actions;
 };
 
-// A program run every interval, whose first line of output is shown through format.
+// How a custom module reads what its command printed.
+enum class CustomOutput {
+    Text, // the first line is the value
+    Json  // one object: text, and optionally tooltip and alert, as Waybar's return-type json
+};
+
+// A program run every interval, whose output is shown through format.
 struct CustomConfig {
     Command              command;
     std::chrono::seconds timeout; // the command and everything it started are killed after this long
+    CustomOutput         output;
     TextModuleConfig     text;
 };
 

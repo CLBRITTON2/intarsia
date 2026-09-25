@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -20,15 +21,21 @@ enum class CommandOutcome {
 };
 
 struct CommandResult {
-    CommandOutcome outcome;
-    std::string    text;   // the first line of output when it succeeded, a reason short enough for the bar when it failed
-    std::string    detail; // the full failure for the log, empty otherwise
+    CommandOutcome             outcome;
+    std::string                text;    // Succeeded: the value, safe to draw. Failed: a reason short enough for the bar.
+    std::optional<std::string> tooltip; // from json output, shown instead of the tooltip format, may hold line breaks
+    bool                       alert;   // from json output, draws the value in the alert color
+    std::string                detail;  // Failed: the full failure, for the log and the tooltip
 
-    bool           operator==(const CommandResult&) const = default;
+    bool                       operator==(const CommandResult&) const = default;
 };
 
 // The first line of text, without its line ending.
 std::string_view FirstLine(std::string_view text);
+
+// What a successful run printed, read as format says. Output is untrusted: text must be UTF-8 with no control or
+// bidirectional override characters, and a tooltip may also hold line breaks. Anything else is a Failed result.
+CommandResult ParseOutput(std::string_view output, CustomOutput format);
 
 // Runs a custom module's command on its own thread, first at once and then every interval, keeping the latest result
 // and posting changedMessage to target whenever it changes.
@@ -51,6 +58,7 @@ class CommandPoller {
     Command              _command;
     std::chrono::seconds _interval;
     std::chrono::seconds _timeout;
+    CustomOutput         _output;
     HWND                 _target;
     UINT                 _changedMessage;
     UniqueHandle         _stopEvent;
