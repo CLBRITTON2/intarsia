@@ -12,6 +12,7 @@
 
 #include <exception>
 #include <memory>
+#include <string_view>
 
 enum class ModuleInput {
     LeftClick,
@@ -33,10 +34,12 @@ struct AppState {
     std::exception_ptr error;
 };
 
-// One appbar window docked to one edge of one monitor, drawing its own module instances.
+// One appbar window docked to one edge of one monitor, drawing its own module instances. When the graphics device is
+// lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.
 class Bar {
   public:
-    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state);
+    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
+        HWND control, UINT deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -45,6 +48,12 @@ class Bar {
 
     // Lays out and draws every module from its current data, then schedules the next self-driven change.
     void Render();
+
+    // True once drawing failed because the graphics device was lost. The bar draws nothing more.
+    bool DeviceLost() const;
+
+    // True once a frame reached the screen, which shows the device worked.
+    bool HasPresented() const;
 
   private:
     template <typename Owner>
@@ -65,6 +74,9 @@ class Bar {
     std::vector<HitBox> DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
                                     const std::vector<float>& offsets, D2D1_SIZE_F barSize) const;
     void                ScheduleNextChange();
+    // False when the call failed because the device was lost, which is reported to control. Throws for any other
+    // failure.
+    bool RequireDevice(HRESULT result, std::string_view call);
     // Runs the module's command for the input, or for a left click without one, lets the module handle it.
     void                                         HandleInput(POINT client, ModuleInput input);
 
@@ -72,6 +84,10 @@ class Bar {
     const Config&                                _config;
     Launcher&                                    _launcher;
     AppState&                                    _state;
+    HWND                                         _control;
+    UINT                                         _deviceLostMessage;
+    bool                                         _deviceLost;
+    bool                                         _presented;
     BarPlacement                                 _placement;
     Sections<std::unique_ptr<IModule>>           _modules;
     std::vector<HitBox>                          _hitBoxes;

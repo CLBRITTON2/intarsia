@@ -4,6 +4,7 @@
 #include "modules/ModuleFactory.hpp"
 #include "platform/AppBar.hpp"
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 #include "platform/WindowProc.hpp"
 
 #include <shellapi.h>
@@ -13,6 +14,7 @@
 #include <cmath>
 #include <format>
 #include <stdexcept>
+#include <string>
 
 using Microsoft::WRL::ComPtr;
 
@@ -109,10 +111,10 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
     }
 }
 
-Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
-         AppState& state) :
-    _graphics(graphics), _config(config), _launcher(launcher), _state(state), _placement(placement), _modules(CreateModules(config, sources)),
-    _window(CreateBarWindow(instance, this)) {
+Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
+         HWND control, UINT deviceLostMessage) :
+    _graphics(graphics), _config(config), _launcher(launcher), _state(state), _control(control), _deviceLostMessage(deviceLostMessage), _deviceLost(false), _presented(false),
+    _placement(placement), _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
     RequireFontFamily(_graphics.dwrite.Get(), _config.font.family.c_str());
     ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                      _config.font.textSizeDips, L"en-us", &_textFormat),
@@ -229,8 +231,9 @@ void Bar::CreateSwapChain(UINT width, UINT height) {
 void Bar::ResizeSwapChain(UINT width, UINT height) {
     // ResizeBuffers fails while D2D still holds a bitmap over the old back buffer.
     _context->SetTarget(nullptr);
-    ThrowIfFailed(_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers");
-    BindRenderTarget();
+    if (RequireDevice(_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers")) {
+        BindRenderTarget();
+    }
 }
 
 void Bar::BindRenderTarget() {
@@ -256,8 +259,16 @@ RenderContext Bar::FrameContext() const {
                          .iconSizeDips = _config.font.iconSizeDips};
 }
 
+bool Bar::DeviceLost() const {
+    return _deviceLost;
+}
+
+bool Bar::HasPresented() const {
+    return _presented;
+}
+
 void Bar::Render() {
-    if (_swapChain == nullptr) {
+    if (_swapChain == nullptr || _deviceLost) {
         return;
     }
 
@@ -280,10 +291,27 @@ void Bar::Render() {
                               DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
         _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
     }
-    ThrowIfFailed(_context->EndDraw(), "ID2D1DeviceContext::EndDraw");
-
-    ThrowIfFailed(_swapChain->Present(1, 0), "IDXGISwapChain1::Present");
+    if (!RequireDevice(_context->EndDraw(), "ID2D1DeviceContext::EndDraw") || !RequireDevice(_swapChain->Present(1, 0), "IDXGISwapChain1::Present")) {
+        return;
+    }
+    _presented = true;
     ScheduleNextChange();
+}
+
+// A driver update, a driver crash or a GPU being removed all lose the device, and nothing drawn on it works again.
+bool Bar::RequireDevice(HRESULT result, std::string_view call) {
+    if (result != DXGI_ERROR_DEVICE_REMOVED && result != DXGI_ERROR_DEVICE_RESET && result != D2DERR_RECREATE_TARGET) {
+        ThrowIfFailed(result, call);
+        return true;
+    }
+    Log(LogLevel::Warning, "bar", "device_lost",
+        {{.key = "call", .value = std::string(call)}, {.key = "result", .value = std::format("0x{:08X}", static_cast<unsigned long>(result))}});
+    _deviceLost = true;
+    KillTimer(_window, kChangeTimer);
+    if (!PostMessageW(_control, _deviceLostMessage, 0, 0)) {
+        ThrowLastError("PostMessageW(device lost)");
+    }
+    return false;
 }
 
 std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,

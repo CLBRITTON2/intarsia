@@ -10,6 +10,7 @@
 
 #include <windows.h>
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <vector>
@@ -33,12 +34,19 @@ class App {
     void                    CreateBars(std::vector<BarPlacement> placements);
     void                    ReloadConfig();
     void                    RebuildBarsIfMonitorsChanged();
+    // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
+    void                  HandleDeviceLost();
+    void                  ScheduleDeviceRetry();
+    void                  RecreateDevice();
 
-    HINSTANCE               _instance;
-    std::filesystem::path   _configPath;
+    HINSTANCE             _instance;
+    std::filesystem::path _configPath;
     // Bars hold a reference to the config, so it is replaced only after they are destroyed.
-    std::unique_ptr<Config>      _config;
+    std::unique_ptr<Config> _config;
+    // Replaced when the device is lost, after the bars that draw with it are destroyed.
     GraphicsDevice               _graphics;
+    std::chrono::milliseconds    _deviceRetry;
+    bool                         _recovering; // no bars exist until the new device is ready
     AppState                     _state;
     bool                         _redrawPending;
     HWND                         _control;

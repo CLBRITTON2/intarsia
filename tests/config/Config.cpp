@@ -83,6 +83,7 @@ return {
 
     std::vector<ModuleKind> Kinds(const std::vector<ModuleInstance>& instances) {
         std::vector<ModuleKind> kinds;
+        kinds.reserve(instances.size());
         for (const ModuleInstance& instance : instances) {
             kinds.push_back(instance.kind);
         }

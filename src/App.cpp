@@ -8,8 +8,11 @@
 
 #include <shellscalingapi.h>
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
+#include <format>
+#include <string>
 #include <utility>
 
 namespace {
@@ -28,6 +31,12 @@ namespace {
     // Docking or undocking sends several WM_DISPLAYCHANGE while monitors come up, so bars are rebuilt once it is quiet.
     constexpr UINT_PTR kDisplaysTimer    = 2;
     constexpr UINT     kDisplaysSettleMs = 500;
+    constexpr UINT     kDeviceLost       = WM_APP + 5;
+    // Windows is often still switching adapters when a device is lost, so the new device waits a moment, backing off
+    // while each new device is lost before it draws a frame.
+    constexpr UINT_PTR                  kDeviceTimer = 3;
+    constexpr std::chrono::milliseconds kFirstDeviceRetry{500};
+    constexpr std::chrono::milliseconds kLongestDeviceRetry{10000};
 
     // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.
     BOOL CALLBACK CollectMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
@@ -84,7 +93,7 @@ namespace {
 
 App::App(HINSTANCE instance, std::filesystem::path configPath) :
     _instance(instance), _configPath(std::move(configPath)), _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()),
-    _state{.error = nullptr}, _redrawPending(false), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
+    _deviceRetry(kFirstDeviceRetry), _recovering(false), _state{.error = nullptr}, _redrawPending(false), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
     _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)) {
     Bar::RegisterWindowClass(_instance);
@@ -114,6 +123,7 @@ int App::Run() {
 LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case kConfigChanged: ReloadConfig(); return 0;
+        case kDeviceLost: HandleDeviceLost(); return 0;
         case kSourcesChanged:
             if (!_redrawPending) {
                 if (SetTimer(_control, kRedrawTimer, kRedrawDelayMs, nullptr) == 0) {
@@ -138,6 +148,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             } else if (wParam == kDisplaysTimer) {
                 KillTimer(_control, kDisplaysTimer);
                 RebuildBarsIfMonitorsChanged();
+            } else if (wParam == kDeviceTimer) {
+                KillTimer(_control, kDeviceTimer);
+                RecreateDevice();
             }
             return 0;
         case kWatcherFailed: {
@@ -158,7 +171,7 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
     for (const BarPlacement& placement : _placements) {
         _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                               ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .monitor = placement.monitor}, _launcher,
-                                              placement, _state));
+                                              placement, _state, _control, kDeviceLost));
         if (_state.error) {
             std::rethrow_exception(_state.error);
         }
@@ -175,12 +188,19 @@ void App::ReloadConfig() {
     _config         = std::move(config);
     _windowManager  = CreateWindowManager(_config->windowManager, _control, kSourcesChanged);
     _commandPollers = std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged);
-    CreateBars(PlacementsForAllMonitors());
+    // A pending device recovery builds the bars from this config once it has a device.
+    if (!_recovering) {
+        CreateBars(PlacementsForAllMonitors());
+    }
 }
 
 // A monitor added, removed, moved, resized or rescaled gets fresh bars. The window manager and the command pollers
 // stay, since they do not depend on monitors.
 void App::RebuildBarsIfMonitorsChanged() {
+    // A pending device recovery reads the monitors when it builds the bars.
+    if (_recovering) {
+        return;
+    }
     std::vector<BarPlacement> placements = PlacementsForAllMonitors();
     if (placements == _placements) {
         return;
@@ -188,4 +208,41 @@ void App::RebuildBarsIfMonitorsChanged() {
     Log(LogLevel::Info, "app", "monitors_changed", {{.key = "from", .value = std::to_string(_placements.size())}, {.key = "to", .value = std::to_string(placements.size())}});
     _bars.clear();
     CreateBars(std::move(placements));
+}
+
+// Every bar reports the same loss, so reports that arrive after the bars were destroyed find no lost bar and do nothing.
+// Retries forever, as the GlazeWM backend does: a GPU that comes back must not need the bar restarted.
+void App::HandleDeviceLost() {
+    if (std::ranges::none_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->DeviceLost(); })) {
+        return;
+    }
+    // A device that drew a frame was working, so the wait starts short again.
+    const bool drew = std::ranges::any_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->HasPresented(); });
+    _deviceRetry    = drew ? kFirstDeviceRetry : std::min(_deviceRetry * 2, kLongestDeviceRetry);
+    Log(LogLevel::Warning, "app", "recovering_device",
+        {{.key = "reason", .value = std::format("0x{:08X}", static_cast<unsigned long>(_graphics.d3d->GetDeviceRemovedReason()))},
+         {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
+    _bars.clear();
+    ScheduleDeviceRetry();
+}
+
+void App::ScheduleDeviceRetry() {
+    _recovering = true;
+    if (SetTimer(_control, kDeviceTimer, static_cast<UINT>(_deviceRetry.count()), nullptr) == 0) {
+        ThrowLastError("SetTimer(device)");
+    }
+}
+
+// Creating the device fails while no adapter is ready, which waits longer and tries again.
+void App::RecreateDevice() {
+    try {
+        _graphics = CreateGraphicsDevice();
+    } catch (const Win32Error& error) {
+        _deviceRetry = std::min(_deviceRetry * 2, kLongestDeviceRetry);
+        Log(LogLevel::Warning, "app", "device_unavailable", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
+        ScheduleDeviceRetry();
+        return;
+    }
+    _recovering = false;
+    CreateBars(PlacementsForAllMonitors());
 }
