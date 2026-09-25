@@ -25,6 +25,9 @@ namespace {
     // cause are held to one per frame.
     constexpr UINT_PTR kRedrawTimer   = 1;
     constexpr UINT     kRedrawDelayMs = 16;
+    // Docking or undocking sends several WM_DISPLAYCHANGE while monitors come up, so bars are rebuilt once it is quiet.
+    constexpr UINT_PTR kDisplaysTimer    = 2;
+    constexpr UINT     kDisplaysSettleMs = 500;
 
     // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.
     BOOL CALLBACK CollectMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
@@ -59,7 +62,8 @@ namespace {
         return placements;
     }
 
-    // A message-only window: it receives the watcher's messages and survives the bars being rebuilt.
+    // Receives the worker threads' messages and survives the bars being rebuilt. A hidden top-level window rather than a
+    // message-only one, because only top-level windows get the WM_DISPLAYCHANGE broadcast.
     HWND CreateControlWindow(HINSTANCE instance, void* owner, WNDPROC procedure) {
         WNDCLASSEXW windowClass{};
         windowClass.cbSize        = sizeof(windowClass);
@@ -69,7 +73,7 @@ namespace {
         if (RegisterClassExW(&windowClass) == 0) {
             ThrowLastError("RegisterClassExW(control)");
         }
-        HWND window = CreateWindowExW(0, kControlClass, L"intarsia control", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, instance, owner);
+        HWND window = CreateWindowExW(WS_EX_TOOLWINDOW, kControlClass, L"intarsia control", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, owner);
         if (window == nullptr) {
             ThrowLastError("CreateWindowExW(control)");
         }
@@ -84,7 +88,7 @@ App::App(HINSTANCE instance, std::filesystem::path configPath) :
     _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)) {
     Bar::RegisterWindowClass(_instance);
-    CreateBars();
+    CreateBars(PlacementsForAllMonitors());
 }
 
 App::~App() {
@@ -118,6 +122,12 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 _redrawPending = true;
             }
             return 0;
+        case WM_DISPLAYCHANGE:
+            // Setting the timer again restarts it, so the rebuild waits for the last change in a burst.
+            if (SetTimer(_control, kDisplaysTimer, kDisplaysSettleMs, nullptr) == 0) {
+                ThrowLastError("SetTimer(displays)");
+            }
+            return 0;
         case WM_TIMER:
             if (wParam == kRedrawTimer) {
                 KillTimer(_control, kRedrawTimer);
@@ -125,6 +135,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 for (const std::unique_ptr<Bar>& bar : _bars) {
                     bar->Render();
                 }
+            } else if (wParam == kDisplaysTimer) {
+                KillTimer(_control, kDisplaysTimer);
+                RebuildBarsIfMonitorsChanged();
             }
             return 0;
         case kWatcherFailed: {
@@ -140,8 +153,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
     }
 }
 
-void App::CreateBars() {
-    for (const BarPlacement& placement : PlacementsForAllMonitors()) {
+void App::CreateBars(std::vector<BarPlacement> placements) {
+    _placements = std::move(placements);
+    for (const BarPlacement& placement : _placements) {
         _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                               ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .monitor = placement.monitor}, _launcher,
                                               placement, _state));
@@ -161,5 +175,17 @@ void App::ReloadConfig() {
     _config         = std::move(config);
     _windowManager  = CreateWindowManager(_config->windowManager, _control, kSourcesChanged);
     _commandPollers = std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged);
-    CreateBars();
+    CreateBars(PlacementsForAllMonitors());
+}
+
+// A monitor added, removed, moved, resized or rescaled gets fresh bars. The window manager and the command pollers
+// stay, since they do not depend on monitors.
+void App::RebuildBarsIfMonitorsChanged() {
+    std::vector<BarPlacement> placements = PlacementsForAllMonitors();
+    if (placements == _placements) {
+        return;
+    }
+    Log(LogLevel::Info, "app", "monitors_changed", {{.key = "from", .value = std::to_string(_placements.size())}, {.key = "to", .value = std::to_string(placements.size())}});
+    _bars.clear();
+    CreateBars(std::move(placements));
 }

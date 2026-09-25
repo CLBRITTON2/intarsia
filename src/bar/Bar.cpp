@@ -93,6 +93,10 @@ namespace {
 
 } // namespace
 
+bool BarPlacement::operator==(const BarPlacement& other) const {
+    return monitor == other.monitor && EqualRect(&monitorRect, &other.monitorRect) && dpi == other.dpi;
+}
+
 void Bar::RegisterWindowClass(HINSTANCE instance) {
     WNDCLASSEXW windowClass{};
     windowClass.cbSize        = sizeof(windowClass);
@@ -156,7 +160,6 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             _placement.dpi = HIWORD(wParam);
             Dock();
             return 0;
-        case WM_DISPLAYCHANGE: Dock(); return 0;
         case WM_PAINT:
             Render();
             ValidateRect(window, nullptr);

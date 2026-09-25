@@ -24,6 +24,8 @@ struct BarPlacement {
     HMONITOR monitor;
     RECT     monitorRect;
     UINT     dpi;
+
+    bool     operator==(const BarPlacement& other) const;
 };
 
 // Process-wide state the window procedures report into, since exceptions cannot unwind through user32.

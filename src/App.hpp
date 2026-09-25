@@ -30,8 +30,9 @@ class App {
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    void                    CreateBars();
+    void                    CreateBars(std::vector<BarPlacement> placements);
     void                    ReloadConfig();
+    void                    RebuildBarsIfMonitorsChanged();
 
     HINSTANCE               _instance;
     std::filesystem::path   _configPath;
@@ -47,6 +48,8 @@ class App {
     // Modules read the window manager, so it is created before the bars and destroyed after them.
     std::unique_ptr<IWindowManager> _windowManager;
     // Created before the bars and destroyed after them, like the window manager, since custom modules read them.
-    std::unique_ptr<CommandPollers>   _commandPollers;
+    std::unique_ptr<CommandPollers> _commandPollers;
+    // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
+    std::vector<BarPlacement>         _placements;
     std::vector<std::unique_ptr<Bar>> _bars;
 };
