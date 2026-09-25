@@ -1,14 +1,15 @@
 #include "App.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
+#include "platform/WindowProc.hpp"
 #include "wm/WindowManagerFactory.hpp"
 
 #include <shellscalingapi.h>
 
 #include <chrono>
 #include <exception>
-#include <stdexcept>
 #include <utility>
 
 namespace {
@@ -19,6 +20,10 @@ namespace {
     constexpr UINT    kWindowsChanged = WM_APP + 4;
     // Editors save in several writes, so the reload waits until the file has been quiet this long.
     constexpr std::chrono::milliseconds kConfigSettle{100};
+    // Window manager changes arrive in bursts (a terminal can retitle itself many times a second), so redraws they
+    // cause are held to one per frame.
+    constexpr UINT_PTR kRedrawTimer   = 1;
+    constexpr UINT     kRedrawDelayMs = 16;
 
     // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.
     BOOL CALLBACK CollectMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
@@ -73,19 +78,19 @@ namespace {
 } // namespace
 
 App::App(HINSTANCE instance, std::filesystem::path configPath) :
-    instance_(instance), configPath_(std::move(configPath)), config_(std::make_unique<Config>(LoadConfig(configPath_))), graphics_(CreateGraphicsDevice()),
-    state_{.error = nullptr}, control_(CreateControlWindow(instance, this, ControlProc)),
-    watcher_(std::make_unique<FileWatcher>(configPath_, control_, kConfigChanged, kWatcherFailed, kConfigSettle)),
-    windowManager_(CreateWindowManager(config_->windowManager, control_, kWindowsChanged)) {
-    Bar::RegisterWindowClass(instance_);
+    _instance(instance), _configPath(std::move(configPath)), _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()),
+    _state{.error = nullptr}, _redrawPending(false), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
+    _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
+    _windowManager(CreateWindowManager(_config->windowManager, _control, kWindowsChanged)) {
+    Bar::RegisterWindowClass(_instance);
     CreateBars();
 }
 
 App::~App() {
-    bars_.clear();
-    windowManager_.reset();
-    watcher_.reset();
-    DestroyWindow(control_);
+    _bars.clear();
+    _windowManager.reset();
+    _watcher.reset();
+    DestroyWindow(_control);
 }
 
 int App::Run() {
@@ -94,44 +99,38 @@ int App::Run() {
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
-    if (state_.error) {
-        std::rethrow_exception(state_.error);
+    if (_state.error) {
+        std::rethrow_exception(_state.error);
     }
     return static_cast<int>(message.wParam);
 }
 
-LRESULT CALLBACK App::ControlProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-    if (message == WM_NCCREATE) {
-        auto* self = static_cast<App*>(IntToPointer<CREATESTRUCTW>(lParam)->lpCreateParams);
-        SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
-    }
-
-    auto* self = IntToPointer<App>(GetWindowLongPtrW(window, GWLP_USERDATA));
-    if (self == nullptr) {
-        return DefWindowProcW(window, message, wParam, lParam);
-    }
-
-    try {
-        return self->HandleControlMessage(window, message, wParam, lParam);
-    } catch (...) {
-        self->state_.error = std::current_exception();
-        PostQuitMessage(1);
-        return 0;
-    }
-}
-
-LRESULT App::HandleControlMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case kConfigChanged: ReloadConfig(); return 0;
         case kWindowsChanged:
-            for (const std::unique_ptr<Bar>& bar : bars_) {
-                bar->Render();
+            if (!_redrawPending) {
+                if (SetTimer(_control, kRedrawTimer, kRedrawDelayMs, nullptr) == 0) {
+                    ThrowLastError("SetTimer(redraw)");
+                }
+                _redrawPending = true;
+            }
+            return 0;
+        case WM_TIMER:
+            if (wParam == kRedrawTimer) {
+                KillTimer(_control, kRedrawTimer);
+                _redrawPending = false;
+                for (const std::unique_ptr<Bar>& bar : _bars) {
+                    bar->Render();
+                }
             }
             return 0;
         case kWatcherFailed: {
-            const std::exception_ptr error = watcher_->TakeError();
+            const std::exception_ptr error = _watcher->TakeError();
+            // Any process on the desktop can post this message, so one with nothing stored behind it is not fatal.
             if (!error) {
-                throw std::logic_error("config watcher reported a failure without storing an error");
+                Log(LogLevel::Warning, "app", "spurious_watcher_failure", {});
+                return 0;
             }
             std::rethrow_exception(error);
         }
@@ -141,21 +140,21 @@ LRESULT App::HandleControlMessage(HWND window, UINT message, WPARAM wParam, LPAR
 
 void App::CreateBars() {
     for (const BarPlacement& placement : PlacementsForAllMonitors()) {
-        bars_.push_back(
-            std::make_unique<Bar>(instance_, graphics_, *config_, ModuleSources{.windowManager = *windowManager_, .monitor = placement.monitor}, launcher_, placement, state_));
-        if (state_.error) {
-            std::rethrow_exception(state_.error);
+        _bars.push_back(
+            std::make_unique<Bar>(_instance, _graphics, *_config, ModuleSources{.windowManager = *_windowManager, .monitor = placement.monitor}, _launcher, placement, _state));
+        if (_state.error) {
+            std::rethrow_exception(_state.error);
         }
     }
 }
 
 // An invalid config throws before any bar is touched, and the error ends the app like a bad config at startup.
 void App::ReloadConfig() {
-    auto config = std::make_unique<Config>(LoadConfig(configPath_));
-    bars_.clear();
+    auto config = std::make_unique<Config>(LoadConfig(_configPath));
+    _bars.clear();
     // Reset before creating the replacement: the native backend allows one instance at a time.
-    windowManager_.reset();
-    config_        = std::move(config);
-    windowManager_ = CreateWindowManager(config_->windowManager, control_, kWindowsChanged);
+    _windowManager.reset();
+    _config        = std::move(config);
+    _windowManager = CreateWindowManager(_config->windowManager, _control, kWindowsChanged);
     CreateBars();
 }

@@ -29,123 +29,117 @@ namespace {
     // which aborts the process.
     class TableReader {
       public:
-        TableReader(lua_State* lua, int index, std::string source, std::string path) : lua_(lua), index_(index), source_(std::move(source)), path_(std::move(path)) {}
+        TableReader(lua_State* lua, int index, std::string source, std::string path) : _lua(lua), _index(index), _source(std::move(source)), _path(std::move(path)) {}
 
         bool Has(std::string_view key) const {
-            lua_pushlstring(lua_, key.data(), key.size());
-            const int type = lua_rawget(lua_, index_);
-            lua_pop(lua_, 1);
+            lua_pushlstring(_lua, key.data(), key.size());
+            const int type = lua_rawget(_lua, _index);
+            lua_pop(_lua, 1);
             return type != LUA_TNIL;
         }
 
         TableReader Table(std::string_view key) const {
             PushField(key, LUA_TTABLE, "a table");
-            return TableReader(lua_, lua_gettop(lua_), source_, KeyPath(key));
+            return TableReader(_lua, lua_gettop(_lua), _source, KeyPath(key));
         }
 
         std::string String(std::string_view key) const {
             PushField(key, LUA_TSTRING, "a string");
             std::string value = StringAt(-1);
-            lua_pop(lua_, 1);
+            lua_pop(_lua, 1);
             return value;
         }
 
         float Number(std::string_view key) const {
             PushField(key, LUA_TNUMBER, "a number");
-            const auto value = static_cast<float>(lua_tonumber(lua_, -1));
-            lua_pop(lua_, 1);
+            const auto value = static_cast<float>(lua_tonumber(_lua, -1));
+            lua_pop(_lua, 1);
             return value;
         }
 
         // A sequence of strings such as { "clock", "cpu" }.
         std::vector<std::string> StringList(std::string_view key) const {
             PushField(key, LUA_TTABLE, "a list of strings");
-            const int                listIndex = lua_gettop(lua_);
-            const auto               length    = static_cast<lua_Integer>(lua_rawlen(lua_, listIndex));
+            const int                listIndex = lua_gettop(_lua);
+            const auto               length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
             std::vector<std::string> values;
             values.reserve(static_cast<size_t>(length));
             for (lua_Integer position = 1; position <= length; ++position) {
-                if (lua_rawgeti(lua_, listIndex, position) != LUA_TSTRING) {
-                    throw Error(std::format("{}[{}] must be a string, got {}", KeyPath(key), position, luaL_typename(lua_, -1)));
+                if (lua_rawgeti(_lua, listIndex, position) != LUA_TSTRING) {
+                    throw Error(std::format("{}[{}] must be a string, got {}", KeyPath(key), position, luaL_typename(_lua, -1)));
                 }
                 values.push_back(StringAt(-1));
-                lua_pop(lua_, 1);
+                lua_pop(_lua, 1);
             }
             if (CountKeys(listIndex) != static_cast<size_t>(length)) {
                 throw Error(std::format("{} must be a plain list, it has keys other than 1 to {}", KeyPath(key), length));
             }
-            lua_pop(lua_, 1);
+            lua_pop(_lua, 1);
             return values;
         }
 
         // Every key of the table, which must all be strings.
         std::vector<std::string> Keys() const {
             std::vector<std::string> keys;
-            lua_pushnil(lua_);
-            while (lua_next(lua_, index_) != 0) {
-                if (lua_type(lua_, -2) != LUA_TSTRING) {
-                    throw Error(std::format("{} has a key that is not a string", path_.empty() ? std::string("the returned table") : path_));
+            lua_pushnil(_lua);
+            while (lua_next(_lua, _index) != 0) {
+                if (lua_type(_lua, -2) != LUA_TSTRING) {
+                    throw Error(std::format("{} has a key that is not a string", _path.empty() ? std::string("the returned table") : _path));
                 }
                 keys.push_back(StringAt(-2));
-                lua_pop(lua_, 1);
+                lua_pop(_lua, 1);
             }
             return keys;
         }
 
         void RejectUnknownKeys(const std::vector<std::string_view>& known) const {
-            lua_pushnil(lua_);
-            while (lua_next(lua_, index_) != 0) {
-                if (lua_type(lua_, -2) != LUA_TSTRING) {
-                    throw Error(std::format("{} has a key that is not a string", path_.empty() ? std::string("the returned table") : path_));
-                }
-                const std::string key = StringAt(-2);
+            for (const std::string& key : Keys()) {
                 if (std::ranges::find(known, key) == known.end()) {
                     throw Error(std::format("{} is not a known key", KeyPath(key)));
                 }
-                lua_pop(lua_, 1);
             }
         }
 
         std::string KeyPath(std::string_view key) const {
-            return path_.empty() ? std::string(key) : std::format("{}.{}", path_, key);
+            return _path.empty() ? std::string(key) : std::format("{}.{}", _path, key);
         }
 
         ConfigError Error(std::string_view message) const {
-            return ConfigError(std::format("{}: {}", source_, message));
+            return ConfigError(std::format("{}: {}", _source, message));
         }
 
       private:
         std::string StringAt(int index) const {
             size_t      length = 0;
-            const char* data   = lua_tolstring(lua_, index, &length);
+            const char* data   = lua_tolstring(_lua, index, &length);
             return {data, length};
         }
 
         size_t CountKeys(int tableIndex) const {
             size_t count = 0;
-            lua_pushnil(lua_);
-            while (lua_next(lua_, tableIndex) != 0) {
+            lua_pushnil(_lua);
+            while (lua_next(_lua, tableIndex) != 0) {
                 ++count;
-                lua_pop(lua_, 1);
+                lua_pop(_lua, 1);
             }
             return count;
         }
 
         void PushField(std::string_view key, int expectedType, std::string_view expectedName) const {
-            lua_pushlstring(lua_, key.data(), key.size());
-            const int type = lua_rawget(lua_, index_);
+            lua_pushlstring(_lua, key.data(), key.size());
+            const int type = lua_rawget(_lua, _index);
             if (type == LUA_TNIL) {
                 throw Error(std::format("{} is missing", KeyPath(key)));
             }
             if (type != expectedType) {
-                throw Error(std::format("{} must be {}, got {}", KeyPath(key), expectedName, lua_typename(lua_, type)));
+                throw Error(std::format("{} must be {}, got {}", KeyPath(key), expectedName, lua_typename(_lua, type)));
             }
         }
 
-        lua_State*  lua_;
-        int         index_;
-        std::string source_;
-        std::string path_;
+        lua_State*  _lua;
+        int         _index;
+        std::string _source;
+        std::string _path;
     };
 
     float PositiveNumber(const TableReader& table, std::string_view key) {
@@ -264,7 +258,7 @@ namespace {
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
     }
 
-    // Every name a modules_ list shows must be defined in the modules table, which holds one table per module.
+    // Every name a _modules list shows must be defined in the modules table, which holds one table per module.
     std::vector<ModuleInstance> ReadModuleList(const TableReader& root, const TableReader& definitions, std::string_view listKey) {
         std::vector<ModuleInstance> instances;
         for (const std::string& name : root.StringList(listKey)) {
@@ -279,8 +273,7 @@ namespace {
     }
 
     bool Shows(const Sections<ModuleInstance>& modules, std::string_view name) {
-        const auto isNamed = [name](const ModuleInstance& instance) { return instance.name == name; };
-        return std::ranges::any_of(modules.left, isNamed) || std::ranges::any_of(modules.center, isNamed) || std::ranges::any_of(modules.right, isNamed);
+        return AnyInSections(modules, [name](const ModuleInstance& instance) { return instance.name == name; });
     }
 
     // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
@@ -290,14 +283,13 @@ namespace {
                 throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
             }
             if (!Shows(modules, name)) {
-                throw definitions.Error(std::format("{} is defined but no modules_ list shows it", definitions.KeyPath(name)));
+                throw definitions.Error(std::format("{} is defined but no _modules list shows it", definitions.KeyPath(name)));
             }
         }
     }
 
     bool ListsModule(const Sections<ModuleInstance>& modules, ModuleKind kind) {
-        const auto isKind = [kind](const ModuleInstance& instance) { return instance.kind == kind; };
-        return std::ranges::any_of(modules.left, isKind) || std::ranges::any_of(modules.center, isKind) || std::ranges::any_of(modules.right, isKind);
+        return AnyInSections(modules, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
     }
 
     // An action is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
@@ -356,6 +348,14 @@ namespace {
         return contents.str();
     }
 
+    // Far more than any real config needs (a few thousand instructions), and still under a second to reach.
+    constexpr int kMaxConfigInstructions = 50'000'000;
+
+    // Called once the count is reached. luaL_error raises inside the lua_pcall, so LoadConfig reports it as a ConfigError.
+    void AbortRunawayConfig(lua_State* lua, lua_Debug*) {
+        luaL_error(lua, "the config ran %d instructions without finishing, is there an endless loop?", kMaxConfigInstructions);
+    }
+
     void OpenLibrary(lua_State* lua, const char* name, lua_CFunction open) {
         luaL_requiref(lua, name, open, 1);
         lua_pop(lua, 1);
@@ -385,11 +385,17 @@ Config LoadConfig(const std::filesystem::path& path) {
     if (lua == nullptr) {
         throw ConfigError("luaL_newstate failed to allocate a Lua state");
     }
-    // Only libraries that cannot reach the filesystem or other processes.
+    // Only libraries that cannot reach the filesystem or other processes: base minus its two file loaders.
     OpenLibrary(lua.get(), LUA_GNAME, luaopen_base);
     OpenLibrary(lua.get(), LUA_STRLIBNAME, luaopen_string);
     OpenLibrary(lua.get(), LUA_TABLIBNAME, luaopen_table);
     OpenLibrary(lua.get(), LUA_MATHLIBNAME, luaopen_math);
+    for (const char* loader : {"dofile", "loadfile"}) {
+        lua_pushnil(lua.get());
+        lua_setglobal(lua.get(), loader);
+    }
+    // Reload runs on the UI thread, so a config that never finishes would freeze the bar: stop it instead.
+    lua_sethook(lua.get(), AbortRunawayConfig, LUA_MASKCOUNT, kMaxConfigInstructions);
 
     const std::string chunkName = "@" + source;
     if (luaL_loadbufferx(lua.get(), chunk.data(), chunk.size(), chunkName.c_str(), "t") != LUA_OK) {

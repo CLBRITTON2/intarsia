@@ -21,20 +21,20 @@ namespace {
 } // namespace
 
 FileWatcher::FileWatcher(const std::filesystem::path& file, HWND target, UINT changedMessage, UINT failedMessage, std::chrono::milliseconds settle) :
-    fileName_(file.filename().wstring()), target_(target), changedMessage_(changedMessage), failedMessage_(failedMessage), settle_(settle),
-    directory_(OwnHandle(CreateFileW(file.parent_path().c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+    _fileName(file.filename().wstring()), _target(target), _changedMessage(changedMessage), _failedMessage(failedMessage), _settle(settle),
+    _directory(OwnHandle(CreateFileW(file.parent_path().c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr),
                          "CreateFileW(config directory)")),
-    stopEvent_(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")), thread_([this] { Watch(); }) {}
+    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")), _thread([this] { Watch(); }) {}
 
 FileWatcher::~FileWatcher() {
-    SetEvent(stopEvent_.get());
-    thread_.join();
+    SetEvent(_stopEvent.get());
+    _thread.join();
 }
 
 std::exception_ptr FileWatcher::TakeError() {
-    const std::scoped_lock lock(errorMutex_);
-    return std::exchange(error_, nullptr);
+    const std::scoped_lock lock(_errorMutex);
+    return std::exchange(_error, nullptr);
 }
 
 void FileWatcher::Watch() {
@@ -42,10 +42,10 @@ void FileWatcher::Watch() {
         WatchUntilStopped();
     } catch (...) {
         {
-            const std::scoped_lock lock(errorMutex_);
-            error_ = std::current_exception();
+            const std::scoped_lock lock(_errorMutex);
+            _error = std::current_exception();
         }
-        PostMessageW(target_, failedMessage_, 0, 0);
+        PostMessageW(_target, _failedMessage, 0, 0);
     }
 }
 
@@ -54,31 +54,31 @@ void FileWatcher::WatchUntilStopped() {
     std::vector<DWORD>          buffer(kBufferDwords);
     const DWORD                 bufferBytes = static_cast<DWORD>(buffer.size() * sizeof(DWORD));
     OVERLAPPED                  overlapped{};
-    const std::array<HANDLE, 2> waits{stopEvent_.get(), readDone.get()};
+    const std::array<HANDLE, 2> waits{_stopEvent.get(), readDone.get()};
     bool                        pending = false;
 
     const auto                  startRead = [&] {
         overlapped        = OVERLAPPED{};
         overlapped.hEvent = readDone.get();
         ResetEvent(readDone.get());
-        if (!ReadDirectoryChangesW(directory_.get(), buffer.data(), bufferBytes, FALSE, kNotifyFilter, nullptr, &overlapped, nullptr)) {
+        if (!ReadDirectoryChangesW(_directory.get(), buffer.data(), bufferBytes, FALSE, kNotifyFilter, nullptr, &overlapped, nullptr)) {
             ThrowLastError("ReadDirectoryChangesW");
         }
     };
 
     startRead();
     while (true) {
-        const DWORD timeout = pending ? static_cast<DWORD>(settle_.count()) : INFINITE;
+        const DWORD timeout = pending ? static_cast<DWORD>(_settle.count()) : INFINITE;
         const DWORD woke    = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, timeout);
         if (woke == WAIT_OBJECT_0) {
-            CancelIoEx(directory_.get(), &overlapped);
+            CancelIoEx(_directory.get(), &overlapped);
             DWORD ignored = 0;
-            GetOverlappedResult(directory_.get(), &overlapped, &ignored, TRUE);
+            GetOverlappedResult(_directory.get(), &overlapped, &ignored, TRUE);
             return;
         }
         if (woke == WAIT_TIMEOUT) {
             pending = false;
-            if (!PostMessageW(target_, changedMessage_, 0, 0)) {
+            if (!PostMessageW(_target, _changedMessage, 0, 0)) {
                 ThrowLastError("PostMessageW(config changed)");
             }
             continue;
@@ -88,12 +88,12 @@ void FileWatcher::WatchUntilStopped() {
         }
 
         DWORD bytes = 0;
-        if (!GetOverlappedResult(directory_.get(), &overlapped, &bytes, FALSE)) {
+        if (!GetOverlappedResult(_directory.get(), &overlapped, &bytes, FALSE)) {
             ThrowLastError("GetOverlappedResult(ReadDirectoryChangesW)");
         }
         // Zero bytes means the change list overflowed the buffer, so the file may have changed.
         const std::vector<std::wstring> names = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
-        if (bytes == 0 || std::ranges::any_of(names, [this](const std::wstring& name) { return SameFileName(name, fileName_); })) {
+        if (bytes == 0 || std::ranges::any_of(names, [this](const std::wstring& name) { return SameFileName(name, _fileName); })) {
             pending = true;
         }
         startRead();

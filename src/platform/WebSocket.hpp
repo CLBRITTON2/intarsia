@@ -34,7 +34,7 @@ class WebSocket {
     };
     using UniqueInternet = std::unique_ptr<void, InternetCloser>;
 
-    UniqueInternet session_;
-    UniqueInternet connection_;
-    UniqueInternet socket_;
+    UniqueInternet _session;
+    UniqueInternet _connection;
+    UniqueInternet _socket;
 };

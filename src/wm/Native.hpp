@@ -47,12 +47,12 @@ class Native final : public IWindowManager {
     static void CALLBACK OnWinEvent(HWINEVENTHOOK hook, DWORD event, HWND window, LONG object, LONG child, DWORD thread, DWORD time);
     void                 Refocus(HWND window);
 
-    ActiveInstance       active_;
-    HWND                 target_;
-    UINT                 changedMessage_;
-    HWND                 foreground_;
-    UniqueHook           foregroundHook_;
-    UniqueHook           nameHook_;
+    ActiveInstance       _active;
+    HWND                 _target;
+    UINT                 _changedMessage;
+    HWND                 _foreground;
+    UniqueHook           _foregroundHook;
+    UniqueHook           _nameHook;
 };
 
 // The text of a window's title bar, empty when it has none.

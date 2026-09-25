@@ -37,6 +37,7 @@ add_library(intarsia_core STATIC
   src/modules/IconText.cpp
   src/modules/Memory.cpp
   src/modules/ModuleFactory.cpp
+  src/modules/TextModule.cpp
   src/modules/Ticks.cpp
   src/modules/Window.cpp
   src/modules/Workspaces.cpp
@@ -44,6 +45,7 @@ add_library(intarsia_core STATIC
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
   src/platform/Handle.cpp
+  src/platform/Log.cpp
   src/platform/PeerProcess.cpp
   src/platform/Process.cpp
   src/platform/Text.cpp
@@ -91,6 +93,7 @@ if(BUILD_TESTING)
     tests/platform/FileWatcher.cpp
     tests/platform/Process.cpp
     tests/platform/Text.cpp
+    tests/platform/WorkQueue.cpp
   )
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/config.lua")

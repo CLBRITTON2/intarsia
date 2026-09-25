@@ -72,7 +72,7 @@ struct WindowConfig {
 // The settings from a module's table: text modules and window have one, workspaces has none.
 using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig>;
 
-// One entry of a modules_ list: a name the user chose, defined in the config's modules table with its type.
+// One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {
     std::string    name;
     ModuleKind     kind;

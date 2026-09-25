@@ -4,7 +4,7 @@
 #include "modules/ModuleFactory.hpp"
 #include "platform/AppBar.hpp"
 #include "platform/Errors.hpp"
-#include "platform/Win32Cast.hpp"
+#include "platform/WindowProc.hpp"
 
 #include <shellapi.h>
 #include <windowsx.h>
@@ -55,15 +55,24 @@ namespace {
 
     std::optional<UINT> EarliestChange(const Sections<std::unique_ptr<IModule>>& modules) {
         std::optional<UINT> earliest;
-        for (const auto* section : {&modules.left, &modules.center, &modules.right}) {
-            for (const std::unique_ptr<IModule>& module : *section) {
-                const std::optional<UINT> wait = module->MillisecondsUntilChange();
-                if (wait.has_value() && (!earliest.has_value() || *wait < *earliest)) {
-                    earliest = wait;
-                }
+        ForEachInSections(modules, [&earliest](const std::unique_ptr<IModule>& module) {
+            const std::optional<UINT> wait = module->MillisecondsUntilChange();
+            if (wait.has_value() && (!earliest.has_value() || *wait < *earliest)) {
+                earliest = wait;
             }
-        }
+        });
         return earliest;
+    }
+
+    // The command an input runs, or nullopt when the config binds none to it.
+    const std::optional<Command>& CommandFor(const ModuleActions& actions, ModuleInput input) {
+        switch (input) {
+            case ModuleInput::LeftClick: return actions.click;
+            case ModuleInput::RightClick: return actions.rightClick;
+            case ModuleInput::ScrollUp: return actions.scrollUp;
+            case ModuleInput::ScrollDown: return actions.scrollDown;
+        }
+        throw std::invalid_argument(std::format("unknown module input {}", static_cast<int>(input)));
     }
 
     HWND CreateBarWindow(HINSTANCE instance, void* owner) {
@@ -87,7 +96,7 @@ namespace {
 void Bar::RegisterWindowClass(HINSTANCE instance) {
     WNDCLASSEXW windowClass{};
     windowClass.cbSize        = sizeof(windowClass);
-    windowClass.lpfnWndProc   = WindowProc;
+    windowClass.lpfnWndProc   = OwnedWindowProc<Bar>;
     windowClass.hInstance     = instance;
     windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.lpszClassName = kWindowClass;
@@ -98,73 +107,53 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
          AppState& state) :
-    graphics_(graphics), config_(config), launcher_(launcher), state_(state), placement_(placement), modules_(CreateModules(config, sources)),
-    window_(CreateBarWindow(instance, this)) {
-    RequireFontFamily(graphics_.dwrite.Get(), config_.font.family.c_str());
-    ThrowIfFailed(graphics_.dwrite->CreateTextFormat(config_.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                                     config_.font.textSizeDips, L"en-us", &textFormat_),
+    _graphics(graphics), _config(config), _launcher(launcher), _state(state), _placement(placement), _modules(CreateModules(config, sources)),
+    _window(CreateBarWindow(instance, this)) {
+    RequireFontFamily(_graphics.dwrite.Get(), _config.font.family.c_str());
+    ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                                     _config.font.textSizeDips, L"en-us", &_textFormat),
                   "IDWriteFactory::CreateTextFormat");
 
-    ThrowIfFailed(graphics_.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &context_), "ID2D1Device::CreateDeviceContext");
-    backgroundBrush_ = CreateBrush(context_.Get(), config_.colors.background);
-    borderBrush_     = CreateBrush(context_.Get(), config_.colors.border);
-    foregroundBrush_ = CreateBrush(context_.Get(), config_.colors.foreground);
-    accentBrush_     = CreateBrush(context_.Get(), config_.colors.accent);
-    alertBrush_      = CreateBrush(context_.Get(), config_.colors.alert);
+    ThrowIfFailed(_graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &_context), "ID2D1Device::CreateDeviceContext");
+    _backgroundBrush = CreateBrush(_context.Get(), _config.colors.background);
+    _borderBrush     = CreateBrush(_context.Get(), _config.colors.border);
+    _foregroundBrush = CreateBrush(_context.Get(), _config.colors.foreground);
+    _accentBrush     = CreateBrush(_context.Get(), _config.colors.accent);
+    _alertBrush      = CreateBrush(_context.Get(), _config.colors.alert);
 
-    ThrowIfFailed(graphics_.composition->CreateTargetForHwnd(window_, TRUE, &compositionTarget_), "IDCompositionDevice::CreateTargetForHwnd");
-    ThrowIfFailed(graphics_.composition->CreateVisual(&visual_), "IDCompositionDevice::CreateVisual");
-    ThrowIfFailed(compositionTarget_->SetRoot(visual_.Get()), "IDCompositionTarget::SetRoot");
+    ThrowIfFailed(_graphics.composition->CreateTargetForHwnd(_window, TRUE, &_compositionTarget), "IDCompositionDevice::CreateTargetForHwnd");
+    ThrowIfFailed(_graphics.composition->CreateVisual(&_visual), "IDCompositionDevice::CreateVisual");
+    ThrowIfFailed(_compositionTarget->SetRoot(_visual.Get()), "IDCompositionTarget::SetRoot");
 
-    RegisterAppBar(window_, kAppBarCallback);
+    RegisterAppBar(_window, kAppBarCallback);
     Dock();
     RECT client{};
-    if (!GetClientRect(window_, &client)) {
+    if (!GetClientRect(_window, &client)) {
         ThrowLastError("GetClientRect");
     }
     CreateSwapChain(static_cast<UINT>(client.right), static_cast<UINT>(client.bottom));
-    ShowWindow(window_, SW_SHOWNOACTIVATE);
+    ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
 
 Bar::~Bar() {
-    if (window_ != nullptr) {
-        DestroyWindow(window_);
+    if (_window != nullptr) {
+        DestroyWindow(_window);
     }
 }
 
-LRESULT CALLBACK Bar::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-    if (message == WM_NCCREATE) {
-        auto* self = static_cast<Bar*>(IntToPointer<CREATESTRUCTW>(lParam)->lpCreateParams);
-        SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
-    }
-
-    auto* self = IntToPointer<Bar>(GetWindowLongPtrW(window, GWLP_USERDATA));
-    if (self == nullptr) {
-        return DefWindowProcW(window, message, wParam, lParam);
-    }
-
-    try {
-        return self->HandleMessage(window, message, wParam, lParam);
-    } catch (...) {
-        self->state_.error = std::current_exception();
-        PostQuitMessage(1);
-        return 0;
-    }
-}
-
-// Uses the handle it is given: messages sent during CreateWindowExW arrive before window_ is assigned.
+// Uses the handle it is given: messages sent during CreateWindowExW arrive before _window is assigned.
 LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_SIZE:
             // CreateWindowExW sends a zero size before the constructor has built the swap chain.
-            if (swapChain_ != nullptr && LOWORD(lParam) != 0 && HIWORD(lParam) != 0) {
+            if (_swapChain != nullptr && LOWORD(lParam) != 0 && HIWORD(lParam) != 0) {
                 ResizeSwapChain(LOWORD(lParam), HIWORD(lParam));
                 Render();
             }
             return 0;
         case WM_DPICHANGED:
-            placement_.dpi = HIWORD(wParam);
+            _placement.dpi = HIWORD(wParam);
             Dock();
             return 0;
         case WM_DISPLAYCHANGE: Dock(); return 0;
@@ -203,16 +192,16 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             UnregisterAppBar(window);
             // Later messages such as WM_NCDESTROY go straight to DefWindowProcW.
             SetWindowLongPtrW(window, GWLP_USERDATA, 0);
-            window_ = nullptr;
+            _window = nullptr;
             return 0;
         default: return DefWindowProcW(window, message, wParam, lParam);
     }
 }
 
 void Bar::Dock() {
-    const int  thickness = DipsToPixels(config_.bar.thicknessDips, placement_.dpi);
-    const RECT rect      = ReserveAppBarRect(window_, placement_.monitorRect, config_.bar.edge, thickness);
-    if (!MoveWindow(window_, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, TRUE)) {
+    const int  thickness = DipsToPixels(_config.bar.thicknessDips, _placement.dpi);
+    const RECT rect      = ReserveAppBarRect(_window, _placement.monitorRect, _config.bar.edge, thickness);
+    if (!MoveWindow(_window, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }
 }
@@ -228,69 +217,69 @@ void Bar::CreateSwapChain(UINT width, UINT height) {
     description.SwapEffect       = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     description.AlphaMode        = DXGI_ALPHA_MODE_PREMULTIPLIED;
 
-    ThrowIfFailed(graphics_.dxgiFactory->CreateSwapChainForComposition(graphics_.d3d.Get(), &description, nullptr, &swapChain_), "IDXGIFactory2::CreateSwapChainForComposition");
-    ThrowIfFailed(visual_->SetContent(swapChain_.Get()), "IDCompositionVisual::SetContent");
-    ThrowIfFailed(graphics_.composition->Commit(), "IDCompositionDevice::Commit");
+    ThrowIfFailed(_graphics.dxgiFactory->CreateSwapChainForComposition(_graphics.d3d.Get(), &description, nullptr, &_swapChain), "IDXGIFactory2::CreateSwapChainForComposition");
+    ThrowIfFailed(_visual->SetContent(_swapChain.Get()), "IDCompositionVisual::SetContent");
+    ThrowIfFailed(_graphics.composition->Commit(), "IDCompositionDevice::Commit");
     BindRenderTarget();
 }
 
 void Bar::ResizeSwapChain(UINT width, UINT height) {
     // ResizeBuffers fails while D2D still holds a bitmap over the old back buffer.
-    context_->SetTarget(nullptr);
-    ThrowIfFailed(swapChain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers");
+    _context->SetTarget(nullptr);
+    ThrowIfFailed(_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers");
     BindRenderTarget();
 }
 
 void Bar::BindRenderTarget() {
     ComPtr<IDXGISurface> surface;
-    ThrowIfFailed(swapChain_->GetBuffer(0, IID_PPV_ARGS(&surface)), "IDXGISwapChain1::GetBuffer");
+    ThrowIfFailed(_swapChain->GetBuffer(0, IID_PPV_ARGS(&surface)), "IDXGISwapChain1::GetBuffer");
 
-    const auto                    dpi        = static_cast<float>(placement_.dpi);
+    const auto                    dpi        = static_cast<float>(_placement.dpi);
     const D2D1_BITMAP_PROPERTIES1 properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                                                                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi);
     ComPtr<ID2D1Bitmap1>          target;
-    ThrowIfFailed(context_->CreateBitmapFromDxgiSurface(surface.Get(), &properties, &target), "ID2D1DeviceContext::CreateBitmapFromDxgiSurface");
-    context_->SetTarget(target.Get());
-    context_->SetDpi(dpi, dpi);
+    ThrowIfFailed(_context->CreateBitmapFromDxgiSurface(surface.Get(), &properties, &target), "ID2D1DeviceContext::CreateBitmapFromDxgiSurface");
+    _context->SetTarget(target.Get());
+    _context->SetDpi(dpi, dpi);
 }
 
 RenderContext Bar::FrameContext() const {
-    return RenderContext{.context      = context_.Get(),
-                         .dwrite       = graphics_.dwrite.Get(),
-                         .textFormat   = textFormat_.Get(),
-                         .foreground   = foregroundBrush_.Get(),
-                         .accent       = accentBrush_.Get(),
-                         .alert        = alertBrush_.Get(),
-                         .iconSizeDips = config_.font.iconSizeDips};
+    return RenderContext{.context      = _context.Get(),
+                         .dwrite       = _graphics.dwrite.Get(),
+                         .textFormat   = _textFormat.Get(),
+                         .foreground   = _foregroundBrush.Get(),
+                         .accent       = _accentBrush.Get(),
+                         .alert        = _alertBrush.Get(),
+                         .iconSizeDips = _config.font.iconSizeDips};
 }
 
 void Bar::Render() {
-    if (swapChain_ == nullptr) {
+    if (_swapChain == nullptr) {
         return;
     }
 
     const RenderContext         render  = FrameContext();
-    const Edge                  edge    = config_.bar.edge;
-    const D2D1_SIZE_F           barSize = context_->GetSize();
-    const Sections<D2D1_SIZE_F> sizes   = MapSections(modules_, [&render](const std::unique_ptr<IModule>& module) {
+    const Edge                  edge    = _config.bar.edge;
+    const D2D1_SIZE_F           barSize = _context->GetSize();
+    const Sections<D2D1_SIZE_F> sizes   = MapSections(_modules, [&render](const std::unique_ptr<IModule>& module) {
         module->Layout(render);
         return module->Size();
     });
     const Sections<float>       offsets =
-        ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), config_.bar.spacingDips);
+        ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), _config.bar.spacingDips);
 
-    context_->BeginDraw();
-    context_->Clear(D2D1::ColorF(0, 0, 0, 0));
-    context_->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), backgroundBrush_.Get());
-    context_->FillRectangle(BorderRect(barSize, edge, config_.bar.borderDips), borderBrush_.Get());
-    hitBoxes_.clear();
-    for (const auto& boxes : {DrawSection(render, modules_.left, sizes.left, offsets.left, barSize), DrawSection(render, modules_.center, sizes.center, offsets.center, barSize),
-                              DrawSection(render, modules_.right, sizes.right, offsets.right, barSize)}) {
-        hitBoxes_.insert(hitBoxes_.end(), boxes.begin(), boxes.end());
+    _context->BeginDraw();
+    _context->Clear(D2D1::ColorF(0, 0, 0, 0));
+    _context->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), _backgroundBrush.Get());
+    _context->FillRectangle(BorderRect(barSize, edge, _config.bar.borderDips), _borderBrush.Get());
+    _hitBoxes.clear();
+    for (const auto& boxes : {DrawSection(render, _modules.left, sizes.left, offsets.left, barSize), DrawSection(render, _modules.center, sizes.center, offsets.center, barSize),
+                              DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
+        _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
     }
-    ThrowIfFailed(context_->EndDraw(), "ID2D1DeviceContext::EndDraw");
+    ThrowIfFailed(_context->EndDraw(), "ID2D1DeviceContext::EndDraw");
 
-    ThrowIfFailed(swapChain_->Present(1, 0), "IDXGISwapChain1::Present");
+    ThrowIfFailed(_swapChain->Present(1, 0), "IDXGISwapChain1::Present");
     ScheduleNextChange();
 }
 
@@ -299,7 +288,7 @@ std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std
     std::vector<HitBox> boxes;
     boxes.reserve(modules.size());
     for (size_t index = 0; index < modules.size(); ++index) {
-        const D2D1_POINT_2F origin = ModuleOrigin(config_.bar.edge, offsets[index], sizes[index], barSize);
+        const D2D1_POINT_2F origin = ModuleOrigin(_config.bar.edge, offsets[index], sizes[index], barSize);
         modules[index]->Draw(render, origin);
         boxes.push_back(HitBox{.module = modules[index].get(), .bounds = D2D1::RectF(origin.x, origin.y, origin.x + sizes[index].width, origin.y + sizes[index].height)});
     }
@@ -308,15 +297,15 @@ std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std
 
 // Mouse positions are client pixels, and modules lay out in DIPs.
 void Bar::HandleInput(POINT client, ModuleInput input) {
-    const float         scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(placement_.dpi);
+    const float         scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
     const D2D1_POINT_2F point = D2D1::Point2F(static_cast<float>(client.x) * scale, static_cast<float>(client.y) * scale);
-    for (const HitBox& box : hitBoxes_) {
+    for (const HitBox& box : _hitBoxes) {
         if (point.x < box.bounds.left || point.x >= box.bounds.right || point.y < box.bounds.top || point.y >= box.bounds.bottom) {
             continue;
         }
         const std::optional<Command>& command = CommandFor(box.module->Actions(), input);
         if (command.has_value()) {
-            launcher_.Launch(*command);
+            _launcher.Launch(*command);
         } else if (input == ModuleInput::LeftClick) {
             box.module->Click(D2D1::Point2F(point.x - box.bounds.left, point.y - box.bounds.top));
         }
@@ -324,23 +313,13 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
     }
 }
 
-const std::optional<Command>& CommandFor(const ModuleActions& actions, ModuleInput input) {
-    switch (input) {
-        case ModuleInput::LeftClick: return actions.click;
-        case ModuleInput::RightClick: return actions.rightClick;
-        case ModuleInput::ScrollUp: return actions.scrollUp;
-        case ModuleInput::ScrollDown: return actions.scrollDown;
-    }
-    throw std::invalid_argument(std::format("unknown module input {}", static_cast<int>(input)));
-}
-
 void Bar::ScheduleNextChange() {
-    const std::optional<UINT> wait = EarliestChange(modules_);
+    const std::optional<UINT> wait = EarliestChange(_modules);
     if (!wait.has_value()) {
-        KillTimer(window_, kChangeTimer);
+        KillTimer(_window, kChangeTimer);
         return;
     }
-    if (SetTimer(window_, kChangeTimer, *wait, nullptr) == 0) {
+    if (SetTimer(_window, kChangeTimer, *wait, nullptr) == 0) {
         ThrowLastError("SetTimer");
     }
 }

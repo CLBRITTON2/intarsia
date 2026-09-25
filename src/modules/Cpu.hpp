@@ -1,8 +1,7 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/IModule.hpp"
-#include "modules/IconText.hpp"
+#include "modules/TextModule.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -18,22 +17,15 @@ struct CpuTimes {
 int CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
 
 // CPU busy time across all cores since the last sample, formatted from an integer percent: format = "{}%".
-class Cpu final : public IModule {
+class Cpu final : public TextModule {
   public:
     // Throws ConfigError when the format cannot render an integer.
     explicit Cpu(TextModuleConfig config);
 
-    void                 Layout(const RenderContext& render) override;
-    D2D1_SIZE_F          Size() const override;
-    void                 Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    std::optional<UINT>  MillisecondsUntilChange() const override;
-    void                 Click(D2D1_POINT_2F point) override;
-    const ModuleActions& Actions() const override;
-
   private:
-    TextModuleConfig                      config_;
-    CpuTimes                              previous_;
-    std::chrono::steady_clock::time_point sampledAt_;
-    int                                   usage_;
-    IconText                              text_;
+    std::wstring                          Text() override;
+
+    CpuTimes                              _previous;
+    std::chrono::steady_clock::time_point _sampledAt;
+    int                                   _usage;
 };

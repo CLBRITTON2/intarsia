@@ -35,25 +35,25 @@ return {
     class TempConfig {
       public:
         explicit TempConfig(std::string_view contents) :
-            path_(std::filesystem::temp_directory_path() / ("intarsia-test-" + std::to_string(std::hash<std::string_view>{}(contents)) + ".lua")) {
-            std::ofstream file(path_, std::ios::binary);
+            _path(std::filesystem::temp_directory_path() / ("intarsia-test-" + std::to_string(std::hash<std::string_view>{}(contents)) + ".lua")) {
+            std::ofstream file(_path, std::ios::binary);
             file << contents;
         }
         ~TempConfig() {
             std::error_code error;
-            if (!std::filesystem::remove(path_, error) || error) {
-                std::fprintf(stderr, "could not delete temp config %ls: %s\n", path_.c_str(), error.message().c_str());
+            if (!std::filesystem::remove(_path, error) || error) {
+                std::fprintf(stderr, "could not delete temp config %ls: %s\n", _path.c_str(), error.message().c_str());
             }
         }
         TempConfig(const TempConfig&)                             = delete;
         TempConfig&                  operator=(const TempConfig&) = delete;
 
         const std::filesystem::path& Path() const {
-            return path_;
+            return _path;
         }
 
       private:
-        std::filesystem::path path_;
+        std::filesystem::path _path;
     };
 
     // The config text with one snippet swapped. Throws when the snippet is not there, so a stale case cannot pass.
@@ -167,7 +167,7 @@ TEST(Config, ListsMayOnlyShowDefinedModules) {
 }
 
 TEST(Config, EveryDefinedModuleMustBeShown) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no modules_ list shows it"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no _modules list shows it"));
 }
 
 TEST(Config, ModuleNamesUseASafeAlphabet) {
@@ -255,6 +255,15 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
     const std::string config = Replace(kValidConfig, "interval = 60 }", "interval = 60, on_click = { \"" + escaped + "\" } }");
     EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("which is not an .exe"));
     std::filesystem::remove(script);
+}
+
+TEST(Config, TheConfigCannotReadFiles) {
+    EXPECT_THAT([] { return LoadText("dofile('C:/Windows/win.ini')"); }, ConfigErrorWith("attempt to call a nil value (global 'dofile')"));
+    EXPECT_THAT([] { return LoadText("loadfile('C:/Windows/win.ini')"); }, ConfigErrorWith("attempt to call a nil value (global 'loadfile')"));
+}
+
+TEST(Config, AnEndlessConfigIsStoppedWithAnError) {
+    EXPECT_THAT([] { return LoadText("while true do end"); }, ConfigErrorWith("without finishing, is there an endless loop?"));
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {

@@ -38,11 +38,11 @@ class Workspaces final : public IModule {
     const ModuleActions& Actions() const override;
 
   private:
-    IWindowManager&                           windowManager_;
-    std::intptr_t                             monitor_;
-    WorkspaceLine                             line_;
-    Microsoft::WRL::ComPtr<IDWriteTextLayout> layout_;
-    D2D1_SIZE_F                               size_;
+    IWindowManager&                           _windowManager;
+    std::intptr_t                             _monitor;
+    WorkspaceLine                             _line;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> _layout;
+    D2D1_SIZE_F                               _size;
 };
 
 // The labels of the workspaces on one monitor joined by two spaces, with where each label sits in the text.

@@ -31,17 +31,17 @@ class FileWatcher {
     void                      Watch();
     void                      WatchUntilStopped();
 
-    std::wstring              fileName_;
-    HWND                      target_;
-    UINT                      changedMessage_;
-    UINT                      failedMessage_;
-    std::chrono::milliseconds settle_;
-    UniqueHandle              directory_;
-    UniqueHandle              stopEvent_;
-    std::mutex                errorMutex_;
-    std::exception_ptr        error_;
+    std::wstring              _fileName;
+    HWND                      _target;
+    UINT                      _changedMessage;
+    UINT                      _failedMessage;
+    std::chrono::milliseconds _settle;
+    UniqueHandle              _directory;
+    UniqueHandle              _stopEvent;
+    std::mutex                _errorMutex;
+    std::exception_ptr        _error;
     // Declared last so every member above exists before the thread starts.
-    std::thread thread_;
+    std::thread _thread;
 };
 
 // File names in a ReadDirectoryChangesW result buffer, in order.

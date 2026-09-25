@@ -128,18 +128,18 @@ namespace glazewm {
     }
 
     bool QueryGate::RequestQuery() {
-        if (inFlight_) {
-            stale_ = true;
+        if (_inFlight) {
+            _stale = true;
             return false;
         }
-        inFlight_ = true;
+        _inFlight = true;
         return true;
     }
 
     bool QueryGate::Answered() {
-        inFlight_ = stale_;
-        stale_    = false;
-        return inFlight_;
+        _inFlight = _stale;
+        _stale    = false;
+        return _inFlight;
     }
 
 } // namespace glazewm

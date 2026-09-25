@@ -11,39 +11,39 @@ namespace {
 } // namespace
 
 Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor) :
-    windowManager_(windowManager), monitor_(reinterpret_cast<std::intptr_t>(monitor)), line_{.text = {}, .runs = {}}, size_{.width = 0.0f, .height = 0.0f} {}
+    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _line{.text = {}, .runs = {}}, _size{.width = 0.0f, .height = 0.0f} {}
 
 void Workspaces::Layout(const RenderContext& render) {
-    const WindowManagerStatus status       = windowManager_.Status();
+    const WindowManagerStatus status       = _windowManager.Status();
     const bool                disconnected = status.connection == Connection::Disconnected;
-    line_ = disconnected ? WorkspaceLine{.text = status.name + L" disconnected", .runs = {}} : JoinWorkspaces(windowManager_.Workspaces(), monitor_);
+    _line = disconnected ? WorkspaceLine{.text = status.name + L" disconnected", .runs = {}} : JoinWorkspaces(_windowManager.Workspaces(), _monitor);
 
-    layout_.Reset();
-    ThrowIfFailed(render.dwrite->CreateTextLayout(line_.text.c_str(), static_cast<UINT32>(line_.text.size()), render.textFormat, std::numeric_limits<float>::max(),
-                                                  std::numeric_limits<float>::max(), &layout_),
+    _layout.Reset();
+    ThrowIfFailed(render.dwrite->CreateTextLayout(_line.text.c_str(), static_cast<UINT32>(_line.text.size()), render.textFormat, std::numeric_limits<float>::max(),
+                                                  std::numeric_limits<float>::max(), &_layout),
                   "IDWriteFactory::CreateTextLayout");
-    ThrowIfFailed(layout_->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping");
+    ThrowIfFailed(_layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping");
     if (disconnected) {
-        ThrowIfFailed(layout_->SetDrawingEffect(render.alert, DWRITE_TEXT_RANGE{.startPosition = 0, .length = static_cast<UINT32>(line_.text.size())}),
+        ThrowIfFailed(_layout->SetDrawingEffect(render.alert, DWRITE_TEXT_RANGE{.startPosition = 0, .length = static_cast<UINT32>(_line.text.size())}),
                       "IDWriteTextLayout::SetDrawingEffect");
     }
-    for (const LabelRun& run : line_.runs) {
+    for (const LabelRun& run : _line.runs) {
         if (run.focused) {
-            ThrowIfFailed(layout_->SetDrawingEffect(render.accent, DWRITE_TEXT_RANGE{.startPosition = run.start, .length = run.length}), "IDWriteTextLayout::SetDrawingEffect");
+            ThrowIfFailed(_layout->SetDrawingEffect(render.accent, DWRITE_TEXT_RANGE{.startPosition = run.start, .length = run.length}), "IDWriteTextLayout::SetDrawingEffect");
         }
     }
 
     DWRITE_TEXT_METRICS metrics{};
-    ThrowIfFailed(layout_->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
-    size_ = D2D1_SIZE_F{.width = metrics.widthIncludingTrailingWhitespace, .height = metrics.height};
+    ThrowIfFailed(_layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
+    _size = D2D1_SIZE_F{.width = metrics.widthIncludingTrailingWhitespace, .height = metrics.height};
 }
 
 D2D1_SIZE_F Workspaces::Size() const {
-    return size_;
+    return _size;
 }
 
 void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    render.context->DrawTextLayout(origin, layout_.Get(), render.foreground);
+    render.context->DrawTextLayout(origin, _layout.Get(), render.foreground);
 }
 
 std::optional<UINT> Workspaces::MillisecondsUntilChange() const {
@@ -51,19 +51,19 @@ std::optional<UINT> Workspaces::MillisecondsUntilChange() const {
 }
 
 void Workspaces::Click(D2D1_POINT_2F point) {
-    if (layout_ == nullptr) {
+    if (_layout == nullptr) {
         return;
     }
     BOOL                    trailing = FALSE;
     BOOL                    inside   = FALSE;
     DWRITE_HIT_TEST_METRICS metrics{};
-    ThrowIfFailed(layout_->HitTestPoint(point.x, point.y, &trailing, &inside, &metrics), "IDWriteTextLayout::HitTestPoint");
+    ThrowIfFailed(_layout->HitTestPoint(point.x, point.y, &trailing, &inside, &metrics), "IDWriteTextLayout::HitTestPoint");
     if (!inside) {
         return;
     }
-    const std::optional<std::string> name = WorkspaceAt(line_, metrics.textPosition);
+    const std::optional<std::string> name = WorkspaceAt(_line, metrics.textPosition);
     if (name.has_value()) {
-        windowManager_.FocusWorkspace(*name);
+        _windowManager.FocusWorkspace(*name);
     }
 }
 

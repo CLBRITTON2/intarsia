@@ -69,8 +69,8 @@ namespace glazewm {
         bool Answered();
 
       private:
-        bool inFlight_ = false;
-        bool stale_    = false;
+        bool _inFlight = false;
+        bool _stale    = false;
     };
 
 } // namespace glazewm

@@ -48,9 +48,9 @@ namespace {
 } // namespace
 
 WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_view path) :
-    session_(OpenSession()), connection_(Checked(WinHttpConnect(session_.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")) {
+    _session(OpenSession()), _connection(Checked(WinHttpConnect(_session.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")) {
     const UniqueInternet request(
-        Checked(WinHttpOpenRequest(connection_.get(), L"GET", std::wstring(path).c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0), "WinHttpOpenRequest"));
+        Checked(WinHttpOpenRequest(_connection.get(), L"GET", std::wstring(path).c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0), "WinHttpOpenRequest"));
     if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET, nullptr, 0)) {
         ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET)");
     }
@@ -69,10 +69,10 @@ WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_vi
     if (status != HTTP_STATUS_SWITCH_PROTOCOLS) {
         throw std::runtime_error(std::format("WebSocket upgrade to port {} answered HTTP {}, expected 101", port, status));
     }
-    socket_.reset(Checked(WinHttpWebSocketCompleteUpgrade(request.get(), 0), "WinHttpWebSocketCompleteUpgrade"));
+    _socket.reset(Checked(WinHttpWebSocketCompleteUpgrade(request.get(), 0), "WinHttpWebSocketCompleteUpgrade"));
 
     DWORD closeTimeout = kCloseTimeoutSeconds;
-    if (!WinHttpSetOption(socket_.get(), WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT, &closeTimeout, sizeof(closeTimeout))) {
+    if (!WinHttpSetOption(_socket.get(), WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT, &closeTimeout, sizeof(closeTimeout))) {
         ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT)");
     }
 }
@@ -81,7 +81,7 @@ WebSocket::~WebSocket() = default;
 
 void WebSocket::Send(std::string_view text) {
     std::string buffer(text);
-    CheckedError(WinHttpWebSocketSend(socket_.get(), WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, buffer.data(), static_cast<DWORD>(buffer.size())), "WinHttpWebSocketSend");
+    CheckedError(WinHttpWebSocketSend(_socket.get(), WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, buffer.data(), static_cast<DWORD>(buffer.size())), "WinHttpWebSocketSend");
 }
 
 std::string WebSocket::Receive() {
@@ -90,7 +90,7 @@ std::string WebSocket::Receive() {
     while (true) {
         DWORD                          read = 0;
         WINHTTP_WEB_SOCKET_BUFFER_TYPE type = WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE;
-        CheckedError(WinHttpWebSocketReceive(socket_.get(), chunk.data(), static_cast<DWORD>(chunk.size()), &read, &type), "WinHttpWebSocketReceive");
+        CheckedError(WinHttpWebSocketReceive(_socket.get(), chunk.data(), static_cast<DWORD>(chunk.size()), &read, &type), "WinHttpWebSocketReceive");
         if (type == WINHTTP_WEB_SOCKET_CLOSE_BUFFER_TYPE) {
             throw std::runtime_error("the server closed the WebSocket");
         }
@@ -105,5 +105,5 @@ std::string WebSocket::Receive() {
 }
 
 void WebSocket::Close() {
-    CheckedError(WinHttpWebSocketClose(socket_.get(), WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0), "WinHttpWebSocketClose");
+    CheckedError(WinHttpWebSocketClose(_socket.get(), WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0), "WinHttpWebSocketClose");
 }

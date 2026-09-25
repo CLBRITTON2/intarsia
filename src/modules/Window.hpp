@@ -21,9 +21,9 @@ class Window final : public IModule {
     const ModuleActions& Actions() const override;
 
   private:
-    WindowConfig          config_;
-    const IWindowManager& windowManager_;
-    IconText              text_;
+    WindowConfig          _config;
+    const IWindowManager& _windowManager;
+    IconText              _text;
 };
 
 // title cut to at most maxLength UTF-16 code units, ending in an ellipsis when cut. Never splits a surrogate pair.

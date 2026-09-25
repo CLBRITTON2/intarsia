@@ -1,18 +1,20 @@
 #include "App.hpp"
 #include "config/Config.hpp"
+#include "platform/Log.hpp"
+#include "platform/Process.hpp"
 
 #include <windows.h>
 
-#include <cstdio>
 #include <exception>
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     try {
+        RestrictDllSearchToSystem32();
         App app(instance, DefaultConfigPath());
         return app.Run();
     } catch (const std::exception& error) {
         // stderr reaches a launching shell that redirected it, the message box covers a plain double-click.
-        std::fprintf(stderr, "intarsia: %s\n", error.what());
+        Log(LogLevel::Error, "app", "fatal", {{.key = "reason", .value = error.what()}});
         MessageBoxA(nullptr, error.what(), "intarsia", MB_ICONERROR | MB_OK);
         return 1;
     }

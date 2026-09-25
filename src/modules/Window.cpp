@@ -13,19 +13,19 @@ namespace {
 } // namespace
 
 Window::Window(WindowConfig config, const IWindowManager& windowManager) :
-    config_(config), windowManager_(windowManager), text_{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
+    _config(config), _windowManager(windowManager), _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
 
 void Window::Layout(const RenderContext& render) {
-    const std::optional<FocusedWindow> focused = windowManager_.Focused();
-    text_                                      = LayOutIconText(render, L"", focused.has_value() ? TruncateTitle(focused->title, config_.maxLength) : std::wstring());
+    const std::optional<FocusedWindow> focused = _windowManager.Focused();
+    _text                                      = LayOutIconText(render, L"", focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring());
 }
 
 D2D1_SIZE_F Window::Size() const {
-    return text_.size;
+    return _text.size;
 }
 
 void Window::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    render.context->DrawTextLayout(origin, text_.layout.Get(), render.foreground);
+    render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
 }
 
 std::optional<UINT> Window::MillisecondsUntilChange() const {
@@ -35,7 +35,7 @@ std::optional<UINT> Window::MillisecondsUntilChange() const {
 void                 Window::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& Window::Actions() const {
-    return config_.actions;
+    return _config.actions;
 }
 
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {

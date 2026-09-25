@@ -1,8 +1,8 @@
 #include "wm/Native.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 
-#include <cstdio>
 #include <stdexcept>
 #include <string>
 
@@ -24,14 +24,14 @@ Native::ActiveInstance::~ActiveInstance() {
 }
 
 Native::Native(HWND target, UINT changedMessage) :
-    active_(this), target_(target), changedMessage_(changedMessage), foreground_(GetForegroundWindow()), foregroundHook_(HookEvent(EVENT_SYSTEM_FOREGROUND)),
-    nameHook_(HookEvent(EVENT_OBJECT_NAMECHANGE)) {}
+    _active(this), _target(target), _changedMessage(changedMessage), _foreground(GetForegroundWindow()), _foregroundHook(HookEvent(EVENT_SYSTEM_FOREGROUND)),
+    _nameHook(HookEvent(EVENT_OBJECT_NAMECHANGE)) {}
 
 std::optional<FocusedWindow> Native::Focused() const {
-    if (foreground_ == nullptr) {
+    if (_foreground == nullptr) {
         return std::nullopt;
     }
-    return FocusedWindow{.title = WindowTitle(foreground_)};
+    return FocusedWindow{.title = WindowTitle(_foreground)};
 }
 
 std::vector<Workspace> Native::Workspaces() const {
@@ -59,16 +59,16 @@ void CALLBACK Native::OnWinEvent(HWINEVENTHOOK, DWORD event, HWND window, LONG o
         return;
     }
     // Title changes matter only for the window the bar is showing.
-    if (event == EVENT_SYSTEM_FOREGROUND || window == activeInstance->foreground_) {
+    if (event == EVENT_SYSTEM_FOREGROUND || window == activeInstance->_foreground) {
         activeInstance->Refocus(window);
     }
 }
 
 // Only records the change and posts: this runs inside a WinEvent callback, where an exception could not be caught.
 void Native::Refocus(HWND window) {
-    foreground_ = window;
-    if (!PostMessageW(target_, changedMessage_, 0, 0)) {
-        std::fprintf(stderr, "intarsia: warning component=native event=post_failed error=%lu\n", GetLastError());
+    _foreground = window;
+    if (!PostMessageW(_target, _changedMessage, 0, 0)) {
+        Log(LogLevel::Warning, "native", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
     }
 }
 

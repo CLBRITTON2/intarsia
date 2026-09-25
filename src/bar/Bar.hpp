@@ -20,9 +20,6 @@ enum class ModuleInput {
     ScrollDown
 };
 
-// The command an input runs, or nullopt when the config binds none to it.
-const std::optional<Command>& CommandFor(const ModuleActions& actions, ModuleInput input);
-
 struct BarPlacement {
     HMONITOR monitor;
     RECT     monitorRect;
@@ -48,7 +45,8 @@ class Bar {
     void Render();
 
   private:
-    static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    template <typename Owner>
+    friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
     void                    Dock();
@@ -68,25 +66,25 @@ class Bar {
     // Runs the module's command for the input, or for a left click without one, lets the module handle it.
     void                                         HandleInput(POINT client, ModuleInput input);
 
-    const GraphicsDevice&                        graphics_;
-    const Config&                                config_;
-    Launcher&                                    launcher_;
-    AppState&                                    state_;
-    BarPlacement                                 placement_;
-    Sections<std::unique_ptr<IModule>>           modules_;
-    std::vector<HitBox>                          hitBoxes_;
+    const GraphicsDevice&                        _graphics;
+    const Config&                                _config;
+    Launcher&                                    _launcher;
+    AppState&                                    _state;
+    BarPlacement                                 _placement;
+    Sections<std::unique_ptr<IModule>>           _modules;
+    std::vector<HitBox>                          _hitBoxes;
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain1>      swapChain_;
-    Microsoft::WRL::ComPtr<ID2D1DeviceContext>   context_;
-    Microsoft::WRL::ComPtr<IDCompositionTarget>  compositionTarget_;
-    Microsoft::WRL::ComPtr<IDCompositionVisual>  visual_;
-    Microsoft::WRL::ComPtr<IDWriteTextFormat>    textFormat_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> backgroundBrush_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> borderBrush_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> foregroundBrush_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> accentBrush_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> alertBrush_;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1>      _swapChain;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext>   _context;
+    Microsoft::WRL::ComPtr<IDCompositionTarget>  _compositionTarget;
+    Microsoft::WRL::ComPtr<IDCompositionVisual>  _visual;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat>    _textFormat;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _backgroundBrush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _borderBrush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _foregroundBrush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _accentBrush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _alertBrush;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.
-    HWND window_;
+    HWND _window;
 };

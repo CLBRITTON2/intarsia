@@ -1,13 +1,12 @@
 #include "wm/GlazeWm.hpp"
 
+#include "platform/Log.hpp"
 #include "platform/PeerProcess.hpp"
 #include "platform/Text.hpp"
 #include "wm/GlazeWmProtocol.hpp"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
-#include <cstdio>
 #include <format>
 #include <stdexcept>
 #include <utility>
@@ -17,60 +16,54 @@ namespace {
     constexpr INTERNET_PORT             kIpcPort = 6123;
     constexpr std::chrono::milliseconds kFirstRetry{2000};
     constexpr std::chrono::milliseconds kLongestRetry{10000};
-    constexpr size_t                    kLogExcerptBytes = 300;
+    constexpr size_t                    kErrorExcerptBytes = 300;
     // Clicks faster than GlazeWM answers pile up here, and anything past this many is dropped with a warning.
     constexpr size_t  kMaxQueuedCommands = 16;
     constexpr wchar_t kName[]            = L"GlazeWM";
     constexpr wchar_t kImageName[]       = L"glazewm.exe";
 
-    void              LogWarning(std::string_view event, std::string_view reason) {
-        std::fprintf(stderr, "intarsia: warning component=glazewm event=%.*s reason=\"%s\"\n", static_cast<int>(event.size()), event.data(),
-                                  LogExcerpt(reason, kLogExcerptBytes).c_str());
-    }
-
 } // namespace
 
 GlazeWm::GlazeWm(HWND target, UINT changedMessage) :
-    native_(target, changedMessage), target_(target), changedMessage_(changedMessage), stopEvent_(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
-    commandEvent_(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(command)")),
-    status_{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"}, stopping_(false), receiver_([this] { Receive(); }),
-    sender_([this] { SendCommands(); }) {}
+    _native(target, changedMessage), _target(target), _changedMessage(changedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
+    _status{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"}, _stopping(false),
+    _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands, [this](const std::string& command) { SendCommand(command); })), _receiver([this] { Receive(); }) {}
 
 // Stops the sender first so no send is pending, then closes the socket: WinHttpWebSocketClose cancels the receiver's
 // pending receive, which is the documented way to unblock it.
 GlazeWm::~GlazeWm() {
     std::shared_ptr<WebSocket> socket;
     {
-        const std::scoped_lock lock(mutex_);
-        stopping_ = true;
-        socket    = socket_;
+        const std::scoped_lock lock(_mutex);
+        _stopping = true;
+        socket    = _socket;
     }
-    SetEvent(stopEvent_.get());
-    sender_.join();
+    SetEvent(_stopEvent.get());
+    _sender.reset();
     if (socket != nullptr) {
-        const std::scoped_lock sending(sendMutex_);
+        const std::scoped_lock sending(_sendMutex);
         try {
             socket->Close();
         } catch (const std::exception& error) {
             // Every WinHttpWebSocketClose failure means the connection is already gone, so the receiver returns anyway.
-            LogWarning("close_failed", error.what());
+            Log(LogLevel::Warning, "glazewm", "close_failed", {{.key = "reason", .value = error.what()}});
         }
     }
-    receiver_.join();
+    _receiver.join();
 }
 
 std::optional<FocusedWindow> GlazeWm::Focused() const {
-    return native_.Focused();
+    return _native.Focused();
 }
 
 std::vector<Workspace> GlazeWm::Workspaces() const {
-    const std::scoped_lock lock(mutex_);
-    return workspaces_;
+    const std::scoped_lock lock(_mutex);
+    return _workspaces;
 }
 
 WindowManagerStatus GlazeWm::Status() const {
-    const std::scoped_lock lock(mutex_);
-    return status_;
+    const std::scoped_lock lock(_mutex);
+    return _status;
 }
 
 void GlazeWm::FocusWorkspace(const std::string& name) {
@@ -78,18 +71,12 @@ void GlazeWm::FocusWorkspace(const std::string& name) {
     try {
         command = glazewm::FocusWorkspaceCommand(name);
     } catch (const glazewm::ProtocolError& error) {
-        LogWarning("command_skipped", error.what());
+        Log(LogLevel::Warning, "glazewm", "command_skipped", {{.key = "reason", .value = error.what()}});
         return;
     }
-    {
-        const std::scoped_lock lock(mutex_);
-        if (commands_.size() >= kMaxQueuedCommands) {
-            LogWarning("command_dropped", "the command queue is full: " + command);
-            return;
-        }
-        commands_.push_back(std::move(command));
+    if (!_sender->Push(command)) {
+        Log(LogLevel::Warning, "glazewm", "command_dropped", {{.key = "reason", .value = "queue full"}, {.key = "command", .value = command}});
     }
-    SetEvent(commandEvent_.get());
 }
 
 // Retries forever, as the owner chose: restarting GlazeWM must not take the bar down, and the modules show that it is
@@ -103,23 +90,26 @@ void GlazeWm::Receive() {
         } catch (const std::exception& error) {
             bool wasConnected = false;
             {
-                const std::scoped_lock lock(mutex_);
-                if (stopping_) {
+                const std::scoped_lock lock(_mutex);
+                if (_stopping) {
                     return;
                 }
-                wasConnected = status_.connection == Connection::Connected;
+                wasConnected = _status.connection == Connection::Connected;
             }
             if (wasConnected) {
                 retry     = kFirstRetry;
                 loggedOut = false;
             }
             if (!loggedOut) {
-                LogWarning("disconnected", std::format("{} (retrying every {} ms, backing off to {} ms)", error.what(), retry.count(), kLongestRetry.count()));
+                Log(LogLevel::Warning, "glazewm", "disconnected",
+                    {{.key = "reason", .value = error.what()},
+                     {.key = "retry_ms", .value = std::to_string(retry.count())},
+                     {.key = "max_retry_ms", .value = std::to_string(kLongestRetry.count())}});
                 loggedOut = true;
             }
             Publish({}, WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = error.what()});
         }
-        if (WaitForSingleObject(stopEvent_.get(), static_cast<DWORD>(retry.count())) == WAIT_OBJECT_0) {
+        if (WaitForSingleObject(_stopEvent.get(), static_cast<DWORD>(retry.count())) == WAIT_OBJECT_0) {
             return;
         }
         retry = std::min(retry * 2, kLongestRetry);
@@ -136,21 +126,21 @@ void GlazeWm::Session() {
     struct Registration {
         GlazeWm& owner;
         Registration(GlazeWm& manager, const std::shared_ptr<WebSocket>& active) : owner(manager) {
-            const std::scoped_lock lock(owner.mutex_);
-            if (owner.stopping_) {
+            const std::scoped_lock lock(owner._mutex);
+            if (owner._stopping) {
                 throw std::runtime_error("stopping");
             }
-            owner.socket_ = active;
+            owner._socket = active;
         }
         ~Registration() {
-            const std::scoped_lock lock(owner.mutex_);
-            owner.socket_ = nullptr;
+            const std::scoped_lock lock(owner._mutex);
+            owner._socket = nullptr;
         }
         Registration(const Registration&)            = delete;
         Registration& operator=(const Registration&) = delete;
     };
     const Registration registration(*this, socket);
-    std::fprintf(stderr, "intarsia: info component=glazewm event=connected\n");
+    Log(LogLevel::Info, "glazewm", "connected", {});
 
     glazewm::QueryGate gate;
     SendSerialized(*socket, glazewm::SubscribeCommand());
@@ -162,11 +152,11 @@ void GlazeWm::Session() {
         if (!message.success) {
             // A rejected command (a workspace that closed just before the click) is that command's failure alone.
             if (message.kind == glazewm::MessageKind::Response && glazewm::IsCommand(message.clientMessage)) {
-                LogWarning("command_failed", std::format("{}: {}", message.clientMessage, message.error));
+                Log(LogLevel::Warning, "glazewm", "command_failed", {{.key = "command", .value = message.clientMessage}, {.key = "reason", .value = message.error}});
                 continue;
             }
             throw glazewm::ProtocolError(
-                std::format("GlazeWM rejected \"{}\": {}", LogExcerpt(message.clientMessage, kLogExcerptBytes), LogExcerpt(message.error, kLogExcerptBytes)));
+                std::format("GlazeWM rejected \"{}\": {}", LogExcerpt(message.clientMessage, kErrorExcerptBytes), LogExcerpt(message.error, kErrorExcerptBytes)));
         }
         if (message.kind == glazewm::MessageKind::Event && glazewm::ChangesWorkspaces(message.eventType)) {
             if (gate.RequestQuery()) {
@@ -181,47 +171,41 @@ void GlazeWm::Session() {
     }
 }
 
-void GlazeWm::SendCommands() {
-    const std::array<HANDLE, 2> waits{stopEvent_.get(), commandEvent_.get()};
-    while (WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE) == WAIT_OBJECT_0 + 1) {
-        std::deque<std::string>    commands;
-        std::shared_ptr<WebSocket> socket;
-        {
-            const std::scoped_lock lock(mutex_);
-            commands.swap(commands_);
-            socket = socket_;
-        }
-        for (const std::string& command : commands) {
-            if (socket == nullptr) {
-                LogWarning("command_dropped", "not connected to GlazeWM: " + command);
-                continue;
-            }
-            try {
-                SendSerialized(*socket, command);
-            } catch (const std::exception& error) {
-                // The receiver sees the same broken connection and reconnects, so this only reports the lost command.
-                LogWarning("command_dropped", std::format("{}: {}", command, error.what()));
-            }
-        }
+// Runs on the sender's queue thread, so it logs instead of throwing.
+void GlazeWm::SendCommand(const std::string& command) {
+    std::shared_ptr<WebSocket> socket;
+    {
+        const std::scoped_lock lock(_mutex);
+        socket = _socket;
+    }
+    if (socket == nullptr) {
+        Log(LogLevel::Warning, "glazewm", "command_dropped", {{.key = "reason", .value = "not connected"}, {.key = "command", .value = command}});
+        return;
+    }
+    try {
+        SendSerialized(*socket, command);
+    } catch (const std::exception& error) {
+        // The receiver sees the same broken connection and reconnects, so this only reports the lost command.
+        Log(LogLevel::Warning, "glazewm", "command_dropped", {{.key = "reason", .value = error.what()}, {.key = "command", .value = command}});
     }
 }
 
 void GlazeWm::SendSerialized(WebSocket& socket, std::string_view text) {
-    const std::scoped_lock lock(sendMutex_);
+    const std::scoped_lock lock(_sendMutex);
     socket.Send(text);
 }
 
 // Posts only when something changed: most focus events move focus within a workspace and leave the list as it was.
 void GlazeWm::Publish(std::vector<Workspace> workspaces, WindowManagerStatus status) {
     {
-        const std::scoped_lock lock(mutex_);
-        if (workspaces == workspaces_ && status == status_) {
+        const std::scoped_lock lock(_mutex);
+        if (workspaces == _workspaces && status == _status) {
             return;
         }
-        workspaces_ = std::move(workspaces);
-        status_     = std::move(status);
+        _workspaces = std::move(workspaces);
+        _status     = std::move(status);
     }
-    if (!PostMessageW(target_, changedMessage_, 0, 0)) {
-        std::fprintf(stderr, "intarsia: warning component=glazewm event=post_failed error=%lu\n", GetLastError());
+    if (!PostMessageW(_target, _changedMessage, 0, 0)) {
+        Log(LogLevel::Warning, "glazewm", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
     }
 }

@@ -24,3 +24,16 @@ Sections<std::invoke_result_t<Transform, const T&>> MapSections(const Sections<T
     };
     return {.left = mapOne(sections.left), .center = mapOne(sections.center), .right = mapOne(sections.right)};
 }
+
+template <typename T, typename Predicate>
+bool AnyInSections(const Sections<T>& sections, Predicate predicate) {
+    return std::ranges::any_of(sections.left, predicate) || std::ranges::any_of(sections.center, predicate) || std::ranges::any_of(sections.right, predicate);
+}
+
+// Every item, left section first.
+template <typename T, typename Visit>
+void ForEachInSections(const Sections<T>& sections, Visit visit) {
+    std::ranges::for_each(sections.left, visit);
+    std::ranges::for_each(sections.center, visit);
+    std::ranges::for_each(sections.right, visit);
+}

@@ -25,23 +25,25 @@ class App {
     int Run();
 
   private:
-    static LRESULT CALLBACK ControlProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-    LRESULT                 HandleControlMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    template <typename Owner>
+    friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
     void                    CreateBars();
     void                    ReloadConfig();
 
-    HINSTANCE               instance_;
-    std::filesystem::path   configPath_;
+    HINSTANCE               _instance;
+    std::filesystem::path   _configPath;
     // Bars hold a reference to the config, so it is replaced only after they are destroyed.
-    std::unique_ptr<Config>      config_;
-    GraphicsDevice               graphics_;
-    AppState                     state_;
-    HWND                         control_;
-    std::unique_ptr<FileWatcher> watcher_;
+    std::unique_ptr<Config>      _config;
+    GraphicsDevice               _graphics;
+    AppState                     _state;
+    bool                         _redrawPending;
+    HWND                         _control;
+    std::unique_ptr<FileWatcher> _watcher;
     // Starts the commands bound to module inputs, off the UI thread.
-    Launcher launcher_;
+    Launcher _launcher;
     // Modules read the window manager, so it is created before the bars and destroyed after them.
-    std::unique_ptr<IWindowManager>   windowManager_;
-    std::vector<std::unique_ptr<Bar>> bars_;
+    std::unique_ptr<IWindowManager>   _windowManager;
+    std::vector<std::unique_ptr<Bar>> _bars;
 };
