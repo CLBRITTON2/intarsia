@@ -21,9 +21,15 @@ Window::Window(WindowConfig config, const IWindowManager& windowManager) :
     }
 }
 
-void Window::Layout(const RenderContext& render) {
+bool Window::Layout(const RenderContext& render) {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
-    _text = LayOutIconText(render, L"", focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring(), render.foreground);
+    std::wstring                       title   = focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring();
+    if (_text.layout != nullptr && title == _shown) {
+        return false;
+    }
+    _text  = LayOutIconText(render, L"", title, render.foreground);
+    _shown = std::move(title);
+    return true;
 }
 
 D2D1_SIZE_F Window::Size() const {

@@ -1,6 +1,7 @@
 #include "platform/FileWatcher.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <cstring>
 #include <format>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace {
@@ -45,7 +47,10 @@ void FileWatcher::Watch() {
             const std::scoped_lock lock(_errorMutex);
             _error = std::current_exception();
         }
-        PostMessageW(_target, _failedMessage, 0, 0);
+        // The app then never learns that reloads stopped, so the log is the only record.
+        if (!PostMessageW(_target, _failedMessage, 0, 0)) {
+            Log(LogLevel::Error, "file_watcher", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
+        }
     }
 }
 
@@ -56,6 +61,7 @@ void FileWatcher::WatchUntilStopped() {
     OVERLAPPED                  overlapped{};
     const std::array<HANDLE, 2> waits{_stopEvent.get(), readDone.get()};
     bool                        pending = false;
+    bool                        reading = false;
 
     const auto                  startRead = [&] {
         overlapped        = OVERLAPPED{};
@@ -64,40 +70,54 @@ void FileWatcher::WatchUntilStopped() {
         if (!ReadDirectoryChangesW(_directory.get(), buffer.data(), bufferBytes, FALSE, kNotifyFilter, nullptr, &overlapped, nullptr)) {
             ThrowLastError("ReadDirectoryChangesW");
         }
+        reading = true;
     };
-
-    startRead();
-    while (true) {
-        const DWORD timeout = pending ? static_cast<DWORD>(_settle.count()) : INFINITE;
-        const DWORD woke    = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, timeout);
-        if (woke == WAIT_OBJECT_0) {
+    // The kernel writes into overlapped and buffer until a read completes, so none may be left pending when they go.
+    const auto stopReading = [&] {
+        if (reading) {
             CancelIoEx(_directory.get(), &overlapped);
             DWORD ignored = 0;
             GetOverlappedResult(_directory.get(), &overlapped, &ignored, TRUE);
-            return;
+            reading = false;
         }
-        if (woke == WAIT_TIMEOUT) {
-            pending = false;
-            if (!PostMessageW(_target, _changedMessage, 0, 0)) {
-                ThrowLastError("PostMessageW(config changed)");
-            }
-            continue;
-        }
-        if (woke != WAIT_OBJECT_0 + 1) {
-            ThrowLastError("WaitForMultipleObjects");
-        }
+    };
 
-        DWORD bytes = 0;
-        if (!GetOverlappedResult(_directory.get(), &overlapped, &bytes, FALSE)) {
-            ThrowLastError("GetOverlappedResult(ReadDirectoryChangesW)");
-        }
-        // Zero bytes means the change list overflowed the buffer, so the file may have changed.
-        const std::vector<std::wstring> names = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
-        if (bytes == 0 || std::ranges::any_of(names, [this](const std::wstring& name) { return SameFileName(name, _fileName); })) {
-            pending = true;
-        }
+    try {
         startRead();
+        while (true) {
+            const DWORD timeout = pending ? static_cast<DWORD>(_settle.count()) : INFINITE;
+            const DWORD woke    = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, timeout);
+            if (woke == WAIT_OBJECT_0) {
+                break;
+            }
+            if (woke == WAIT_TIMEOUT) {
+                pending = false;
+                if (!PostMessageW(_target, _changedMessage, 0, 0)) {
+                    ThrowLastError("PostMessageW(config changed)");
+                }
+                continue;
+            }
+            if (woke != WAIT_OBJECT_0 + 1) {
+                ThrowLastError("WaitForMultipleObjects");
+            }
+
+            reading     = false;
+            DWORD bytes = 0;
+            if (!GetOverlappedResult(_directory.get(), &overlapped, &bytes, FALSE)) {
+                ThrowLastError("GetOverlappedResult(ReadDirectoryChangesW)");
+            }
+            // Zero bytes means the change list overflowed the buffer, so the file may have changed.
+            const std::vector<std::wstring> names = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
+            if (bytes == 0 || std::ranges::any_of(names, [this](const std::wstring& name) { return SameFileName(name, _fileName); })) {
+                pending = true;
+            }
+            startRead();
+        }
+    } catch (...) {
+        stopReading();
+        throw;
     }
+    stopReading();
 }
 
 std::vector<std::wstring> ChangedFileNames(std::span<const std::byte> buffer) {

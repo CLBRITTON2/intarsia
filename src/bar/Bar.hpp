@@ -51,6 +51,9 @@ class Bar {
     // Lays out and draws every module from its current data, then schedules the next self-driven change.
     void Render();
 
+    // Render, drawing only when some module's content changed: an unchanged frame costs a present for nothing.
+    void Refresh();
+
     // True once drawing failed because the graphics device was lost. The bar draws nothing more.
     bool DeviceLost() const;
 
@@ -69,6 +72,9 @@ class Bar {
     void          Dock();
     void          PlaceInZOrder(HWND insertAfter);
     RenderContext FrameContext() const;
+    // Whether any module's content changed.
+    bool LayOutModules();
+    void Draw();
     // Where a module was last drawn, for routing clicks to it.
     struct HitBox {
         IModule*    module;

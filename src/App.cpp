@@ -144,7 +144,7 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 KillTimer(_control, kRedrawTimer);
                 _redrawPending = false;
                 for (const std::unique_ptr<Bar>& bar : _bars) {
-                    bar->Render();
+                    bar->Refresh();
                 }
             } else if (wParam == kDisplaysTimer) {
                 KillTimer(_control, kDisplaysTimer);

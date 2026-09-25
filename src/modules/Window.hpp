@@ -13,7 +13,7 @@ class Window final : public IModule {
   public:
     Window(WindowConfig config, const IWindowManager& windowManager);
 
-    void                        Layout(const RenderContext& render) override;
+    bool                        Layout(const RenderContext& render) override;
     D2D1_SIZE_F                 Size() const override;
     void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     std::optional<UINT>         MillisecondsUntilChange() const override;
@@ -24,6 +24,7 @@ class Window final : public IModule {
   private:
     WindowConfig          _config;
     const IWindowManager& _windowManager;
+    std::wstring          _shown; // what _text holds, once it has a layout
     IconText              _text;
 };
 

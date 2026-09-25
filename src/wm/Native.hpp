@@ -43,17 +43,22 @@ class Native final : public IWindowManager {
     };
     using UniqueHook = std::unique_ptr<std::remove_pointer_t<HWINEVENTHOOK>, Unhook>;
 
-    static UniqueHook    HookEvent(DWORD event);
+    static UniqueHook    HookEvent(DWORD event, DWORD process);
+    static UniqueHook    HookTitleChanges(HWND window);
     static void CALLBACK OnWinEvent(HWINEVENTHOOK hook, DWORD event, HWND window, LONG object, LONG child, DWORD thread, DWORD time);
     void                 Refocus(HWND window);
+    void                 Retitle();
+    void                 PostChanged() const;
 
     ActiveInstance       _active;
     HWND                 _target;
     UINT                 _changedMessage;
     HWND                 _foreground;
+    std::wstring         _title;
     UniqueHook           _foregroundHook;
-    UniqueHook           _nameHook;
+    UniqueHook           _titleHook;
 };
 
-// The text of a window's title bar, empty when it has none.
+// The text of a window's title bar, empty when it has none. Lone surrogates, which any process can put in its own
+// title, become U+FFFD.
 std::wstring WindowTitle(HWND window);

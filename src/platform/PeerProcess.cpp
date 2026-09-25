@@ -12,42 +12,41 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
-#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace {
 
     // MIB_TCPROW_OWNER_PID stores address and port in network byte order.
     constexpr DWORD kLoopbackAddress = 0x0100007F; // 127.0.0.1
-    constexpr DWORD kAnyAddress      = 0;
 
     USHORT          RowPort(DWORD networkPort) {
         return static_cast<USHORT>(((networkPort & 0xFFu) << 8) | ((networkPort >> 8) & 0xFFu));
     }
 
-    std::vector<std::byte> ListenerTable() {
+    std::vector<std::byte> ConnectionTable() {
         DWORD size = 0;
-        GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+        GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
         // The table can grow between the size query and the read, so retry a few times with the size it reports.
         for (int attempt = 0; attempt < 4; ++attempt) {
             std::vector<std::byte> table(size);
-            const DWORD            result = GetExtendedTcpTable(table.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+            const DWORD            result = GetExtendedTcpTable(table.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
             if (result == NO_ERROR) {
                 return table;
             }
             if (result != ERROR_INSUFFICIENT_BUFFER) {
-                throw Win32Error("GetExtendedTcpTable(TCP_TABLE_OWNER_PID_LISTENER)", HRESULT_FROM_WIN32(result));
+                throw Win32Error("GetExtendedTcpTable(TCP_TABLE_OWNER_PID_CONNECTIONS)", HRESULT_FROM_WIN32(result));
             }
         }
         throw PeerVerificationError("GetExtendedTcpTable kept growing past its reported size");
     }
 
-    std::vector<std::byte> TokenUserBuffer(HANDLE token) {
+    std::vector<std::byte> TokenBuffer(HANDLE token, TOKEN_INFORMATION_CLASS kind, std::string_view name) {
         DWORD size = 0;
-        GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+        GetTokenInformation(token, kind, nullptr, 0, &size);
         std::vector<std::byte> buffer(size);
-        if (!GetTokenInformation(token, TokenUser, buffer.data(), size, &size)) {
-            ThrowLastError("GetTokenInformation(TokenUser)");
+        if (!GetTokenInformation(token, kind, buffer.data(), size, &size)) {
+            ThrowLastError(std::format("GetTokenInformation({})", name));
         }
         return buffer;
     }
@@ -56,35 +55,29 @@ namespace {
         return reinterpret_cast<TOKEN_USER*>(tokenUser.data())->User.Sid;
     }
 
+    // The mandatory level's RID, such as SECURITY_MANDATORY_MEDIUM_RID.
+    DWORD IntegrityLevel(HANDLE token) {
+        std::vector<std::byte> label = TokenBuffer(token, TokenIntegrityLevel, "TokenIntegrityLevel");
+        PSID                   sid   = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(label.data())->Label.Sid;
+        return *GetSidSubAuthority(sid, static_cast<DWORD>(*GetSidSubAuthorityCount(sid) - 1));
+    }
+
 } // namespace
 
-DWORD LoopbackListenerProcess(USHORT port) {
-    std::vector<std::byte> table = ListenerTable();
+DWORD LoopbackPeerProcess(USHORT clientPort, USHORT serverPort) {
+    std::vector<std::byte> table = ConnectionTable();
     MIB_TCPTABLE_OWNER_PID header{};
     std::memcpy(&header, table.data(), offsetof(MIB_TCPTABLE_OWNER_PID, table));
 
-    std::optional<DWORD> loopback;
-    std::optional<DWORD> any;
     for (DWORD index = 0; index < header.dwNumEntries; ++index) {
         MIB_TCPROW_OWNER_PID row{};
         std::memcpy(&row, table.data() + offsetof(MIB_TCPTABLE_OWNER_PID, table) + (index * sizeof(MIB_TCPROW_OWNER_PID)), sizeof(row));
-        if (RowPort(row.dwLocalPort) != port) {
-            continue;
-        }
-        if (row.dwLocalAddr == kLoopbackAddress) {
-            loopback = row.dwOwningPid;
-        } else if (row.dwLocalAddr == kAnyAddress) {
-            any = row.dwOwningPid;
+        // The server's end: local is the port it serves, remote is the client's port.
+        if (row.dwLocalAddr == kLoopbackAddress && row.dwRemoteAddr == kLoopbackAddress && RowPort(row.dwLocalPort) == serverPort && RowPort(row.dwRemotePort) == clientPort) {
+            return row.dwOwningPid;
         }
     }
-    // A connection to 127.0.0.1 reaches the loopback-specific binding before a wildcard one.
-    if (loopback.has_value()) {
-        return *loopback;
-    }
-    if (any.has_value()) {
-        return *any;
-    }
-    throw PeerVerificationError(std::format("nothing is listening on 127.0.0.1:{}", port));
+    throw PeerVerificationError(std::format("no connection from 127.0.0.1:{} to 127.0.0.1:{} is open", clientPort, serverPort));
 }
 
 void RequireSameUserProcess(DWORD processId, std::wstring_view imageName) {
@@ -106,9 +99,15 @@ void RequireSameUserProcess(DWORD processId, std::wstring_view imageName) {
         throw PeerVerificationError(std::format("cannot read the owner of {} (pid {}): OpenProcessToken failed with {}", ToUtf8(image.wstring()), processId, GetLastError()));
     }
     const UniqueHandle     token(rawToken);
-    std::vector<std::byte> peerUser = TokenUserBuffer(token.get());
-    std::vector<std::byte> ourUser  = TokenUserBuffer(GetCurrentProcessToken());
+    std::vector<std::byte> peerUser = TokenBuffer(token.get(), TokenUser, "TokenUser");
+    std::vector<std::byte> ourUser  = TokenBuffer(GetCurrentProcessToken(), TokenUser, "TokenUser");
     if (!EqualSid(UserSid(peerUser), UserSid(ourUser))) {
         throw PeerVerificationError(std::format("{} (pid {}) runs as a different user", ToUtf8(image.wstring()), processId));
+    }
+    // A sandboxed process of the same user runs at low integrity (so does every AppContainer), and must not pass.
+    const DWORD peerLevel = IntegrityLevel(token.get());
+    const DWORD ourLevel  = IntegrityLevel(GetCurrentProcessToken());
+    if (peerLevel < ourLevel) {
+        throw PeerVerificationError(std::format("{} (pid {}) runs at integrity level 0x{:X}, below the bar's 0x{:X}", ToUtf8(image.wstring()), processId, peerLevel, ourLevel));
     }
 }

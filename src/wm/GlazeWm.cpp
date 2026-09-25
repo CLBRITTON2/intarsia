@@ -120,7 +120,7 @@ void GlazeWm::Session() {
     const auto socket = std::make_shared<WebSocket>(L"127.0.0.1", kIpcPort, L"/");
     // GlazeWM's IPC has no authentication, so whoever owns the listening port is checked before anything it says is
     // used: any process of any user could have bound 127.0.0.1:6123 while GlazeWM was down.
-    RequireSameUserProcess(LoopbackListenerProcess(kIpcPort), kImageName);
+    RequireSameUserProcess(LoopbackPeerProcess(socket->LocalPort(), kIpcPort), kImageName);
 
     // Published for the life of this connection so the sender and the destructor can reach it.
     struct Registration {

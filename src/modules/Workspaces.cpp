@@ -3,7 +3,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
-#include <limits>
+#include <utility>
 
 namespace {
 
@@ -12,39 +12,35 @@ namespace {
 } // namespace
 
 Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor) :
-    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _line{.text = {}, .runs = {}}, _size{.width = 0.0f, .height = 0.0f} {}
+    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _line{.text = {}, .runs = {}}, _disconnected(false),
+    _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
 
-void Workspaces::Layout(const RenderContext& render) {
+bool Workspaces::Layout(const RenderContext& render) {
     const WindowManagerStatus status       = _windowManager.Status();
     const bool                disconnected = status.connection == Connection::Disconnected;
-    _line = disconnected ? WorkspaceLine{.text = status.name + L" disconnected", .runs = {}} : JoinWorkspaces(_windowManager.Workspaces(), _monitor);
-
-    _layout.Reset();
-    ThrowIfFailed(render.dwrite->CreateTextLayout(_line.text.c_str(), static_cast<UINT32>(_line.text.size()), render.textFormat, std::numeric_limits<float>::max(),
-                                                  std::numeric_limits<float>::max(), &_layout),
-                  "IDWriteFactory::CreateTextLayout");
-    ThrowIfFailed(_layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping");
-    if (disconnected) {
-        ThrowIfFailed(_layout->SetDrawingEffect(render.alert, DWRITE_TEXT_RANGE{.startPosition = 0, .length = static_cast<UINT32>(_line.text.size())}),
-                      "IDWriteTextLayout::SetDrawingEffect");
+    WorkspaceLine             line = disconnected ? WorkspaceLine{.text = status.name + L" disconnected", .runs = {}} : JoinWorkspaces(_windowManager.Workspaces(), _monitor);
+    if (_text.layout != nullptr && line == _line && disconnected == _disconnected) {
+        return false;
     }
+    _line         = std::move(line);
+    _disconnected = disconnected;
+
+    _text = LayOutIconText(render, L"", _line.text, disconnected ? render.alert : render.foreground);
     for (const LabelRun& run : _line.runs) {
         if (run.focused) {
-            ThrowIfFailed(_layout->SetDrawingEffect(render.accent, DWRITE_TEXT_RANGE{.startPosition = run.start, .length = run.length}), "IDWriteTextLayout::SetDrawingEffect");
+            ThrowIfFailed(_text.layout->SetDrawingEffect(render.accent, DWRITE_TEXT_RANGE{.startPosition = run.start, .length = run.length}),
+                          "IDWriteTextLayout::SetDrawingEffect");
         }
     }
-
-    DWRITE_TEXT_METRICS metrics{};
-    ThrowIfFailed(_layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
-    _size = D2D1_SIZE_F{.width = metrics.widthIncludingTrailingWhitespace, .height = metrics.height};
+    return true;
 }
 
 D2D1_SIZE_F Workspaces::Size() const {
-    return _size;
+    return _text.size;
 }
 
 void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    render.context->DrawTextLayout(origin, _layout.Get(), render.foreground);
+    render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
 }
 
 std::optional<UINT> Workspaces::MillisecondsUntilChange() const {
@@ -52,13 +48,13 @@ std::optional<UINT> Workspaces::MillisecondsUntilChange() const {
 }
 
 void Workspaces::Click(D2D1_POINT_2F point) {
-    if (_layout == nullptr) {
+    if (_text.layout == nullptr) {
         return;
     }
     BOOL                    trailing = FALSE;
     BOOL                    inside   = FALSE;
     DWRITE_HIT_TEST_METRICS metrics{};
-    ThrowIfFailed(_layout->HitTestPoint(point.x, point.y, &trailing, &inside, &metrics), "IDWriteTextLayout::HitTestPoint");
+    ThrowIfFailed(_text.layout->HitTestPoint(point.x, point.y, &trailing, &inside, &metrics), "IDWriteTextLayout::HitTestPoint");
     if (!inside) {
         return;
     }

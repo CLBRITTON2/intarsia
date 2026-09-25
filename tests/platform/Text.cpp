@@ -41,6 +41,26 @@ TEST(Text, LogExcerptCutsLongTextAndSaysHowMuchWasDropped) {
     EXPECT_EQ(LogExcerpt("abc", 4), "abc");
 }
 
+TEST(Text, LogExcerptEscapesBytesThatAreNotUtf8AndKeepsThoseThatAre) {
+    // A stray continuation byte, a truncated sequence, an overlong '/', then a valid U+00E9.
+    const std::string excerpt = LogExcerpt("a\x80"
+                                           "b\xE2\x82"
+                                           "c\xC0\xAF"
+                                           "\xC3\xA9",
+                                           100);
+    EXPECT_EQ(excerpt, "a\\x80b\\xe2\\x82c\\xc0\\xaf\xC3\xA9");
+    EXPECT_NO_THROW(ToWide(excerpt));
+}
+
+TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
+    const std::wstring text{
+        L'a', static_cast<wchar_t>(0xD800), L'b', static_cast<wchar_t>(0xDC00), static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), static_cast<wchar_t>(0xD800)};
+    const std::wstring replaced     = ReplaceLoneSurrogates(text);
+    constexpr auto     kReplacement = static_cast<wchar_t>(0xFFFD);
+    EXPECT_EQ(replaced, (std::wstring{L'a', kReplacement, L'b', kReplacement, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacement}));
+    EXPECT_NO_THROW(ToUtf8(replaced));
+}
+
 TEST(Text, LogExcerptNeverSplitsAUtf8Sequence) {
     // "a" then U+00E9 (two bytes): a cut after its first byte backs off to before it.
     EXPECT_EQ(LogExcerpt("a\xC3\xA9z", 2), "a...(3 more bytes)");

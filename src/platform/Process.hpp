@@ -29,7 +29,8 @@ std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program);
 std::wstring JoinArguments(const std::vector<std::wstring>& arguments);
 
 // Limits DLL loading for the rest of the process to System32, so no DLL beside the executable or in the current
-// directory can be planted into it. Call first thing at startup.
+// directory can be planted into it. Call first thing at startup. The executable's own imports load before any code
+// runs, so the link sets /DEPENDENTLOADFLAG for those.
 void RestrictDllSearchToSystem32();
 
 // A command that started but gave no usable output: it timed out, was cancelled, printed too much or exited nonzero.

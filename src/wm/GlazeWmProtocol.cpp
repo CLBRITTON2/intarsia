@@ -88,7 +88,9 @@ namespace glazewm {
         const bool        success     = BoolField(message, "success", "message");
         const auto        error       = message.find("error");
         std::string       errorText   = error != message.end() && error->is_string() ? error->get<std::string>() : std::string();
-        nlohmann::json    data        = message.contains("data") ? message["data"] : nlohmann::json();
+        // Moved, never copied: nlohmann copies recursively, so a peer's deeply nested data would overflow the stack.
+        const auto     dataField = message.find("data");
+        nlohmann::json data      = dataField != message.end() ? std::move(*dataField) : nlohmann::json();
 
         if (messageType == "client_response") {
             return ServerMessage{.kind          = MessageKind::Response,

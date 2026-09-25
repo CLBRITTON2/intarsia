@@ -3,6 +3,7 @@
 #include "platform/Errors.hpp"
 
 #include <array>
+#include <cstring>
 #include <format>
 #include <stdexcept>
 #include <string>
@@ -13,11 +14,12 @@ namespace {
     // grow the bar's memory without bound.
     constexpr size_t kMaxMessageBytes = size_t{1024} * 1024;
 
-    // Loopback connects and sends finish at once, so a short bound only matters when the peer has stopped reading.
-    // Receives wait forever (0): an idle IPC socket is normal, not a failure.
-    constexpr int kConnectTimeoutMs = 2000;
-    constexpr int kSendTimeoutMs    = 2000;
-    constexpr int kReceiveTimeoutMs = 0;
+    // Loopback connects, sends and upgrades finish at once, so a short bound only matters when the peer has stopped
+    // reading or never answers the upgrade. Once upgraded, receives wait forever (0): an idle IPC socket is normal.
+    constexpr int   kConnectTimeoutMs   = 2000;
+    constexpr int   kSendTimeoutMs      = 2000;
+    constexpr int   kHandshakeTimeoutMs = 2000;
+    constexpr DWORD kIdleTimeoutMs      = 0;
     // Seconds WinHttpWebSocketClose waits for the server's close frame, which bounds how long shutdown can take.
     constexpr DWORD kCloseTimeoutSeconds = 1;
 
@@ -37,7 +39,7 @@ namespace {
     HINTERNET OpenSession() {
         HINTERNET session = Checked(WinHttpOpen(L"intarsia", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen");
         // Set on the session so the request and the WebSocket made from it inherit them.
-        if (!WinHttpSetTimeouts(session, 0, kConnectTimeoutMs, kSendTimeoutMs, kReceiveTimeoutMs)) {
+        if (!WinHttpSetTimeouts(session, 0, kConnectTimeoutMs, kSendTimeoutMs, kHandshakeTimeoutMs)) {
             const DWORD error = GetLastError();
             WinHttpCloseHandle(session);
             throw Win32Error("WinHttpSetTimeouts", HRESULT_FROM_WIN32(error));
@@ -45,10 +47,26 @@ namespace {
         return session;
     }
 
+    USHORT LocalPortOf(HINTERNET request) {
+        WINHTTP_CONNECTION_INFO info{};
+        DWORD                   size = sizeof(info);
+        info.cbSize                  = size;
+        if (!WinHttpQueryOption(request, WINHTTP_OPTION_CONNECTION_INFO, &info, &size)) {
+            ThrowLastError("WinHttpQueryOption(WINHTTP_OPTION_CONNECTION_INFO)");
+        }
+        if (info.LocalAddress.ss_family != AF_INET) {
+            throw std::runtime_error(std::format("the WebSocket's local address has family {}, expected IPv4", static_cast<int>(info.LocalAddress.ss_family)));
+        }
+        sockaddr_in local{};
+        std::memcpy(&local, &info.LocalAddress, sizeof(local));
+        // sin_port is in network byte order.
+        return static_cast<USHORT>(((local.sin_port & 0xFFu) << 8) | ((local.sin_port >> 8) & 0xFFu));
+    }
+
 } // namespace
 
 WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_view path) :
-    _session(OpenSession()), _connection(Checked(WinHttpConnect(_session.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")) {
+    _session(OpenSession()), _connection(Checked(WinHttpConnect(_session.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")), _localPort(0) {
     const UniqueInternet request(
         Checked(WinHttpOpenRequest(_connection.get(), L"GET", std::wstring(path).c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0), "WinHttpOpenRequest"));
     if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET, nullptr, 0)) {
@@ -69,12 +87,22 @@ WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_vi
     if (status != HTTP_STATUS_SWITCH_PROTOCOLS) {
         throw std::runtime_error(std::format("WebSocket upgrade to port {} answered HTTP {}, expected 101", port, status));
     }
+    _localPort = LocalPortOf(request.get());
+    // Set on the request, which the WebSocket inherits it from: the WebSocket handle itself rejects the option.
+    DWORD idleTimeout = kIdleTimeoutMs;
+    if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_RECEIVE_TIMEOUT, &idleTimeout, sizeof(idleTimeout))) {
+        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_RECEIVE_TIMEOUT)");
+    }
     _socket.reset(Checked(WinHttpWebSocketCompleteUpgrade(request.get(), 0), "WinHttpWebSocketCompleteUpgrade"));
 
     DWORD closeTimeout = kCloseTimeoutSeconds;
     if (!WinHttpSetOption(_socket.get(), WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT, &closeTimeout, sizeof(closeTimeout))) {
         ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT)");
     }
+}
+
+USHORT WebSocket::LocalPort() const {
+    return _localPort;
 }
 
 WebSocket::~WebSocket() = default;

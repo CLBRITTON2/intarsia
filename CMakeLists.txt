@@ -4,6 +4,10 @@ project(intarsia LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# SDL checks, Control Flow Guard and CET shadow stack compatibility for every target, Lua and the tests included.
+add_compile_options(/sdl /guard:cf)
+add_link_options(/guard:cf /CETCOMPAT)
+
 include(FetchContent)
 
 # Lua ships no CMake build, so the release tarball is built here as a static library.
@@ -67,6 +71,9 @@ target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d1
 
 add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest)
 target_link_libraries(intarsia PRIVATE intarsia_core)
+# 0x800 is LOAD_LIBRARY_SEARCH_SYSTEM32: the loader resolves the executable's imports (d2d1, winhttp, the C runtime)
+# from System32 only, never from a DLL planted beside it.
+target_link_options(intarsia PRIVATE /DEPENDENTLOADFLAG:0x800)
 
 option(BUILD_TESTING "Build the GoogleTest unit tests" OFF)
 if(BUILD_TESTING)
@@ -98,10 +105,15 @@ if(BUILD_TESTING)
     tests/platform/AppBar.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/Process.cpp
+    tests/platform/PeerProcess.cpp
     tests/platform/Text.cpp
+    tests/platform/WebSocket.cpp
     tests/platform/WorkQueue.cpp
+    tests/render/Surface.cpp
+    tests/wm/Native.cpp
   )
-  target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main)
+  # Winsock, BCrypt and CryptoAPI play the far end of a loopback connection in the WebSocket and peer tests.
+  target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/config.lua")
   gtest_discover_tests(intarsia_gtests)
 endif()

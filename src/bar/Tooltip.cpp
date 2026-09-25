@@ -76,24 +76,28 @@ Tooltip::~Tooltip() {
 
 // Padding is the bar's spacing and the border its border, so the tooltip reads as part of the bar.
 void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
+    // Wrapped at the monitor's width and cut at its height: text from a command or a window title can be any length,
+    // and a surface past the GPU's texture size limit cannot be created.
+    const float               inset         = _config.bar.spacingDips + _config.bar.borderDips;
+    const LONG                monitorWidth  = anchor.monitor.right - anchor.monitor.left;
+    const LONG                monitorHeight = anchor.monitor.bottom - anchor.monitor.top;
+    const float               widthDips     = static_cast<float>(monitorWidth) * USER_DEFAULT_SCREEN_DPI / static_cast<float>(anchor.dpi);
     ComPtr<IDWriteTextLayout> layout;
-    ThrowIfFailed(_graphics.dwrite->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), _textFormat, std::numeric_limits<float>::max(),
+    ThrowIfFailed(_graphics.dwrite->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), _textFormat, std::max(widthDips - (2 * inset), 1.0f),
                                                      std::numeric_limits<float>::max(), &layout),
                   "IDWriteFactory::CreateTextLayout(tooltip)");
-    ThrowIfFailed(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping(tooltip)");
+    ThrowIfFailed(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK), "IDWriteTextLayout::SetWordWrapping(tooltip)");
     DWRITE_TEXT_METRICS metrics{};
     ThrowIfFailed(layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics(tooltip)");
 
-    const float inset = _config.bar.spacingDips + _config.bar.borderDips;
-    const SIZE size{.cx = DipsToWholePixels(metrics.widthIncludingTrailingWhitespace + (2 * inset), anchor.dpi), .cy = DipsToWholePixels(metrics.height + (2 * inset), anchor.dpi)};
-    if (_surface == nullptr) {
-        _surface         = std::make_unique<Surface>(_graphics, _window, static_cast<UINT>(size.cx), static_cast<UINT>(size.cy), anchor.dpi);
-        _backgroundBrush = CreateBrush(_surface->Context(), _config.colors.background);
-        _borderBrush     = CreateBrush(_surface->Context(), _config.colors.border);
-        _foregroundBrush = CreateBrush(_surface->Context(), _config.colors.foreground);
-    } else {
-        _surface->Resize(static_cast<UINT>(size.cx), static_cast<UINT>(size.cy), anchor.dpi);
-    }
+    const SIZE size{.cx = std::min(DipsToWholePixels(metrics.widthIncludingTrailingWhitespace + (2 * inset), anchor.dpi), monitorWidth),
+                    .cy = std::min(DipsToWholePixels(metrics.height + (2 * inset), anchor.dpi), monitorHeight)};
+    // A window takes one composition target at a time, so the old surface goes before the new one is made.
+    ReleaseSurface();
+    _surface         = std::make_unique<Surface>(_graphics, _window, static_cast<UINT>(size.cx), static_cast<UINT>(size.cy), anchor.dpi);
+    _backgroundBrush = CreateBrush(_surface->Context(), _config.colors.background);
+    _borderBrush     = CreateBrush(_surface->Context(), _config.colors.border);
+    _foregroundBrush = CreateBrush(_surface->Context(), _config.colors.foreground);
 
     ID2D1DeviceContext* context = _surface->Context();
     const D2D1_SIZE_F   area    = context->GetSize();
@@ -114,6 +118,15 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     }
 }
 
+// The buffers are sized to the text, up to the whole monitor, so they go with it instead of waiting for the next hover.
 void Tooltip::Hide() {
     ShowWindow(_window, SW_HIDE);
+    ReleaseSurface();
+}
+
+void Tooltip::ReleaseSurface() {
+    _foregroundBrush.Reset();
+    _borderBrush.Reset();
+    _backgroundBrush.Reset();
+    _surface.reset();
 }

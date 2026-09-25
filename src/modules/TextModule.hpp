@@ -10,13 +10,15 @@
 struct ModuleText {
     std::wstring text;
     bool         alert; // drawn in the alert color, for a value that needs attention such as a failed command
+
+    bool         operator==(const ModuleText& other) const = default;
 };
 
 // A module that shows its icon and one formatted value, redrawn on each interval tick: clock, cpu, memory, custom. A
 // subclass supplies only the value, formatted with whichever spec it is given: format on the bar, tooltip on hover.
 class TextModule : public IModule {
   public:
-    void                        Layout(const RenderContext& render) final;
+    bool                        Layout(const RenderContext& render) final;
     D2D1_SIZE_F                 Size() const final;
     void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const final;
     std::optional<UINT>         MillisecondsUntilChange() const override;
@@ -34,5 +36,6 @@ class TextModule : public IModule {
 
   private:
     TextModuleConfig _config;
+    ModuleText       _shown; // what _text holds, once it has a layout
     IconText         _text;
 };

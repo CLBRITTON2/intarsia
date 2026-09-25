@@ -9,13 +9,14 @@
 #include <optional>
 #include <string>
 
-// One piece of a bar, such as the clock. The bar calls Layout, then Size, then Draw on every frame.
+// One piece of a bar, such as the clock. The bar calls Layout, then Size, then Draw for each frame it draws.
 class IModule {
   public:
     virtual ~IModule() = default;
 
-    // Rebuilds what the module draws from its current data.
-    virtual void        Layout(const RenderContext& render)                           = 0;
+    // Rebuilds what the module draws from its current data. Returns false when that is what the last call built, so the
+    // bar can skip a frame no module changed.
+    virtual bool        Layout(const RenderContext& render)                           = 0;
     virtual D2D1_SIZE_F Size() const                                                  = 0;
     virtual void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const = 0;
 

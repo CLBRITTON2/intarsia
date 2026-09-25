@@ -6,6 +6,23 @@
 
 #include <format>
 
+namespace {
+
+    constexpr wchar_t kReplacementCharacter = 0xFFFD;
+
+    // Bytes of the valid UTF-8 sequence that starts at text[at], or 0 when none does.
+    size_t Utf8SequenceBytes(std::string_view text, size_t at) {
+        const auto   lead  = static_cast<unsigned char>(text[at]);
+        const size_t bytes = lead >= 0xF0u ? 4 : lead >= 0xE0u ? 3 : lead >= 0xC0u ? 2 : 0;
+        if (bytes == 0 || at + bytes > text.size()) {
+            return 0;
+        }
+        // Also rejects overlong forms, encoded surrogates and code points past U+10FFFF.
+        return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data() + at, static_cast<int>(bytes), nullptr, 0) > 0 ? bytes : 0;
+    }
+
+} // namespace
+
 std::string ToUtf8(std::wstring_view text) {
     if (text.empty()) {
         return {};
@@ -32,6 +49,18 @@ std::wstring ToWide(std::string_view text) {
     return wide;
 }
 
+std::wstring ReplaceLoneSurrogates(std::wstring_view text) {
+    std::wstring valid(text);
+    for (size_t index = 0; index < valid.size(); ++index) {
+        if (IS_HIGH_SURROGATE(valid[index]) && index + 1 < valid.size() && IS_LOW_SURROGATE(valid[index + 1])) {
+            ++index;
+        } else if (IS_HIGH_SURROGATE(valid[index]) || IS_LOW_SURROGATE(valid[index])) {
+            valid[index] = kReplacementCharacter;
+        }
+    }
+    return valid;
+}
+
 std::string LogExcerpt(std::string_view text, size_t maxBytes) {
     size_t kept = text.size() <= maxBytes ? text.size() : maxBytes;
     // Back off over UTF-8 continuation bytes (10xxxxxx) so the cut lands on a character boundary.
@@ -39,10 +68,24 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
         --kept;
     }
 
-    std::string excerpt;
+    const std::string_view shown = text.substr(0, kept);
+    std::string            excerpt;
     excerpt.reserve(kept + 16);
-    for (const char character : text.substr(0, kept)) {
-        const auto byte = static_cast<unsigned char>(character);
+    size_t at = 0;
+    while (at < shown.size()) {
+        const char character = shown[at];
+        const auto byte      = static_cast<unsigned char>(character);
+        if (byte >= 0x80u) {
+            const size_t bytes = Utf8SequenceBytes(shown, at);
+            if (bytes == 0) {
+                excerpt += std::format("\\x{:02x}", byte);
+                ++at;
+            } else {
+                excerpt += shown.substr(at, bytes);
+                at += bytes;
+            }
+            continue;
+        }
         if (character == '"' || character == '\\') {
             excerpt += '\\';
             excerpt += character;
@@ -51,6 +94,7 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
         } else {
             excerpt += character;
         }
+        ++at;
     }
     if (kept < text.size()) {
         excerpt += std::format("...({} more bytes)", text.size() - kept);

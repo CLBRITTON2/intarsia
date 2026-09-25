@@ -291,6 +291,23 @@ TEST(Config, TheConfigCannotReadFiles) {
     EXPECT_THAT([] { return LoadText("loadfile('C:/Windows/win.ini')"); }, ConfigErrorWith("attempt to call a nil value (global 'loadfile')"));
 }
 
+// load takes precompiled bytecode, which Lua does not verify.
+TEST(Config, TheConfigCannotLoadChunks) {
+    EXPECT_THAT([] { return LoadText("load('return 1')"); }, ConfigErrorWith("attempt to call a nil value (global 'load')"));
+}
+
+// Each module's table stays on the Lua stack while the config is read, far past the slots Lua guarantees.
+TEST(Config, ManyModulesFitOnTheLuaStack) {
+    std::string names = "{ ";
+    std::string definitions;
+    for (int index = 0; index < 200; ++index) {
+        names += "\"clock" + std::to_string(index) + "\", ";
+        definitions += "        clock" + std::to_string(index) + " = { type = \"clock\", format = \"{:%H:%M}\", icon = \"x\", interval = 60 },\n";
+    }
+    names += "}";
+    EXPECT_EQ(LoadText(WithRightModules(names, definitions)).modules.right.size(), 200u);
+}
+
 TEST(Config, TooltipIsOptional) {
     EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
     const Config config = LoadText(Replace(kValidConfig, R"(interval = 60 },)", R"(interval = 60, tooltip = "{:%A %d %B %Y}" },)"));

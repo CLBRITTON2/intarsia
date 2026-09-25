@@ -32,6 +32,7 @@ namespace {
         TableReader(lua_State* lua, int index, std::string source, std::string path) : _lua(lua), _index(index), _source(std::move(source)), _path(std::move(path)) {}
 
         bool Has(std::string_view key) const {
+            Reserve(1);
             lua_pushlstring(_lua, key.data(), key.size());
             const int type = lua_rawget(_lua, _index);
             lua_pop(_lua, 1);
@@ -81,6 +82,7 @@ namespace {
         // Every key of the table, which must all be strings.
         std::vector<std::string> Keys() const {
             std::vector<std::string> keys;
+            Reserve(2);
             lua_pushnil(_lua);
             while (lua_next(_lua, _index) != 0) {
                 if (lua_type(_lua, -2) != LUA_TSTRING) {
@@ -117,6 +119,7 @@ namespace {
 
         size_t CountKeys(int tableIndex) const {
             size_t count = 0;
+            Reserve(2);
             lua_pushnil(_lua);
             while (lua_next(_lua, tableIndex) != 0) {
                 ++count;
@@ -125,7 +128,17 @@ namespace {
             return count;
         }
 
+        // Every table read stays on the stack while its TableReader lives, one slot per module, so the stack can grow past
+        // the LUA_MINSTACK slots Lua guarantees. Pushing past the allocated stack is unchecked in a release build.
+        void Reserve(int slots) const {
+            if (lua_checkstack(_lua, slots) == 0) {
+                throw Error(std::format("Lua cannot grow its stack by {} slots to read {}", slots, _path.empty() ? std::string("the returned table") : _path));
+            }
+        }
+
+        // Leaves room for StringList's element on top of the field.
         void PushField(std::string_view key, int expectedType, std::string_view expectedName) const {
+            Reserve(2);
             lua_pushlstring(_lua, key.data(), key.size());
             const int type = lua_rawget(_lua, _index);
             if (type == LUA_TNIL) {
@@ -431,12 +444,13 @@ Config LoadConfig(const std::filesystem::path& path) {
     if (lua == nullptr) {
         throw ConfigError("luaL_newstate failed to allocate a Lua state");
     }
-    // Only libraries that cannot reach the filesystem or other processes: base minus its two file loaders.
+    // Only libraries that cannot reach the filesystem or other processes: base minus its loaders. load goes too, since it
+    // accepts precompiled chunks and Lua does not verify bytecode.
     OpenLibrary(lua.get(), LUA_GNAME, luaopen_base);
     OpenLibrary(lua.get(), LUA_STRLIBNAME, luaopen_string);
     OpenLibrary(lua.get(), LUA_TABLIBNAME, luaopen_table);
     OpenLibrary(lua.get(), LUA_MATHLIBNAME, luaopen_math);
-    for (const char* loader : {"dofile", "loadfile"}) {
+    for (const char* loader : {"dofile", "loadfile", "load"}) {
         lua_pushnil(lua.get());
         lua_setglobal(lua.get(), loader);
     }

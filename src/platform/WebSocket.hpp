@@ -1,5 +1,8 @@
 #pragma once
 
+// Before winhttp.h, which declares WINHTTP_CONNECTION_INFO only when the socket address types are defined.
+#include <winsock2.h>
+
 #include <windows.h>
 #include <winhttp.h>
 
@@ -17,7 +20,10 @@ class WebSocket {
     WebSocket(const WebSocket&)            = delete;
     WebSocket& operator=(const WebSocket&) = delete;
 
-    void       Send(std::string_view text);
+    // This end's port, which names the connection in the OS's TCP table.
+    USHORT LocalPort() const;
+
+    void   Send(std::string_view text);
 
     // One whole message as text. Throws when the connection fails, is closed, or the server closes it.
     std::string Receive();
@@ -37,4 +43,5 @@ class WebSocket {
     UniqueInternet _session;
     UniqueInternet _connection;
     UniqueInternet _socket;
+    USHORT         _localPort;
 };

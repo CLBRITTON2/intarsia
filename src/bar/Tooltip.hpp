@@ -38,11 +38,13 @@ class Tooltip {
     void Hide();
 
   private:
+    void                  ReleaseSurface();
+
     const GraphicsDevice& _graphics;
     const Config&         _config;
     IDWriteTextFormat*    _textFormat;
     HWND                  _window;
-    // Created on the first Show, once there is a size to create it at.
+    // Only while shown: Show creates it at the text's size and Hide releases it.
     std::unique_ptr<Surface>                     _surface;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _backgroundBrush;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _borderBrush;

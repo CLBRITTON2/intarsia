@@ -179,7 +179,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         case WM_TIMER:
             if (wParam == kChangeTimer) {
-                Render();
+                Refresh();
             }
             return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
@@ -261,33 +261,57 @@ void Bar::Render() {
         return;
     }
     try {
-        const RenderContext         render  = FrameContext();
-        const Edge                  edge    = _config.bar.edge;
-        const D2D1_SIZE_F           barSize = render.context->GetSize();
-        const Sections<D2D1_SIZE_F> sizes   = MapSections(_modules, [&render](const std::unique_ptr<IModule>& module) {
-            module->Layout(render);
-            return module->Size();
-        });
-        const Sections<float>       offsets =
-            ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), _config.bar.spacingDips);
-
-        render.context->BeginDraw();
-        render.context->Clear(D2D1::ColorF(0, 0, 0, 0));
-        render.context->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), _backgroundBrush.Get());
-        render.context->FillRectangle(BorderRect(barSize, edge, _config.bar.borderDips), _borderBrush.Get());
-        _hitBoxes.clear();
-        for (const auto& boxes :
-             {DrawSection(render, _modules.left, sizes.left, offsets.left, barSize), DrawSection(render, _modules.center, sizes.center, offsets.center, barSize),
-              DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
-            _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
-        }
-        _surface->EndDrawAndPresent();
+        LayOutModules();
+        Draw();
     } catch (const DeviceLostError& error) {
         ReportDeviceLost(error);
         return;
     }
-    _presented = true;
     ScheduleNextChange();
+}
+
+void Bar::Refresh() {
+    if (_surface == nullptr || _deviceLost) {
+        return;
+    }
+    try {
+        if (LayOutModules()) {
+            Draw();
+        }
+    } catch (const DeviceLostError& error) {
+        ReportDeviceLost(error);
+        return;
+    }
+    ScheduleNextChange();
+}
+
+bool Bar::LayOutModules() {
+    const RenderContext render  = FrameContext();
+    bool                changed = false;
+    // Every module lays out, so none is left holding stale content.
+    ForEachInSections(_modules, [&render, &changed](const std::unique_ptr<IModule>& module) { changed = module->Layout(render) || changed; });
+    return changed;
+}
+
+void Bar::Draw() {
+    const RenderContext         render  = FrameContext();
+    const Edge                  edge    = _config.bar.edge;
+    const D2D1_SIZE_F           barSize = render.context->GetSize();
+    const Sections<D2D1_SIZE_F> sizes   = MapSections(_modules, [](const std::unique_ptr<IModule>& module) { return module->Size(); });
+    const Sections<float>       offsets =
+        ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), _config.bar.spacingDips);
+
+    render.context->BeginDraw();
+    render.context->Clear(D2D1::ColorF(0, 0, 0, 0));
+    render.context->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), _backgroundBrush.Get());
+    render.context->FillRectangle(BorderRect(barSize, edge, _config.bar.borderDips), _borderBrush.Get());
+    _hitBoxes.clear();
+    for (const auto& boxes : {DrawSection(render, _modules.left, sizes.left, offsets.left, barSize), DrawSection(render, _modules.center, sizes.center, offsets.center, barSize),
+                              DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
+        _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
+    }
+    _surface->EndDrawAndPresent();
+    _presented = true;
 }
 
 void Bar::ReportDeviceLost(const DeviceLostError& error) {
