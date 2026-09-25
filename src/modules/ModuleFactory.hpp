@@ -15,7 +15,7 @@ struct ModuleSources {
     HMONITOR        monitor;
 };
 
-std::unique_ptr<IModule> CreateModule(ModuleKind kind, const Config& config, const ModuleSources& sources);
+std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources);
 
 // Fresh module instances for one bar, in the order the config lists them.
 Sections<std::unique_ptr<IModule>> CreateModules(const Config& config, const ModuleSources& sources);

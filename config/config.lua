@@ -24,31 +24,43 @@ return {
     -- windows: no window manager, windows and focus come from Windows itself (no workspaces module)
     window_manager = "glazewm",
 
-    modules_left = { "workspaces", "window" },
-    modules_center = { "clock" },
+    -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
+    -- does not define, or a module no list shows, is an error.
+    modules_left = { "workspaces", "title" },
+    modules_center = { "date" },
     modules_right = { "cpu", "memory" },
 
-    clock = {
-        format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
-        icon = "\u{F1441}",
-        interval = 60, -- seconds between redraws, aligned to the clock
-    },
-    window = {
-        max_length = 80, -- longer titles are cut with an ellipsis
-    },
-    -- Any text module takes optional on_click, on_right_click, on_scroll_up and on_scroll_down commands:
-    -- { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config loads),
-    -- and it starts without a shell, so arguments reach it exactly as written.
-    cpu = {
-        format = "{}%", -- the value is an integer percent
-        icon = "\u{F4BC}",
-        interval = 1,
-        on_click = { "C:\\Windows\\System32\\Taskmgr.exe" },
-    },
-    memory = {
-        format = "{:.1f} GB", -- the value is gibibytes in use, as a double
-        icon = "\u{EFC5}",
-        interval = 1,
-        on_click = { "C:\\Windows\\System32\\resmon.exe" },
+    -- Each module has a name you choose and a type: clock, window, workspaces, cpu or memory. One type can appear
+    -- under several names with different settings, such as a second clock with its own format.
+    --
+    -- clock, window, cpu and memory take optional on_click, on_right_click, on_scroll_up and on_scroll_down
+    -- commands: { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config
+    -- loads), and it starts without a shell, so arguments reach it exactly as written.
+    modules = {
+        workspaces = { type = "workspaces" },
+        title = {
+            type = "window",
+            max_length = 80, -- longer titles are cut with an ellipsis
+        },
+        date = {
+            type = "clock",
+            format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
+            icon = "\u{F1441}",
+            interval = 60, -- seconds between redraws, aligned to the clock
+        },
+        cpu = {
+            type = "cpu",
+            format = "{}%", -- the value is an integer percent
+            icon = "\u{F4BC}",
+            interval = 1,
+            on_click = { "C:\\Windows\\System32\\Taskmgr.exe" },
+        },
+        memory = {
+            type = "memory",
+            format = "{:.1f} GB", -- the value is gibibytes in use, as a double
+            icon = "\u{EFC5}",
+            interval = 1,
+            on_click = { "C:\\Windows\\System32\\resmon.exe" },
+        },
     },
 }

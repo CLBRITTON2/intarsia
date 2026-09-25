@@ -78,7 +78,21 @@ namespace {
             return values;
         }
 
-        void RejectUnknownKeys(std::initializer_list<std::string_view> known) const {
+        // Every key of the table, which must all be strings.
+        std::vector<std::string> Keys() const {
+            std::vector<std::string> keys;
+            lua_pushnil(lua_);
+            while (lua_next(lua_, index_) != 0) {
+                if (lua_type(lua_, -2) != LUA_TSTRING) {
+                    throw Error(std::format("{} has a key that is not a string", path_.empty() ? std::string("the returned table") : path_));
+                }
+                keys.push_back(StringAt(-2));
+                lua_pop(lua_, 1);
+            }
+            return keys;
+        }
+
+        void RejectUnknownKeys(const std::vector<std::string_view>& known) const {
             lua_pushnil(lua_);
             while (lua_next(lua_, index_) != 0) {
                 if (lua_type(lua_, -2) != LUA_TSTRING) {
@@ -223,21 +237,67 @@ namespace {
         return names;
     }
 
-    std::vector<ModuleKind> ReadModuleList(const TableReader& table, std::string_view key) {
-        std::vector<ModuleKind> kinds;
-        for (const std::string& name : table.StringList(key)) {
-            const auto module = std::ranges::find(kModuleNames, name, &ModuleName::name);
-            if (module == kModuleNames.end()) {
-                throw table.Error(std::format("{} lists unknown module '{}', known modules are: {}", table.KeyPath(key), name, KnownModuleNames()));
-            }
-            kinds.push_back(module->kind);
-        }
-        return kinds;
+    bool IsModuleNameCharacter(char character) {
+        return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-';
     }
 
-    bool ListsModule(const Sections<ModuleKind>& modules, ModuleKind kind) {
-        return std::ranges::find(modules.left, kind) != modules.left.end() || std::ranges::find(modules.center, kind) != modules.center.end() ||
-            std::ranges::find(modules.right, kind) != modules.right.end();
+    ModuleKind ParseModuleType(const TableReader& module) {
+        const std::string type  = module.String("type");
+        const auto        entry = std::ranges::find(kModuleNames, type, &ModuleName::name);
+        if (entry == kModuleNames.end()) {
+            throw module.Error(std::format("{} is '{}', known types are: {}", module.KeyPath("type"), type, KnownModuleNames()));
+        }
+        return entry->kind;
+    }
+
+    TextModuleConfig ReadTextModuleConfig(const TableReader& module);
+    WindowConfig     ReadWindowConfig(const TableReader& window);
+
+    ModuleSettings   ReadModuleSettings(const TableReader& module, ModuleKind kind) {
+        switch (kind) {
+            case ModuleKind::Clock:
+            case ModuleKind::Cpu:
+            case ModuleKind::Memory: return ReadTextModuleConfig(module);
+            case ModuleKind::Window: return ReadWindowConfig(module);
+            case ModuleKind::Workspaces: module.RejectUnknownKeys({"type"}); return std::monostate{};
+        }
+        throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
+    }
+
+    // Every name a modules_ list shows must be defined in the modules table, which holds one table per module.
+    std::vector<ModuleInstance> ReadModuleList(const TableReader& root, const TableReader& definitions, std::string_view listKey) {
+        std::vector<ModuleInstance> instances;
+        for (const std::string& name : root.StringList(listKey)) {
+            if (!definitions.Has(name)) {
+                throw root.Error(std::format("{} shows '{}', which is not defined in modules", listKey, name));
+            }
+            const TableReader module = definitions.Table(name);
+            const ModuleKind  kind   = ParseModuleType(module);
+            instances.push_back(ModuleInstance{.name = name, .kind = kind, .settings = ReadModuleSettings(module, kind)});
+        }
+        return instances;
+    }
+
+    bool Shows(const Sections<ModuleInstance>& modules, std::string_view name) {
+        const auto isNamed = [name](const ModuleInstance& instance) { return instance.name == name; };
+        return std::ranges::any_of(modules.left, isNamed) || std::ranges::any_of(modules.center, isNamed) || std::ranges::any_of(modules.right, isNamed);
+    }
+
+    // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
+    void RejectUnshownModules(const TableReader& definitions, const Sections<ModuleInstance>& modules) {
+        for (const std::string& name : definitions.Keys()) {
+            if (name.empty() || !std::ranges::all_of(name, IsModuleNameCharacter)) {
+                throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
+            }
+            if (!Shows(modules, name)) {
+                throw definitions.Error(std::format("{} is defined but no modules_ list shows it", definitions.KeyPath(name)));
+            }
+        }
+    }
+
+    bool ListsModule(const Sections<ModuleInstance>& modules, ModuleKind kind) {
+        const auto isKind = [kind](const ModuleInstance& instance) { return instance.kind == kind; };
+        return std::ranges::any_of(modules.left, isKind) || std::ranges::any_of(modules.center, isKind) || std::ranges::any_of(modules.right, isKind);
     }
 
     // An action is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
@@ -274,7 +334,7 @@ namespace {
     }
 
     TextModuleConfig ReadTextModuleConfig(const TableReader& module) {
-        module.RejectUnknownKeys({"format", "icon", "interval", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        module.RejectUnknownKeys({"type", "format", "icon", "interval", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
         return TextModuleConfig{.format   = module.String("format"),
                                 .icon     = ToWide(module.String("icon")),
                                 .interval = std::chrono::seconds(PositiveWholeNumber(module, "interval")),
@@ -282,20 +342,8 @@ namespace {
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {
-        window.RejectUnknownKeys({"max_length", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        window.RejectUnknownKeys({"type", "max_length", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
         return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .actions = ReadActions(window)};
-    }
-
-    // A module's table is read when present, and required when a section lists the module.
-    template <typename ModuleConfig, typename Read>
-    std::optional<ModuleConfig> ReadModuleConfig(const TableReader& root, const Sections<ModuleKind>& modules, ModuleKind kind, std::string_view name, Read read) {
-        if (root.Has(name)) {
-            return read(root.Table(name));
-        }
-        if (ListsModule(modules, kind)) {
-            throw root.Error(std::format("{} is listed in a modules_ list but has no {} table", name, name));
-        }
-        return std::nullopt;
     }
 
     std::string ReadFile(const std::filesystem::path& path) {
@@ -355,7 +403,13 @@ Config LoadConfig(const std::filesystem::path& path) {
     }
 
     const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
-    root.RejectUnknownKeys({"bar", "font", "colors", "window_manager", "modules_left", "modules_center", "modules_right", "clock", "window", "cpu", "memory"});
+    root.RejectUnknownKeys({"bar", "font", "colors", "window_manager", "modules_left", "modules_center", "modules_right", "modules"});
+
+    const TableReader              definitions = root.Table("modules");
+    const Sections<ModuleInstance> modules{.left   = ReadModuleList(root, definitions, "modules_left"),
+                                           .center = ReadModuleList(root, definitions, "modules_center"),
+                                           .right  = ReadModuleList(root, definitions, "modules_right")};
+    RejectUnshownModules(definitions, modules);
 
     const TableReader bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "thickness", "border", "spacing"});
@@ -378,22 +432,9 @@ Config LoadConfig(const std::filesystem::path& path) {
 
     const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
-    Sections<ModuleKind>    modules{.left = ReadModuleList(root, "modules_left"), .center = ReadModuleList(root, "modules_center"), .right = ReadModuleList(root, "modules_right")};
-    std::optional<TextModuleConfig> clock  = ReadModuleConfig<TextModuleConfig>(root, modules, ModuleKind::Clock, "clock", ReadTextModuleConfig);
-    std::optional<WindowConfig>     window = ReadModuleConfig<WindowConfig>(root, modules, ModuleKind::Window, "window", ReadWindowConfig);
-    std::optional<TextModuleConfig> cpu    = ReadModuleConfig<TextModuleConfig>(root, modules, ModuleKind::Cpu, "cpu", ReadTextModuleConfig);
-    std::optional<TextModuleConfig> memory = ReadModuleConfig<TextModuleConfig>(root, modules, ModuleKind::Memory, "memory", ReadTextModuleConfig);
     if (windowManager == WindowManagerKind::Windows && ListsModule(modules, ModuleKind::Workspaces)) {
         throw root.Error("workspaces needs a window manager that has workspaces, window_manager 'windows' has none");
     }
 
-    return Config{.bar           = barConfig,
-                  .font          = std::move(fontConfig),
-                  .colors        = colorConfig,
-                  .windowManager = windowManager,
-                  .modules       = std::move(modules),
-                  .clock         = std::move(clock),
-                  .window        = window,
-                  .cpu           = std::move(cpu),
-                  .memory        = std::move(memory)};
+    return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig, .windowManager = windowManager, .modules = modules};
 }

@@ -11,6 +11,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <variant>
 
 struct BarConfig {
     Edge  edge;
@@ -68,17 +69,22 @@ struct WindowConfig {
     ModuleActions actions;
 };
 
+// The settings from a module's table: text modules and window have one, workspaces has none.
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig>;
+
+// One entry of a modules_ list: a name the user chose, defined in the config's modules table with its type.
+struct ModuleInstance {
+    std::string    name;
+    ModuleKind     kind;
+    ModuleSettings settings;
+};
+
 struct Config {
-    BarConfig            bar;
-    FontConfig           font;
-    ColorConfig          colors;
-    WindowManagerKind    windowManager;
-    Sections<ModuleKind> modules;
-    // Each is present whenever a section lists its module, the loader rejects a config that lists one without its table.
-    std::optional<TextModuleConfig> clock;
-    std::optional<WindowConfig>     window;
-    std::optional<TextModuleConfig> cpu;
-    std::optional<TextModuleConfig> memory;
+    BarConfig                bar;
+    FontConfig               font;
+    ColorConfig              colors;
+    WindowManagerKind        windowManager;
+    Sections<ModuleInstance> modules;
 };
 
 class ConfigError : public std::runtime_error {

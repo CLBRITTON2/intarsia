@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -20,11 +21,13 @@ return {
     font = { family = "Some Font", text_size = 15, icon_size = 18 },
     colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7", alert = "#eb6f92" },
     window_manager = "windows",
-    modules_left = { "window" },
-    modules_center = { "clock" },
+    modules_left = { "title" },
+    modules_center = { "time" },
     modules_right = {},
-    clock = { format = "{:%H:%M}", icon = "x", interval = 60 },
-    window = { max_length = 80 },
+    modules = {
+        time = { type = "clock", format = "{:%H:%M}", icon = "x", interval = 60 },
+        title = { type = "window", max_length = 80 },
+    },
 }
 )lua";
 
@@ -53,14 +56,20 @@ return {
         std::filesystem::path path_;
     };
 
-    // kValidConfig with one snippet swapped. Throws when the snippet is not there, so a stale case cannot pass.
-    std::string ValidConfigWith(std::string_view from, std::string_view to) {
-        std::string  text(kValidConfig);
+    // The config text with one snippet swapped. Throws when the snippet is not there, so a stale case cannot pass.
+    std::string Replace(std::string_view config, std::string_view from, std::string_view to) {
+        std::string  text(config);
         const size_t position = text.find(from);
         if (position == std::string::npos) {
-            throw std::invalid_argument("snippet not in kValidConfig: " + std::string(from));
+            throw std::invalid_argument("snippet not in the config: " + std::string(from));
         }
         return text.replace(position, from.size(), to);
+    }
+
+    // kValidConfig with extra modules defined, and shown on the right.
+    std::string WithRightModules(std::string_view names, std::string_view definitions) {
+        return Replace(Replace(kValidConfig, "modules_right = {},", std::string("modules_right = ") + std::string(names) + ","), "    modules = {\n",
+                       "    modules = {\n" + std::string(definitions) + "\n");
     }
 
     Config LoadText(std::string_view contents) {
@@ -72,13 +81,26 @@ return {
         return testing::ThrowsMessage<ConfigError>(testing::HasSubstr(std::string(text)));
     }
 
+    std::vector<ModuleKind> Kinds(const std::vector<ModuleInstance>& instances) {
+        std::vector<ModuleKind> kinds;
+        for (const ModuleInstance& instance : instances) {
+            kinds.push_back(instance.kind);
+        }
+        return kinds;
+    }
+
+    // Throws std::bad_variant_access, failing the test, when the instance holds other settings.
+    template <typename Settings>
+    const Settings& SettingsOf(const std::vector<ModuleInstance>& instances, size_t index) {
+        return std::get<Settings>(instances.at(index).settings);
+    }
+
 } // namespace
 
 TEST(Config, ShippedExampleLoads) {
     const Config config = LoadConfig(INTARSIA_EXAMPLE_CONFIG);
     EXPECT_EQ(config.bar.edge, Edge::Top);
-    EXPECT_EQ(config.modules.center, std::vector<ModuleKind>{ModuleKind::Clock});
-    EXPECT_TRUE(config.clock.has_value());
+    EXPECT_EQ(Kinds(config.modules.center), std::vector<ModuleKind>{ModuleKind::Clock});
 }
 
 TEST(Config, ValidConfigParsesIntoTypedValues) {
@@ -88,10 +110,8 @@ TEST(Config, ValidConfigParsesIntoTypedValues) {
     EXPECT_EQ(config.font.family, L"Some Font");
     EXPECT_FLOAT_EQ(config.colors.background.a, 0xe6 / 255.0f);
     EXPECT_FLOAT_EQ(config.colors.foreground.a, 1.0f);
-    ASSERT_TRUE(config.clock.has_value());
-    if (config.clock.has_value()) {
-        EXPECT_EQ(config.clock->interval, std::chrono::seconds(60));
-    }
+    EXPECT_EQ(config.modules.center.at(0).name, "time");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).interval, std::chrono::seconds(60));
 }
 
 TEST(Config, MissingFileIsAnError) {
@@ -108,107 +128,120 @@ TEST(Config, ChunkMustReturnATable) {
 }
 
 TEST(Config, MissingKeyNamesItsPath) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(edge = "top", )", "")); }, ConfigErrorWith("bar.edge is missing"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(edge = "top", )", "")); }, ConfigErrorWith("bar.edge is missing"));
 }
 
 TEST(Config, WrongTypeNamesPathAndBothTypes) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("thickness = 54", R"(thickness = "54")")); }, ConfigErrorWith("bar.thickness must be a number, got string"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", R"(thickness = "54")")); }, ConfigErrorWith("bar.thickness must be a number, got string"));
 }
 
 TEST(Config, UnknownKeysAreRejectedAtRootAndInsideTables) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("modules_right = {},", "modules_right = {}, extra = 1,")); }, ConfigErrorWith("extra is not a known key"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("spacing = 8", "spacing = 8, padding = 2")); }, ConfigErrorWith("bar.padding is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "modules_right = {},", "modules_right = {}, extra = 1,")); }, ConfigErrorWith("extra is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "spacing = 8", "spacing = 8, padding = 2")); }, ConfigErrorWith("bar.padding is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 80, width = 3")); }, ConfigErrorWith("modules.title.width is not a known key"));
 }
 
 TEST(Config, EdgeMustBeOneOfFour) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(edge = "top")", R"(edge = "side")")); }, ConfigErrorWith("got 'side'"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(edge = "top")", R"(edge = "side")")); }, ConfigErrorWith("got 'side'"));
 }
 
 TEST(Config, ColorsMustBeHex) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"("#e0def4")", R"("e0def4")")); }, ConfigErrorWith("colors.foreground must be '#RRGGBB'"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"("#e0def4")", R"("#e0dzf4")")); }, ConfigErrorWith("invalid hex digits 'dz'"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"("#e0def4")", R"("e0def4")")); }, ConfigErrorWith("colors.foreground must be '#RRGGBB'"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"("#e0def4")", R"("#e0dzf4")")); }, ConfigErrorWith("invalid hex digits 'dz'"));
 }
 
 TEST(Config, SizesMustBePositiveAndIntervalWholeSeconds) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("border = 1", "border = -1")); }, ConfigErrorWith("bar.border must be 0 or more"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("interval = 60", "interval = 1.5")); }, ConfigErrorWith("clock.interval must be a whole number"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "border = 1", "border = -1")); }, ConfigErrorWith("bar.border must be 0 or more"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ConfigErrorWith("modules.time.interval must be a whole number"));
 }
 
-TEST(Config, ModuleListsMustBePlainListsOfKnownModules) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", R"({ "clock", x = 1 })")); }, ConfigErrorWith("modules_center must be a plain list"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", R"({ "teapot" })")); },
-                ConfigErrorWith("unknown module 'teapot', known modules are: clock, window, workspaces, cpu, memory"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "clock" })", "{ 7 }")); }, ConfigErrorWith("modules_center[1] must be a string"));
+TEST(Config, ModuleListsMustBePlainListsOfStrings) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", R"({ "time", x = 1 })")); }, ConfigErrorWith("modules_center must be a plain list"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{ 7 }")); }, ConfigErrorWith("modules_center[1] must be a string"));
 }
 
-TEST(Config, ListedModuleNeedsItsTableUnlistedMayKeepIt) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(clock = { format = "{:%H:%M}", icon = "x", interval = 60 },)", "")); },
-                ConfigErrorWith("clock is listed in a modules_ list but has no clock table"));
-    EXPECT_TRUE(LoadText(ValidConfigWith(R"({ "clock" })", "{}")).clock.has_value());
+TEST(Config, ListsMayOnlyShowDefinedModules) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", R"({ "time", "clock" })")); },
+                ConfigErrorWith("modules_center shows 'clock', which is not defined in modules"));
+}
+
+TEST(Config, EveryDefinedModuleMustBeShown) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no modules_ list shows it"));
+}
+
+TEST(Config, ModuleNamesUseASafeAlphabet) {
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "two words" })", R"(        ["two words"] = { type = "cpu", format = "{}", icon = "", interval = 1 },)")); },
+                ConfigErrorWith("is not a valid module name"));
+}
+
+TEST(Config, TypeMustBeAKnownModuleType) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, cpu, memory"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
+}
+
+TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
+    const Config config = LoadText(WithRightModules(R"({ "cpu", "cpu_slow" })", R"(        cpu = { type = "cpu", format = "{}%", icon = "c", interval = 1 },
+        cpu_slow = { type = "cpu", format = "{}", icon = "", interval = 5 },)"));
+    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Cpu}));
+    EXPECT_EQ(config.modules.right.at(1).name, "cpu_slow");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{}%");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(5));
 }
 
 TEST(Config, WindowManagerAndWindowModuleParse) {
     const Config config = LoadText(kValidConfig);
     EXPECT_EQ(config.windowManager, WindowManagerKind::Windows);
-    EXPECT_EQ(config.modules.left, std::vector<ModuleKind>{ModuleKind::Window});
-    ASSERT_TRUE(config.window.has_value());
-    if (config.window.has_value()) {
-        EXPECT_EQ(config.window->maxLength, 80u);
-    }
+    EXPECT_EQ(Kinds(config.modules.left), std::vector<ModuleKind>{ModuleKind::Window});
+    EXPECT_EQ(SettingsOf<WindowConfig>(config.modules.left, 0).maxLength, 80u);
 }
 
 TEST(Config, WindowManagerMustBeAKnownBackend) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"(window_manager = "windows")", R"(window_manager = "i3")")); },
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "i3")")); },
                 ConfigErrorWith("window_manager must be one of windows, glazewm, got 'i3'"));
 }
 
 TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith(R"({ "window" })", R"({ "workspaces" })")); }, ConfigErrorWith("window_manager 'windows' has none"));
-    const Config config =
-        LoadText(ValidConfigWith("window_manager = \"windows\",\n    modules_left = { \"window\" },", "window_manager = \"glazewm\",\n    modules_left = { \"workspaces\" },"));
+    const std::string onWindows = WithRightModules(R"({ "desktops" })", R"(        desktops = { type = "workspaces" },)");
+    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("window_manager 'windows' has none"));
+
+    const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
+    const Config      config    = LoadText(onGlazeWm);
     EXPECT_EQ(config.windowManager, WindowManagerKind::GlazeWm);
-    EXPECT_EQ(config.modules.left, std::vector<ModuleKind>{ModuleKind::Workspaces});
+    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Workspaces});
+    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(type = "workspaces")", R"(type = "workspaces", size = 2)")); },
+                ConfigErrorWith("modules.desktops.size is not a known key"));
 }
 
-TEST(Config, WindowModuleNeedsItsTableAndAWholeMaxLength) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("window = { max_length = 80 },", "")); }, ConfigErrorWith("window is listed in a modules_ list but has no window table"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("max_length = 80", "max_length = 2.5")); }, ConfigErrorWith("window.max_length must be a whole number"));
+TEST(Config, WindowModuleNeedsAWholeMaxLength) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 2.5")); }, ConfigErrorWith("modules.title.max_length must be a whole number"));
 }
 
 TEST(Config, CpuAndMemoryShareTheTextModuleShape) {
-    const Config config = LoadText(ValidConfigWith("modules_right = {},", R"(modules_right = { "cpu", "memory" },
-    cpu = { format = "{}%", icon = "c", interval = 1 },
-    memory = { format = "{:.1f} GB", icon = "m", interval = 2 },)"));
-    EXPECT_EQ(config.modules.right, (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Memory}));
-    ASSERT_TRUE(config.cpu.has_value() && config.memory.has_value());
-    if (config.cpu.has_value() && config.memory.has_value()) {
-        EXPECT_EQ(config.cpu->format, "{}%");
-        EXPECT_EQ(config.memory->interval, std::chrono::seconds(2));
-    }
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("modules_right = {},", R"(modules_right = { "cpu" },)")); },
-                ConfigErrorWith("cpu is listed in a modules_ list but has no cpu table"));
+    const Config config = LoadText(WithRightModules(R"({ "cpu", "memory" })", R"(        cpu = { type = "cpu", format = "{}%", icon = "c", interval = 1 },
+        memory = { type = "memory", format = "{:.1f} GB", icon = "m", interval = 2 },)"));
+    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Memory}));
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{}%");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(2));
 }
 
 TEST(Config, ActionsResolveToAbsoluteExecutables) {
-    const Config config = LoadText(ValidConfigWith("interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" } })"));
-    ASSERT_TRUE(config.clock.has_value());
-    if (config.clock.has_value()) {
-        const ModuleActions& actions = config.clock->actions;
-        ASSERT_TRUE(actions.click.has_value());
-        if (actions.click.has_value()) {
-            EXPECT_TRUE(actions.click->program.is_absolute());
-            EXPECT_EQ(actions.click->arguments, (std::vector<std::wstring>{L"/c", L"exit 0"}));
-        }
-        EXPECT_TRUE(actions.scrollUp.has_value());
-        EXPECT_FALSE(actions.rightClick.has_value());
-        EXPECT_FALSE(actions.scrollDown.has_value());
+    const Config         config  = LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" } })"));
+    const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
+    ASSERT_TRUE(actions.click.has_value());
+    if (actions.click.has_value()) {
+        EXPECT_TRUE(actions.click->program.is_absolute());
+        EXPECT_EQ(actions.click->arguments, (std::vector<std::wstring>{L"/c", L"exit 0"}));
     }
+    EXPECT_TRUE(actions.scrollUp.has_value());
+    EXPECT_FALSE(actions.rightClick.has_value());
+    EXPECT_FALSE(actions.scrollDown.has_value());
 }
 
 TEST(Config, ActionsMustNameAnExistingExecutable) {
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("interval = 60 }", "interval = 60, on_click = {} }")); }, ConfigErrorWith("clock.on_click must name a program"));
-    EXPECT_THAT([] { return LoadText(ValidConfigWith("interval = 60 }", R"(interval = 60, on_click = { "intarsia-no-such-program" } })")); },
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", "interval = 60, on_click = {} }")); }, ConfigErrorWith("modules.time.on_click must name a program"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "intarsia-no-such-program" } })")); },
                 ConfigErrorWith("not an existing file or a program on PATH"));
 }
 
@@ -219,13 +252,13 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
     for (size_t position = escaped.find('\\'); position != std::string::npos; position = escaped.find('\\', position + 2)) {
         escaped.insert(position, "\\");
     }
-    const std::string config = ValidConfigWith("interval = 60 }", "interval = 60, on_click = { \"" + escaped + "\" } }");
+    const std::string config = Replace(kValidConfig, "interval = 60 }", "interval = 60, on_click = { \"" + escaped + "\" } }");
     EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("which is not an .exe"));
     std::filesystem::remove(script);
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {
-    const std::string config =
-        ValidConfigWith(R"(bar = { edge = "top", thickness = 54, border = 1, spacing = 8 },)", R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
+    const std::string config = Replace(kValidConfig, R"(bar = { edge = "top", thickness = 54, border = 1, spacing = 8 },)",
+                                       R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
     EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("bar.edge is missing"));
 }
