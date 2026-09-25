@@ -236,10 +236,11 @@ namespace {
         ModuleKind       kind;
     };
 
-    constexpr std::array<ModuleName, 6> kModuleNames{{
+    constexpr std::array<ModuleName, 7> kModuleNames{{
         {.name = "clock", .kind = ModuleKind::Clock},
         {.name = "window", .kind = ModuleKind::Window},
         {.name = "workspaces", .kind = ModuleKind::Workspaces},
+        {.name = "windows", .kind = ModuleKind::Windows},
         {.name = "cpu", .kind = ModuleKind::Cpu},
         {.name = "memory", .kind = ModuleKind::Memory},
         {.name = "custom", .kind = ModuleKind::Custom},
@@ -278,7 +279,8 @@ namespace {
             case ModuleKind::Memory: return ReadTextModuleConfig(module);
             case ModuleKind::Window: return ReadWindowConfig(module);
             case ModuleKind::Custom: return ReadCustomConfig(module);
-            case ModuleKind::Workspaces: module.RejectUnknownKeys({"type"}); return std::monostate{};
+            case ModuleKind::Workspaces:
+            case ModuleKind::Windows: module.RejectUnknownKeys({"type"}); return std::monostate{};
         }
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
     }
@@ -499,8 +501,10 @@ Config LoadConfig(const std::filesystem::path& path) {
 
     const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
-    if (windowManager == WindowManagerKind::Windows && ListsModule(modules, ModuleKind::Workspaces)) {
-        throw root.Error("workspaces needs a window manager that has workspaces, window_manager 'windows' has none");
+    for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"}}) {
+        if (windowManager == WindowManagerKind::Windows && ListsModule(modules, kind)) {
+            throw root.Error(std::format("{} needs a window manager that has workspaces, window_manager 'windows' has none", name));
+        }
     }
 
     return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig, .windowManager = windowManager, .modules = modules};

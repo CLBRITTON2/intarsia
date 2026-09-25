@@ -39,7 +39,7 @@ int CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
     return static_cast<int>(((total - idle) * 100 + (total / 2)) / total);
 }
 
-Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config)), _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()), _usage(0) {
+Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config)), _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()) {
     RequireFormats("cpu", Settings().format, Settings().tooltip, 0);
 }
 

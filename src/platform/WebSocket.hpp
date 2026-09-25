@@ -43,5 +43,5 @@ class WebSocket {
     UniqueInternet _session;
     UniqueInternet _connection;
     UniqueInternet _socket;
-    USHORT         _localPort;
+    USHORT         _localPort = 0;
 };

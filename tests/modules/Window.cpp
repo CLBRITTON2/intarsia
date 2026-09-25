@@ -23,10 +23,14 @@ namespace {
         std::vector<Workspace> Workspaces() const override {
             return {};
         }
+        std::vector<ManagedWindow> Windows() const override {
+            return {};
+        }
         WindowManagerStatus Status() const override {
             return WindowManagerStatus{.name = L"fake", .connection = Connection::Connected, .detail = ""};
         }
         void FocusWorkspace(const std::string&) override {}
+        void FocusWindow(const std::string&) override {}
     };
 
     // Enough to lay text out: nothing here draws, so there is no device context or brush.

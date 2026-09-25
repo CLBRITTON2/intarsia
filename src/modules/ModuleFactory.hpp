@@ -4,6 +4,7 @@
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
 #include "modules/IModule.hpp"
+#include "modules/WindowIcons.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -14,6 +15,7 @@
 struct ModuleSources {
     IWindowManager&       windowManager;
     const CommandPollers& commandPollers;
+    WindowIcons&          windowIcons;
     HMONITOR              monitor;
 };
 

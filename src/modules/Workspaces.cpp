@@ -12,7 +12,7 @@ namespace {
 } // namespace
 
 Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor) :
-    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _line{.text = {}, .runs = {}}, _disconnected(false),
+    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _line{.text = {}, .runs = {}},
     _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
 
 bool Workspaces::Layout(const RenderContext& render) {

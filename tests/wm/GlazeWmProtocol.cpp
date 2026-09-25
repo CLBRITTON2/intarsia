@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
 #include <vector>
 
 namespace {
@@ -16,6 +17,27 @@ namespace {
             ] },
             { "type": "monitor", "handle": 131073, "deviceName": "\\\\.\\DISPLAY2", "children": [
                 { "type": "workspace", "name": "9", "displayName": "", "hasFocus": false, "isDisplayed": true, "children": [] }
+            ] }
+        ] }
+    })json";
+
+    constexpr char             kFirstWindowId[] = "0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a";
+
+    // Windows directly under a displayed workspace and inside a split, and one on a hidden workspace the bar skips.
+    constexpr std::string_view kWindowsResponse = R"json({
+        "messageType": "client_response", "clientMessage": "query monitors", "success": true, "error": null,
+        "data": { "monitors": [
+            { "type": "monitor", "handle": 65537, "children": [
+                { "type": "workspace", "name": "1", "displayName": null, "hasFocus": false, "isDisplayed": false, "children": [
+                    { "type": "window", "id": "11111111-1111-1111-1111-111111111111", "handle": 9999, "hasFocus": false }
+                ] },
+                { "type": "workspace", "name": "2", "displayName": null, "hasFocus": true, "isDisplayed": true, "children": [
+                    { "type": "window", "id": "0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a", "handle": 1001, "hasFocus": false },
+                    { "type": "split", "children": [
+                        { "type": "window", "id": "22222222-2222-2222-2222-222222222222", "handle": 1002, "hasFocus": true },
+                        { "type": "window", "id": "33333333-3333-3333-3333-333333333333", "handle": 1003, "hasFocus": false }
+                    ] }
+                ] }
             ] }
         ] }
     })json";
@@ -74,7 +96,48 @@ TEST(GlazeWmProtocol, OnlyWorkspaceAndFocusEventsTriggerARequery) {
 TEST(GlazeWmProtocol, SubscribesToExactlyTheWorkspaceEvents) {
     EXPECT_EQ(glazewm::SubscribeCommand(),
               "sub --events focus_changed workspace_activated workspace_deactivated workspace_updated monitor_added monitor_removed monitor_updated window_managed "
-              "window_unmanaged");
+              "window_unmanaged focused_container_moved");
+}
+
+TEST(GlazeWmProtocol, WindowsComeFromDisplayedWorkspacesInTreeOrderThroughSplits) {
+    const std::vector<ManagedWindow> windows = glazewm::WindowsFromMonitors(glazewm::ParseServerMessage(kWindowsResponse).data);
+    ASSERT_EQ(windows.size(), 3u);
+    EXPECT_EQ(windows[0].id, kFirstWindowId);
+    EXPECT_EQ(windows[0].handle, 1001);
+    EXPECT_FALSE(windows[0].focused);
+    EXPECT_EQ(windows[1].handle, 1002);
+    EXPECT_TRUE(windows[1].focused);
+    EXPECT_EQ(windows[2].handle, 1003);
+    EXPECT_EQ(windows[2].monitor, 65537);
+}
+
+TEST(GlazeWmProtocol, AWorkspaceHoldingAnUnknownContainerIsAProtocolError) {
+    const std::string response = std::string(kWindowsResponse).replace(std::string(kWindowsResponse).find("\"split\""), 7, "\"mystery\"");
+    EXPECT_THROW(glazewm::WindowsFromMonitors(glazewm::ParseServerMessage(response).data), glazewm::ProtocolError);
+}
+
+TEST(GlazeWmProtocol, DeeplyNestedSplitsDoNotOverflowTheStack) {
+    std::string nested = R"({"type":"window","id":"x","handle":1,"hasFocus":false})";
+    for (int depth = 0; depth < 20'000; ++depth) {
+        nested = R"({"type":"split","children":[)" + nested + "]}";
+    }
+    const std::string response =
+        R"({"messageType":"client_response","clientMessage":"query monitors","success":true,"error":null,"data":{"monitors":[{"type":"monitor","handle":1,)"
+        R"("children":[{"type":"workspace","name":"1","isDisplayed":true,"children":[)" +
+        nested + "]}]}]}}";
+    EXPECT_EQ(glazewm::WindowsFromMonitors(glazewm::ParseServerMessage(response).data).size(), 1u);
+}
+
+TEST(GlazeWmProtocol, FocusWindowCommandAddressesTheContainerById) {
+    EXPECT_EQ(glazewm::FocusWindowCommand(kFirstWindowId), std::string("command focus --container-id ") + kFirstWindowId);
+    EXPECT_TRUE(glazewm::IsCommand(glazewm::FocusWindowCommand(kFirstWindowId)));
+}
+
+TEST(GlazeWmProtocol, FocusWindowCommandRefusesIdsThatAreNotUuids) {
+    EXPECT_THROW(glazewm::FocusWindowCommand(""), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a --workspace 2"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e 5f0e-4c1a-9d3b-2a1f0e9c8b7a"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7g"), glazewm::ProtocolError);
 }
 
 TEST(GlazeWmProtocol, ErrorsQuoteOnlyAShortEscapedExcerpt) {

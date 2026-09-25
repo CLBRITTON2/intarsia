@@ -18,6 +18,16 @@ struct Workspace {
     bool          operator==(const Workspace&) const = default;
 };
 
+// A window on a monitor's displayed workspace.
+struct ManagedWindow {
+    std::string   id;     // what commands address the window by
+    std::intptr_t handle; // the HWND
+    bool          focused;
+    std::intptr_t monitor; // the HMONITOR the window's workspace is on
+
+    bool          operator==(const ManagedWindow&) const = default;
+};
+
 enum class Connection {
     Connected,
     Disconnected
@@ -39,8 +49,12 @@ class IWindowManager {
 
     virtual std::optional<FocusedWindow> Focused() const    = 0;
     virtual std::vector<Workspace>       Workspaces() const = 0;
-    virtual WindowManagerStatus          Status() const     = 0;
+    // The windows on every monitor's displayed workspace, in the manager's tiling order.
+    virtual std::vector<ManagedWindow> Windows() const = 0;
+    virtual WindowManagerStatus        Status() const  = 0;
 
     // Asks the manager to focus a workspace from Workspaces(). Returns at once: the result arrives as a change.
     virtual void FocusWorkspace(const std::string& name) = 0;
+    // Asks the manager to focus a window from Windows(), the same way.
+    virtual void FocusWindow(const std::string& id) = 0;
 };

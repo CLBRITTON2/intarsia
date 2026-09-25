@@ -178,7 +178,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, cpu, memory"));
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, cpu, memory"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -213,6 +213,16 @@ TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
     EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Workspaces});
     EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(type = "workspaces")", R"(type = "workspaces", size = 2)")); },
                 ConfigErrorWith("modules.desktops.size is not a known key"));
+}
+
+TEST(Config, WindowsNeedAWindowManagerWithWorkspaces) {
+    const std::string onWindows = WithRightModules(R"({ "apps" })", R"(        apps = { type = "windows" },)");
+    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("windows needs a window manager that has workspaces"));
+
+    const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
+    EXPECT_EQ(Kinds(LoadText(onGlazeWm).modules.right), std::vector<ModuleKind>{ModuleKind::Windows});
+    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(type = "windows")", R"(type = "windows", icon_size = 2)")); },
+                ConfigErrorWith("modules.apps.icon_size is not a known key"));
 }
 
 TEST(Config, WindowModuleNeedsAWholeMaxLength) {

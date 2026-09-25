@@ -23,17 +23,17 @@ return {
     },
 
     -- glazewm: workspaces and focus over GlazeWM's IPC, retried while GlazeWM is down
-    -- windows: no window manager, windows and focus come from Windows itself (no workspaces module)
+    -- windows: no window manager, windows and focus come from Windows itself (no workspaces or windows module)
     window_manager = "glazewm",
 
     -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
     -- does not define, or a module no list shows, is an error.
-    modules_left = { "workspaces", "title" },
+    modules_left = { "workspaces", "apps", "title" },
     modules_center = { "date" },
     modules_right = { "cpu", "memory" },
 
-    -- Each module has a name you choose and a type: clock, window, workspaces, cpu, memory or custom. One type can
-    -- appear under several names with different settings, such as a second clock with its own format.
+    -- Each module has a name you choose and a type: clock, window, workspaces, windows, cpu, memory or custom. One
+    -- type can appear under several names with different settings, such as a second clock with its own format.
     --
     -- clock, window, cpu, memory and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
     -- commands: { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config
@@ -43,6 +43,8 @@ return {
     -- module. The workspaces module shows why the window manager is disconnected, with no key needed.
     modules = {
         workspaces = { type = "workspaces" },
+        -- An icon per window on the displayed workspace, at font.icon_size. Click one to focus it.
+        apps = { type = "windows" },
         title = {
             type = "window",
             max_length = 80, -- longer titles are cut with an ellipsis

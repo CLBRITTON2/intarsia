@@ -66,7 +66,7 @@ namespace {
 } // namespace
 
 WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_view path) :
-    _session(OpenSession()), _connection(Checked(WinHttpConnect(_session.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")), _localPort(0) {
+    _session(OpenSession()), _connection(Checked(WinHttpConnect(_session.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")) {
     const UniqueInternet request(
         Checked(WinHttpOpenRequest(_connection.get(), L"GET", std::wstring(path).c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0), "WinHttpOpenRequest"));
     if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET, nullptr, 0)) {

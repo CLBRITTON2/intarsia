@@ -48,7 +48,7 @@ class Workspaces final : public IModule {
     std::intptr_t   _monitor;
     // What _text holds, once it has a layout.
     WorkspaceLine _line;
-    bool          _disconnected;
+    bool          _disconnected = false;
     IconText      _text;
 };
 

@@ -40,12 +40,20 @@ std::vector<Workspace> Native::Workspaces() const {
     return {};
 }
 
+std::vector<ManagedWindow> Native::Windows() const {
+    return {};
+}
+
 WindowManagerStatus Native::Status() const {
     return WindowManagerStatus{.name = L"Windows", .connection = Connection::Connected, .detail = ""};
 }
 
 void Native::FocusWorkspace(const std::string& name) {
     throw std::logic_error("the native backend has no workspaces, cannot focus '" + name + "'");
+}
+
+void Native::FocusWindow(const std::string& id) {
+    throw std::logic_error("the native backend lists no windows, cannot focus '" + id + "'");
 }
 
 // process 0 hooks every process.

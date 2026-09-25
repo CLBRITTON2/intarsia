@@ -17,10 +17,11 @@ namespace glazewm {
 
     inline constexpr std::string_view kQueryMonitors = "query monitors";
 
-    // The events that can change the workspace list or which workspace is focused. Subscribing to these alone
-    // skips noisy ones like user_config_changed, which carries GlazeWM's whole config.
-    inline constexpr std::array<std::string_view, 9> kWorkspaceEvents{"focus_changed",   "workspace_activated", "workspace_deactivated", "workspace_updated", "monitor_added",
-                                                                      "monitor_removed", "monitor_updated",     "window_managed",        "window_unmanaged"};
+    // The events that can change the workspace list, the windows on displayed workspaces, or focus. Subscribing to
+    // these alone skips noisy ones like user_config_changed, which carries GlazeWM's whole config.
+    inline constexpr std::array<std::string_view, 10> kWorkspaceEvents{"focus_changed",    "workspace_activated",    "workspace_deactivated", "workspace_updated",
+                                                                       "monitor_added",    "monitor_removed",        "monitor_updated",       "window_managed",
+                                                                       "window_unmanaged", "focused_container_moved"};
 
     class ProtocolError : public std::runtime_error {
       public:
@@ -48,6 +49,9 @@ namespace glazewm {
     // whitespace or control characters could smuggle in extra arguments: those throw ProtocolError instead.
     std::string FocusWorkspaceCommand(std::string_view name);
 
+    // "command focus --container-id <id>". Throws ProtocolError unless id is a UUID, the only form GlazeWM gives ids in.
+    std::string FocusWindowCommand(std::string_view id);
+
     // Whether a response answers a command, whose failure is the command's own and leaves the connection usable.
     bool IsCommand(std::string_view clientMessage);
 
@@ -57,7 +61,10 @@ namespace glazewm {
     // The workspaces in the data of a "query monitors" response, tagged with their monitor's HMONITOR.
     std::vector<Workspace> WorkspacesFromMonitors(const nlohmann::json& data);
 
-    bool                   ChangesWorkspaces(std::string_view eventType);
+    // The windows on each monitor's displayed workspace in the same data, in tree order through any split containers.
+    std::vector<ManagedWindow> WindowsFromMonitors(const nlohmann::json& data);
+
+    bool                       ChangesWorkspaces(std::string_view eventType);
 
     // Keeps at most one query in flight: a burst of events costs one query, plus one more if events arrived while it
     // was out, instead of one per event.

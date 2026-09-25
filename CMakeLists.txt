@@ -47,6 +47,8 @@ add_library(intarsia_core STATIC
   src/modules/TextModule.cpp
   src/modules/Ticks.cpp
   src/modules/Window.cpp
+  src/modules/WindowIcons.cpp
+  src/modules/WindowList.cpp
   src/modules/Workspaces.cpp
   src/platform/AppBar.cpp
   src/platform/Errors.cpp
@@ -67,7 +69,7 @@ add_library(intarsia_core STATIC
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi)
+target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs)
 
 add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest)
 target_link_libraries(intarsia PRIVATE intarsia_core)
@@ -100,6 +102,8 @@ if(BUILD_TESTING)
     tests/modules/Memory.cpp
     tests/modules/Ticks.cpp
     tests/modules/Window.cpp
+    tests/modules/WindowIcons.cpp
+    tests/modules/WindowList.cpp
     tests/modules/Workspaces.cpp
     tests/wm/GlazeWmProtocol.cpp
     tests/platform/AppBar.cpp

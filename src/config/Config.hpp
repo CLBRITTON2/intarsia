@@ -50,6 +50,7 @@ enum class ModuleKind {
     Clock,
     Window,
     Workspaces,
+    Windows,
     Cpu,
     Memory,
     Custom
@@ -93,7 +94,7 @@ struct CustomConfig {
     TextModuleConfig     text;
 };
 
-// The settings from a module's table: workspaces has none.
+// The settings from a module's table: workspaces and windows have none.
 using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.

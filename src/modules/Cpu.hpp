@@ -27,5 +27,5 @@ class Cpu final : public TextModule {
 
     CpuTimes                              _previous;
     std::chrono::steady_clock::time_point _sampledAt;
-    int                                   _usage;
+    int                                   _usage = 0;
 };

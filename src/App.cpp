@@ -38,6 +38,15 @@ namespace {
     constexpr std::chrono::milliseconds kFirstDeviceRetry{500};
     constexpr std::chrono::milliseconds kLongestDeviceRetry{10000};
 
+    std::vector<std::intptr_t>          WindowHandles(const std::vector<ManagedWindow>& windows) {
+        std::vector<std::intptr_t> handles;
+        handles.reserve(windows.size());
+        for (const ManagedWindow& window : windows) {
+            handles.push_back(window.handle);
+        }
+        return handles;
+    }
+
     // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.
     BOOL CALLBACK CollectMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
         IntToPointer<std::vector<HMONITOR>>(data)->push_back(monitor);
@@ -93,9 +102,10 @@ namespace {
 
 App::App(HINSTANCE instance, std::filesystem::path configPath) :
     _instance(instance), _configPath(std::move(configPath)), _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()),
-    _deviceRetry(kFirstDeviceRetry), _recovering(false), _state{.error = nullptr}, _redrawPending(false), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
+    _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
     _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
-    _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)) {
+    _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)),
+    _windowIcons(std::make_unique<WindowIcons>(_control, kSourcesChanged)) {
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
@@ -103,6 +113,7 @@ App::App(HINSTANCE instance, std::filesystem::path configPath) :
 
 App::~App() {
     _bars.clear();
+    _windowIcons.reset();
     _commandPollers.reset();
     _windowManager.reset();
     _watcher.reset();
@@ -143,6 +154,7 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             if (wParam == kRedrawTimer) {
                 KillTimer(_control, kRedrawTimer);
                 _redrawPending = false;
+                _windowIcons->Retain(WindowHandles(_windowManager->Windows()));
                 for (const std::unique_ptr<Bar>& bar : _bars) {
                     bar->Refresh();
                 }
@@ -171,9 +183,10 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
     _placements = std::move(placements);
     try {
         for (const BarPlacement& placement : _placements) {
-            _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
-                                                  ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .monitor = placement.monitor}, _launcher,
-                                                  placement, _state, _control, kDeviceLost));
+            _bars.push_back(std::make_unique<Bar>(
+                _instance, _graphics, *_config,
+                ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .windowIcons = *_windowIcons, .monitor = placement.monitor}, _launcher,
+                placement, _state, _control, kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }

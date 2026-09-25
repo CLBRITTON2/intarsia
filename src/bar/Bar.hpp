@@ -100,12 +100,12 @@ class Bar {
     AppState&                          _state;
     HWND                               _control;
     UINT                               _deviceLostMessage;
-    bool                               _deviceLost;
-    bool                               _presented;
+    bool                               _deviceLost = false;
+    bool                               _presented  = false;
     BarPlacement                       _placement;
     Sections<std::unique_ptr<IModule>> _modules;
     std::vector<HitBox>                _hitBoxes;
-    IModule*                           _pointed; // the module under the cursor, null when there is none
+    IModule*                           _pointed = nullptr; // the module under the cursor, null when there is none
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                     _surface;

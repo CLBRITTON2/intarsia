@@ -43,6 +43,38 @@ namespace glazewm {
             return value;
         }
 
+        // A monitor's HMONITOR or a window's HWND.
+        std::intptr_t HandleField(const nlohmann::json& object, std::string_view key, std::string_view context) {
+            const nlohmann::json& value = Field(object, key, context);
+            if (!value.is_number_integer()) {
+                throw ProtocolError(std::format("GlazeWM {} field '{}' is a {}, expected an integer", context, key, value.type_name()));
+            }
+            return value.get<std::intptr_t>();
+        }
+
+        // Last child on top, so the walk pops them in tree order.
+        void PushChildren(std::vector<const nlohmann::json*>& pending, const nlohmann::json& container, std::string_view context) {
+            const nlohmann::json& children = ArrayField(container, "children", context);
+            for (auto child = children.rbegin(); child != children.rend(); ++child) {
+                pending.push_back(&*child);
+            }
+        }
+
+        bool IsUuid(std::string_view id) {
+            if (id.size() != 36) {
+                return false;
+            }
+            for (size_t index = 0; index < id.size(); ++index) {
+                const char character = id[index];
+                const bool dash      = index == 8 || index == 13 || index == 18 || index == 23;
+                const bool hex       = (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
+                if (dash ? character != '-' : !hex) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {
             const nlohmann::json& displayName = Field(workspace, "displayName", "workspace");
             const std::string     label =
@@ -72,6 +104,13 @@ namespace glazewm {
                 std::format("workspace name \"{}\" cannot be sent to GlazeWM: it is empty or holds whitespace or control characters", LogExcerpt(name, kExcerptBytes)));
         }
         return std::format("command focus --workspace {}", name);
+    }
+
+    std::string FocusWindowCommand(std::string_view id) {
+        if (!IsUuid(id)) {
+            throw ProtocolError(std::format("window id \"{}\" cannot be sent to GlazeWM: it is not a UUID", LogExcerpt(id, kExcerptBytes)));
+        }
+        return std::format("command focus --container-id {}", id);
     }
 
     bool IsCommand(std::string_view clientMessage) {
@@ -111,11 +150,7 @@ namespace glazewm {
     std::vector<Workspace> WorkspacesFromMonitors(const nlohmann::json& data) {
         std::vector<Workspace> workspaces;
         for (const nlohmann::json& monitor : ArrayField(data, "monitors", "monitors response")) {
-            const nlohmann::json& handle = Field(monitor, "handle", "monitor");
-            if (!handle.is_number_integer()) {
-                throw ProtocolError(std::format("GlazeWM monitor handle is a {}, expected an integer", handle.type_name()));
-            }
-            const auto monitorHandle = handle.get<std::intptr_t>();
+            const std::intptr_t monitorHandle = HandleField(monitor, "handle", "monitor");
             for (const nlohmann::json& child : ArrayField(monitor, "children", "monitor")) {
                 if (StringField(child, "type", "monitor child") == "workspace") {
                     workspaces.push_back(ReadWorkspace(child, monitorHandle));
@@ -123,6 +158,37 @@ namespace glazewm {
             }
         }
         return workspaces;
+    }
+
+    std::vector<ManagedWindow> WindowsFromMonitors(const nlohmann::json& data) {
+        std::vector<ManagedWindow> windows;
+        for (const nlohmann::json& monitor : ArrayField(data, "monitors", "monitors response")) {
+            const std::intptr_t monitorHandle = HandleField(monitor, "handle", "monitor");
+            for (const nlohmann::json& child : ArrayField(monitor, "children", "monitor")) {
+                if (StringField(child, "type", "monitor child") != "workspace" || !BoolField(child, "isDisplayed", "workspace")) {
+                    continue;
+                }
+                // A stack of its own rather than recursion: the tree's depth is the peer's to choose.
+                std::vector<const nlohmann::json*> pending;
+                PushChildren(pending, child, "workspace");
+                while (!pending.empty()) {
+                    const nlohmann::json& node = *pending.back();
+                    pending.pop_back();
+                    const std::string type = StringField(node, "type", "workspace child");
+                    if (type == "window") {
+                        windows.push_back(ManagedWindow{.id      = StringField(node, "id", "window"),
+                                                        .handle  = HandleField(node, "handle", "window"),
+                                                        .focused = BoolField(node, "hasFocus", "window"),
+                                                        .monitor = monitorHandle});
+                    } else if (type == "split") {
+                        PushChildren(pending, node, "split");
+                    } else {
+                        throw ProtocolError(std::format("GlazeWM workspace holds a \"{}\" container, expected split or window", LogExcerpt(type, kExcerptBytes)));
+                    }
+                }
+            }
+        }
+        return windows;
     }
 
     bool ChangesWorkspaces(std::string_view eventType) {

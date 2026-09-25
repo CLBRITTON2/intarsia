@@ -26,7 +26,7 @@ namespace {
 
 GlazeWm::GlazeWm(HWND target, UINT changedMessage) :
     _native(target, changedMessage), _target(target), _changedMessage(changedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
-    _status{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"}, _stopping(false),
+    _status{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"},
     _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands, [this](const std::string& command) { SendCommand(command); })), _receiver([this] { Receive(); }) {}
 
 // Stops the sender first so no send is pending, then closes the socket: WinHttpWebSocketClose cancels the receiver's
@@ -61,15 +61,28 @@ std::vector<Workspace> GlazeWm::Workspaces() const {
     return _workspaces;
 }
 
+std::vector<ManagedWindow> GlazeWm::Windows() const {
+    const std::scoped_lock lock(_mutex);
+    return _windows;
+}
+
 WindowManagerStatus GlazeWm::Status() const {
     const std::scoped_lock lock(_mutex);
     return _status;
 }
 
 void GlazeWm::FocusWorkspace(const std::string& name) {
+    QueueCommand([&name] { return glazewm::FocusWorkspaceCommand(name); });
+}
+
+void GlazeWm::FocusWindow(const std::string& id) {
+    QueueCommand([&id] { return glazewm::FocusWindowCommand(id); });
+}
+
+void GlazeWm::QueueCommand(const std::function<std::string()>& makeCommand) {
     std::string command;
     try {
-        command = glazewm::FocusWorkspaceCommand(name);
+        command = makeCommand();
     } catch (const glazewm::ProtocolError& error) {
         Log(LogLevel::Warning, "glazewm", "command_skipped", {{.key = "reason", .value = error.what()}});
         return;
@@ -107,7 +120,7 @@ void GlazeWm::Receive() {
                      {.key = "max_retry_ms", .value = std::to_string(kLongestRetry.count())}});
                 loggedOut = true;
             }
-            Publish({}, WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = error.what()});
+            Publish({}, {}, WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = error.what()});
         }
         if (WaitForSingleObject(_stopEvent.get(), static_cast<DWORD>(retry.count())) == WAIT_OBJECT_0) {
             return;
@@ -163,7 +176,8 @@ void GlazeWm::Session() {
                 SendSerialized(*socket, glazewm::kQueryMonitors);
             }
         } else if (message.kind == glazewm::MessageKind::Response && message.clientMessage == glazewm::kQueryMonitors) {
-            Publish(glazewm::WorkspacesFromMonitors(message.data), WindowManagerStatus{.name = kName, .connection = Connection::Connected, .detail = ""});
+            Publish(glazewm::WorkspacesFromMonitors(message.data), glazewm::WindowsFromMonitors(message.data),
+                    WindowManagerStatus{.name = kName, .connection = Connection::Connected, .detail = ""});
             if (gate.Answered()) {
                 SendSerialized(*socket, glazewm::kQueryMonitors);
             }
@@ -195,14 +209,15 @@ void GlazeWm::SendSerialized(WebSocket& socket, std::string_view text) {
     socket.Send(text);
 }
 
-// Posts only when something changed: most focus events move focus within a workspace and leave the list as it was.
-void GlazeWm::Publish(std::vector<Workspace> workspaces, WindowManagerStatus status) {
+// Posts only when something changed: many events, such as a window resized, leave what the bar shows as it was.
+void GlazeWm::Publish(std::vector<Workspace> workspaces, std::vector<ManagedWindow> windows, WindowManagerStatus status) {
     {
         const std::scoped_lock lock(_mutex);
-        if (workspaces == _workspaces && status == _status) {
+        if (workspaces == _workspaces && windows == _windows && status == _status) {
             return;
         }
         _workspaces = std::move(workspaces);
+        _windows    = std::move(windows);
         _status     = std::move(status);
     }
     if (!PostMessageW(_target, _changedMessage, 0, 0)) {

@@ -108,8 +108,8 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
          HWND control, UINT deviceLostMessage) :
-    _graphics(graphics), _config(config), _launcher(launcher), _state(state), _control(control), _deviceLostMessage(deviceLostMessage), _deviceLost(false), _presented(false),
-    _placement(placement), _modules(CreateModules(config, sources)), _pointed(nullptr), _window(CreateBarWindow(instance, this)) {
+    _graphics(graphics), _config(config), _launcher(launcher), _state(state), _control(control), _deviceLostMessage(deviceLostMessage), _placement(placement),
+    _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {

@@ -21,10 +21,14 @@ class Native final : public IWindowManager {
     // Windows has no public API that lists virtual desktops, so there are never any. The config loader rejects a
     // workspaces module with this backend.
     std::vector<Workspace> Workspaces() const override;
+    // None, for the same reason: they belong to workspaces. The config loader rejects a windows module here too.
+    std::vector<ManagedWindow> Windows() const override;
     // Always connected: the WinEvents come from the OS itself.
     WindowManagerStatus Status() const override;
     // Throws std::logic_error: there are no workspaces to focus.
     void FocusWorkspace(const std::string& name) override;
+    // Throws std::logic_error: there are no windows to focus.
+    void FocusWindow(const std::string& id) override;
 
   private:
     // Registers the instance the callbacks reach for as long as it lives, and refuses a second one.
