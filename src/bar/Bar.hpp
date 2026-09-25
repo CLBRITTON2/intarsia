@@ -1,18 +1,20 @@
 #pragma once
 
 #include "bar/Sections.hpp"
+#include "bar/Tooltip.hpp"
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
 #include "platform/Process.hpp"
 #include "render/Graphics.hpp"
 #include "render/RenderContext.hpp"
+#include "render/Surface.hpp"
 
 #include <windows.h>
 
 #include <exception>
 #include <memory>
-#include <string_view>
+#include <vector>
 
 enum class ModuleInput {
     LeftClick,
@@ -58,13 +60,15 @@ class Bar {
   private:
     template <typename Owner>
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-    LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    // A lost device from any message is reported instead of ending the process.
+    LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    LRESULT Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    void                    Dock();
-    void                    CreateSwapChain(UINT width, UINT height);
-    void                    ResizeSwapChain(UINT width, UINT height);
-    void                    BindRenderTarget();
-    RenderContext           FrameContext() const;
+    // Everything the constructor does once the window exists.
+    void          Build(HINSTANCE instance);
+    void          Dock();
+    void          PlaceInZOrder(HWND insertAfter);
+    RenderContext FrameContext() const;
     // Where a module was last drawn, for routing clicks to it.
     struct HitBox {
         IModule*    module;
@@ -74,28 +78,32 @@ class Bar {
     std::vector<HitBox> DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
                                     const std::vector<float>& offsets, D2D1_SIZE_F barSize) const;
     void                ScheduleNextChange();
-    // False when the call failed because the device was lost, which is reported to control. Throws for any other
-    // failure.
-    bool RequireDevice(HRESULT result, std::string_view call);
+    // Stops drawing and posts to control, once.
+    void ReportDeviceLost(const DeviceLostError& error);
+    // The box under a point in client pixels, or null between modules.
+    const HitBox* BoxAt(POINT client) const;
     // Runs the module's command for the input, or for a left click without one, lets the module handle it.
-    void                                         HandleInput(POINT client, ModuleInput input);
+    void HandleInput(POINT client, ModuleInput input);
+    // Restarts hover tracking whenever the cursor moves onto a different module, hiding any tooltip.
+    void                               PointAt(POINT client);
+    void                               ShowTooltip();
 
-    const GraphicsDevice&                        _graphics;
-    const Config&                                _config;
-    Launcher&                                    _launcher;
-    AppState&                                    _state;
-    HWND                                         _control;
-    UINT                                         _deviceLostMessage;
-    bool                                         _deviceLost;
-    bool                                         _presented;
-    BarPlacement                                 _placement;
-    Sections<std::unique_ptr<IModule>>           _modules;
-    std::vector<HitBox>                          _hitBoxes;
+    const GraphicsDevice&              _graphics;
+    const Config&                      _config;
+    Launcher&                          _launcher;
+    AppState&                          _state;
+    HWND                               _control;
+    UINT                               _deviceLostMessage;
+    bool                               _deviceLost;
+    bool                               _presented;
+    BarPlacement                       _placement;
+    Sections<std::unique_ptr<IModule>> _modules;
+    std::vector<HitBox>                _hitBoxes;
+    IModule*                           _pointed; // the module under the cursor, null when there is none
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain1>      _swapChain;
-    Microsoft::WRL::ComPtr<ID2D1DeviceContext>   _context;
-    Microsoft::WRL::ComPtr<IDCompositionTarget>  _compositionTarget;
-    Microsoft::WRL::ComPtr<IDCompositionVisual>  _visual;
+    // Null until the constructor has docked the window and knows its size.
+    std::unique_ptr<Surface>                     _surface;
+    std::unique_ptr<Tooltip>                     _tooltip;
     Microsoft::WRL::ComPtr<IDWriteTextFormat>    _textFormat;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _backgroundBrush;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _borderBrush;

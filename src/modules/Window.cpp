@@ -1,5 +1,7 @@
 #include "modules/Window.hpp"
 
+#include "platform/Text.hpp"
+
 #include <utility>
 
 namespace {
@@ -13,7 +15,11 @@ namespace {
 } // namespace
 
 Window::Window(WindowConfig config, const IWindowManager& windowManager) :
-    _config(config), _windowManager(windowManager), _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
+    _config(std::move(config)), _windowManager(windowManager), _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {
+    if (_config.tooltip.has_value()) {
+        RequireFormat("window tooltip", *_config.tooltip, std::string());
+    }
+}
 
 void Window::Layout(const RenderContext& render) {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
@@ -36,6 +42,15 @@ void                 Window::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& Window::Actions() const {
     return _config.actions;
+}
+
+// The whole title, however long, since the bar may have cut it.
+std::optional<std::wstring> Window::TooltipText() {
+    const std::optional<FocusedWindow> focused = _windowManager.Focused();
+    if (!_config.tooltip.has_value() || !focused.has_value()) {
+        return std::nullopt;
+    }
+    return ToWide(FormatValue(*_config.tooltip, ToUtf8(focused->title)));
 }
 
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {

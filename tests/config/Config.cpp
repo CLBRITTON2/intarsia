@@ -17,7 +17,7 @@ namespace {
 
     constexpr std::string_view kValidConfig = R"lua(
 return {
-    bar = { edge = "top", thickness = 54, border = 1, spacing = 8 },
+    bar = { edge = "top", layer = "top", thickness = 54, border = 1, spacing = 8 },
     font = { family = "Some Font", text_size = 15, icon_size = 18 },
     colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7", alert = "#eb6f92" },
     window_manager = "windows",
@@ -278,12 +278,26 @@ TEST(Config, TheConfigCannotReadFiles) {
     EXPECT_THAT([] { return LoadText("loadfile('C:/Windows/win.ini')"); }, ConfigErrorWith("attempt to call a nil value (global 'loadfile')"));
 }
 
+TEST(Config, TooltipIsOptional) {
+    EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
+    const Config config = LoadText(Replace(kValidConfig, R"(interval = 60 },)", R"(interval = 60, tooltip = "{:%A %d %B %Y}" },)"));
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{:%A %d %B %Y}");
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(max_length = 80 })", R"(max_length = 80, tooltip = 7 })")); },
+                ConfigErrorWith("modules.title.tooltip must be a string"));
+}
+
+TEST(Config, LayerIsTopOrBottom) {
+    EXPECT_EQ(LoadText(kValidConfig).bar.layer, Layer::Top);
+    EXPECT_EQ(LoadText(Replace(kValidConfig, R"(layer = "top")", R"(layer = "bottom")")).bar.layer, Layer::Bottom);
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(layer = "top")", R"(layer = "overlay")")); }, ConfigErrorWith("bar.layer must be one of top, bottom, got 'overlay'"));
+}
+
 TEST(Config, AnEndlessConfigIsStoppedWithAnError) {
     EXPECT_THAT([] { return LoadText("while true do end"); }, ConfigErrorWith("without finishing, is there an endless loop?"));
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {
-    const std::string config = Replace(kValidConfig, R"(bar = { edge = "top", thickness = 54, border = 1, spacing = 8 },)",
+    const std::string config = Replace(kValidConfig, R"(bar = { edge = "top", layer = "top", thickness = 54, border = 1, spacing = 8 },)",
                                        R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
     EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("bar.edge is missing"));
 }

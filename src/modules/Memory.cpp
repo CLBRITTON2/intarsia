@@ -25,9 +25,9 @@ double BytesToGibibytes(std::uint64_t bytes) {
 }
 
 Memory::Memory(TextModuleConfig config) : TextModule(std::move(config)) {
-    RequireFormat("memory format", Settings().format, 0.0);
+    RequireFormats("memory", Settings().format, Settings().tooltip, 0.0);
 }
 
-ModuleText Memory::Text() {
-    return ModuleText{.text = ToWide(FormatValue(Settings().format, BytesToGibibytes(UsedPhysicalBytes()))), .alert = false};
+ModuleText Memory::Format(const std::string& spec) {
+    return ModuleText{.text = ToWide(FormatValue(spec, BytesToGibibytes(UsedPhysicalBytes()))), .alert = false};
 }

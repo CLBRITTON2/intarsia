@@ -13,7 +13,7 @@ class Clock final : public TextModule {
     explicit Clock(TextModuleConfig config);
 
   private:
-    ModuleText Text() override;
+    ModuleText Format(const std::string& spec) override;
 };
 
 // Local time rendered with format, a std::format spec such as "{:%a %d %b %Y, %H:%M}".

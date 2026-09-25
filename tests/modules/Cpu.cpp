@@ -4,11 +4,13 @@
 
 #include <chrono>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 namespace {
 
     TextModuleConfig CpuWithFormat(std::string format) {
-        return TextModuleConfig{.format = std::move(format), .icon = L"", .interval = std::chrono::seconds(1), .actions = {}};
+        return TextModuleConfig{.format = std::move(format), .tooltip = std::nullopt, .icon = L"", .interval = std::chrono::seconds(1), .actions = {}};
     }
 
 } // namespace
@@ -38,4 +40,10 @@ TEST(Cpu, IdleBeyondTotalIsAnError) {
 TEST(Cpu, FormatMustRenderAnInteger) {
     EXPECT_THROW(Cpu(CpuWithFormat("{:.1f}%")), ConfigError);
     EXPECT_NO_THROW(Cpu(CpuWithFormat("{}%")));
+}
+
+TEST(Cpu, TooltipIsCheckedLikeTheFormat) {
+    TextModuleConfig config = CpuWithFormat("{}%");
+    config.tooltip          = "{:.1f}";
+    EXPECT_THROW(Cpu(std::move(config)), ConfigError);
 }

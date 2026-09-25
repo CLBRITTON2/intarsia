@@ -40,12 +40,12 @@ int CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
 }
 
 Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config)), _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()), _usage(0) {
-    RequireFormat("cpu format", Settings().format, 0);
+    RequireFormats("cpu", Settings().format, Settings().tooltip, 0);
 }
 
 // Samples at most once per interval: the bar also redraws for other modules, and a sample over a few milliseconds
 // would swing between 0 and 100. The 50 ms slack is for the redraw timer firing a little early.
-ModuleText Cpu::Text() {
+ModuleText Cpu::Format(const std::string& spec) {
     const auto now = std::chrono::steady_clock::now();
     if (now - _sampledAt >= Settings().interval - std::chrono::milliseconds(50)) {
         const CpuTimes current = ReadCpuTimes();
@@ -53,5 +53,5 @@ ModuleText Cpu::Text() {
         _previous              = current;
         _sampledAt             = now;
     }
-    return ModuleText{.text = ToWide(FormatValue(Settings().format, _usage)), .alert = false};
+    return ModuleText{.text = ToWide(FormatValue(spec, _usage)), .alert = false};
 }

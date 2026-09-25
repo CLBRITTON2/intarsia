@@ -15,7 +15,7 @@ class Custom final : public TextModule {
     std::optional<UINT> MillisecondsUntilChange() const override;
 
   private:
-    ModuleText           Text() override;
+    ModuleText           Format(const std::string& spec) override;
 
     const CommandPoller& _poller;
 };

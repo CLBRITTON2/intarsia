@@ -23,7 +23,7 @@ class Cpu final : public TextModule {
     explicit Cpu(TextModuleConfig config);
 
   private:
-    ModuleText                            Text() override;
+    ModuleText                            Format(const std::string& spec) override;
 
     CpuTimes                              _previous;
     std::chrono::steady_clock::time_point _sampledAt;

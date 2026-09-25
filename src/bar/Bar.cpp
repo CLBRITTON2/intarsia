@@ -11,7 +11,6 @@
 #include <windowsx.h>
 
 #include <algorithm>
-#include <cmath>
 #include <format>
 #include <stdexcept>
 #include <string>
@@ -24,11 +23,7 @@ namespace {
     constexpr UINT     kAppBarCallback = WM_APP + 1;
     constexpr UINT_PTR kChangeTimer    = 1;
 
-    int                DipsToPixels(float dips, UINT dpi) {
-        return static_cast<int>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
-    }
-
-    bool IsHorizontal(Edge edge) {
+    bool               IsHorizontal(Edge edge) {
         return edge == Edge::Top || edge == Edge::Bottom;
     }
 
@@ -77,6 +72,14 @@ namespace {
         throw std::invalid_argument(std::format("unknown module input {}", static_cast<int>(input)));
     }
 
+    HWND LayerZOrder(Layer layer) {
+        switch (layer) {
+            case Layer::Top: return HWND_TOPMOST;
+            case Layer::Bottom: return HWND_BOTTOM;
+        }
+        throw std::invalid_argument(std::format("unknown layer {}", static_cast<int>(layer)));
+    }
+
     HWND CreateBarWindow(HINSTANCE instance, void* owner) {
         // No activation so clicking the bar never steals focus from the tiled window.
         HWND window =
@@ -85,12 +88,6 @@ namespace {
             ThrowLastError("CreateWindowExW");
         }
         return window;
-    }
-
-    ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1_COLOR_F& color) {
-        ComPtr<ID2D1SolidColorBrush> brush;
-        ThrowIfFailed(context->CreateSolidColorBrush(color, &brush), "ID2D1DeviceContext::CreateSolidColorBrush");
-        return brush;
     }
 
 } // namespace
@@ -114,30 +111,37 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
          HWND control, UINT deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _state(state), _control(control), _deviceLostMessage(deviceLostMessage), _deviceLost(false), _presented(false),
-    _placement(placement), _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
+    _placement(placement), _modules(CreateModules(config, sources)), _pointed(nullptr), _window(CreateBarWindow(instance, this)) {
+    // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
+    // strip would outlive the failed bar.
+    try {
+        Build(instance);
+    } catch (...) {
+        DestroyWindow(_window);
+        throw;
+    }
+}
+
+void Bar::Build(HINSTANCE instance) {
     RequireFontFamily(_graphics.dwrite.Get(), _config.font.family.c_str());
     ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                      _config.font.textSizeDips, L"en-us", &_textFormat),
                   "IDWriteFactory::CreateTextFormat");
 
-    ThrowIfFailed(_graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &_context), "ID2D1Device::CreateDeviceContext");
-    _backgroundBrush = CreateBrush(_context.Get(), _config.colors.background);
-    _borderBrush     = CreateBrush(_context.Get(), _config.colors.border);
-    _foregroundBrush = CreateBrush(_context.Get(), _config.colors.foreground);
-    _accentBrush     = CreateBrush(_context.Get(), _config.colors.accent);
-    _alertBrush      = CreateBrush(_context.Get(), _config.colors.alert);
-
-    ThrowIfFailed(_graphics.composition->CreateTargetForHwnd(_window, TRUE, &_compositionTarget), "IDCompositionDevice::CreateTargetForHwnd");
-    ThrowIfFailed(_graphics.composition->CreateVisual(&_visual), "IDCompositionDevice::CreateVisual");
-    ThrowIfFailed(_compositionTarget->SetRoot(_visual.Get()), "IDCompositionTarget::SetRoot");
-
     RegisterAppBar(_window, kAppBarCallback);
     Dock();
+    PlaceInZOrder(LayerZOrder(_config.bar.layer));
     RECT client{};
     if (!GetClientRect(_window, &client)) {
         ThrowLastError("GetClientRect");
     }
-    CreateSwapChain(static_cast<UINT>(client.right), static_cast<UINT>(client.bottom));
+    _surface         = std::make_unique<Surface>(_graphics, _window, static_cast<UINT>(client.right), static_cast<UINT>(client.bottom), _placement.dpi);
+    _backgroundBrush = CreateBrush(_surface->Context(), _config.colors.background);
+    _borderBrush     = CreateBrush(_surface->Context(), _config.colors.border);
+    _foregroundBrush = CreateBrush(_surface->Context(), _config.colors.foreground);
+    _accentBrush     = CreateBrush(_surface->Context(), _config.colors.accent);
+    _alertBrush      = CreateBrush(_surface->Context(), _config.colors.alert);
+    _tooltip         = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
     ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
@@ -148,13 +152,22 @@ Bar::~Bar() {
     }
 }
 
-// Uses the handle it is given: messages sent during CreateWindowExW arrive before _window is assigned.
 LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+    try {
+        return Dispatch(window, message, wParam, lParam);
+    } catch (const DeviceLostError& error) {
+        ReportDeviceLost(error);
+        return 0;
+    }
+}
+
+// Uses the handle it is given: messages sent during CreateWindowExW arrive before _window is assigned.
+LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_SIZE:
-            // CreateWindowExW sends a zero size before the constructor has built the swap chain.
-            if (_swapChain != nullptr && LOWORD(lParam) != 0 && HIWORD(lParam) != 0) {
-                ResizeSwapChain(LOWORD(lParam), HIWORD(lParam));
+            // CreateWindowExW and Dock send sizes before the constructor has built the surface.
+            if (_surface != nullptr && !_deviceLost && LOWORD(lParam) != 0 && HIWORD(lParam) != 0) {
+                _surface->Resize(LOWORD(lParam), HIWORD(lParam), _placement.dpi);
                 Render();
             }
             return 0;
@@ -172,6 +185,12 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+        case WM_MOUSEMOVE: PointAt(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}); return 0;
+        case WM_MOUSEHOVER: ShowTooltip(); return 0;
+        case WM_MOUSELEAVE:
+            _pointed = nullptr;
+            _tooltip->Hide();
+            return 0;
         case WM_LBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::LeftClick); return 0;
         case WM_RBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::RightClick); return 0;
         case WM_MOUSEWHEEL: {
@@ -188,6 +207,9 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
         case kAppBarCallback:
             if (wParam == ABN_POSCHANGED) {
                 Dock();
+            } else if (wParam == ABN_FULLSCREENAPP && _config.bar.layer == Layer::Top) {
+                // HWND_BOTTOM also drops topmost, so the fullscreen app covers the bar until it closes.
+                PlaceInZOrder(lParam != 0 ? HWND_BOTTOM : HWND_TOPMOST);
             }
             return 0;
         // Closing any bar (taskkill, Alt+F4) quits the app. A config reload destroys bars without WM_CLOSE.
@@ -211,46 +233,14 @@ void Bar::Dock() {
     }
 }
 
-void Bar::CreateSwapChain(UINT width, UINT height) {
-    DXGI_SWAP_CHAIN_DESC1 description{};
-    description.Width            = width;
-    description.Height           = height;
-    description.Format           = DXGI_FORMAT_B8G8R8A8_UNORM;
-    description.SampleDesc.Count = 1;
-    description.BufferUsage      = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    description.BufferCount      = 2;
-    description.SwapEffect       = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-    description.AlphaMode        = DXGI_ALPHA_MODE_PREMULTIPLIED;
-
-    ThrowIfFailed(_graphics.dxgiFactory->CreateSwapChainForComposition(_graphics.d3d.Get(), &description, nullptr, &_swapChain), "IDXGIFactory2::CreateSwapChainForComposition");
-    ThrowIfFailed(_visual->SetContent(_swapChain.Get()), "IDCompositionVisual::SetContent");
-    ThrowIfFailed(_graphics.composition->Commit(), "IDCompositionDevice::Commit");
-    BindRenderTarget();
-}
-
-void Bar::ResizeSwapChain(UINT width, UINT height) {
-    // ResizeBuffers fails while D2D still holds a bitmap over the old back buffer.
-    _context->SetTarget(nullptr);
-    if (RequireDevice(_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers")) {
-        BindRenderTarget();
+void Bar::PlaceInZOrder(HWND insertAfter) {
+    if (!SetWindowPos(_window, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)) {
+        ThrowLastError("SetWindowPos(z-order)");
     }
 }
 
-void Bar::BindRenderTarget() {
-    ComPtr<IDXGISurface> surface;
-    ThrowIfFailed(_swapChain->GetBuffer(0, IID_PPV_ARGS(&surface)), "IDXGISwapChain1::GetBuffer");
-
-    const auto                    dpi        = static_cast<float>(_placement.dpi);
-    const D2D1_BITMAP_PROPERTIES1 properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-                                                                       D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi);
-    ComPtr<ID2D1Bitmap1>          target;
-    ThrowIfFailed(_context->CreateBitmapFromDxgiSurface(surface.Get(), &properties, &target), "ID2D1DeviceContext::CreateBitmapFromDxgiSurface");
-    _context->SetTarget(target.Get());
-    _context->SetDpi(dpi, dpi);
-}
-
 RenderContext Bar::FrameContext() const {
-    return RenderContext{.context      = _context.Get(),
+    return RenderContext{.context      = _surface->Context(),
                          .dwrite       = _graphics.dwrite.Get(),
                          .textFormat   = _textFormat.Get(),
                          .foreground   = _foregroundBrush.Get(),
@@ -267,51 +257,52 @@ bool Bar::HasPresented() const {
     return _presented;
 }
 
+// Catches a lost device itself because App calls it outside the window procedure.
 void Bar::Render() {
-    if (_swapChain == nullptr || _deviceLost) {
+    if (_surface == nullptr || _deviceLost) {
         return;
     }
+    try {
+        const RenderContext         render  = FrameContext();
+        const Edge                  edge    = _config.bar.edge;
+        const D2D1_SIZE_F           barSize = render.context->GetSize();
+        const Sections<D2D1_SIZE_F> sizes   = MapSections(_modules, [&render](const std::unique_ptr<IModule>& module) {
+            module->Layout(render);
+            return module->Size();
+        });
+        const Sections<float>       offsets =
+            ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), _config.bar.spacingDips);
 
-    const RenderContext         render  = FrameContext();
-    const Edge                  edge    = _config.bar.edge;
-    const D2D1_SIZE_F           barSize = _context->GetSize();
-    const Sections<D2D1_SIZE_F> sizes   = MapSections(_modules, [&render](const std::unique_ptr<IModule>& module) {
-        module->Layout(render);
-        return module->Size();
-    });
-    const Sections<float>       offsets =
-        ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), _config.bar.spacingDips);
-
-    _context->BeginDraw();
-    _context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    _context->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), _backgroundBrush.Get());
-    _context->FillRectangle(BorderRect(barSize, edge, _config.bar.borderDips), _borderBrush.Get());
-    _hitBoxes.clear();
-    for (const auto& boxes : {DrawSection(render, _modules.left, sizes.left, offsets.left, barSize), DrawSection(render, _modules.center, sizes.center, offsets.center, barSize),
-                              DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
-        _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
-    }
-    if (!RequireDevice(_context->EndDraw(), "ID2D1DeviceContext::EndDraw") || !RequireDevice(_swapChain->Present(1, 0), "IDXGISwapChain1::Present")) {
+        render.context->BeginDraw();
+        render.context->Clear(D2D1::ColorF(0, 0, 0, 0));
+        render.context->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), _backgroundBrush.Get());
+        render.context->FillRectangle(BorderRect(barSize, edge, _config.bar.borderDips), _borderBrush.Get());
+        _hitBoxes.clear();
+        for (const auto& boxes :
+             {DrawSection(render, _modules.left, sizes.left, offsets.left, barSize), DrawSection(render, _modules.center, sizes.center, offsets.center, barSize),
+              DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
+            _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
+        }
+        _surface->EndDrawAndPresent();
+    } catch (const DeviceLostError& error) {
+        ReportDeviceLost(error);
         return;
     }
     _presented = true;
     ScheduleNextChange();
 }
 
-// A driver update, a driver crash or a GPU being removed all lose the device, and nothing drawn on it works again.
-bool Bar::RequireDevice(HRESULT result, std::string_view call) {
-    if (result != DXGI_ERROR_DEVICE_REMOVED && result != DXGI_ERROR_DEVICE_RESET && result != D2DERR_RECREATE_TARGET) {
-        ThrowIfFailed(result, call);
-        return true;
+void Bar::ReportDeviceLost(const DeviceLostError& error) {
+    if (_deviceLost) {
+        return;
     }
-    Log(LogLevel::Warning, "bar", "device_lost",
-        {{.key = "call", .value = std::string(call)}, {.key = "result", .value = std::format("0x{:08X}", static_cast<unsigned long>(result))}});
+    Log(LogLevel::Warning, "bar", "device_lost", {{.key = "reason", .value = error.what()}});
     _deviceLost = true;
     KillTimer(_window, kChangeTimer);
+    _tooltip->Hide();
     if (!PostMessageW(_control, _deviceLostMessage, 0, 0)) {
         ThrowLastError("PostMessageW(device lost)");
     }
-    return false;
 }
 
 std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
@@ -327,20 +318,27 @@ std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std
 }
 
 // Mouse positions are client pixels, and modules lay out in DIPs.
-void Bar::HandleInput(POINT client, ModuleInput input) {
+const Bar::HitBox* Bar::BoxAt(POINT client) const {
     const float         scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
     const D2D1_POINT_2F point = D2D1::Point2F(static_cast<float>(client.x) * scale, static_cast<float>(client.y) * scale);
-    for (const HitBox& box : _hitBoxes) {
-        if (point.x < box.bounds.left || point.x >= box.bounds.right || point.y < box.bounds.top || point.y >= box.bounds.bottom) {
-            continue;
-        }
-        const std::optional<Command>& command = CommandFor(box.module->Actions(), input);
-        if (command.has_value()) {
-            _launcher.Launch(*command);
-        } else if (input == ModuleInput::LeftClick) {
-            box.module->Click(D2D1::Point2F(point.x - box.bounds.left, point.y - box.bounds.top));
-        }
+    const auto          box   = std::ranges::find_if(_hitBoxes, [point](const HitBox& candidate) {
+        return point.x >= candidate.bounds.left && point.x < candidate.bounds.right && point.y >= candidate.bounds.top && point.y < candidate.bounds.bottom;
+    });
+    return box == _hitBoxes.end() ? nullptr : &*box;
+}
+
+void Bar::HandleInput(POINT client, ModuleInput input) {
+    _tooltip->Hide();
+    const HitBox* box = BoxAt(client);
+    if (box == nullptr) {
         return;
+    }
+    const std::optional<Command>& command = CommandFor(box->module->Actions(), input);
+    if (command.has_value()) {
+        _launcher.Launch(*command);
+    } else if (input == ModuleInput::LeftClick) {
+        const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
+        box->module->Click(D2D1::Point2F((static_cast<float>(client.x) * scale) - box->bounds.left, (static_cast<float>(client.y) * scale) - box->bounds.top));
     }
 }
 
@@ -353,4 +351,39 @@ void Bar::ScheduleNextChange() {
     if (SetTimer(_window, kChangeTimer, *wait, nullptr) == 0) {
         ThrowLastError("SetTimer");
     }
+}
+
+void Bar::PointAt(POINT client) {
+    const HitBox* box    = BoxAt(client);
+    IModule*      module = box == nullptr ? nullptr : box->module;
+    if (module == _pointed) {
+        return;
+    }
+    _pointed = module;
+    _tooltip->Hide();
+    TRACKMOUSEEVENT track{.cbSize = sizeof(TRACKMOUSEEVENT), .dwFlags = TME_HOVER | TME_LEAVE, .hwndTrack = _window, .dwHoverTime = HOVER_DEFAULT};
+    if (!TrackMouseEvent(&track)) {
+        ThrowLastError("TrackMouseEvent");
+    }
+}
+
+void Bar::ShowTooltip() {
+    const auto box = std::ranges::find(_hitBoxes, _pointed, &HitBox::module);
+    if (_pointed == nullptr || box == _hitBoxes.end()) {
+        return;
+    }
+    const std::optional<std::wstring> text = _pointed->TooltipText();
+    if (!text.has_value() || text->empty()) {
+        return;
+    }
+    RECT bar{};
+    if (!GetWindowRect(_window, &bar)) {
+        ThrowLastError("GetWindowRect");
+    }
+    const UINT dpi = _placement.dpi;
+    const RECT module{.left   = bar.left + DipsToPixels(box->bounds.left, dpi),
+                      .top    = bar.top + DipsToPixels(box->bounds.top, dpi),
+                      .right  = bar.left + DipsToPixels(box->bounds.right, dpi),
+                      .bottom = bar.top + DipsToPixels(box->bounds.bottom, dpi)};
+    _tooltip->Show(*text, TooltipAnchor{.module = module, .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi});
 }

@@ -13,12 +13,13 @@ class Window final : public IModule {
   public:
     Window(WindowConfig config, const IWindowManager& windowManager);
 
-    void                 Layout(const RenderContext& render) override;
-    D2D1_SIZE_F          Size() const override;
-    void                 Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    std::optional<UINT>  MillisecondsUntilChange() const override;
-    void                 Click(D2D1_POINT_2F point) override;
-    const ModuleActions& Actions() const override;
+    void                        Layout(const RenderContext& render) override;
+    D2D1_SIZE_F                 Size() const override;
+    void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    std::optional<UINT>         MillisecondsUntilChange() const override;
+    void                        Click(D2D1_POINT_2F point) override;
+    const ModuleActions&        Actions() const override;
+    std::optional<std::wstring> TooltipText() override;
 
   private:
     WindowConfig          _config;

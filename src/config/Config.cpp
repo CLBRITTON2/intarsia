@@ -188,6 +188,15 @@ namespace {
         throw table.Error(std::format("{} must be one of top, bottom, left, right, got '{}'", table.KeyPath(key), value));
     }
 
+    Layer ParseLayer(const TableReader& table, std::string_view key) {
+        const std::string value = table.String(key);
+        if (value == "top")
+            return Layer::Top;
+        if (value == "bottom")
+            return Layer::Bottom;
+        throw table.Error(std::format("{} must be one of top, bottom, got '{}'", table.KeyPath(key), value));
+    }
+
     // "#RRGGBB" or "#RRGGBBAA".
     D2D1_COLOR_F ReadColor(const TableReader& table, std::string_view key) {
         const std::string text = table.String(key);
@@ -329,33 +338,38 @@ namespace {
                              .scrollDown = ReadAction(module, "on_scroll_down")};
     }
 
-    // A module's own keys plus the input actions every module with actions takes.
-    std::vector<std::string_view> WithActionKeys(std::initializer_list<std::string_view> keys) {
+    // A module's own keys plus the optional tooltip and input actions every module with settings takes.
+    std::vector<std::string_view> WithOptionalKeys(std::initializer_list<std::string_view> keys) {
         std::vector<std::string_view> known(keys);
-        known.insert(known.end(), {"on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        known.insert(known.end(), {"tooltip", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
         return known;
+    }
+
+    std::optional<std::string> ReadTooltip(const TableReader& module) {
+        return module.Has("tooltip") ? std::optional<std::string>(module.String("tooltip")) : std::nullopt;
     }
 
     TextModuleConfig ReadTextFields(const TableReader& module) {
         return TextModuleConfig{.format   = module.String("format"),
+                                .tooltip  = ReadTooltip(module),
                                 .icon     = ToWide(module.String("icon")),
                                 .interval = std::chrono::seconds(PositiveWholeNumber(module, "interval")),
                                 .actions  = ReadActions(module)};
     }
 
     TextModuleConfig ReadTextModuleConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithActionKeys({"type", "format", "icon", "interval"}));
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "format", "icon", "interval"}));
         return ReadTextFields(module);
     }
 
     CustomConfig ReadCustomConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithActionKeys({"type", "command", "timeout", "format", "icon", "interval"}));
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "format", "icon", "interval"}));
         return CustomConfig{.command = ReadCommand(module, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")), .text = ReadTextFields(module)};
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {
-        window.RejectUnknownKeys(WithActionKeys({"type", "max_length"}));
-        return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .actions = ReadActions(window)};
+        window.RejectUnknownKeys(WithOptionalKeys({"type", "max_length"}));
+        return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .tooltip = ReadTooltip(window), .actions = ReadActions(window)};
     }
 
     std::string ReadFile(const std::filesystem::path& path) {
@@ -438,8 +452,9 @@ Config LoadConfig(const std::filesystem::path& path) {
     RejectUnshownModules(definitions, modules);
 
     const TableReader bar = root.Table("bar");
-    bar.RejectUnknownKeys({"edge", "thickness", "border", "spacing"});
+    bar.RejectUnknownKeys({"edge", "layer", "thickness", "border", "spacing"});
     const BarConfig   barConfig{.edge          = ParseEdge(bar, "edge"),
+                                .layer         = ParseLayer(bar, "layer"),
                                 .thicknessDips = PositiveNumber(bar, "thickness"),
                                 .borderDips    = NonNegativeNumber(bar, "border"),
                                 .spacingDips   = NonNegativeNumber(bar, "spacing")};

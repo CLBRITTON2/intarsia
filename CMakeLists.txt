@@ -31,6 +31,7 @@ add_library(intarsia_core STATIC
   src/App.cpp
   src/bar/Bar.cpp
   src/bar/Layout.cpp
+  src/bar/Tooltip.cpp
   src/config/Config.cpp
   src/modules/Clock.cpp
   src/modules/Cpu.cpp
@@ -53,6 +54,7 @@ add_library(intarsia_core STATIC
   src/platform/Text.cpp
   src/platform/WebSocket.cpp
   src/render/Graphics.cpp
+  src/render/Surface.cpp
   src/wm/GlazeWm.cpp
   src/wm/GlazeWmProtocol.cpp
   src/wm/Native.cpp
@@ -83,6 +85,7 @@ if(BUILD_TESTING)
   add_executable(intarsia_gtests
     tests/bar/Layout.cpp
     tests/bar/Sections.cpp
+    tests/bar/Tooltip.cpp
     tests/config/Config.cpp
     tests/modules/Clock.cpp
     tests/modules/CommandPoller.cpp

@@ -12,7 +12,7 @@ namespace {
     }
 
     TextModuleConfig ClockWithFormat(std::string format) {
-        return TextModuleConfig{.format = std::move(format), .icon = L"", .interval = std::chrono::seconds(60), .actions = {}};
+        return TextModuleConfig{.format = std::move(format), .tooltip = std::nullopt, .icon = L"", .interval = std::chrono::seconds(60), .actions = {}};
     }
 
 } // namespace

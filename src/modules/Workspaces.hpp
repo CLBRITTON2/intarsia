@@ -36,6 +36,8 @@ class Workspaces final : public IModule {
     void                Click(D2D1_POINT_2F point) override;
     // None: the module has no config table, and a left click focuses the workspace under it.
     const ModuleActions& Actions() const override;
+    // While disconnected, why: the window manager's status detail. Nothing while connected.
+    std::optional<std::wstring> TooltipText() override;
 
   private:
     IWindowManager&                           _windowManager;

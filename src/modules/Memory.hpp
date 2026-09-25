@@ -15,5 +15,5 @@ class Memory final : public TextModule {
     explicit Memory(TextModuleConfig config);
 
   private:
-    ModuleText Text() override;
+    ModuleText Format(const std::string& spec) override;
 };

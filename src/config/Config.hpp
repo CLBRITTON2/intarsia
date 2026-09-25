@@ -13,8 +13,15 @@
 #include <string>
 #include <variant>
 
+// Where the bar sits among other windows, as Waybar's layer option.
+enum class Layer {
+    Top,   // above other windows, lowered while a fullscreen app runs, as the taskbar does
+    Bottom // below other windows, which can cover it
+};
+
 struct BarConfig {
     Edge  edge;
+    Layer layer;
     float thicknessDips;
     float borderDips;
     float spacingDips;
@@ -59,15 +66,17 @@ struct ModuleActions {
 
 // A module that shows an icon and one formatted value, redrawn every interval: clock, cpu, memory.
 struct TextModuleConfig {
-    std::string          format; // std::format spec for the module's value, such as "{:%H:%M}" or "{}%"
-    std::wstring         icon;
-    std::chrono::seconds interval;
-    ModuleActions        actions;
+    std::string                format;  // std::format spec for the module's value, such as "{:%H:%M}" or "{}%"
+    std::optional<std::string> tooltip; // a second spec for the same value, shown on hover, none when absent
+    std::wstring               icon;
+    std::chrono::seconds       interval;
+    ModuleActions              actions;
 };
 
 struct WindowConfig {
-    size_t        maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
-    ModuleActions actions;
+    size_t                     maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
+    std::optional<std::string> tooltip;   // std::format spec for the full title, shown on hover, none when absent
+    ModuleActions              actions;
 };
 
 // A program run every interval, whose first line of output is shown through format.

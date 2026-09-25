@@ -6,6 +6,7 @@
 #include <wrl/client.h>
 
 #include <format>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -30,4 +31,13 @@ void RequireFormat(std::string_view key, const std::string& format, Value sample
     try {
         FormatValue(format, sample);
     } catch (const std::format_error& error) { throw ConfigError(std::format("{} '{}' is not a valid std::format spec for its value: {}", key, format, error.what())); }
+}
+
+// RequireFormat for a module's format and, when it has one, its tooltip. module names the type, such as "cpu".
+template <typename Value>
+void RequireFormats(std::string_view module, const std::string& format, const std::optional<std::string>& tooltip, Value sample) {
+    RequireFormat(std::format("{} format", module), format, sample);
+    if (tooltip.has_value()) {
+        RequireFormat(std::format("{} tooltip", module), *tooltip, sample);
+    }
 }

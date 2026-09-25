@@ -2,6 +2,8 @@
 return {
     bar = {
         edge = "top", -- top, bottom, left or right
+        -- top: above other windows, lowered while a fullscreen app runs. bottom: other windows can cover it.
+        layer = "top",
         thickness = 54, -- DIPs, scaled by each monitor's DPI
         border = 1,
         spacing = 8, -- between modules and at both ends of the bar
@@ -36,15 +38,20 @@ return {
     -- clock, window, cpu, memory and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
     -- commands: { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config
     -- loads), and it starts without a shell, so arguments reach it exactly as written.
+    --
+    -- They also take an optional tooltip: a second format for the same value, shown while the cursor rests on the
+    -- module. The workspaces module shows why the window manager is disconnected, with no key needed.
     modules = {
         workspaces = { type = "workspaces" },
         title = {
             type = "window",
             max_length = 80, -- longer titles are cut with an ellipsis
+            tooltip = "{}", -- the whole title
         },
         date = {
             type = "clock",
             format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
+            tooltip = "{:%A %d %B %Y, %H:%M:%S}",
             icon = "\u{F1441}",
             interval = 60, -- seconds between redraws, aligned to the clock
         },

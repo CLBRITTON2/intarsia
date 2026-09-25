@@ -7,6 +7,9 @@
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
+#include <stdexcept>
+#include <string_view>
+
 // Shared by every bar: one D3D device feeds all swap chains and one DComp device commits all visuals.
 struct GraphicsDevice {
     Microsoft::WRL::ComPtr<ID3D11Device>        d3d;
@@ -18,6 +21,21 @@ struct GraphicsDevice {
 };
 
 GraphicsDevice CreateGraphicsDevice();
+
+// The graphics device is gone (driver update, driver crash, GPU removed) and nothing made from it works again. Only
+// App can recover, by creating a new device and everything drawn with it.
+class DeviceLostError : public std::runtime_error {
+  public:
+    using std::runtime_error::runtime_error;
+};
+
+// ThrowIfFailed, except that the results meaning the device is lost throw DeviceLostError.
+void                                         ThrowIfDeviceFailed(HRESULT result, std::string_view call);
+
+Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1_COLOR_F& color);
+
+// Rounded to the nearest pixel.
+int DipsToPixels(float dips, UINT dpi);
 
 // DirectWrite silently substitutes a missing family, which would hide a broken font install.
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family);

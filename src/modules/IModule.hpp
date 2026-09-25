@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <optional>
+#include <string>
 
 // One piece of a bar, such as the clock. The bar calls Layout, then Size, then Draw on every frame.
 class IModule {
@@ -26,4 +27,7 @@ class IModule {
 
     // The commands the config binds to this module's inputs.
     virtual const ModuleActions& Actions() const = 0;
+
+    // The text to show while the cursor rests on the module, from its current data, or nullopt for no tooltip.
+    virtual std::optional<std::wstring> TooltipText() = 0;
 };

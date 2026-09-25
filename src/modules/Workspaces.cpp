@@ -1,6 +1,7 @@
 #include "modules/Workspaces.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Text.hpp"
 
 #include <limits>
 
@@ -70,6 +71,14 @@ void Workspaces::Click(D2D1_POINT_2F point) {
 const ModuleActions& Workspaces::Actions() const {
     static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
     return kNone;
+}
+
+std::optional<std::wstring> Workspaces::TooltipText() {
+    const WindowManagerStatus status = _windowManager.Status();
+    if (status.connection != Connection::Disconnected) {
+        return std::nullopt;
+    }
+    return ToWide(status.detail);
 }
 
 WorkspaceLine JoinWorkspaces(const std::vector<Workspace>& workspaces, std::intptr_t monitor) {

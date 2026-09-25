@@ -7,7 +7,7 @@
 namespace {
 
     TextModuleConfig MemoryWithFormat(std::string format) {
-        return TextModuleConfig{.format = std::move(format), .icon = L"", .interval = std::chrono::seconds(1), .actions = {}};
+        return TextModuleConfig{.format = std::move(format), .tooltip = std::nullopt, .icon = L"", .interval = std::chrono::seconds(1), .actions = {}};
     }
 
 } // namespace

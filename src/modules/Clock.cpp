@@ -13,11 +13,11 @@ namespace {
 } // namespace
 
 Clock::Clock(TextModuleConfig config) : TextModule(std::move(config)) {
-    RequireFormat("clock format", Settings().format, LocalTime(std::chrono::system_clock::now()));
+    RequireFormats("clock", Settings().format, Settings().tooltip, LocalTime(std::chrono::system_clock::now()));
 }
 
-ModuleText Clock::Text() {
-    return ModuleText{.text = ToWide(FormatLocalTime(Settings().format, std::chrono::system_clock::now())), .alert = false};
+ModuleText Clock::Format(const std::string& spec) {
+    return ModuleText{.text = ToWide(FormatLocalTime(spec, std::chrono::system_clock::now())), .alert = false};
 }
 
 std::string FormatLocalTime(const std::string& format, std::chrono::system_clock::time_point now) {

@@ -8,7 +8,7 @@
 TextModule::TextModule(TextModuleConfig config) : _config(std::move(config)), _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
 
 void TextModule::Layout(const RenderContext& render) {
-    const ModuleText content = Text();
+    const ModuleText content = Format(_config.format);
     _text                    = LayOutIconText(render, _config.icon, content.text, content.alert ? render.alert : render.foreground);
 }
 
@@ -28,6 +28,13 @@ void                 TextModule::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& TextModule::Actions() const {
     return _config.actions;
+}
+
+std::optional<std::wstring> TextModule::TooltipText() {
+    if (!_config.tooltip.has_value()) {
+        return std::nullopt;
+    }
+    return Format(*_config.tooltip).text;
 }
 
 const TextModuleConfig& TextModule::Settings() const {

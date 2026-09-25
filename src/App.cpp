@@ -97,6 +97,7 @@ App::App(HINSTANCE instance, std::filesystem::path configPath) :
     _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)) {
     Bar::RegisterWindowClass(_instance);
+    Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
 }
 
@@ -168,13 +169,21 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 void App::CreateBars(std::vector<BarPlacement> placements) {
     _placements = std::move(placements);
-    for (const BarPlacement& placement : _placements) {
-        _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
-                                              ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .monitor = placement.monitor}, _launcher,
-                                              placement, _state, _control, kDeviceLost));
-        if (_state.error) {
-            std::rethrow_exception(_state.error);
+    try {
+        for (const BarPlacement& placement : _placements) {
+            _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
+                                                  ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .monitor = placement.monitor}, _launcher,
+                                                  placement, _state, _control, kDeviceLost));
+            if (_state.error) {
+                std::rethrow_exception(_state.error);
+            }
         }
+    } catch (const DeviceLostError& error) {
+        // Lost while a bar was being built rather than while it drew: the same recovery, and it had drawn nothing.
+        _bars.clear();
+        _deviceRetry = std::min(_deviceRetry * 2, kLongestDeviceRetry);
+        Log(LogLevel::Warning, "app", "recovering_device", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
+        ScheduleDeviceRetry();
     }
 }
 

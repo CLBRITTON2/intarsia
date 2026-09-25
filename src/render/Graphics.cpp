@@ -3,6 +3,9 @@
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
+#include <windows.h>
+
+#include <cmath>
 #include <format>
 #include <stdexcept>
 
@@ -26,6 +29,23 @@ GraphicsDevice CreateGraphicsDevice() {
     ThrowIfFailed(DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&device.composition)), "DCompositionCreateDevice");
 
     return device;
+}
+
+void ThrowIfDeviceFailed(HRESULT result, std::string_view call) {
+    if (result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == D2DERR_RECREATE_TARGET) {
+        throw DeviceLostError(std::format("{} lost the graphics device with 0x{:08X}", call, static_cast<unsigned long>(result)));
+    }
+    ThrowIfFailed(result, call);
+}
+
+ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1_COLOR_F& color) {
+    ComPtr<ID2D1SolidColorBrush> brush;
+    ThrowIfDeviceFailed(context->CreateSolidColorBrush(color, &brush), "ID2D1DeviceContext::CreateSolidColorBrush");
+    return brush;
+}
+
+int DipsToPixels(float dips, UINT dpi) {
+    return static_cast<int>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
 }
 
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family) {
