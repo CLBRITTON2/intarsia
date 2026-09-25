@@ -2,8 +2,12 @@
 
 #include "platform/WorkQueue.hpp"
 
+#include <windows.h>
+
+#include <chrono>
 #include <filesystem>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +31,19 @@ std::wstring JoinArguments(const std::vector<std::wstring>& arguments);
 // Limits DLL loading for the rest of the process to System32, so no DLL beside the executable or in the current
 // directory can be planted into it. Call first thing at startup.
 void RestrictDllSearchToSystem32();
+
+// A command that started but gave no usable output: it timed out, was cancelled, printed too much or exited nonzero.
+// The message is short enough to show on the bar.
+class CommandError : public std::runtime_error {
+  public:
+    using std::runtime_error::runtime_error;
+};
+
+// Runs the command with no window and no shell, blocking until it ends, and returns what it printed to stdout. The
+// command and every process it starts run in a job that is killed when the timeout passes, when cancel is signaled or
+// when this returns, so nothing it starts outlives the call. It inherits only its stdout pipe: stdin and stderr are
+// closed.
+std::string CaptureOutput(const Command& command, std::chrono::milliseconds timeout, size_t maxBytes, HANDLE cancel);
 
 // Starts commands on its own thread with ShellExecuteExW, so a UAC prompt (Task Manager needs one) never blocks the UI.
 class Launcher {

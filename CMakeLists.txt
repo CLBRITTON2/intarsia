@@ -36,6 +36,8 @@ add_library(intarsia_core STATIC
   src/modules/Cpu.cpp
   src/modules/IconText.cpp
   src/modules/Memory.cpp
+  src/modules/CommandPoller.cpp
+  src/modules/Custom.cpp
   src/modules/ModuleFactory.cpp
   src/modules/TextModule.cpp
   src/modules/Ticks.cpp
@@ -83,6 +85,7 @@ if(BUILD_TESTING)
     tests/bar/Sections.cpp
     tests/config/Config.cpp
     tests/modules/Clock.cpp
+    tests/modules/CommandPoller.cpp
     tests/modules/Cpu.cpp
     tests/modules/Memory.cpp
     tests/modules/Ticks.cpp

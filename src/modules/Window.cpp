@@ -17,7 +17,7 @@ Window::Window(WindowConfig config, const IWindowManager& windowManager) :
 
 void Window::Layout(const RenderContext& render) {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
-    _text                                      = LayOutIconText(render, L"", focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring());
+    _text = LayOutIconText(render, L"", focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring(), render.foreground);
 }
 
 D2D1_SIZE_F Window::Size() const {

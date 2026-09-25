@@ -44,7 +44,8 @@ enum class ModuleKind {
     Window,
     Workspaces,
     Cpu,
-    Memory
+    Memory,
+    Custom
 };
 
 // What a module runs for each input, from the optional on_click, on_right_click, on_scroll_up and on_scroll_down keys.
@@ -69,8 +70,15 @@ struct WindowConfig {
     ModuleActions actions;
 };
 
-// The settings from a module's table: text modules and window have one, workspaces has none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig>;
+// A program run every interval, whose first line of output is shown through format.
+struct CustomConfig {
+    Command              command;
+    std::chrono::seconds timeout; // the command and everything it started are killed after this long
+    TextModuleConfig     text;
+};
+
+// The settings from a module's table: workspaces has none.
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {

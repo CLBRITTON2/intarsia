@@ -214,12 +214,13 @@ namespace {
         ModuleKind       kind;
     };
 
-    constexpr std::array<ModuleName, 5> kModuleNames{{
+    constexpr std::array<ModuleName, 6> kModuleNames{{
         {.name = "clock", .kind = ModuleKind::Clock},
         {.name = "window", .kind = ModuleKind::Window},
         {.name = "workspaces", .kind = ModuleKind::Workspaces},
         {.name = "cpu", .kind = ModuleKind::Cpu},
         {.name = "memory", .kind = ModuleKind::Memory},
+        {.name = "custom", .kind = ModuleKind::Custom},
     }};
 
     std::string                         KnownModuleNames() {
@@ -246,6 +247,7 @@ namespace {
 
     TextModuleConfig ReadTextModuleConfig(const TableReader& module);
     WindowConfig     ReadWindowConfig(const TableReader& window);
+    CustomConfig     ReadCustomConfig(const TableReader& module);
 
     ModuleSettings   ReadModuleSettings(const TableReader& module, ModuleKind kind) {
         switch (kind) {
@@ -253,6 +255,7 @@ namespace {
             case ModuleKind::Cpu:
             case ModuleKind::Memory: return ReadTextModuleConfig(module);
             case ModuleKind::Window: return ReadWindowConfig(module);
+            case ModuleKind::Custom: return ReadCustomConfig(module);
             case ModuleKind::Workspaces: module.RejectUnknownKeys({"type"}); return std::monostate{};
         }
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
@@ -292,12 +295,9 @@ namespace {
         return AnyInSections(modules, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
     }
 
-    // An action is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
+    // A command is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
     // cmd.exe, which parses the arguments again as shell syntax.
-    std::optional<Command> ReadCommand(const TableReader& module, std::string_view key) {
-        if (!module.Has(key)) {
-            return std::nullopt;
-        }
+    Command ReadCommand(const TableReader& module, std::string_view key) {
         const std::vector<std::string> argv = module.StringList(key);
         if (argv.empty()) {
             throw module.Error(std::format("{} must name a program, as {{ \"taskmgr.exe\" }}", module.KeyPath(key)));
@@ -318,23 +318,43 @@ namespace {
         return Command{.program = *program, .arguments = std::move(arguments)};
     }
 
-    ModuleActions ReadActions(const TableReader& module) {
-        return ModuleActions{.click      = ReadCommand(module, "on_click"),
-                             .rightClick = ReadCommand(module, "on_right_click"),
-                             .scrollUp   = ReadCommand(module, "on_scroll_up"),
-                             .scrollDown = ReadCommand(module, "on_scroll_down")};
+    std::optional<Command> ReadAction(const TableReader& module, std::string_view key) {
+        return module.Has(key) ? std::optional<Command>(ReadCommand(module, key)) : std::nullopt;
     }
 
-    TextModuleConfig ReadTextModuleConfig(const TableReader& module) {
-        module.RejectUnknownKeys({"type", "format", "icon", "interval", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+    ModuleActions ReadActions(const TableReader& module) {
+        return ModuleActions{.click      = ReadAction(module, "on_click"),
+                             .rightClick = ReadAction(module, "on_right_click"),
+                             .scrollUp   = ReadAction(module, "on_scroll_up"),
+                             .scrollDown = ReadAction(module, "on_scroll_down")};
+    }
+
+    // A module's own keys plus the input actions every module with actions takes.
+    std::vector<std::string_view> WithActionKeys(std::initializer_list<std::string_view> keys) {
+        std::vector<std::string_view> known(keys);
+        known.insert(known.end(), {"on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        return known;
+    }
+
+    TextModuleConfig ReadTextFields(const TableReader& module) {
         return TextModuleConfig{.format   = module.String("format"),
                                 .icon     = ToWide(module.String("icon")),
                                 .interval = std::chrono::seconds(PositiveWholeNumber(module, "interval")),
                                 .actions  = ReadActions(module)};
     }
 
+    TextModuleConfig ReadTextModuleConfig(const TableReader& module) {
+        module.RejectUnknownKeys(WithActionKeys({"type", "format", "icon", "interval"}));
+        return ReadTextFields(module);
+    }
+
+    CustomConfig ReadCustomConfig(const TableReader& module) {
+        module.RejectUnknownKeys(WithActionKeys({"type", "command", "timeout", "format", "icon", "interval"}));
+        return CustomConfig{.command = ReadCommand(module, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")), .text = ReadTextFields(module)};
+    }
+
     WindowConfig ReadWindowConfig(const TableReader& window) {
-        window.RejectUnknownKeys({"type", "max_length", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        window.RejectUnknownKeys(WithActionKeys({"type", "max_length"}));
         return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .actions = ReadActions(window)};
     }
 

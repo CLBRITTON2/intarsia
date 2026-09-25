@@ -2,6 +2,7 @@
 
 #include "bar/Bar.hpp"
 #include "config/Config.hpp"
+#include "modules/CommandPoller.hpp"
 #include "platform/FileWatcher.hpp"
 #include "platform/Process.hpp"
 #include "render/Graphics.hpp"
@@ -44,6 +45,8 @@ class App {
     // Starts the commands bound to module inputs, off the UI thread.
     Launcher _launcher;
     // Modules read the window manager, so it is created before the bars and destroyed after them.
-    std::unique_ptr<IWindowManager>   _windowManager;
+    std::unique_ptr<IWindowManager> _windowManager;
+    // Created before the bars and destroyed after them, like the window manager, since custom modules read them.
+    std::unique_ptr<CommandPollers>   _commandPollers;
     std::vector<std::unique_ptr<Bar>> _bars;
 };

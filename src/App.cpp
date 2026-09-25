@@ -17,7 +17,8 @@ namespace {
     constexpr wchar_t kControlClass[] = L"IntarsiaControl";
     constexpr UINT    kConfigChanged  = WM_APP + 2;
     constexpr UINT    kWatcherFailed  = WM_APP + 3;
-    constexpr UINT    kWindowsChanged = WM_APP + 4;
+    // Posted by the window manager backend and the command pollers when what modules show has changed.
+    constexpr UINT kSourcesChanged = WM_APP + 4;
     // Editors save in several writes, so the reload waits until the file has been quiet this long.
     constexpr std::chrono::milliseconds kConfigSettle{100};
     // Window manager changes arrive in bursts (a terminal can retitle itself many times a second), so redraws they
@@ -81,13 +82,14 @@ App::App(HINSTANCE instance, std::filesystem::path configPath) :
     _instance(instance), _configPath(std::move(configPath)), _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()),
     _state{.error = nullptr}, _redrawPending(false), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
     _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
-    _windowManager(CreateWindowManager(_config->windowManager, _control, kWindowsChanged)) {
+    _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)) {
     Bar::RegisterWindowClass(_instance);
     CreateBars();
 }
 
 App::~App() {
     _bars.clear();
+    _commandPollers.reset();
     _windowManager.reset();
     _watcher.reset();
     DestroyWindow(_control);
@@ -108,7 +110,7 @@ int App::Run() {
 LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case kConfigChanged: ReloadConfig(); return 0;
-        case kWindowsChanged:
+        case kSourcesChanged:
             if (!_redrawPending) {
                 if (SetTimer(_control, kRedrawTimer, kRedrawDelayMs, nullptr) == 0) {
                     ThrowLastError("SetTimer(redraw)");
@@ -140,8 +142,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 void App::CreateBars() {
     for (const BarPlacement& placement : PlacementsForAllMonitors()) {
-        _bars.push_back(
-            std::make_unique<Bar>(_instance, _graphics, *_config, ModuleSources{.windowManager = *_windowManager, .monitor = placement.monitor}, _launcher, placement, _state));
+        _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
+                                              ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .monitor = placement.monitor}, _launcher,
+                                              placement, _state));
         if (_state.error) {
             std::rethrow_exception(_state.error);
         }
@@ -152,9 +155,11 @@ void App::CreateBars() {
 void App::ReloadConfig() {
     auto config = std::make_unique<Config>(LoadConfig(_configPath));
     _bars.clear();
+    _commandPollers.reset();
     // Reset before creating the replacement: the native backend allows one instance at a time.
     _windowManager.reset();
-    _config        = std::move(config);
-    _windowManager = CreateWindowManager(_config->windowManager, _control, kWindowsChanged);
+    _config         = std::move(config);
+    _windowManager  = CreateWindowManager(_config->windowManager, _control, kSourcesChanged);
+    _commandPollers = std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged);
     CreateBars();
 }

@@ -2,6 +2,7 @@
 
 #include "modules/Clock.hpp"
 #include "modules/Cpu.hpp"
+#include "modules/Custom.hpp"
 #include "modules/Memory.hpp"
 #include "modules/Window.hpp"
 #include "modules/Workspaces.hpp"
@@ -30,6 +31,7 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Workspaces: return std::make_unique<Workspaces>(sources.windowManager, sources.monitor);
         case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
+        case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(instance.kind)));
 }

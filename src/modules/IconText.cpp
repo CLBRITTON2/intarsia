@@ -4,7 +4,7 @@
 
 #include <limits>
 
-IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text) {
+IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text, ID2D1Brush* textBrush) {
     const std::wstring line = icon.empty() ? std::wstring(text) : std::wstring(icon) + L"  " + std::wstring(text);
 
     IconText           laidOut{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}};
@@ -17,6 +17,8 @@ IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std
         ThrowIfFailed(laidOut.layout->SetFontSize(render.iconSizeDips, iconRange), "IDWriteTextLayout::SetFontSize");
         ThrowIfFailed(laidOut.layout->SetDrawingEffect(render.accent, iconRange), "IDWriteTextLayout::SetDrawingEffect");
     }
+    const DWRITE_TEXT_RANGE textRange{.startPosition = static_cast<UINT32>(line.size() - text.size()), .length = static_cast<UINT32>(text.size())};
+    ThrowIfFailed(laidOut.layout->SetDrawingEffect(textBrush, textRange), "IDWriteTextLayout::SetDrawingEffect");
 
     DWRITE_TEXT_METRICS metrics{};
     ThrowIfFailed(laidOut.layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");

@@ -8,7 +8,8 @@
 TextModule::TextModule(TextModuleConfig config) : _config(std::move(config)), _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
 
 void TextModule::Layout(const RenderContext& render) {
-    _text = LayOutIconText(render, _config.icon, Text());
+    const ModuleText content = Text();
+    _text                    = LayOutIconText(render, _config.icon, content.text, content.alert ? render.alert : render.foreground);
 }
 
 D2D1_SIZE_F TextModule::Size() const {

@@ -14,8 +14,9 @@ struct IconText {
     D2D1_SIZE_F                               size;
 };
 
-// The icon in the accent color at the icon size, two spaces, then the text. Just the text when there is no icon.
-IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text);
+// The icon in the accent color at the icon size, two spaces, then the text drawn with textBrush. Just the text when
+// there is no icon.
+IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text, ID2D1Brush* textBrush);
 
 template <typename Value>
 std::string FormatValue(const std::string& format, Value value) {

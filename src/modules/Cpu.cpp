@@ -45,7 +45,7 @@ Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config)), _previous(Rea
 
 // Samples at most once per interval: the bar also redraws for other modules, and a sample over a few milliseconds
 // would swing between 0 and 100. The 50 ms slack is for the redraw timer firing a little early.
-std::wstring Cpu::Text() {
+ModuleText Cpu::Text() {
     const auto now = std::chrono::steady_clock::now();
     if (now - _sampledAt >= Settings().interval - std::chrono::milliseconds(50)) {
         const CpuTimes current = ReadCpuTimes();
@@ -53,5 +53,5 @@ std::wstring Cpu::Text() {
         _previous              = current;
         _sampledAt             = now;
     }
-    return ToWide(FormatValue(Settings().format, _usage));
+    return ModuleText{.text = ToWide(FormatValue(Settings().format, _usage)), .alert = false};
 }

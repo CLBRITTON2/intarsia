@@ -30,10 +30,10 @@ return {
     modules_center = { "date" },
     modules_right = { "cpu", "memory" },
 
-    -- Each module has a name you choose and a type: clock, window, workspaces, cpu or memory. One type can appear
-    -- under several names with different settings, such as a second clock with its own format.
+    -- Each module has a name you choose and a type: clock, window, workspaces, cpu, memory or custom. One type can
+    -- appear under several names with different settings, such as a second clock with its own format.
     --
-    -- clock, window, cpu and memory take optional on_click, on_right_click, on_scroll_up and on_scroll_down
+    -- clock, window, cpu, memory and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
     -- commands: { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config
     -- loads), and it starts without a shell, so arguments reach it exactly as written.
     modules = {
@@ -62,5 +62,17 @@ return {
             interval = 1,
             on_click = { "C:\\Windows\\System32\\resmon.exe" },
         },
+        -- A custom module runs its command every interval and shows the first line it printed. The command follows
+        -- the same rules as on_click, runs with no window, and is killed with everything it started after timeout
+        -- seconds. A failed run shows its reason in the alert color. Add "weather" to a list to show it.
+        -- weather = {
+        --     type = "custom",
+        --     -- Absolute, so another curl.exe earlier on PATH (such as MSYS2's) is never picked instead.
+        --     command = { "C:\\Windows\\System32\\curl.exe", "--silent", "--fail", "https://wttr.in/?format=%c%t" },
+        --     timeout = 10,
+        --     format = "{}", -- the value is the output's first line, as a string
+        --     icon = "",
+        --     interval = 900,
+        -- },
     },
 }

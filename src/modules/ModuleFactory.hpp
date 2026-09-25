@@ -2,6 +2,7 @@
 
 #include "bar/Sections.hpp"
 #include "config/Config.hpp"
+#include "modules/CommandPoller.hpp"
 #include "modules/IModule.hpp"
 #include "wm/IWindowManager.hpp"
 
@@ -11,8 +12,9 @@
 
 // What a module reads beyond its own config: shared data sources, and the monitor of the bar it belongs to.
 struct ModuleSources {
-    IWindowManager& windowManager;
-    HMONITOR        monitor;
+    IWindowManager&       windowManager;
+    const CommandPollers& commandPollers;
+    HMONITOR              monitor;
 };
 
 std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources);

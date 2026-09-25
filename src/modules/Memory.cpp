@@ -28,6 +28,6 @@ Memory::Memory(TextModuleConfig config) : TextModule(std::move(config)) {
     RequireFormat("memory format", Settings().format, 0.0);
 }
 
-std::wstring Memory::Text() {
-    return ToWide(FormatValue(Settings().format, BytesToGibibytes(UsedPhysicalBytes())));
+ModuleText Memory::Text() {
+    return ModuleText{.text = ToWide(FormatValue(Settings().format, BytesToGibibytes(UsedPhysicalBytes()))), .alert = false};
 }
