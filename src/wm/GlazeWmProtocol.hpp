@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -34,7 +35,7 @@ namespace glazewm {
         using std::runtime_error::runtime_error;
     };
 
-    enum class MessageKind {
+    enum class MessageKind : std::uint8_t {
         Response, // "client_response", the answer to a message the client sent
         Event     // "event_subscription", pushed for a subscription
     };

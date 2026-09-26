@@ -33,6 +33,7 @@ target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
 # Everything but the entry point, so the tests link the same code the bar runs.
 add_library(intarsia_core STATIC
   src/App.cpp
+  src/LaunchOptions.cpp
   src/bar/Bar.cpp
   src/bar/Layout.cpp
   src/bar/Tooltip.cpp
@@ -53,6 +54,7 @@ add_library(intarsia_core STATIC
   src/modules/WindowList.cpp
   src/modules/Workspaces.cpp
   src/platform/AppBar.cpp
+  src/platform/ChangeSignal.cpp
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
   src/platform/Handle.cpp
@@ -94,6 +96,7 @@ if(BUILD_TESTING)
   enable_testing()
   include(GoogleTest)
   add_executable(intarsia_gtests
+    tests/LaunchOptions.cpp
     tests/bar/Layout.cpp
     tests/bar/Sections.cpp
     tests/bar/Tooltip.cpp
@@ -111,6 +114,7 @@ if(BUILD_TESTING)
     tests/modules/Workspaces.cpp
     tests/wm/GlazeWmProtocol.cpp
     tests/platform/AppBar.cpp
+    tests/platform/ChangeSignal.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
@@ -124,4 +128,11 @@ if(BUILD_TESTING)
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/config.lua")
   gtest_discover_tests(intarsia_gtests)
+
+  # The stress tests' IPC server (scripts/smoke.ps1), named glazewm.exe because the bar's peer check requires it.
+  add_executable(smoke_glazewm_server tests/smoke/GlazeWmServer.cpp)
+  set_target_properties(smoke_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
+  target_compile_definitions(smoke_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_compile_options(smoke_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
+  target_link_libraries(smoke_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
 endif()

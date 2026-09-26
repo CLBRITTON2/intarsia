@@ -12,11 +12,12 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <vector>
 
-enum class ModuleInput {
+enum class ModuleInput : std::uint8_t {
     LeftClick,
     RightClick,
     ScrollUp,

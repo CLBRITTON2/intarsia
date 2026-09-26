@@ -33,6 +33,20 @@ pwsh -File scripts/test.ps1
 This builds the debug preset and runs the GoogleTest suite through ctest. `tests/` mirrors `src/`, one file per unit.
 Some tests create windows and a Direct3D device, so run them from an interactive desktop session.
 
+## Stress tests
+
+```powershell
+pwsh -File scripts/smoke.ps1 -Preset release
+```
+
+This runs the real bar through a set of scenarios, each against a test GlazeWM IPC server
+(`tests/smoke/GlazeWmServer.cpp`): idle, steady events, an event flood, malformed and oversized messages, a server that
+never finishes the handshake, one that drops the connection every second or two, one that rejects every query, and a
+config rewritten twenty times a second. Custom modules run commands that print past the output cap, outlive their
+timeout and fail. The bar is sampled every second and a scenario fails if it crashes, stops answering, logs a fatal
+error, leaks memory, handles, GDI or USER objects or threads, idles above 3% of a core, or does not exit cleanly.
+`-Scenario` picks scenarios, `-Seconds` sets how long each runs, and a long `-Seconds` makes it a soak test.
+
 ## Lint
 
 ```powershell
@@ -52,6 +66,7 @@ Copy-Item config\config.lua $env:USERPROFILE\.config\intarsia\config.lua
 Start-Process build\release\intarsia.exe -RedirectStandardError $env:TEMP\intarsia.log
 ```
 
+`--config <path>` reads another config, and `--glazewm-port <port>` connects to GlazeWM on a port other than 6123.
 Saving the config rebuilds the bars. A config with a wrong key or type stops the bar with a message naming the file
 and the key. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
 with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen space back.
@@ -67,4 +82,5 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
 | `config/config.lua` | the example config, documenting every key |
-| `scripts/` | build, test and lint, which CI runs too |
+| `tests/` | unit tests mirroring `src/`, and `tests/smoke/` for the stress tests' IPC server |
+| `scripts/` | build, test, stress test and lint |

@@ -1,10 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <string_view>
 
-enum class LogLevel {
+enum class LogLevel : std::uint8_t {
     Info,
     Warning,
     Error

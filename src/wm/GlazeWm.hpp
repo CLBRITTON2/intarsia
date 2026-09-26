@@ -20,7 +20,8 @@
 // the socket. The focused title comes from Windows events, since GlazeWM sends no event when a title changes.
 class GlazeWm final : public IWindowManager {
   public:
-    GlazeWm(HWND target, UINT changedMessage);
+    // port is GlazeWM's IPC port on 127.0.0.1, 6123 unless a test server stands in.
+    GlazeWm(ChangeSignal& changes, INTERNET_PORT port);
     ~GlazeWm() override;
     GlazeWm(const GlazeWm&)                                  = delete;
     GlazeWm&                       operator=(const GlazeWm&) = delete;
@@ -62,8 +63,8 @@ class GlazeWm final : public IWindowManager {
     void               QueueCommand(const std::function<std::string()>& makeCommand);
 
     Native             _native;
-    HWND               _target;
-    UINT               _changedMessage;
+    INTERNET_PORT      _port;
+    ChangeSignal&      _changes;
     UniqueHandle       _stopEvent;
     mutable std::mutex _mutex; // guards the members below it up to _sendMutex
     Snapshot           _snapshot;

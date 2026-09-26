@@ -25,9 +25,9 @@ Native::ActiveInstance::~ActiveInstance() {
     activeInstance = nullptr;
 }
 
-Native::Native(HWND target, UINT changedMessage) :
-    _active(this), _target(target), _changedMessage(changedMessage), _foreground(GetForegroundWindow()), _title(WindowTitle(_foreground)),
-    _foregroundHook(HookEvent(EVENT_SYSTEM_FOREGROUND, 0)), _titleHook(HookTitleChanges(_foreground)) {}
+Native::Native(ChangeSignal& changes) :
+    _active(this), _changes(changes), _foreground(GetForegroundWindow()), _title(WindowTitle(_foreground)), _foregroundHook(HookEvent(EVENT_SYSTEM_FOREGROUND, 0)),
+    _titleHook(HookTitleChanges(_foreground)) {}
 
 std::optional<FocusedWindow> Native::Focused() const {
     if (_foreground == nullptr) {
@@ -112,7 +112,7 @@ void Native::Refocus(HWND window) {
         _titleHook.reset();
         Log(LogLevel::Error, "native", "title_hook_failed", {{.key = "reason", .value = error.what()}});
     }
-    PostChanged();
+    _changes.Notify("native");
 }
 
 // Windows also reports name changes that leave the title as it was, and those need no redraw.
@@ -122,13 +122,7 @@ void Native::Retitle() {
         return;
     }
     _title = std::move(title);
-    PostChanged();
-}
-
-void Native::PostChanged() const {
-    if (!PostMessageW(_target, _changedMessage, 0, 0)) {
-        Log(LogLevel::Warning, "native", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
-    }
+    _changes.Notify("native");
 }
 
 std::wstring WindowTitle(HWND window) {

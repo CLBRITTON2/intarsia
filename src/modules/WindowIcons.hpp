@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/ChangeSignal.hpp"
 #include "platform/WorkQueue.hpp"
 
 #include <windows.h>
@@ -25,11 +26,11 @@ HICON WindowIcon(HWND window, UINT timeoutMs);
 // The icon's pixels. Throws Win32Error when WIC cannot read it.
 IconPixels IconToPixels(HICON icon);
 
-// Window icons for every bar, read on a worker thread and kept until Retain drops them. Posts changedMessage to target
-// whenever an icon arrives.
+// Window icons for every bar, read on a worker thread and kept until Retain drops them. Notifies changes whenever an icon
+// arrives.
 class WindowIcons {
   public:
-    WindowIcons(HWND target, UINT changedMessage);
+    explicit WindowIcons(ChangeSignal& changes);
 
     // The window's icon, or null while it is being read or when the window has none. The first ask queues the read.
     std::shared_ptr<const IconPixels> For(std::intptr_t window);
@@ -38,11 +39,10 @@ class WindowIcons {
     void Retain(const std::vector<std::intptr_t>& windows);
 
   private:
-    void       Read(std::intptr_t window);
+    void          Read(std::intptr_t window);
 
-    HWND       _target;
-    UINT       _changedMessage;
-    std::mutex _mutex; // guards _icons
+    ChangeSignal& _changes;
+    std::mutex    _mutex; // guards _icons
     // Null while the read is queued or when the window has no icon.
     std::map<std::intptr_t, std::shared_ptr<const IconPixels>> _icons;
     // Declared last so every member above exists before its thread starts, and it stops before they go.

@@ -2,7 +2,9 @@
 
 #include <windows.h>
 
-enum class Edge {
+#include <cstdint>
+
+enum class Edge : std::uint8_t {
     Top,
     Bottom,
     Left,

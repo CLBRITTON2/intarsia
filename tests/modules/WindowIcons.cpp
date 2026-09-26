@@ -74,7 +74,8 @@ TEST(WindowIcons, ReadsOnItsThreadAndForgetsWindowsRetainDrops) {
     const IconWindow window;
     HWND             target = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
     {
-        WindowIcons icons(target, kIconChanged);
+        ChangeSignal changes(target, kIconChanged);
+        WindowIcons  icons(changes);
         EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
         const std::shared_ptr<const IconPixels> pixels = WaitForIcon(icons, window.Get());
         ASSERT_NE(pixels, nullptr);

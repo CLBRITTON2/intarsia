@@ -34,7 +34,7 @@ enum class TilingDirection : std::uint8_t {
     Vertical
 };
 
-enum class Connection {
+enum class Connection : std::uint8_t {
     Connected,
     Disconnected
 };

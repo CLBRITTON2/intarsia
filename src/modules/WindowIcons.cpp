@@ -57,8 +57,7 @@ IconPixels IconToPixels(HICON icon) {
     return pixels;
 }
 
-WindowIcons::WindowIcons(HWND target, UINT changedMessage) :
-    _target(target), _changedMessage(changedMessage), _reader(kMaxQueuedReads, [this](const std::intptr_t& window) { Read(window); }) {}
+WindowIcons::WindowIcons(ChangeSignal& changes) : _changes(changes), _reader(kMaxQueuedReads, [this](const std::intptr_t& window) { Read(window); }) {}
 
 std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
     {
@@ -106,7 +105,5 @@ void WindowIcons::Read(std::intptr_t window) {
         }
         icon->second = std::move(pixels);
     }
-    if (!PostMessageW(_target, _changedMessage, 0, 0)) {
-        Log(LogLevel::Warning, "window_icons", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
-    }
+    _changes.Notify("window_icons");
 }

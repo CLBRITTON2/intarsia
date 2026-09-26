@@ -1,11 +1,13 @@
 #pragma once
 
 #include "config/Config.hpp"
+#include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
 
 #include <windows.h>
 
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -14,7 +16,7 @@
 #include <string_view>
 #include <thread>
 
-enum class CommandOutcome {
+enum class CommandOutcome : std::uint8_t {
     Pending, // the first run has not finished yet
     Succeeded,
     Failed
@@ -38,10 +40,10 @@ std::string_view FirstLine(std::string_view text);
 CommandResult ParseOutput(std::string_view output, CustomOutput format);
 
 // Runs a custom module's command on its own thread, first at once and then every interval, keeping the latest result
-// and posting changedMessage to target whenever it changes.
+// and notifying changes whenever it changes.
 class CommandPoller {
   public:
-    CommandPoller(std::string name, const CustomConfig& config, HWND target, UINT changedMessage);
+    CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes);
     // Kills a run in progress rather than waiting for it.
     ~CommandPoller();
     CommandPoller(const CommandPoller&)            = delete;
@@ -59,8 +61,7 @@ class CommandPoller {
     std::chrono::seconds _interval;
     std::chrono::seconds _timeout;
     CustomOutput         _output;
-    HWND                 _target;
-    UINT                 _changedMessage;
+    ChangeSignal&        _changes;
     UniqueHandle         _stopEvent;
     mutable std::mutex   _mutex;
     CommandResult        _result;
@@ -72,7 +73,7 @@ class CommandPoller {
 // there are.
 class CommandPollers {
   public:
-    CommandPollers(const Config& config, HWND target, UINT changedMessage);
+    CommandPollers(const Config& config, ChangeSignal& changes);
 
     // Throws std::logic_error for a name the config defines no custom module under.
     const CommandPoller& For(const std::string& name) const;

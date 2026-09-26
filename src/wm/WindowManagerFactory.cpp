@@ -6,10 +6,10 @@
 #include <format>
 #include <stdexcept>
 
-std::unique_ptr<IWindowManager> CreateWindowManager(WindowManagerKind kind, HWND target, UINT changedMessage) {
+std::unique_ptr<IWindowManager> CreateWindowManager(WindowManagerKind kind, ChangeSignal& changes, USHORT glazeWmPort) {
     switch (kind) {
-        case WindowManagerKind::Windows: return std::make_unique<Native>(target, changedMessage);
-        case WindowManagerKind::GlazeWm: return std::make_unique<GlazeWm>(target, changedMessage);
+        case WindowManagerKind::Windows: return std::make_unique<Native>(changes);
+        case WindowManagerKind::GlazeWm: return std::make_unique<GlazeWm>(changes, glazeWmPort);
     }
     throw std::invalid_argument(std::format("unknown window manager kind {}", static_cast<int>(kind)));
 }

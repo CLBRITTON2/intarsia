@@ -24,7 +24,7 @@ namespace {
 
     class WindowListModule : public testing::Test {
       public:
-        WindowListModule() : _target(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr)), _icons(_target, WM_APP + 1) {}
+        WindowListModule() : _target(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr)), _changes(_target, WM_APP + 1), _icons(_changes) {}
         ~WindowListModule() override {
             DestroyWindow(_target);
         }
@@ -33,6 +33,7 @@ namespace {
 
       protected:
         HWND              _target;
+        ChangeSignal      _changes;
         WindowIcons       _icons;
         FakeWindowManager _windowManager;
     };

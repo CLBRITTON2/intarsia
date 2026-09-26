@@ -109,9 +109,9 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format) {
     throw std::invalid_argument(std::format("unknown custom output {}", static_cast<int>(format)));
 }
 
-CommandPoller::CommandPoller(std::string name, const CustomConfig& config, HWND target, UINT changedMessage) :
-    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _target(target),
-    _changedMessage(changedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")),
+CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :
+    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _changes(changes),
+    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")),
     _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .detail = {}}, _thread([this] { Run(); }) {}
 
 CommandPoller::~CommandPoller() {
@@ -167,15 +167,13 @@ void CommandPoller::Publish(CommandResult result) {
     if (result.outcome == CommandOutcome::Failed) {
         Log(LogLevel::Warning, "custom", "command_failed", {{.key = "module", .value = _name}, {.key = "program", .value = program}, {.key = "reason", .value = result.detail}});
     }
-    if (!PostMessageW(_target, _changedMessage, 0, 0)) {
-        Log(LogLevel::Warning, "custom", "post_failed", {{.key = "module", .value = _name}, {.key = "error", .value = std::to_string(GetLastError())}});
-    }
+    _changes.Notify("custom");
 }
 
-CommandPollers::CommandPollers(const Config& config, HWND target, UINT changedMessage) {
+CommandPollers::CommandPollers(const Config& config, ChangeSignal& changes) {
     ForEachInSections(config.modules, [&](const ModuleInstance& instance) {
         if (instance.kind == ModuleKind::Custom && !_pollers.contains(instance.name)) {
-            _pollers.emplace(instance.name, std::make_unique<CommandPoller>(instance.name, std::get<CustomConfig>(instance.settings), target, changedMessage));
+            _pollers.emplace(instance.name, std::make_unique<CommandPoller>(instance.name, std::get<CustomConfig>(instance.settings), changes));
         }
     });
 }

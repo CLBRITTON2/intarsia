@@ -22,6 +22,15 @@ namespace {
         return static_cast<LONG>(std::ceil(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
     }
 
+    // The tooltip only shows what Show drew. WM_CLOSE (taskkill sends it to every top-level window) is ignored: the
+    // bar that owns the tooltip destroys it, and DefWindowProcW would leave the bar holding a dead handle.
+    LRESULT CALLBACK TooltipWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+        if (message == WM_CLOSE) {
+            return 0;
+        }
+        return DefWindowProcW(window, message, wParam, lParam);
+    }
+
     HWND CreateTooltipWindow(HINSTANCE instance) {
         HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, kWindowClass, L"intarsia tooltip", WS_POPUP, 0, 0, 0, 0,
                                       nullptr, nullptr, instance, nullptr);
@@ -54,11 +63,10 @@ RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
     return RECT{.left = left, .top = top, .right = left + size.cx, .bottom = top + size.cy};
 }
 
-// Messages go straight to DefWindowProcW: the tooltip only shows what Show drew.
 void Tooltip::RegisterWindowClass(HINSTANCE instance) {
     WNDCLASSEXW windowClass{};
     windowClass.cbSize        = sizeof(windowClass);
-    windowClass.lpfnWndProc   = DefWindowProcW;
+    windowClass.lpfnWndProc   = TooltipWindowProc;
     windowClass.hInstance     = instance;
     windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.lpszClassName = kWindowClass;

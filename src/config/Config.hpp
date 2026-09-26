@@ -7,6 +7,7 @@
 #include <d2d1.h>
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
@@ -14,7 +15,7 @@
 #include <variant>
 
 // Where the bar sits among other windows, as Waybar's layer option.
-enum class Layer {
+enum class Layer : std::uint8_t {
     Top,   // above other windows, lowered while a fullscreen app runs, as the taskbar does
     Bottom // below other windows, which can cover it
 };
@@ -41,12 +42,12 @@ struct ColorConfig {
     D2D1_COLOR_F alert; // for states that need attention, such as a disconnected window manager
 };
 
-enum class WindowManagerKind {
+enum class WindowManagerKind : std::uint8_t {
     Windows, // no window manager: the native backend reads windows and focus from Win32 events
     GlazeWm
 };
 
-enum class ModuleKind {
+enum class ModuleKind : std::uint8_t {
     Clock,
     Window,
     Workspaces,
@@ -99,7 +100,7 @@ struct TilingDirectionConfig {
 };
 
 // How a custom module reads what its command printed.
-enum class CustomOutput {
+enum class CustomOutput : std::uint8_t {
     Text, // the first line is the value
     Json  // one object: text, and optionally tooltip and alert, as Waybar's return-type json
 };

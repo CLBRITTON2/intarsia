@@ -1,4 +1,5 @@
 #include "App.hpp"
+#include "LaunchOptions.hpp"
 #include "config/Config.hpp"
 #include "platform/Log.hpp"
 #include "platform/Process.hpp"
@@ -7,10 +8,16 @@
 
 #include <exception>
 
+namespace {
+
+    constexpr USHORT kGlazeWmPort = 6123;
+
+} // namespace
+
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     try {
         RestrictDllSearchToSystem32();
-        App app(instance, DefaultConfigPath());
+        App app(instance, ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), kGlazeWmPort));
         return app.Run();
     } catch (const std::exception& error) {
         // stderr reaches a launching shell that redirected it, the message box covers a plain double-click.

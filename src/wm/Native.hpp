@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/ChangeSignal.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -15,7 +16,7 @@
 // instance may exist at a time: destroy the old one before creating its replacement.
 class Native final : public IWindowManager {
   public:
-    Native(HWND target, UINT changedMessage);
+    explicit Native(ChangeSignal& changes);
 
     std::optional<FocusedWindow> Focused() const override;
     // Windows has no public API that lists virtual desktops, so there are never any. The config loader rejects a
@@ -59,11 +60,9 @@ class Native final : public IWindowManager {
     static void CALLBACK OnWinEvent(HWINEVENTHOOK hook, DWORD event, HWND window, LONG object, LONG child, DWORD thread, DWORD time);
     void                 Refocus(HWND window);
     void                 Retitle();
-    void                 PostChanged() const;
 
     ActiveInstance       _active;
-    HWND                 _target;
-    UINT                 _changedMessage;
+    ChangeSignal&        _changes;
     HWND                 _foreground;
     std::wstring         _title;
     UniqueHook           _foregroundHook;

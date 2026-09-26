@@ -141,9 +141,14 @@ TEST(GlazeWmProtocol, AWorkspaceHoldingAnUnknownContainerIsAProtocolError) {
 }
 
 TEST(GlazeWmProtocol, DeeplyNestedSplitsDoNotOverflowTheStack) {
-    std::string nested = R"({"type":"window","id":"x","handle":1,"hasFocus":false})";
-    for (int depth = 0; depth < 20'000; ++depth) {
-        nested = R"({"type":"split","children":[)" + nested + "]}";
+    constexpr int kDepth = 20'000;
+    std::string   nested;
+    for (int depth = 0; depth < kDepth; ++depth) {
+        nested += R"({"type":"split","children":[)";
+    }
+    nested += R"({"type":"window","id":"x","handle":1,"hasFocus":false})";
+    for (int depth = 0; depth < kDepth; ++depth) {
+        nested += "]}";
     }
     const std::string response =
         R"({"messageType":"client_response","clientMessage":"query monitors","success":true,"error":null,"data":{"monitors":[{"type":"monitor","handle":1,)"

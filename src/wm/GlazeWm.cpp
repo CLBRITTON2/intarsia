@@ -13,7 +13,6 @@
 
 namespace {
 
-    constexpr INTERNET_PORT             kIpcPort = 6123;
     constexpr std::chrono::milliseconds kFirstRetry{2000};
     constexpr std::chrono::milliseconds kLongestRetry{10000};
     constexpr size_t                    kErrorExcerptBytes = 300;
@@ -24,8 +23,8 @@ namespace {
 
 } // namespace
 
-GlazeWm::GlazeWm(HWND target, UINT changedMessage) :
-    _native(target, changedMessage), _target(target), _changedMessage(changedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
+GlazeWm::GlazeWm(ChangeSignal& changes, INTERNET_PORT port) :
+    _native(changes), _port(port), _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
     _snapshot{.workspaces   = {},
               .windows      = {},
               .bindingModes = {},
@@ -114,7 +113,7 @@ void GlazeWm::QueueCommand(const std::function<std::string()>& makeCommand) {
     }
 }
 
-// Retries forever, as the owner chose: restarting GlazeWM must not take the bar down, and the modules show that it is
+// Retries forever: restarting GlazeWM must not take the bar down, and the modules show that it is
 // disconnected until it is back. Only the change from up to down is logged, and the wait backs off while it stays down.
 void GlazeWm::Receive() {
     std::chrono::milliseconds retry     = kFirstRetry;
@@ -156,10 +155,10 @@ void GlazeWm::Receive() {
 }
 
 void GlazeWm::Session() {
-    const auto socket = std::make_shared<WebSocket>(L"127.0.0.1", kIpcPort, L"/");
+    const auto socket = std::make_shared<WebSocket>(L"127.0.0.1", _port, L"/");
     // GlazeWM's IPC has no authentication, so whoever owns the listening port is checked before anything it says is
     // used: any process of any user could have bound 127.0.0.1:6123 while GlazeWM was down.
-    RequireSameUserProcess(LoopbackPeerProcess(socket->LocalPort(), kIpcPort), kImageName);
+    RequireSameUserProcess(LoopbackPeerProcess(socket->LocalPort(), _port), kImageName);
 
     // Published for the life of this connection so the sender and the destructor can reach it.
     struct Registration {
@@ -283,7 +282,5 @@ void GlazeWm::Publish(const Snapshot& snapshot) {
         }
         _snapshot = snapshot;
     }
-    if (!PostMessageW(_target, _changedMessage, 0, 0)) {
-        Log(LogLevel::Warning, "glazewm", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
-    }
+    _changes.Notify("glazewm");
 }

@@ -24,6 +24,9 @@ namespace {
     constexpr UINT kSourcesChanged = WM_APP + 4;
     // Editors save in several writes, so the reload waits until the file has been quiet this long.
     constexpr std::chrono::milliseconds kConfigSettle{100};
+    // How long a config that failed to load must stay unchanged before the failure ends the app.
+    constexpr UINT_PTR                  kConfigFailedTimer = 4;
+    constexpr std::chrono::milliseconds kConfigConfirm{1000};
     // Window manager changes arrive in bursts (a terminal can retitle itself many times a second), so redraws they
     // cause are held to one per frame.
     constexpr UINT_PTR kRedrawTimer   = 1;
@@ -100,12 +103,12 @@ namespace {
 
 } // namespace
 
-App::App(HINSTANCE instance, std::filesystem::path configPath) :
-    _instance(instance), _configPath(std::move(configPath)), _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()),
-    _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
+App::App(HINSTANCE instance, LaunchOptions options) :
+    _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _config(std::make_unique<Config>(LoadConfig(_configPath))),
+    _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged),
     _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
-    _windowManager(CreateWindowManager(_config->windowManager, _control, kSourcesChanged)), _commandPollers(std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged)),
-    _windowIcons(std::make_unique<WindowIcons>(_control, kSourcesChanged)) {
+    _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
+    _windowIcons(std::make_unique<WindowIcons>(_changes)) {
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
@@ -134,7 +137,7 @@ int App::Run() {
 
 LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-        case kConfigChanged: ReloadConfig(); return 0;
+        case kConfigChanged: HandleConfigChanged(); return 0;
         case kDeviceLost: HandleDeviceLost(); return 0;
         case kSourcesChanged:
             if (!_redrawPending) {
@@ -154,6 +157,7 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             if (wParam == kRedrawTimer) {
                 KillTimer(_control, kRedrawTimer);
                 _redrawPending = false;
+                _changes.Acknowledge();
                 _windowIcons->Retain(WindowHandles(_windowManager->Windows()));
                 for (const std::unique_ptr<Bar>& bar : _bars) {
                     bar->Refresh();
@@ -164,6 +168,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             } else if (wParam == kDeviceTimer) {
                 KillTimer(_control, kDeviceTimer);
                 RecreateDevice();
+            } else if (wParam == kConfigFailedTimer) {
+                KillTimer(_control, kConfigFailedTimer);
+                std::rethrow_exception(_configError);
             }
             return 0;
         case kWatcherFailed: {
@@ -175,6 +182,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             std::rethrow_exception(error);
         }
+        // taskkill sends WM_CLOSE to every top-level window, this hidden one included, and DefWindowProcW would destroy
+        // it. The bars' own WM_CLOSE can be lost when a reload replaces them first, so this one quits too.
+        case WM_CLOSE: PostQuitMessage(0); return 0;
         default: return DefWindowProcW(window, message, wParam, lParam);
     }
 }
@@ -200,7 +210,24 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
     }
 }
 
-// An invalid config throws before any bar is touched, and the error ends the app like a bad config at startup.
+// A config that fails to load leaves the running bars alone. The failure ends the app like a bad config at startup,
+// but only once the file has stayed unchanged for kConfigConfirm: a reload can read a file an editor is still writing
+// (truncated, not yet filled), and the next save supersedes that read.
+void App::HandleConfigChanged() {
+    KillTimer(_control, kConfigFailedTimer);
+    _configError = nullptr;
+    try {
+        ReloadConfig();
+    } catch (const ConfigError& error) {
+        Log(LogLevel::Warning, "app", "config_invalid", {{.key = "reason", .value = error.what()}, {.key = "fatal_in_ms", .value = std::to_string(kConfigConfirm.count())}});
+        _configError = std::current_exception();
+        if (SetTimer(_control, kConfigFailedTimer, static_cast<UINT>(kConfigConfirm.count()), nullptr) == 0) {
+            ThrowLastError("SetTimer(config failed)");
+        }
+    }
+}
+
+// Throws ConfigError, with no bar touched, when the config does not load.
 void App::ReloadConfig() {
     auto config = std::make_unique<Config>(LoadConfig(_configPath));
     _bars.clear();
@@ -208,8 +235,8 @@ void App::ReloadConfig() {
     // Reset before creating the replacement: the native backend allows one instance at a time.
     _windowManager.reset();
     _config         = std::move(config);
-    _windowManager  = CreateWindowManager(_config->windowManager, _control, kSourcesChanged);
-    _commandPollers = std::make_unique<CommandPollers>(*_config, _control, kSourcesChanged);
+    _windowManager  = CreateWindowManager(_config->windowManager, _changes, _glazeWmPort);
+    _commandPollers = std::make_unique<CommandPollers>(*_config, _changes);
     // A pending device recovery builds the bars from this config once it has a device.
     if (!_recovering) {
         CreateBars(PlacementsForAllMonitors());
