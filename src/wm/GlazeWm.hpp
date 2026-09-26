@@ -22,37 +22,50 @@ class GlazeWm final : public IWindowManager {
   public:
     GlazeWm(HWND target, UINT changedMessage);
     ~GlazeWm() override;
-    GlazeWm(const GlazeWm&)                                = delete;
-    GlazeWm&                     operator=(const GlazeWm&) = delete;
+    GlazeWm(const GlazeWm&)                                  = delete;
+    GlazeWm&                       operator=(const GlazeWm&) = delete;
 
-    std::optional<FocusedWindow> Focused() const override;
-    std::vector<Workspace>       Workspaces() const override;
-    std::vector<ManagedWindow>   Windows() const override;
-    WindowManagerStatus          Status() const override;
+    std::optional<FocusedWindow>   Focused() const override;
+    std::vector<Workspace>         Workspaces() const override;
+    std::vector<ManagedWindow>     Windows() const override;
+    std::vector<std::wstring>      BindingModes() const override;
+    std::optional<TilingDirection> Direction() const override;
+    WindowManagerStatus            Status() const override;
     // Queues the command for the sender. A name GlazeWM's parser cannot take safely is logged and dropped.
     void FocusWorkspace(const std::string& name) override;
     // Queues the command for the sender. An id that is not a UUID is logged and dropped.
     void FocusWindow(const std::string& id) override;
+    // Queues the command for the sender.
+    void ToggleTilingDirection() override;
 
   private:
+    // Everything the backend reports, replaced whole so readers never see half of one update.
+    struct Snapshot {
+        std::vector<Workspace>         workspaces;
+        std::vector<ManagedWindow>     windows;
+        std::vector<std::wstring>      bindingModes;
+        std::optional<TilingDirection> direction;
+        WindowManagerStatus            status;
+
+        bool                           operator==(const Snapshot&) const = default;
+    };
+
     void Receive();
     void Session();
     void SendCommand(const std::string& command);
     // Every send goes through here: WinHTTP fails a send while another one is pending.
     void SendSerialized(WebSocket& socket, std::string_view text);
-    void Publish(std::vector<Workspace> workspaces, std::vector<ManagedWindow> windows, WindowManagerStatus status);
+    void Publish(const Snapshot& snapshot);
     // Queues a command built by makeCommand, which throws ProtocolError for an argument GlazeWM cannot take.
-    void                       QueueCommand(const std::function<std::string()>& makeCommand);
+    void               QueueCommand(const std::function<std::string()>& makeCommand);
 
-    Native                     _native;
-    HWND                       _target;
-    UINT                       _changedMessage;
-    UniqueHandle               _stopEvent;
-    mutable std::mutex         _mutex; // guards the members below it up to _sendMutex
-    std::vector<Workspace>     _workspaces;
-    std::vector<ManagedWindow> _windows;
-    WindowManagerStatus        _status;
-    bool                       _stopping = false;
+    Native             _native;
+    HWND               _target;
+    UINT               _changedMessage;
+    UniqueHandle       _stopEvent;
+    mutable std::mutex _mutex; // guards the members below it up to _sendMutex
+    Snapshot           _snapshot;
+    bool               _stopping = false;
     // Shared so the sender or the destructor can still use the socket while the session that opened it is ending.
     std::shared_ptr<WebSocket> _socket;
     std::mutex                 _sendMutex;

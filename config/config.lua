@@ -23,17 +23,19 @@ return {
     },
 
     -- glazewm: workspaces and focus over GlazeWM's IPC, retried while GlazeWM is down
-    -- windows: no window manager, windows and focus come from Windows itself (no workspaces or windows module)
+    -- windows: no window manager, windows and focus come from Windows itself (no workspaces, windows, binding_mode or
+    -- tiling_direction module)
     window_manager = "glazewm",
 
     -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
     -- does not define, or a module no list shows, is an error.
-    modules_left = { "workspaces", "apps", "title" },
+    modules_left = { "workspaces", "mode", "apps", "title" },
     modules_center = { "date" },
-    modules_right = { "cpu", "memory" },
+    modules_right = { "tiling", "cpu", "memory" },
 
-    -- Each module has a name you choose and a type: clock, window, workspaces, windows, cpu, memory or custom. One
-    -- type can appear under several names with different settings, such as a second clock with its own format.
+    -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
+    -- tiling_direction, cpu, memory or custom. One type can appear under several names with different settings, such
+    -- as a second clock with its own format.
     --
     -- clock, window, cpu, memory and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
     -- commands: { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config
@@ -45,6 +47,10 @@ return {
         workspaces = { type = "workspaces" },
         -- An icon per window on the displayed workspace, at font.icon_size. Click one to focus it.
         apps = { type = "windows" },
+        -- The active binding modes' names in the accent color, nothing while none is active.
+        mode = { type = "binding_mode" },
+        -- The focused container's tiling direction. Click to flip it.
+        tiling = { type = "tiling_direction", horizontal = "↔", vertical = "↕" },
         title = {
             type = "window",
             max_length = 80, -- longer titles are cut with an ellipsis

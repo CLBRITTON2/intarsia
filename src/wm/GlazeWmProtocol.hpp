@@ -15,7 +15,13 @@
 // Everything the server sends is untrusted: errors quote at most a short escaped excerpt of it.
 namespace glazewm {
 
-    inline constexpr std::string_view kQueryMonitors = "query monitors";
+    inline constexpr std::string_view kQueryMonitors         = "query monitors";
+    inline constexpr std::string_view kQueryBindingModes     = "query binding-modes";
+    inline constexpr std::string_view kQueryTilingDirection  = "query tiling-direction";
+    inline constexpr std::string_view kToggleTilingDirection = "command toggle-tiling-direction";
+
+    inline constexpr std::string_view kBindingModesChanged    = "binding_modes_changed";
+    inline constexpr std::string_view kTilingDirectionChanged = "tiling_direction_changed";
 
     // The events that can change the workspace list, the windows on displayed workspaces, or focus. Subscribing to
     // these alone skips noisy ones like user_config_changed, which carries GlazeWM's whole config.
@@ -42,7 +48,8 @@ namespace glazewm {
         nlohmann::json data;
     };
 
-    // "sub --events focus_changed workspace_activated ...", for kWorkspaceEvents.
+    // "sub --events focus_changed workspace_activated ...", for kWorkspaceEvents and the binding mode and tiling
+    // direction events.
     std::string SubscribeCommand();
 
     // "command focus --workspace <name>". GlazeWM splits messages on whitespace with no quoting, so a name holding
@@ -64,7 +71,15 @@ namespace glazewm {
     // The windows on each monitor's displayed workspace in the same data, in tree order through any split containers.
     std::vector<ManagedWindow> WindowsFromMonitors(const nlohmann::json& data);
 
-    bool                       ChangesWorkspaces(std::string_view eventType);
+    // The display names of the active binding modes in the data of a "query binding-modes" response.
+    std::vector<std::wstring> BindingModesFromResponse(const nlohmann::json& data);
+
+    // The direction in the data of a "query tiling-direction" response.
+    TilingDirection TilingDirectionFromResponse(const nlohmann::json& data);
+
+    bool            ChangesWorkspaces(std::string_view eventType);
+    // Focus moving to another container changes the direction shown, as does flipping it.
+    bool ChangesTilingDirection(std::string_view eventType);
 
     // Keeps at most one query in flight: a burst of events costs one query, plus one more if events arrived while it
     // was out, instead of one per event.

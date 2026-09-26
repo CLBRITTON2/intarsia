@@ -28,6 +28,12 @@ struct ManagedWindow {
     bool          operator==(const ManagedWindow&) const = default;
 };
 
+// The axis new windows tile along in the focused container.
+enum class TilingDirection : std::uint8_t {
+    Horizontal,
+    Vertical
+};
+
 enum class Connection {
     Connected,
     Disconnected
@@ -51,10 +57,16 @@ class IWindowManager {
     virtual std::vector<Workspace>       Workspaces() const = 0;
     // The windows on every monitor's displayed workspace, in the manager's tiling order.
     virtual std::vector<ManagedWindow> Windows() const = 0;
-    virtual WindowManagerStatus        Status() const  = 0;
+    // The display names of the active binding modes, empty when none is active.
+    virtual std::vector<std::wstring> BindingModes() const = 0;
+    // The focused container's tiling direction, or nullopt when nothing focused has one.
+    virtual std::optional<TilingDirection> Direction() const = 0;
+    virtual WindowManagerStatus            Status() const    = 0;
 
     // Asks the manager to focus a workspace from Workspaces(). Returns at once: the result arrives as a change.
     virtual void FocusWorkspace(const std::string& name) = 0;
     // Asks the manager to focus a window from Windows(), the same way.
     virtual void FocusWindow(const std::string& id) = 0;
+    // Asks the manager to flip the focused container's tiling direction, the same way.
+    virtual void ToggleTilingDirection() = 0;
 };

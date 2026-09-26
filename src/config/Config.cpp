@@ -236,11 +236,13 @@ namespace {
         ModuleKind       kind;
     };
 
-    constexpr std::array<ModuleName, 7> kModuleNames{{
+    constexpr std::array<ModuleName, 9> kModuleNames{{
         {.name = "clock", .kind = ModuleKind::Clock},
         {.name = "window", .kind = ModuleKind::Window},
         {.name = "workspaces", .kind = ModuleKind::Workspaces},
         {.name = "windows", .kind = ModuleKind::Windows},
+        {.name = "binding_mode", .kind = ModuleKind::BindingMode},
+        {.name = "tiling_direction", .kind = ModuleKind::TilingDirection},
         {.name = "cpu", .kind = ModuleKind::Cpu},
         {.name = "memory", .kind = ModuleKind::Memory},
         {.name = "custom", .kind = ModuleKind::Custom},
@@ -280,7 +282,11 @@ namespace {
             case ModuleKind::Window: return ReadWindowConfig(module);
             case ModuleKind::Custom: return ReadCustomConfig(module);
             case ModuleKind::Workspaces:
-            case ModuleKind::Windows: module.RejectUnknownKeys({"type"}); return std::monostate{};
+            case ModuleKind::Windows:
+            case ModuleKind::BindingMode: module.RejectUnknownKeys({"type"}); return std::monostate{};
+            case ModuleKind::TilingDirection:
+                module.RejectUnknownKeys({"type", "horizontal", "vertical"});
+                return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
         }
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
     }
@@ -501,9 +507,10 @@ Config LoadConfig(const std::filesystem::path& path) {
 
     const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
-    for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"}}) {
+    for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"}, std::pair{ModuleKind::BindingMode, "binding_mode"},
+                                    std::pair{ModuleKind::TilingDirection, "tiling_direction"}}) {
         if (windowManager == WindowManagerKind::Windows && ListsModule(modules, kind)) {
-            throw root.Error(std::format("{} needs a window manager that has workspaces, window_manager 'windows' has none", name));
+            throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", name));
         }
     }
 

@@ -51,6 +51,8 @@ enum class ModuleKind {
     Window,
     Workspaces,
     Windows,
+    BindingMode,
+    TilingDirection,
     Cpu,
     Memory,
     Custom
@@ -80,6 +82,12 @@ struct WindowConfig {
     ModuleActions              actions;
 };
 
+// What the tiling_direction module shows for each direction, such as a Nerd Font arrow.
+struct TilingDirectionConfig {
+    std::wstring horizontal;
+    std::wstring vertical;
+};
+
 // How a custom module reads what its command printed.
 enum class CustomOutput {
     Text, // the first line is the value
@@ -94,8 +102,8 @@ struct CustomConfig {
     TextModuleConfig     text;
 };
 
-// The settings from a module's table: workspaces and windows have none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig>;
+// The settings from a module's table: workspaces, windows and binding_mode have none.
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {

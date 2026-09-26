@@ -23,12 +23,17 @@ class Native final : public IWindowManager {
     std::vector<Workspace> Workspaces() const override;
     // None, for the same reason: they belong to workspaces. The config loader rejects a windows module here too.
     std::vector<ManagedWindow> Windows() const override;
+    // None: binding modes and tiling belong to a tiling window manager. The config loader rejects their modules here.
+    std::vector<std::wstring>      BindingModes() const override;
+    std::optional<TilingDirection> Direction() const override;
     // Always connected: the WinEvents come from the OS itself.
     WindowManagerStatus Status() const override;
     // Throws std::logic_error: there are no workspaces to focus.
     void FocusWorkspace(const std::string& name) override;
     // Throws std::logic_error: there are no windows to focus.
     void FocusWindow(const std::string& id) override;
+    // Throws std::logic_error: nothing tiles.
+    void ToggleTilingDirection() override;
 
   private:
     // Registers the instance the callbacks reach for as long as it lives, and refuses a second one.

@@ -44,6 +44,14 @@ std::vector<ManagedWindow> Native::Windows() const {
     return {};
 }
 
+std::vector<std::wstring> Native::BindingModes() const {
+    return {};
+}
+
+std::optional<TilingDirection> Native::Direction() const {
+    return std::nullopt;
+}
+
 WindowManagerStatus Native::Status() const {
     return WindowManagerStatus{.name = L"Windows", .connection = Connection::Connected, .detail = ""};
 }
@@ -54,6 +62,10 @@ void Native::FocusWorkspace(const std::string& name) {
 
 void Native::FocusWindow(const std::string& id) {
     throw std::logic_error("the native backend lists no windows, cannot focus '" + id + "'");
+}
+
+void Native::ToggleTilingDirection() {
+    throw std::logic_error("the native backend does not tile, there is no tiling direction to toggle");
 }
 
 // process 0 hooks every process.

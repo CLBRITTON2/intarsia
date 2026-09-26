@@ -1,56 +1,12 @@
 #include "modules/Window.hpp"
 
-#include "platform/Errors.hpp"
-
-#include <dwrite.h>
-#include <wrl/client.h>
+#include "../wm/FakeWindowManager.hpp"
+#include "TextOnlyRender.hpp"
 
 #include <gtest/gtest.h>
 
 #include <optional>
 #include <string>
-#include <vector>
-
-namespace {
-
-    class FakeWindowManager final : public IWindowManager {
-      public:
-        std::optional<FocusedWindow> focused;
-
-        std::optional<FocusedWindow> Focused() const override {
-            return focused;
-        }
-        std::vector<Workspace> Workspaces() const override {
-            return {};
-        }
-        std::vector<ManagedWindow> Windows() const override {
-            return {};
-        }
-        WindowManagerStatus Status() const override {
-            return WindowManagerStatus{.name = L"fake", .connection = Connection::Connected, .detail = ""};
-        }
-        void FocusWorkspace(const std::string&) override {}
-        void FocusWindow(const std::string&) override {}
-    };
-
-    // Enough to lay text out: nothing here draws, so there is no device context or brush.
-    struct TextOnlyRender {
-        Microsoft::WRL::ComPtr<IDWriteFactory>    dwrite;
-        Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
-
-        TextOnlyRender() {
-            ThrowIfFailed(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), &dwrite), "DWriteCreateFactory");
-            ThrowIfFailed(dwrite->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"en-us", &format),
-                          "CreateTextFormat");
-        }
-
-        RenderContext Context() const {
-            return RenderContext{
-                .context = nullptr, .dwrite = dwrite.Get(), .textFormat = format.Get(), .foreground = nullptr, .accent = nullptr, .alert = nullptr, .iconSizeDips = 12.0f};
-        }
-    };
-
-} // namespace
 
 TEST(Window, LayoutReportsAChangeOnlyWhenTheTitleChanges) {
     FakeWindowManager    windowManager;

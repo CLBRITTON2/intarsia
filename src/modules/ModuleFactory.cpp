@@ -1,8 +1,10 @@
 #include "modules/ModuleFactory.hpp"
 
+#include "modules/BindingModes.hpp"
 #include "modules/Clock.hpp"
 #include "modules/Cpu.hpp"
 #include "modules/Custom.hpp"
+#include "modules/DirectionToggle.hpp"
 #include "modules/Memory.hpp"
 #include "modules/Window.hpp"
 #include "modules/WindowList.hpp"
@@ -31,6 +33,8 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Window: return std::make_unique<Window>(RequireSettings<WindowConfig>(instance), sources.windowManager);
         case ModuleKind::Workspaces: return std::make_unique<Workspaces>(sources.windowManager, sources.monitor);
         case ModuleKind::Windows: return std::make_unique<WindowList>(sources.windowManager, sources.windowIcons, sources.monitor);
+        case ModuleKind::BindingMode: return std::make_unique<BindingModes>(sources.windowManager);
+        case ModuleKind::TilingDirection: return std::make_unique<DirectionToggle>(RequireSettings<TilingDirectionConfig>(instance), sources.windowManager);
         case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));

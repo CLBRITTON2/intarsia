@@ -178,7 +178,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, cpu, memory"));
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -205,7 +205,7 @@ TEST(Config, WindowManagerMustBeAKnownBackend) {
 
 TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
     const std::string onWindows = WithRightModules(R"({ "desktops" })", R"(        desktops = { type = "workspaces" },)");
-    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("window_manager 'windows' has none"));
+    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("window_manager 'windows' is none"));
 
     const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
     const Config      config    = LoadText(onGlazeWm);
@@ -217,12 +217,24 @@ TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
 
 TEST(Config, WindowsNeedAWindowManagerWithWorkspaces) {
     const std::string onWindows = WithRightModules(R"({ "apps" })", R"(        apps = { type = "windows" },)");
-    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("windows needs a window manager that has workspaces"));
+    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("windows needs a tiling window manager"));
 
     const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
     EXPECT_EQ(Kinds(LoadText(onGlazeWm).modules.right), std::vector<ModuleKind>{ModuleKind::Windows});
     EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(type = "windows")", R"(type = "windows", icon_size = 2)")); },
                 ConfigErrorWith("modules.apps.icon_size is not a known key"));
+}
+
+TEST(Config, BindingModeAndTilingDirectionParseOnATilingWindowManager) {
+    const std::string onWindows = WithRightModules(R"({ "mode", "tiling" })", R"(        mode = { type = "binding_mode" },
+        tiling = { type = "tiling_direction", horizontal = "H", vertical = "V" },)");
+    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("binding_mode needs a tiling window manager"));
+
+    const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
+    const Config      config    = LoadText(onGlazeWm);
+    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::BindingMode, ModuleKind::TilingDirection}));
+    EXPECT_EQ(SettingsOf<TilingDirectionConfig>(config.modules.right, 1).vertical, L"V");
+    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(horizontal = "H", )", "")); }, ConfigErrorWith("modules.tiling.horizontal is missing"));
 }
 
 TEST(Config, WindowModuleNeedsAWholeMaxLength) {

@@ -75,12 +75,17 @@ namespace glazewm {
             return true;
         }
 
+        // The display name when there is a non-empty one, else the name: workspaces and binding modes both have both.
+        std::wstring DisplayLabel(const nlohmann::json& object, std::string_view context) {
+            const nlohmann::json& displayName = Field(object, "displayName", context);
+            return ToWide(displayName.is_string() && !displayName.get<std::string>().empty() ? displayName.get<std::string>() : StringField(object, "name", context));
+        }
+
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {
-            const nlohmann::json& displayName = Field(workspace, "displayName", "workspace");
-            const std::string     label =
-                displayName.is_string() && !displayName.get<std::string>().empty() ? displayName.get<std::string>() : StringField(workspace, "name", "workspace");
-            return Workspace{
-                .label = ToWide(label), .name = StringField(workspace, "name", "workspace"), .focused = BoolField(workspace, "hasFocus", "workspace"), .monitor = monitor};
+            return Workspace{.label   = DisplayLabel(workspace, "workspace"),
+                             .name    = StringField(workspace, "name", "workspace"),
+                             .focused = BoolField(workspace, "hasFocus", "workspace"),
+                             .monitor = monitor};
         }
 
     } // namespace
@@ -88,6 +93,10 @@ namespace glazewm {
     std::string SubscribeCommand() {
         std::string command = "sub --events";
         for (const std::string_view event : kWorkspaceEvents) {
+            command += ' ';
+            command += event;
+        }
+        for (const std::string_view event : {kBindingModesChanged, kTilingDirectionChanged}) {
             command += ' ';
             command += event;
         }
@@ -191,8 +200,31 @@ namespace glazewm {
         return windows;
     }
 
+    std::vector<std::wstring> BindingModesFromResponse(const nlohmann::json& data) {
+        std::vector<std::wstring> modes;
+        for (const nlohmann::json& mode : ArrayField(data, "bindingModes", "binding modes response")) {
+            modes.push_back(DisplayLabel(mode, "binding mode"));
+        }
+        return modes;
+    }
+
+    TilingDirection TilingDirectionFromResponse(const nlohmann::json& data) {
+        const std::string direction = StringField(data, "tilingDirection", "tiling direction response");
+        if (direction == "horizontal") {
+            return TilingDirection::Horizontal;
+        }
+        if (direction == "vertical") {
+            return TilingDirection::Vertical;
+        }
+        throw ProtocolError(std::format("GlazeWM sent an unknown tiling direction \"{}\"", LogExcerpt(direction, kExcerptBytes)));
+    }
+
     bool ChangesWorkspaces(std::string_view eventType) {
         return std::ranges::find(kWorkspaceEvents, eventType) != kWorkspaceEvents.end();
+    }
+
+    bool ChangesTilingDirection(std::string_view eventType) {
+        return eventType == kTilingDirectionChanged || eventType == "focus_changed" || eventType == "focused_container_moved";
     }
 
     bool QueryGate::RequestQuery() {

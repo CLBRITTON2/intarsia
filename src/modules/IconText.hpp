@@ -19,6 +19,19 @@ struct IconText {
 // there is no icon.
 IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text, ID2D1Brush* textBrush);
 
+// One line of text, laid out again only when the text changes. The brush is the bar's and stays the same.
+class TextLine {
+  public:
+    // Whether the text differs from the last update's.
+    bool        Update(const RenderContext& render, std::wstring text, ID2D1Brush* brush);
+    D2D1_SIZE_F Size() const;
+    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
+
+  private:
+    std::wstring _shown; // what _text holds, once it has a layout
+    IconText     _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}};
+};
+
 template <typename Value>
 std::string FormatValue(const std::string& format, Value value) {
     return std::vformat(format, std::make_format_args(value));

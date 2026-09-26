@@ -26,7 +26,11 @@ namespace {
 
 GlazeWm::GlazeWm(HWND target, UINT changedMessage) :
     _native(target, changedMessage), _target(target), _changedMessage(changedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
-    _status{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"},
+    _snapshot{.workspaces   = {},
+              .windows      = {},
+              .bindingModes = {},
+              .direction    = std::nullopt,
+              .status       = WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"}},
     _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands, [this](const std::string& command) { SendCommand(command); })), _receiver([this] { Receive(); }) {}
 
 // Stops the sender first so no send is pending, then closes the socket: WinHttpWebSocketClose cancels the receiver's
@@ -58,17 +62,27 @@ std::optional<FocusedWindow> GlazeWm::Focused() const {
 
 std::vector<Workspace> GlazeWm::Workspaces() const {
     const std::scoped_lock lock(_mutex);
-    return _workspaces;
+    return _snapshot.workspaces;
 }
 
 std::vector<ManagedWindow> GlazeWm::Windows() const {
     const std::scoped_lock lock(_mutex);
-    return _windows;
+    return _snapshot.windows;
+}
+
+std::vector<std::wstring> GlazeWm::BindingModes() const {
+    const std::scoped_lock lock(_mutex);
+    return _snapshot.bindingModes;
+}
+
+std::optional<TilingDirection> GlazeWm::Direction() const {
+    const std::scoped_lock lock(_mutex);
+    return _snapshot.direction;
 }
 
 WindowManagerStatus GlazeWm::Status() const {
     const std::scoped_lock lock(_mutex);
-    return _status;
+    return _snapshot.status;
 }
 
 void GlazeWm::FocusWorkspace(const std::string& name) {
@@ -77,6 +91,10 @@ void GlazeWm::FocusWorkspace(const std::string& name) {
 
 void GlazeWm::FocusWindow(const std::string& id) {
     QueueCommand([&id] { return glazewm::FocusWindowCommand(id); });
+}
+
+void GlazeWm::ToggleTilingDirection() {
+    QueueCommand([] { return std::string(glazewm::kToggleTilingDirection); });
 }
 
 void GlazeWm::QueueCommand(const std::function<std::string()>& makeCommand) {
@@ -107,7 +125,7 @@ void GlazeWm::Receive() {
                 if (_stopping) {
                     return;
                 }
-                wasConnected = _status.connection == Connection::Connected;
+                wasConnected = _snapshot.status.connection == Connection::Connected;
             }
             if (wasConnected) {
                 retry     = kFirstRetry;
@@ -120,7 +138,11 @@ void GlazeWm::Receive() {
                      {.key = "max_retry_ms", .value = std::to_string(kLongestRetry.count())}});
                 loggedOut = true;
             }
-            Publish({}, {}, WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = error.what()});
+            Publish(Snapshot{.workspaces   = {},
+                             .windows      = {},
+                             .bindingModes = {},
+                             .direction    = std::nullopt,
+                             .status       = WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = error.what()}});
         }
         if (WaitForSingleObject(_stopEvent.get(), static_cast<DWORD>(retry.count())) == WAIT_OBJECT_0) {
             return;
@@ -155,32 +177,71 @@ void GlazeWm::Session() {
     const Registration registration(*this, socket);
     Log(LogLevel::Info, "glazewm", "connected", {});
 
-    glazewm::QueryGate gate;
+    glazewm::QueryGate monitorsGate;
+    glazewm::QueryGate bindingModesGate;
+    glazewm::QueryGate directionGate;
+    const auto         ask = [this, &socket](glazewm::QueryGate& gate, std::string_view query) {
+        if (gate.RequestQuery()) {
+            SendSerialized(*socket, query);
+        }
+    };
+    const auto answered = [this, &socket](glazewm::QueryGate& gate, std::string_view query) {
+        if (gate.Answered()) {
+            SendSerialized(*socket, query);
+        }
+    };
+
+    Snapshot current{.workspaces   = {},
+                     .windows      = {},
+                     .bindingModes = {},
+                     .direction    = std::nullopt,
+                     .status       = WindowManagerStatus{.name = kName, .connection = Connection::Connected, .detail = ""}};
     SendSerialized(*socket, glazewm::SubscribeCommand());
-    if (gate.RequestQuery()) {
-        SendSerialized(*socket, glazewm::kQueryMonitors);
-    }
+    ask(monitorsGate, glazewm::kQueryMonitors);
+    ask(bindingModesGate, glazewm::kQueryBindingModes);
+    ask(directionGate, glazewm::kQueryTilingDirection);
     while (true) {
-        const glazewm::ServerMessage message = glazewm::ParseServerMessage(socket->Receive());
+        const glazewm::ServerMessage message  = glazewm::ParseServerMessage(socket->Receive());
+        const bool                   response = message.kind == glazewm::MessageKind::Response;
         if (!message.success) {
             // A rejected command (a workspace that closed just before the click) is that command's failure alone.
-            if (message.kind == glazewm::MessageKind::Response && glazewm::IsCommand(message.clientMessage)) {
+            if (response && glazewm::IsCommand(message.clientMessage)) {
                 Log(LogLevel::Warning, "glazewm", "command_failed", {{.key = "command", .value = message.clientMessage}, {.key = "reason", .value = message.error}});
+                continue;
+            }
+            // GlazeWM answers "No direction container." while nothing focused has a direction: there is none to show.
+            if (response && message.clientMessage == glazewm::kQueryTilingDirection) {
+                current.direction = std::nullopt;
+                Publish(current);
+                answered(directionGate, glazewm::kQueryTilingDirection);
                 continue;
             }
             throw glazewm::ProtocolError(
                 std::format("GlazeWM rejected \"{}\": {}", LogExcerpt(message.clientMessage, kErrorExcerptBytes), LogExcerpt(message.error, kErrorExcerptBytes)));
         }
-        if (message.kind == glazewm::MessageKind::Event && glazewm::ChangesWorkspaces(message.eventType)) {
-            if (gate.RequestQuery()) {
-                SendSerialized(*socket, glazewm::kQueryMonitors);
+        if (!response) {
+            if (glazewm::ChangesWorkspaces(message.eventType)) {
+                ask(monitorsGate, glazewm::kQueryMonitors);
             }
-        } else if (message.kind == glazewm::MessageKind::Response && message.clientMessage == glazewm::kQueryMonitors) {
-            Publish(glazewm::WorkspacesFromMonitors(message.data), glazewm::WindowsFromMonitors(message.data),
-                    WindowManagerStatus{.name = kName, .connection = Connection::Connected, .detail = ""});
-            if (gate.Answered()) {
-                SendSerialized(*socket, glazewm::kQueryMonitors);
+            if (message.eventType == glazewm::kBindingModesChanged) {
+                ask(bindingModesGate, glazewm::kQueryBindingModes);
             }
+            if (glazewm::ChangesTilingDirection(message.eventType)) {
+                ask(directionGate, glazewm::kQueryTilingDirection);
+            }
+        } else if (message.clientMessage == glazewm::kQueryMonitors) {
+            current.workspaces = glazewm::WorkspacesFromMonitors(message.data);
+            current.windows    = glazewm::WindowsFromMonitors(message.data);
+            Publish(current);
+            answered(monitorsGate, glazewm::kQueryMonitors);
+        } else if (message.clientMessage == glazewm::kQueryBindingModes) {
+            current.bindingModes = glazewm::BindingModesFromResponse(message.data);
+            Publish(current);
+            answered(bindingModesGate, glazewm::kQueryBindingModes);
+        } else if (message.clientMessage == glazewm::kQueryTilingDirection) {
+            current.direction = glazewm::TilingDirectionFromResponse(message.data);
+            Publish(current);
+            answered(directionGate, glazewm::kQueryTilingDirection);
         }
     }
 }
@@ -210,15 +271,13 @@ void GlazeWm::SendSerialized(WebSocket& socket, std::string_view text) {
 }
 
 // Posts only when something changed: many events, such as a window resized, leave what the bar shows as it was.
-void GlazeWm::Publish(std::vector<Workspace> workspaces, std::vector<ManagedWindow> windows, WindowManagerStatus status) {
+void GlazeWm::Publish(const Snapshot& snapshot) {
     {
         const std::scoped_lock lock(_mutex);
-        if (workspaces == _workspaces && windows == _windows && status == _status) {
+        if (snapshot == _snapshot) {
             return;
         }
-        _workspaces = std::move(workspaces);
-        _windows    = std::move(windows);
-        _status     = std::move(status);
+        _snapshot = snapshot;
     }
     if (!PostMessageW(_target, _changedMessage, 0, 0)) {
         Log(LogLevel::Warning, "glazewm", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});

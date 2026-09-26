@@ -1,5 +1,6 @@
 #include "modules/WindowList.hpp"
 
+#include "../wm/FakeWindowManager.hpp"
 #include "render/Graphics.hpp"
 
 #include <gtest/gtest.h>
@@ -9,29 +10,6 @@
 #include <vector>
 
 namespace {
-
-    class FakeWindowManager final : public IWindowManager {
-      public:
-        std::vector<ManagedWindow>   windows;
-        std::string                  focusedId;
-
-        std::optional<FocusedWindow> Focused() const override {
-            return std::nullopt;
-        }
-        std::vector<Workspace> Workspaces() const override {
-            return {};
-        }
-        std::vector<ManagedWindow> Windows() const override {
-            return windows;
-        }
-        WindowManagerStatus Status() const override {
-            return WindowManagerStatus{.name = L"fake", .connection = Connection::Connected, .detail = ""};
-        }
-        void FocusWorkspace(const std::string&) override {}
-        void FocusWindow(const std::string& id) override {
-            focusedId = id;
-        }
-    };
 
     // Handles no window has, so every icon read finds nothing and no bitmap is ever made.
     const std::vector<ManagedWindow> kWindows{
@@ -151,9 +129,9 @@ TEST_F(WindowListModule, ClickFocusesTheWindowUnderIt) {
     _windowManager.windows = kWindows;
     module.Layout(NoDrawing());
     module.Click(D2D1::Point2F(35.0f, 5.0f));
-    EXPECT_EQ(_windowManager.focusedId, "b");
+    EXPECT_EQ(_windowManager.focusedWindow, "b");
 
-    _windowManager.focusedId.clear();
+    _windowManager.focusedWindow.clear();
     module.Click(D2D1::Point2F(25.0f, 5.0f));
-    EXPECT_TRUE(_windowManager.focusedId.empty());
+    EXPECT_TRUE(_windowManager.focusedWindow.empty());
 }

@@ -96,7 +96,31 @@ TEST(GlazeWmProtocol, OnlyWorkspaceAndFocusEventsTriggerARequery) {
 TEST(GlazeWmProtocol, SubscribesToExactlyTheWorkspaceEvents) {
     EXPECT_EQ(glazewm::SubscribeCommand(),
               "sub --events focus_changed workspace_activated workspace_deactivated workspace_updated monitor_added monitor_removed monitor_updated window_managed "
-              "window_unmanaged focused_container_moved");
+              "window_unmanaged focused_container_moved binding_modes_changed tiling_direction_changed");
+}
+
+TEST(GlazeWmProtocol, BindingModesPreferTheDisplayName) {
+    const glazewm::ServerMessage message =
+        glazewm::ParseServerMessage(R"({"messageType":"client_response","clientMessage":"query binding-modes","success":true,"error":null,"data":{"bindingModes":[)"
+                                    R"({"name":"resize","displayName":null,"keybindings":[]},{"name":"pause","displayName":"Paused","keybindings":[]}]}})");
+    EXPECT_EQ(glazewm::BindingModesFromResponse(message.data), (std::vector<std::wstring>{L"resize", L"Paused"}));
+}
+
+TEST(GlazeWmProtocol, TilingDirectionIsHorizontalOrVertical) {
+    const auto direction = [](std::string_view value) {
+        return glazewm::TilingDirectionFromResponse(nlohmann::json{{"tilingDirection", value}, {"directionContainer", nlohmann::json::object()}});
+    };
+    EXPECT_EQ(direction("horizontal"), TilingDirection::Horizontal);
+    EXPECT_EQ(direction("vertical"), TilingDirection::Vertical);
+    EXPECT_THROW(direction("diagonal"), glazewm::ProtocolError);
+}
+
+TEST(GlazeWmProtocol, FocusAndDirectionEventsRequeryTheDirection) {
+    EXPECT_TRUE(glazewm::ChangesTilingDirection("tiling_direction_changed"));
+    EXPECT_TRUE(glazewm::ChangesTilingDirection("focus_changed"));
+    EXPECT_TRUE(glazewm::ChangesTilingDirection("focused_container_moved"));
+    EXPECT_FALSE(glazewm::ChangesTilingDirection("binding_modes_changed"));
+    EXPECT_FALSE(glazewm::ChangesWorkspaces("binding_modes_changed"));
 }
 
 TEST(GlazeWmProtocol, WindowsComeFromDisplayedWorkspacesInTreeOrderThroughSplits) {

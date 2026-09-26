@@ -24,8 +24,7 @@ class Window final : public IModule {
   private:
     WindowConfig          _config;
     const IWindowManager& _windowManager;
-    std::wstring          _shown; // what _text holds, once it has a layout
-    IconText              _text;
+    TextLine              _line;
 };
 
 // title cut to at most maxLength UTF-16 code units, ending in an ellipsis when cut. Never splits a surrogate pair.

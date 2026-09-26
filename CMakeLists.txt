@@ -37,12 +37,14 @@ add_library(intarsia_core STATIC
   src/bar/Layout.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
+  src/modules/BindingModes.cpp
   src/modules/Clock.cpp
   src/modules/Cpu.cpp
   src/modules/IconText.cpp
   src/modules/Memory.cpp
   src/modules/CommandPoller.cpp
   src/modules/Custom.cpp
+  src/modules/DirectionToggle.cpp
   src/modules/ModuleFactory.cpp
   src/modules/TextModule.cpp
   src/modules/Ticks.cpp
@@ -96,9 +98,11 @@ if(BUILD_TESTING)
     tests/bar/Sections.cpp
     tests/bar/Tooltip.cpp
     tests/config/Config.cpp
+    tests/modules/BindingModes.cpp
     tests/modules/Clock.cpp
     tests/modules/CommandPoller.cpp
     tests/modules/Cpu.cpp
+    tests/modules/DirectionToggle.cpp
     tests/modules/Memory.cpp
     tests/modules/Ticks.cpp
     tests/modules/Window.cpp

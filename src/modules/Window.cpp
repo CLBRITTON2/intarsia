@@ -14,8 +14,7 @@ namespace {
 
 } // namespace
 
-Window::Window(WindowConfig config, const IWindowManager& windowManager) :
-    _config(std::move(config)), _windowManager(windowManager), _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {
+Window::Window(WindowConfig config, const IWindowManager& windowManager) : _config(std::move(config)), _windowManager(windowManager) {
     if (_config.tooltip.has_value()) {
         RequireFormat("window tooltip", *_config.tooltip, std::string());
     }
@@ -23,21 +22,15 @@ Window::Window(WindowConfig config, const IWindowManager& windowManager) :
 
 bool Window::Layout(const RenderContext& render) {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
-    std::wstring                       title   = focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring();
-    if (_text.layout != nullptr && title == _shown) {
-        return false;
-    }
-    _text  = LayOutIconText(render, L"", title, render.foreground);
-    _shown = std::move(title);
-    return true;
+    return _line.Update(render, focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring(), render.foreground);
 }
 
 D2D1_SIZE_F Window::Size() const {
-    return _text.size;
+    return _line.Size();
 }
 
 void Window::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
+    _line.Draw(render, origin);
 }
 
 std::optional<UINT> Window::MillisecondsUntilChange() const {
