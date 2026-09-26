@@ -348,8 +348,49 @@ namespace {
         return Command{.program = *program, .arguments = std::move(arguments)};
     }
 
-    std::optional<Command> ReadAction(const TableReader& module, std::string_view key) {
-        return module.Has(key) ? std::optional<Command>(ReadCommand(module, key)) : std::nullopt;
+    // One line of text: a line break or other control character would reach the window manager's command parser.
+    WindowManagerCommand ReadWindowManagerCommand(const TableReader& action) {
+        action.RejectUnknownKeys({"window_manager"});
+        std::string text    = action.String("window_manager");
+        const bool  control = std::ranges::any_of(text, [](char character) {
+            const auto byte = static_cast<unsigned char>(character);
+            return byte < 0x20u || byte == 0x7Fu;
+        });
+        if (text.empty() || control) {
+            throw action.Error(std::format("{} must be a command on one line, as \"focus --next-workspace\"", action.KeyPath("window_manager")));
+        }
+        return WindowManagerCommand{.text = std::move(text)};
+    }
+
+    // { window_manager = "..." } sends the window manager a command, and a list starts a program.
+    std::optional<ModuleAction> ReadAction(const TableReader& module, std::string_view key) {
+        if (!module.Has(key)) {
+            return std::nullopt;
+        }
+        const TableReader action = module.Table(key);
+        if (action.Has("window_manager")) {
+            return ModuleAction(ReadWindowManagerCommand(action));
+        }
+        return ModuleAction(ReadCommand(module, key));
+    }
+
+    bool SendsWindowManagerCommands(const ModuleActions& actions) {
+        return std::ranges::any_of(std::array{&actions.click, &actions.rightClick, &actions.scrollUp, &actions.scrollDown},
+                                   [](const std::optional<ModuleAction>* action) { return action->has_value() && std::holds_alternative<WindowManagerCommand>(**action); });
+    }
+
+    // The actions in a module's settings, or null for a module that takes none.
+    const ModuleActions* ActionsOf(const ModuleSettings& settings) {
+        if (const auto* text = std::get_if<TextModuleConfig>(&settings)) {
+            return &text->actions;
+        }
+        if (const auto* window = std::get_if<WindowConfig>(&settings)) {
+            return &window->actions;
+        }
+        if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
+            return &custom->text.actions;
+        }
+        return nullptr;
     }
 
     ModuleActions ReadActions(const TableReader& module) {
@@ -512,6 +553,13 @@ Config LoadConfig(const std::filesystem::path& path) {
         if (windowManager == WindowManagerKind::Windows && ListsModule(modules, kind)) {
             throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", name));
         }
+    }
+    const bool sendsCommands = AnyInSections(modules, [](const ModuleInstance& instance) {
+        const ModuleActions* actions = ActionsOf(instance.settings);
+        return actions != nullptr && SendsWindowManagerCommands(*actions);
+    });
+    if (windowManager == WindowManagerKind::Windows && sendsCommands) {
+        throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
     }
 
     return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig, .windowManager = windowManager, .modules = modules};

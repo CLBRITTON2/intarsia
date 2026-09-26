@@ -38,8 +38,10 @@ return {
     -- as a second clock with its own format.
     --
     -- clock, window, cpu, memory and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
-    -- commands: { program, arguments... }. The program must be an .exe (absolute, or found on PATH when the config
-    -- loads), and it starts without a shell, so arguments reach it exactly as written.
+    -- actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
+    -- config loads), and it starts without a shell, so arguments reach it exactly as written.
+    -- { window_manager = "focus --next-workspace" } sends the window manager a command in its own syntax instead,
+    -- without starting a process (glazewm only).
     --
     -- They also take an optional tooltip: a second format for the same value, shown while the cursor rests on the
     -- module. The workspaces module shows why the window manager is disconnected, with no key needed.

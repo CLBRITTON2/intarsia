@@ -59,6 +59,10 @@ namespace glazewm {
     // "command focus --container-id <id>". Throws ProtocolError unless id is a UUID, the only form GlazeWM gives ids in.
     std::string FocusWindowCommand(std::string_view id);
 
+    // "command <command>", for a command from the config written in GlazeWM's own syntax. Throws ProtocolError when it
+    // is empty or holds a control character.
+    std::string CommandMessage(std::string_view command);
+
     // Whether a response answers a command, whose failure is the command's own and leaves the connection usable.
     bool IsCommand(std::string_view clientMessage);
 

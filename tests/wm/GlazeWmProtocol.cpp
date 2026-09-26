@@ -152,6 +152,13 @@ TEST(GlazeWmProtocol, DeeplyNestedSplitsDoNotOverflowTheStack) {
     EXPECT_EQ(glazewm::WindowsFromMonitors(glazewm::ParseServerMessage(response).data).size(), 1u);
 }
 
+TEST(GlazeWmProtocol, CommandMessageSendsAConfigCommandAsWritten) {
+    EXPECT_EQ(glazewm::CommandMessage("focus --next-workspace"), "command focus --next-workspace");
+    EXPECT_TRUE(glazewm::IsCommand(glazewm::CommandMessage("focus --next-workspace")));
+    EXPECT_THROW(glazewm::CommandMessage(""), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::CommandMessage("focus\n--workspace 2"), glazewm::ProtocolError);
+}
+
 TEST(GlazeWmProtocol, FocusWindowCommandAddressesTheContainerById) {
     EXPECT_EQ(glazewm::FocusWindowCommand(kFirstWindowId), std::string("command focus --container-id ") + kFirstWindowId);
     EXPECT_TRUE(glazewm::IsCommand(glazewm::FocusWindowCommand(kFirstWindowId)));

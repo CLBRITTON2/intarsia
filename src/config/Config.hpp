@@ -58,13 +58,23 @@ enum class ModuleKind {
     Custom
 };
 
-// What a module runs for each input, from the optional on_click, on_right_click, on_scroll_up and on_scroll_down keys.
-// An input with a command replaces the module's own handling of it.
+// A command sent to the window manager as it is written, such as "focus --next-workspace" for GlazeWM.
+struct WindowManagerCommand {
+    std::string text;
+
+    bool        operator==(const WindowManagerCommand&) const = default;
+};
+
+// What an input does: start a program, or send the window manager a command.
+using ModuleAction = std::variant<Command, WindowManagerCommand>;
+
+// What a module does for each input, from the optional on_click, on_right_click, on_scroll_up and on_scroll_down
+// keys. An input with an action replaces the module's own handling of it.
 struct ModuleActions {
-    std::optional<Command> click;
-    std::optional<Command> rightClick;
-    std::optional<Command> scrollUp;
-    std::optional<Command> scrollDown;
+    std::optional<ModuleAction> click;
+    std::optional<ModuleAction> rightClick;
+    std::optional<ModuleAction> scrollUp;
+    std::optional<ModuleAction> scrollDown;
 };
 
 // A module that shows an icon and one formatted value, redrawn every interval: clock, cpu, memory.

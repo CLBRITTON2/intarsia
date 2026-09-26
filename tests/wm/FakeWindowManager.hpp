@@ -17,6 +17,7 @@ class FakeWindowManager final : public IWindowManager {
     std::string                    focusedWorkspace;
     std::string                    focusedWindow;
     int                            directionToggles = 0;
+    std::vector<std::string>       commands;
 
     std::optional<FocusedWindow>   Focused() const override {
         return focused;
@@ -44,5 +45,8 @@ class FakeWindowManager final : public IWindowManager {
     }
     void ToggleTilingDirection() override {
         ++directionToggles;
+    }
+    void RunCommand(const std::string& command) override {
+        commands.push_back(command);
     }
 };

@@ -68,6 +68,10 @@ void Native::ToggleTilingDirection() {
     throw std::logic_error("the native backend does not tile, there is no tiling direction to toggle");
 }
 
+void Native::RunCommand(const std::string& command) {
+    throw std::logic_error("the native backend takes no commands, cannot run '" + command + "'");
+}
+
 // process 0 hooks every process.
 Native::UniqueHook Native::HookEvent(DWORD event, DWORD process) {
     HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, process, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);

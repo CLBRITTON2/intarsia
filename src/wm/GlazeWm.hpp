@@ -37,6 +37,8 @@ class GlazeWm final : public IWindowManager {
     void FocusWindow(const std::string& id) override;
     // Queues the command for the sender.
     void ToggleTilingDirection() override;
+    // Queues "command <command>" for the sender. A command holding a control character is logged and dropped.
+    void RunCommand(const std::string& command) override;
 
   private:
     // Everything the backend reports, replaced whole so readers never see half of one update.

@@ -59,8 +59,8 @@ namespace {
         return earliest;
     }
 
-    // The command an input runs, or nullopt when the config binds none to it.
-    const std::optional<Command>& CommandFor(const ModuleActions& actions, ModuleInput input) {
+    // The action an input runs, or nullopt when the config binds none to it.
+    const std::optional<ModuleAction>& ActionFor(const ModuleActions& actions, ModuleInput input) {
         switch (input) {
             case ModuleInput::LeftClick: return actions.click;
             case ModuleInput::RightClick: return actions.rightClick;
@@ -108,8 +108,8 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
          HWND control, UINT deviceLostMessage) :
-    _graphics(graphics), _config(config), _launcher(launcher), _state(state), _control(control), _deviceLostMessage(deviceLostMessage), _placement(placement),
-    _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
+    _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
+    _placement(placement), _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
@@ -355,9 +355,11 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
     if (box == nullptr) {
         return;
     }
-    const std::optional<Command>& command = CommandFor(box->module->Actions(), input);
-    if (command.has_value()) {
+    const std::optional<ModuleAction>& action = ActionFor(box->module->Actions(), input);
+    if (const auto* command = action.has_value() ? std::get_if<Command>(&*action) : nullptr) {
         _launcher.Launch(*command);
+    } else if (const auto* windowManagerCommand = action.has_value() ? std::get_if<WindowManagerCommand>(&*action) : nullptr) {
+        _windowManager.RunCommand(windowManagerCommand->text);
     } else if (input == ModuleInput::LeftClick) {
         const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
         box->module->Click(D2D1::Point2F((static_cast<float>(client.x) * scale) - box->bounds.left, (static_cast<float>(client.y) * scale) - box->bounds.top));

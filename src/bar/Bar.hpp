@@ -88,7 +88,7 @@ class Bar {
     void ReportDeviceLost(const DeviceLostError& error);
     // The box under a point in client pixels, or null between modules.
     const HitBox* BoxAt(POINT client) const;
-    // Runs the module's command for the input, or for a left click without one, lets the module handle it.
+    // Runs the module's action for the input, or for a left click without one, lets the module handle it.
     void HandleInput(POINT client, ModuleInput input);
     // Restarts hover tracking whenever the cursor moves onto a different module, hiding any tooltip.
     void                               PointAt(POINT client);
@@ -97,6 +97,7 @@ class Bar {
     const GraphicsDevice&              _graphics;
     const Config&                      _config;
     Launcher&                          _launcher;
+    IWindowManager&                    _windowManager; // takes the window_manager actions
     AppState&                          _state;
     HWND                               _control;
     UINT                               _deviceLostMessage;

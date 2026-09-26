@@ -97,6 +97,10 @@ void GlazeWm::ToggleTilingDirection() {
     QueueCommand([] { return std::string(glazewm::kToggleTilingDirection); });
 }
 
+void GlazeWm::RunCommand(const std::string& command) {
+    QueueCommand([&command] { return glazewm::CommandMessage(command); });
+}
+
 void GlazeWm::QueueCommand(const std::function<std::string()>& makeCommand) {
     std::string command;
     try {

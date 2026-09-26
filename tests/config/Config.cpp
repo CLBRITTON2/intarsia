@@ -253,13 +253,32 @@ TEST(Config, ActionsResolveToAbsoluteExecutables) {
     const Config         config  = LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" } })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.click.has_value());
-    if (actions.click.has_value()) {
-        EXPECT_TRUE(actions.click->program.is_absolute());
-        EXPECT_EQ(actions.click->arguments, (std::vector<std::wstring>{L"/c", L"exit 0"}));
-    }
+    const Command& click = std::get<Command>(*actions.click);
+    EXPECT_TRUE(click.program.is_absolute());
+    EXPECT_EQ(click.arguments, (std::vector<std::wstring>{L"/c", L"exit 0"}));
     EXPECT_TRUE(actions.scrollUp.has_value());
     EXPECT_FALSE(actions.rightClick.has_value());
     EXPECT_FALSE(actions.scrollDown.has_value());
+}
+
+TEST(Config, WindowManagerActionsSendTheirTextAsWritten) {
+    const std::string    glazeWm = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
+    const Config         config  = LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_scroll_up = { window_manager = "focus --next-workspace" } })"));
+    const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
+    ASSERT_TRUE(actions.scrollUp.has_value());
+    EXPECT_EQ(std::get<WindowManagerCommand>(*actions.scrollUp).text, "focus --next-workspace");
+
+    EXPECT_THAT([&glazeWm] { return LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "focus\n--workspace 2" } })")); },
+                ConfigErrorWith("modules.time.on_click.window_manager must be a command on one line"));
+    EXPECT_THAT([&glazeWm] { return LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "" } })")); },
+                ConfigErrorWith("must be a command on one line"));
+    EXPECT_THAT([&glazeWm] { return LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "x", extra = 1 } })")); },
+                ConfigErrorWith("modules.time.on_click.extra is not a known key"));
+}
+
+TEST(Config, WindowManagerActionsNeedAWindowManagerThatTakesCommands) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "focus --next-workspace" } })")); },
+                ConfigErrorWith("window_manager 'windows' takes none"));
 }
 
 TEST(Config, ActionsMustNameAnExistingExecutable) {

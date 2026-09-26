@@ -69,4 +69,6 @@ class IWindowManager {
     virtual void FocusWindow(const std::string& id) = 0;
     // Asks the manager to flip the focused container's tiling direction, the same way.
     virtual void ToggleTilingDirection() = 0;
+    // Sends the manager a command from the config as written, such as "focus --next-workspace", the same way.
+    virtual void RunCommand(const std::string& command) = 0;
 };

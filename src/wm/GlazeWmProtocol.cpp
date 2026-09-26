@@ -122,6 +122,17 @@ namespace glazewm {
         return std::format("command focus --container-id {}", id);
     }
 
+    std::string CommandMessage(std::string_view command) {
+        const bool control = std::ranges::any_of(command, [](char character) {
+            const auto byte = static_cast<unsigned char>(character);
+            return byte < 0x20u || byte == 0x7Fu;
+        });
+        if (command.empty() || control) {
+            throw ProtocolError(std::format("command \"{}\" cannot be sent to GlazeWM: it is empty or holds control characters", LogExcerpt(command, kExcerptBytes)));
+        }
+        return std::format("command {}", command);
+    }
+
     bool IsCommand(std::string_view clientMessage) {
         return clientMessage.starts_with("command ");
     }

@@ -34,6 +34,8 @@ class Native final : public IWindowManager {
     void FocusWindow(const std::string& id) override;
     // Throws std::logic_error: nothing tiles.
     void ToggleTilingDirection() override;
+    // Throws std::logic_error: Windows takes no commands. The config loader rejects window_manager actions here.
+    void RunCommand(const std::string& command) override;
 
   private:
     // Registers the instance the callbacks reach for as long as it lives, and refuses a second one.
