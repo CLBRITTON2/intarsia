@@ -84,3 +84,7 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `config/config.lua` | the example config, documenting every key |
 | `tests/` | unit tests mirroring `src/`, and `tests/smoke/` for the stress tests' IPC server |
 | `scripts/` | build, test, stress test and lint |
+
+## License
+
+Apache License 2.0, in [LICENSE](LICENSE).

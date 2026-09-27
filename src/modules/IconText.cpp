@@ -2,6 +2,7 @@
 
 #include "platform/Errors.hpp"
 
+#include <cstdint>
 #include <limits>
 #include <utility>
 
@@ -9,16 +10,16 @@ IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std
     const std::wstring line = icon.empty() ? std::wstring(text) : std::wstring(icon) + L"  " + std::wstring(text);
 
     IconText           laidOut{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}};
-    ThrowIfFailed(render.dwrite->CreateTextLayout(line.c_str(), static_cast<UINT32>(line.size()), render.textFormat, std::numeric_limits<float>::max(),
+    ThrowIfFailed(render.dwrite->CreateTextLayout(line.c_str(), static_cast<std::uint32_t>(line.size()), render.textFormat, std::numeric_limits<float>::max(),
                                                   std::numeric_limits<float>::max(), &laidOut.layout),
                   "IDWriteFactory::CreateTextLayout");
     ThrowIfFailed(laidOut.layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping");
     if (!icon.empty()) {
-        const DWRITE_TEXT_RANGE iconRange{.startPosition = 0, .length = static_cast<UINT32>(icon.size())};
+        const DWRITE_TEXT_RANGE iconRange{.startPosition = 0, .length = static_cast<std::uint32_t>(icon.size())};
         ThrowIfFailed(laidOut.layout->SetFontSize(render.iconSizeDips, iconRange), "IDWriteTextLayout::SetFontSize");
         ThrowIfFailed(laidOut.layout->SetDrawingEffect(render.accent, iconRange), "IDWriteTextLayout::SetDrawingEffect");
     }
-    const DWRITE_TEXT_RANGE textRange{.startPosition = static_cast<UINT32>(line.size() - text.size()), .length = static_cast<UINT32>(text.size())};
+    const DWRITE_TEXT_RANGE textRange{.startPosition = static_cast<std::uint32_t>(line.size() - text.size()), .length = static_cast<std::uint32_t>(text.size())};
     ThrowIfFailed(laidOut.layout->SetDrawingEffect(textBrush, textRange), "IDWriteTextLayout::SetDrawingEffect");
 
     DWRITE_TEXT_METRICS metrics{};

@@ -2,6 +2,7 @@
 
 #include "modules/Ticks.hpp"
 
+#include <cstdint>
 #include <chrono>
 #include <utility>
 
@@ -26,8 +27,8 @@ void TextModule::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
 }
 
-std::optional<UINT> TextModule::MillisecondsUntilChange() const {
-    return static_cast<UINT>(TimeUntilNextTick(std::chrono::system_clock::now(), _config.interval).count());
+std::optional<std::uint32_t> TextModule::MillisecondsUntilChange() const {
+    return static_cast<std::uint32_t>(TimeUntilNextTick(std::chrono::system_clock::now(), _config.interval).count());
 }
 
 void                 TextModule::Click(D2D1_POINT_2F) {}

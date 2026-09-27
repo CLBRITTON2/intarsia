@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -10,7 +11,7 @@
 // The command line: intarsia.exe [--config <path>] [--glazewm-port <port>].
 struct LaunchOptions {
     std::filesystem::path configPath;
-    USHORT                glazeWmPort; // the smoke harness points the bar at its own server while GlazeWM holds 6123
+    std::uint16_t         glazeWmPort; // the smoke harness points the bar at its own server while GlazeWM holds 6123
 };
 
 class LaunchOptionsError : public std::runtime_error {
@@ -19,7 +20,7 @@ class LaunchOptionsError : public std::runtime_error {
 };
 
 // arguments excludes the program name. Throws LaunchOptionsError naming the bad argument.
-LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, USHORT defaultGlazeWmPort);
+LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, std::uint16_t defaultGlazeWmPort);
 
 // This process's arguments, without the program name.
 std::vector<std::wstring> CommandLineArguments();

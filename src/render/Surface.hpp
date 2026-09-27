@@ -10,16 +10,16 @@
 class Surface {
   public:
     // width and height are pixels and must not be zero.
-    Surface(const GraphicsDevice& graphics, HWND window, UINT width, UINT height, UINT dpi);
+    Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t width, std::uint32_t height, std::uint32_t dpi);
 
     // The context to draw each frame on, between its BeginDraw and EndDrawAndPresent.
     ID2D1DeviceContext* Context() const;
 
-    void                Resize(UINT width, UINT height, UINT dpi);
+    void                Resize(std::uint32_t width, std::uint32_t height, std::uint32_t dpi);
     void                EndDrawAndPresent();
 
   private:
-    void                                        BindRenderTarget(UINT dpi);
+    void                                        BindRenderTarget(std::uint32_t dpi);
 
     Microsoft::WRL::ComPtr<ID2D1DeviceContext>  _context;
     Microsoft::WRL::ComPtr<IDCompositionTarget> _compositionTarget;

@@ -2,6 +2,7 @@
 
 #include "platform/Errors.hpp"
 
+#include <cstdint>
 #include <array>
 #include <cstring>
 #include <format>
@@ -16,10 +17,10 @@ namespace {
 
     // Loopback connects, sends and upgrades finish at once, so a short bound only matters when the peer has stopped
     // reading or never answers the upgrade. Once upgraded, receives wait forever (0): an idle IPC socket is normal.
-    constexpr int   kConnectTimeoutMs   = 2000;
-    constexpr int   kSendTimeoutMs      = 2000;
-    constexpr int   kHandshakeTimeoutMs = 2000;
-    constexpr DWORD kIdleTimeoutMs      = 0;
+    constexpr std::int32_t kConnectTimeoutMs   = 2000;
+    constexpr std::int32_t kSendTimeoutMs      = 2000;
+    constexpr std::int32_t kHandshakeTimeoutMs = 2000;
+    constexpr DWORD        kIdleTimeoutMs      = 0;
     // Seconds WinHttpWebSocketClose waits for the server's close frame, which bounds how long shutdown can take.
     constexpr DWORD kCloseTimeoutSeconds = 1;
 
@@ -30,7 +31,7 @@ namespace {
         return handle;
     }
 
-    void CheckedError(DWORD error, std::string_view call) {
+    void CheckedError(std::uint32_t error, std::string_view call) {
         if (error != NO_ERROR) {
             throw Win32Error(call, HRESULT_FROM_WIN32(error));
         }
@@ -47,7 +48,7 @@ namespace {
         return session;
     }
 
-    USHORT LocalPortOf(HINTERNET request) {
+    std::uint16_t LocalPortOf(HINTERNET request) {
         WINHTTP_CONNECTION_INFO info{};
         DWORD                   size = sizeof(info);
         info.cbSize                  = size;
@@ -55,17 +56,17 @@ namespace {
             ThrowLastError("WinHttpQueryOption(WINHTTP_OPTION_CONNECTION_INFO)");
         }
         if (info.LocalAddress.ss_family != AF_INET) {
-            throw std::runtime_error(std::format("the WebSocket's local address has family {}, expected IPv4", static_cast<int>(info.LocalAddress.ss_family)));
+            throw std::runtime_error(std::format("the WebSocket's local address has family {}, expected IPv4", static_cast<std::int32_t>(info.LocalAddress.ss_family)));
         }
         sockaddr_in local{};
         std::memcpy(&local, &info.LocalAddress, sizeof(local));
         // sin_port is in network byte order.
-        return static_cast<USHORT>(((local.sin_port & 0xFFu) << 8) | ((local.sin_port >> 8) & 0xFFu));
+        return static_cast<std::uint16_t>(((local.sin_port & 0xFFu) << 8) | ((local.sin_port >> 8) & 0xFFu));
     }
 
 } // namespace
 
-WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_view path) :
+WebSocket::WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_view path) :
     _session(OpenSession()), _connection(Checked(WinHttpConnect(_session.get(), std::wstring(host).c_str(), port, 0), "WinHttpConnect")) {
     const UniqueInternet request(
         Checked(WinHttpOpenRequest(_connection.get(), L"GET", std::wstring(path).c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0), "WinHttpOpenRequest"));
@@ -101,7 +102,7 @@ WebSocket::WebSocket(std::wstring_view host, INTERNET_PORT port, std::wstring_vi
     }
 }
 
-USHORT WebSocket::LocalPort() const {
+std::uint16_t WebSocket::LocalPort() const {
     return _localPort;
 }
 

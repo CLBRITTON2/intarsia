@@ -5,6 +5,7 @@
 #include "platform/Text.hpp"
 #include "wm/GlazeWmProtocol.hpp"
 
+#include <cstdint>
 #include <algorithm>
 #include <chrono>
 #include <format>
@@ -23,7 +24,7 @@ namespace {
 
 } // namespace
 
-GlazeWm::GlazeWm(ChangeSignal& changes, INTERNET_PORT port) :
+GlazeWm::GlazeWm(ChangeSignal& changes, std::uint16_t port) :
     _native(changes), _port(port), _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
     _snapshot{.workspaces   = {},
               .windows      = {},

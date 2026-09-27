@@ -21,8 +21,8 @@ namespace loopback {
     class Winsock {
       public:
         Winsock() {
-            WSADATA   data{};
-            const int result = WSAStartup(MAKEWORD(2, 2), &data);
+            WSADATA            data{};
+            const std::int32_t result = WSAStartup(MAKEWORD(2, 2), &data);
             if (result != 0) {
                 throw std::runtime_error("WSAStartup failed with " + std::to_string(result));
             }
@@ -55,9 +55,9 @@ namespace loopback {
             return _handle;
         }
 
-        USHORT Port() const {
-            sockaddr_in address{};
-            int         size = sizeof(address);
+        std::uint16_t Port() const {
+            sockaddr_in  address{};
+            std::int32_t size = sizeof(address);
             if (getsockname(_handle, reinterpret_cast<sockaddr*>(&address), &size) != 0) {
                 throw std::runtime_error("getsockname failed with " + std::to_string(WSAGetLastError()));
             }
@@ -68,7 +68,7 @@ namespace loopback {
         SOCKET _handle;
     };
 
-    inline sockaddr_in Address(USHORT port) {
+    inline sockaddr_in Address(std::uint16_t port) {
         sockaddr_in address{};
         address.sin_family      = AF_INET;
         address.sin_port        = htons(port);
@@ -76,7 +76,7 @@ namespace loopback {
         return address;
     }
 
-    inline Socket ListenOn(USHORT port) {
+    inline Socket ListenOn(std::uint16_t port) {
         Socket            listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         const sockaddr_in address = Address(port);
         if (bind(listener.Get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 || listen(listener.Get(), 1) != 0) {
@@ -90,7 +90,7 @@ namespace loopback {
         return ListenOn(0);
     }
 
-    inline Socket Connect(USHORT port) {
+    inline Socket Connect(std::uint16_t port) {
         Socket            client(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         const sockaddr_in address = Address(port);
         if (connect(client.Get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
@@ -104,7 +104,7 @@ namespace loopback {
     }
 
     inline void SendAll(const Socket& socket, std::string_view bytes) {
-        if (send(socket.Get(), bytes.data(), static_cast<int>(bytes.size()), 0) != static_cast<int>(bytes.size())) {
+        if (send(socket.Get(), bytes.data(), static_cast<std::int32_t>(bytes.size()), 0) != static_cast<std::int32_t>(bytes.size())) {
             throw std::runtime_error("send failed with " + std::to_string(WSAGetLastError()));
         }
     }
@@ -131,7 +131,7 @@ namespace loopback {
     inline void ReceiveExactly(const Socket& socket, char* data, size_t size) {
         size_t received = 0;
         while (received < size) {
-            const int got = recv(socket.Get(), data + received, static_cast<int>(size - received), 0);
+            const std::int32_t got = recv(socket.Get(), data + received, static_cast<std::int32_t>(size - received), 0);
             if (got <= 0) {
                 throw std::runtime_error("the other end closed mid-frame");
             }
@@ -144,7 +144,7 @@ namespace loopback {
         fd_set readable;
         FD_ZERO(&readable);
         FD_SET(socket.Get(), &readable);
-        const timeval timeout{.tv_sec = static_cast<long>(wait.count() / 1000), .tv_usec = static_cast<long>((wait.count() % 1000) * 1000)};
+        const timeval timeout{.tv_sec = static_cast<std::int32_t>(wait.count() / 1000), .tv_usec = static_cast<std::int32_t>((wait.count() % 1000) * 1000)};
         return select(0, &readable, nullptr, nullptr, &timeout) > 0;
     }
 
@@ -188,7 +188,7 @@ namespace loopback {
             frame += static_cast<char>(payload.size() & 0xFFu);
         } else {
             frame += static_cast<char>(127);
-            for (int shift = 56; shift >= 0; shift -= 8) {
+            for (std::int32_t shift = 56; shift >= 0; shift -= 8) {
                 frame += static_cast<char>((static_cast<std::uint64_t>(payload.size()) >> shift) & 0xFFu);
             }
         }

@@ -7,6 +7,7 @@
 #include <winsock2.h>
 #include <iphlpapi.h>
 
+#include <cstdint>
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -18,17 +19,17 @@
 namespace {
 
     // MIB_TCPROW_OWNER_PID stores address and port in network byte order.
-    constexpr DWORD kLoopbackAddress = 0x0100007F; // 127.0.0.1
+    constexpr std::uint32_t kLoopbackAddress = 0x0100007F; // 127.0.0.1
 
-    USHORT          RowPort(DWORD networkPort) {
-        return static_cast<USHORT>(((networkPort & 0xFFu) << 8) | ((networkPort >> 8) & 0xFFu));
+    std::uint16_t           RowPort(std::uint32_t networkPort) {
+        return static_cast<std::uint16_t>(((networkPort & 0xFFu) << 8) | ((networkPort >> 8) & 0xFFu));
     }
 
     std::vector<std::byte> ConnectionTable() {
         DWORD size = 0;
         GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
         // The table can grow between the size query and the read, so retry a few times with the size it reports.
-        for (int attempt = 0; attempt < 4; ++attempt) {
+        for (std::int32_t attempt = 0; attempt < 4; ++attempt) {
             std::vector<std::byte> table(size);
             const DWORD            result = GetExtendedTcpTable(table.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
             if (result == NO_ERROR) {
@@ -56,7 +57,7 @@ namespace {
     }
 
     // The mandatory level's RID, such as SECURITY_MANDATORY_MEDIUM_RID.
-    DWORD IntegrityLevel(HANDLE token) {
+    std::uint32_t IntegrityLevel(HANDLE token) {
         std::vector<std::byte> label = TokenBuffer(token, TokenIntegrityLevel, "TokenIntegrityLevel");
         PSID                   sid   = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(label.data())->Label.Sid;
         return *GetSidSubAuthority(sid, static_cast<DWORD>(*GetSidSubAuthorityCount(sid) - 1));
@@ -64,12 +65,12 @@ namespace {
 
 } // namespace
 
-DWORD LoopbackPeerProcess(USHORT clientPort, USHORT serverPort) {
+std::uint32_t LoopbackPeerProcess(std::uint16_t clientPort, std::uint16_t serverPort) {
     std::vector<std::byte> table = ConnectionTable();
     MIB_TCPTABLE_OWNER_PID header{};
     std::memcpy(&header, table.data(), offsetof(MIB_TCPTABLE_OWNER_PID, table));
 
-    for (DWORD index = 0; index < header.dwNumEntries; ++index) {
+    for (std::uint32_t index = 0; index < header.dwNumEntries; ++index) {
         MIB_TCPROW_OWNER_PID row{};
         std::memcpy(&row, table.data() + offsetof(MIB_TCPTABLE_OWNER_PID, table) + (index * sizeof(MIB_TCPROW_OWNER_PID)), sizeof(row));
         // The server's end: local is the port it serves, remote is the client's port.
@@ -80,7 +81,7 @@ DWORD LoopbackPeerProcess(USHORT clientPort, USHORT serverPort) {
     throw PeerVerificationError(std::format("no connection from 127.0.0.1:{} to 127.0.0.1:{} is open", clientPort, serverPort));
 }
 
-void RequireSameUserProcess(DWORD processId, std::wstring_view imageName) {
+void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName) {
     const UniqueHandle         process = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(listener)");
 
     std::array<wchar_t, 32768> path{};
@@ -90,7 +91,7 @@ void RequireSameUserProcess(DWORD processId, std::wstring_view imageName) {
     }
     const std::filesystem::path image(std::wstring(path.data(), length));
     const std::wstring          fileName = image.filename().wstring();
-    if (CompareStringOrdinal(fileName.c_str(), static_cast<int>(fileName.size()), imageName.data(), static_cast<int>(imageName.size()), TRUE) != CSTR_EQUAL) {
+    if (CompareStringOrdinal(fileName.c_str(), static_cast<std::int32_t>(fileName.size()), imageName.data(), static_cast<std::int32_t>(imageName.size()), TRUE) != CSTR_EQUAL) {
         throw PeerVerificationError(std::format("the listener is {} (pid {}), not {}", ToUtf8(image.wstring()), processId, ToUtf8(imageName)));
     }
 
@@ -105,8 +106,8 @@ void RequireSameUserProcess(DWORD processId, std::wstring_view imageName) {
         throw PeerVerificationError(std::format("{} (pid {}) runs as a different user", ToUtf8(image.wstring()), processId));
     }
     // A sandboxed process of the same user runs at low integrity (so does every AppContainer), and must not pass.
-    const DWORD peerLevel = IntegrityLevel(token.get());
-    const DWORD ourLevel  = IntegrityLevel(GetCurrentProcessToken());
+    const std::uint32_t peerLevel = IntegrityLevel(token.get());
+    const std::uint32_t ourLevel  = IntegrityLevel(GetCurrentProcessToken());
     if (peerLevel < ourLevel) {
         throw PeerVerificationError(std::format("{} (pid {}) runs at integrity level 0x{:X}, below the bar's 0x{:X}", ToUtf8(image.wstring()), processId, peerLevel, ourLevel));
     }

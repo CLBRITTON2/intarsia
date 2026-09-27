@@ -2,6 +2,7 @@
 
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <utility>
 
 namespace {
@@ -33,7 +34,7 @@ void Window::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     _line.Draw(render, origin);
 }
 
-std::optional<UINT> Window::MillisecondsUntilChange() const {
+std::optional<std::uint32_t> Window::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 

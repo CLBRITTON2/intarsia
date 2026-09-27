@@ -12,12 +12,12 @@
 #include <vector>
 
 struct LabelRun {
-    UINT32      start;
-    UINT32      length;
-    bool        focused;
-    std::string name; // the workspace name commands use
+    std::uint32_t start;
+    std::uint32_t length;
+    bool          focused;
+    std::string   name; // the workspace name commands use
 
-    bool        operator==(const LabelRun& other) const = default;
+    bool          operator==(const LabelRun& other) const = default;
 };
 
 struct WorkspaceLine {
@@ -33,11 +33,11 @@ class Workspaces final : public IModule {
   public:
     Workspaces(IWindowManager& windowManager, HMONITOR monitor);
 
-    bool                Layout(const RenderContext& render) override;
-    D2D1_SIZE_F         Size() const override;
-    void                Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    std::optional<UINT> MillisecondsUntilChange() const override;
-    void                Click(D2D1_POINT_2F point) override;
+    bool                         Layout(const RenderContext& render) override;
+    D2D1_SIZE_F                  Size() const override;
+    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
+    void                         Click(D2D1_POINT_2F point) override;
     // None: the module has no config table, and a left click focuses the workspace under it.
     const ModuleActions& Actions() const override;
     // While disconnected, why: the window manager's status detail. Nothing while connected.
@@ -56,4 +56,4 @@ class Workspaces final : public IModule {
 WorkspaceLine JoinWorkspaces(const std::vector<Workspace>& workspaces, std::intptr_t monitor);
 
 // The name of the workspace whose label covers a text position, or nullopt between labels.
-std::optional<std::string> WorkspaceAt(const WorkspaceLine& line, UINT32 textPosition);
+std::optional<std::string> WorkspaceAt(const WorkspaceLine& line, std::uint32_t textPosition);

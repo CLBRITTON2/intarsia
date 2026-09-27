@@ -13,6 +13,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <chrono>
 #include <exception>
 #include <filesystem>
@@ -28,7 +29,7 @@ class App {
     App& operator=(const App&) = delete;
 
     // Runs the message loop until a bar is closed, then rethrows any error a window or the watcher reported.
-    int Run();
+    std::int32_t Run();
 
   private:
     template <typename Owner>
@@ -46,7 +47,7 @@ class App {
 
     HINSTANCE             _instance;
     std::filesystem::path _configPath;
-    USHORT                _glazeWmPort;
+    std::uint16_t         _glazeWmPort;
     // Bars hold a reference to the config, so it is replaced only after they are destroyed.
     std::unique_ptr<Config> _config;
     // Replaced when the device is lost, after the bars that draw with it are destroyed.

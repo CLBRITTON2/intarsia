@@ -2,12 +2,13 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <chrono>
 #include <format>
 
 namespace {
 
-    std::chrono::system_clock::time_point AtMilliseconds(long long milliseconds) {
+    std::chrono::system_clock::time_point AtMilliseconds(std::int64_t milliseconds) {
         return std::chrono::system_clock::time_point(std::chrono::milliseconds(milliseconds));
     }
 

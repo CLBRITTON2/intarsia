@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <utility>
@@ -27,7 +28,7 @@ namespace {
 
 } // namespace
 
-int CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
+std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
     const std::uint64_t idle  = after.idle - before.idle;
     const std::uint64_t total = (after.kernel - before.kernel) + (after.user - before.user);
     if (idle > total) {
@@ -36,11 +37,11 @@ int CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
     if (total == 0) {
         return 0;
     }
-    return static_cast<int>(((total - idle) * 100 + (total / 2)) / total);
+    return static_cast<std::int32_t>(((total - idle) * 100 + (total / 2)) / total);
 }
 
 Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config)), _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()) {
-    RequireFormats("cpu", Settings().format, Settings().tooltip, 0);
+    RequireFormats("cpu", Settings().format, Settings().tooltip, std::int32_t{0});
 }
 
 // Samples at most once per interval: the bar also redraws for other modules, and a sample over a few milliseconds

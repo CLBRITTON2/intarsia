@@ -6,6 +6,7 @@
 #include <d2d1.h>
 #include <windows.h>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -21,7 +22,7 @@ class IModule {
     virtual void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const = 0;
 
     // Milliseconds until the content changes on its own, or nullopt when only an outside event changes it.
-    virtual std::optional<UINT> MillisecondsUntilChange() const = 0;
+    virtual std::optional<std::uint32_t> MillisecondsUntilChange() const = 0;
 
     // A left click, in DIPs from the module's origin as last drawn. Only called when no on_click command is configured.
     virtual void Click(D2D1_POINT_2F point) = 0;

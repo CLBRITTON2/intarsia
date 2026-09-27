@@ -13,15 +13,15 @@
 
 // An icon's pixels, premultiplied BGRA with no row padding, ready for ID2D1DeviceContext::CreateBitmap.
 struct IconPixels {
-    UINT                      width;
-    UINT                      height;
+    std::uint32_t             width;
+    std::uint32_t             height;
     std::vector<std::uint8_t> pbgra;
 };
 
 // The icon a window shows in the taskbar: its own (WM_GETICON, large first since the bar scales it down), then its
 // class's. Null when it has neither. Borrowed: the window's process owns it. A window that does not answer costs up
 // to timeoutMs per ask, so never call this on the UI thread.
-HICON WindowIcon(HWND window, UINT timeoutMs);
+HICON WindowIcon(HWND window, std::uint32_t timeoutMs);
 
 // The icon's pixels. Throws Win32Error when WIC cannot read it.
 IconPixels IconToPixels(HICON icon);

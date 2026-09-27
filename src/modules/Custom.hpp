@@ -4,6 +4,10 @@
 #include "modules/CommandPoller.hpp"
 #include "modules/TextModule.hpp"
 
+#include <cstdint>
+#include <optional>
+#include <string>
+
 // What its command printed, formatted from a string: format = "{}". While the command fails it shows the reason in the
 // alert color, and nothing before the first run finishes.
 class Custom final : public TextModule {
@@ -12,7 +16,7 @@ class Custom final : public TextModule {
     Custom(const CustomConfig& config, const CommandPoller& poller);
 
     // Never on its own: the poller posts when the output changes.
-    std::optional<UINT> MillisecondsUntilChange() const override;
+    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     // A failed run's full reason, else a json tooltip, else the tooltip format.
     std::optional<std::wstring> TooltipText() override;
 

@@ -8,6 +8,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -21,7 +22,7 @@
 class GlazeWm final : public IWindowManager {
   public:
     // port is GlazeWM's IPC port on 127.0.0.1, 6123 unless a test server stands in.
-    GlazeWm(ChangeSignal& changes, INTERNET_PORT port);
+    GlazeWm(ChangeSignal& changes, std::uint16_t port);
     ~GlazeWm() override;
     GlazeWm(const GlazeWm&)                                  = delete;
     GlazeWm&                       operator=(const GlazeWm&) = delete;
@@ -63,7 +64,7 @@ class GlazeWm final : public IWindowManager {
     void               QueueCommand(const std::function<std::string()>& makeCommand);
 
     Native             _native;
-    INTERNET_PORT      _port;
+    std::uint16_t      _port;
     ChangeSignal&      _changes;
     UniqueHandle       _stopEvent;
     mutable std::mutex _mutex; // guards the members below it up to _sendMutex

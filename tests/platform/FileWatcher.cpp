@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
@@ -11,8 +12,8 @@
 namespace {
 
     struct ChangeRecord {
-        DWORD        action;
-        std::wstring name;
+        std::uint32_t action;
+        std::wstring  name;
     };
 
     // Lays records out the way ReadDirectoryChangesW does: DWORD-aligned, each pointing at the next.

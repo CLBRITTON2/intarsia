@@ -4,11 +4,11 @@
 
 namespace {
 
-    constexpr UINT kChanged = WM_APP + 7;
+    constexpr std::uint32_t kChanged = WM_APP + 7;
 
-    int            QueuedChanges(HWND target) {
-        int count   = 0;
-        MSG message = {};
+    std::int32_t            QueuedChanges(HWND target) {
+        std::int32_t count   = 0;
+        MSG          message = {};
         while (PeekMessageW(&message, target, kChanged, kChanged, PM_REMOVE)) {
             ++count;
         }
@@ -22,7 +22,7 @@ TEST(ChangeSignal, PostsOnceUntilAcknowledged) {
     HWND         target = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
     ChangeSignal changes(target, kChanged);
 
-    for (int change = 0; change < 1000; ++change) {
+    for (std::int32_t change = 0; change < 1000; ++change) {
         changes.Notify("test");
     }
     EXPECT_EQ(QueuedChanges(target), 1);

@@ -4,6 +4,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <chrono>
 #include <cstddef>
 #include <exception>
@@ -19,7 +20,7 @@
 // the file, because editors often save by writing a temp file and renaming it over the original.
 class FileWatcher {
   public:
-    FileWatcher(const std::filesystem::path& file, HWND target, UINT changedMessage, UINT failedMessage, std::chrono::milliseconds settle);
+    FileWatcher(const std::filesystem::path& file, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage, std::chrono::milliseconds settle);
     ~FileWatcher();
     FileWatcher(const FileWatcher&)            = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
@@ -33,8 +34,8 @@ class FileWatcher {
 
     std::wstring              _fileName;
     HWND                      _target;
-    UINT                      _changedMessage;
-    UINT                      _failedMessage;
+    std::uint32_t             _changedMessage;
+    std::uint32_t             _failedMessage;
     std::chrono::milliseconds _settle;
     UniqueHandle              _directory;
     UniqueHandle              _stopEvent;

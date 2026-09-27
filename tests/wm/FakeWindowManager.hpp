@@ -2,6 +2,7 @@
 
 #include "wm/IWindowManager.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -16,7 +17,7 @@ class FakeWindowManager final : public IWindowManager {
     std::optional<TilingDirection> direction;
     std::string                    focusedWorkspace;
     std::string                    focusedWindow;
-    int                            directionToggles = 0;
+    std::int32_t                   directionToggles = 0;
     std::vector<std::string>       commands;
 
     std::optional<FocusedWindow>   Focused() const override {

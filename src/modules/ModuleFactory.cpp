@@ -10,6 +10,7 @@
 #include "modules/WindowList.hpp"
 #include "modules/Workspaces.hpp"
 
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <variant>
@@ -39,7 +40,7 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
     }
-    throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(instance.kind)));
+    throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));
 }
 
 Sections<std::unique_ptr<IModule>> CreateModules(const Config& config, const ModuleSources& sources) {

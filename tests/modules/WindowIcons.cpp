@@ -4,12 +4,13 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <chrono>
 #include <memory>
 
 namespace {
 
-    constexpr UINT kIconChanged = WM_APP + 1;
+    constexpr std::uint32_t kIconChanged = WM_APP + 1;
 
     // A message-only window of this thread, carrying the stock application icon as its own.
     class IconWindow {

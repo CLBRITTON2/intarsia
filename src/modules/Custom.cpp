@@ -2,6 +2,7 @@
 
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <string>
@@ -10,7 +11,7 @@ Custom::Custom(const CustomConfig& config, const CommandPoller& poller) : TextMo
     RequireFormats("custom", Settings().format, Settings().tooltip, std::string());
 }
 
-std::optional<UINT> Custom::MillisecondsUntilChange() const {
+std::optional<std::uint32_t> Custom::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
@@ -32,5 +33,5 @@ ModuleText Custom::Format(const std::string& spec) {
         case CommandOutcome::Succeeded: return ModuleText{.text = ToWide(FormatValue(spec, result.text)), .alert = result.alert};
         case CommandOutcome::Failed: return ModuleText{.text = ToWide(result.text), .alert = true};
     }
-    throw std::invalid_argument(std::format("unknown command outcome {}", static_cast<int>(result.outcome)));
+    throw std::invalid_argument(std::format("unknown command outcome {}", static_cast<std::int32_t>(result.outcome)));
 }

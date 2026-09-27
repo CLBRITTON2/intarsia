@@ -2,6 +2,7 @@
 
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <algorithm>
 #include <format>
 
@@ -105,7 +106,7 @@ namespace glazewm {
 
     std::string FocusWorkspaceCommand(std::string_view name) {
         const bool unsafe = std::ranges::any_of(name, [](char character) {
-            const auto byte = static_cast<unsigned char>(character);
+            const auto byte = static_cast<std::uint8_t>(character);
             return byte <= 0x20u || byte == 0x7Fu;
         });
         if (name.empty() || unsafe) {
@@ -124,7 +125,7 @@ namespace glazewm {
 
     std::string CommandMessage(std::string_view command) {
         const bool control = std::ranges::any_of(command, [](char character) {
-            const auto byte = static_cast<unsigned char>(character);
+            const auto byte = static_cast<std::uint8_t>(character);
             return byte < 0x20u || byte == 0x7Fu;
         });
         if (command.empty() || control) {

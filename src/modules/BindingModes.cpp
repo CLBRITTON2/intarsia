@@ -1,5 +1,7 @@
 #include "modules/BindingModes.hpp"
 
+#include <cstdint>
+
 BindingModes::BindingModes(const IWindowManager& windowManager) : _windowManager(windowManager) {}
 
 bool BindingModes::Layout(const RenderContext& render) {
@@ -14,7 +16,7 @@ void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const
     _line.Draw(render, origin);
 }
 
-std::optional<UINT> BindingModes::MillisecondsUntilChange() const {
+std::optional<std::uint32_t> BindingModes::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 

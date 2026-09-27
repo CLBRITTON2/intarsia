@@ -2,7 +2,7 @@
 
 using Microsoft::WRL::ComPtr;
 
-Surface::Surface(const GraphicsDevice& graphics, HWND window, UINT width, UINT height, UINT dpi) {
+Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t width, std::uint32_t height, std::uint32_t dpi) {
     ThrowIfDeviceFailed(graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &_context), "ID2D1Device::CreateDeviceContext");
     ThrowIfDeviceFailed(graphics.composition->CreateTargetForHwnd(window, TRUE, &_compositionTarget), "IDCompositionDevice::CreateTargetForHwnd");
     ThrowIfDeviceFailed(graphics.composition->CreateVisual(&_visual), "IDCompositionDevice::CreateVisual");
@@ -28,7 +28,7 @@ ID2D1DeviceContext* Surface::Context() const {
     return _context.Get();
 }
 
-void Surface::Resize(UINT width, UINT height, UINT dpi) {
+void Surface::Resize(std::uint32_t width, std::uint32_t height, std::uint32_t dpi) {
     // ResizeBuffers fails while D2D still holds a bitmap over the old back buffer.
     _context->SetTarget(nullptr);
     ThrowIfDeviceFailed(_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers");
@@ -40,7 +40,7 @@ void Surface::EndDrawAndPresent() {
     ThrowIfDeviceFailed(_swapChain->Present(1, 0), "IDXGISwapChain1::Present");
 }
 
-void Surface::BindRenderTarget(UINT dpi) {
+void Surface::BindRenderTarget(std::uint32_t dpi) {
     ComPtr<IDXGISurface> surface;
     ThrowIfDeviceFailed(_swapChain->GetBuffer(0, IID_PPV_ARGS(&surface)), "IDXGISwapChain1::GetBuffer");
 

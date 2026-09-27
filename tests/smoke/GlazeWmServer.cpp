@@ -30,8 +30,8 @@ namespace {
     };
 
     struct Options {
-        USHORT   port;
-        Scenario scenario;
+        std::uint16_t port;
+        Scenario      scenario;
     };
 
     Scenario ParseScenario(std::string_view name) {
@@ -49,13 +49,13 @@ namespace {
         throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flood, malformed, stall, flap or reject", name));
     }
 
-    Options ParseOptions(int argc, char** argv) {
-        std::optional<USHORT>   port;
-        std::optional<Scenario> scenario;
-        for (int index = 1; index + 1 < argc; index += 2) {
+    Options ParseOptions(std::int32_t argc, char** argv) {
+        std::optional<std::uint16_t> port;
+        std::optional<Scenario>      scenario;
+        for (std::int32_t index = 1; index + 1 < argc; index += 2) {
             const std::string_view name = argv[index];
             if (name == "--port") {
-                port = static_cast<USHORT>(std::stoi(argv[index + 1]));
+                port = static_cast<std::uint16_t>(std::stoi(argv[index + 1]));
             } else if (name == "--scenario") {
                 scenario = ParseScenario(argv[index + 1]);
             } else {
@@ -131,7 +131,7 @@ namespace {
         }
         loopback::AnswerUpgrade(peer);
 
-        std::mt19937 random(static_cast<unsigned>(connection));
+        std::mt19937 random(static_cast<std::uint32_t>(connection));
         const auto   dropAt     = std::chrono::steady_clock::now() + std::chrono::milliseconds(200 + (random() % 1800));
         auto         nextEvent  = std::chrono::steady_clock::now();
         size_t       focused    = 0;

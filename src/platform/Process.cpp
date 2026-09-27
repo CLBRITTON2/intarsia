@@ -19,10 +19,10 @@
 
 namespace {
 
-    constexpr size_t kMaxQueuedLaunches = 8;
-    constexpr UINT   kKilledExitCode    = 1;
+    constexpr size_t        kMaxQueuedLaunches = 8;
+    constexpr std::uint32_t kKilledExitCode    = 1;
 
-    bool             NeedsQuotes(std::wstring_view argument) {
+    bool                    NeedsQuotes(std::wstring_view argument) {
         return argument.empty() || argument.find_first_of(L" \t\n\v\"") != std::wstring_view::npos;
     }
 

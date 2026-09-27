@@ -8,6 +8,7 @@
 
 #include <shellscalingapi.h>
 
+#include <cstdint>
 #include <algorithm>
 #include <chrono>
 #include <exception>
@@ -17,11 +18,11 @@
 
 namespace {
 
-    constexpr wchar_t kControlClass[] = L"IntarsiaControl";
-    constexpr UINT    kConfigChanged  = WM_APP + 2;
-    constexpr UINT    kWatcherFailed  = WM_APP + 3;
+    constexpr wchar_t       kControlClass[] = L"IntarsiaControl";
+    constexpr std::uint32_t kConfigChanged  = WM_APP + 2;
+    constexpr std::uint32_t kWatcherFailed  = WM_APP + 3;
     // Posted by the window manager backend and the command pollers when what modules show has changed.
-    constexpr UINT kSourcesChanged = WM_APP + 4;
+    constexpr std::uint32_t kSourcesChanged = WM_APP + 4;
     // Editors save in several writes, so the reload waits until the file has been quiet this long.
     constexpr std::chrono::milliseconds kConfigSettle{100};
     // How long a config that failed to load must stay unchanged before the failure ends the app.
@@ -29,12 +30,12 @@ namespace {
     constexpr std::chrono::milliseconds kConfigConfirm{1000};
     // Window manager changes arrive in bursts (a terminal can retitle itself many times a second), so redraws they
     // cause are held to one per frame.
-    constexpr UINT_PTR kRedrawTimer   = 1;
-    constexpr UINT     kRedrawDelayMs = 16;
+    constexpr UINT_PTR      kRedrawTimer   = 1;
+    constexpr std::uint32_t kRedrawDelayMs = 16;
     // Docking or undocking sends several WM_DISPLAYCHANGE while monitors come up, so bars are rebuilt once it is quiet.
-    constexpr UINT_PTR kDisplaysTimer    = 2;
-    constexpr UINT     kDisplaysSettleMs = 500;
-    constexpr UINT     kDeviceLost       = WM_APP + 5;
+    constexpr UINT_PTR      kDisplaysTimer    = 2;
+    constexpr std::uint32_t kDisplaysSettleMs = 500;
+    constexpr std::uint32_t kDeviceLost       = WM_APP + 5;
     // Windows is often still switching adapters when a device is lost, so the new device waits a moment, backing off
     // while each new device is lost before it draws a frame.
     constexpr UINT_PTR                  kDeviceTimer = 3;
@@ -63,8 +64,8 @@ namespace {
             ThrowLastError("GetMonitorInfoW");
         }
 
-        UINT dpiX = 0;
-        UINT dpiY = 0;
+        std::uint32_t dpiX = 0;
+        std::uint32_t dpiY = 0;
         ThrowIfFailed(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY), "GetDpiForMonitor");
         return BarPlacement{.monitor = monitor, .monitorRect = info.rcMonitor, .dpi = dpiX};
     }
@@ -123,7 +124,7 @@ App::~App() {
     DestroyWindow(_control);
 }
 
-int App::Run() {
+std::int32_t App::Run() {
     MSG message{};
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         TranslateMessage(&message);
@@ -132,7 +133,7 @@ int App::Run() {
     if (_state.error) {
         std::rethrow_exception(_state.error);
     }
-    return static_cast<int>(message.wParam);
+    return static_cast<std::int32_t>(message.wParam);
 }
 
 LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -221,7 +222,7 @@ void App::HandleConfigChanged() {
     } catch (const ConfigError& error) {
         Log(LogLevel::Warning, "app", "config_invalid", {{.key = "reason", .value = error.what()}, {.key = "fatal_in_ms", .value = std::to_string(kConfigConfirm.count())}});
         _configError = std::current_exception();
-        if (SetTimer(_control, kConfigFailedTimer, static_cast<UINT>(kConfigConfirm.count()), nullptr) == 0) {
+        if (SetTimer(_control, kConfigFailedTimer, static_cast<std::uint32_t>(kConfigConfirm.count()), nullptr) == 0) {
             ThrowLastError("SetTimer(config failed)");
         }
     }
@@ -269,7 +270,7 @@ void App::HandleDeviceLost() {
     const bool drew = std::ranges::any_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->HasPresented(); });
     _deviceRetry    = drew ? kFirstDeviceRetry : std::min(_deviceRetry * 2, kLongestDeviceRetry);
     Log(LogLevel::Warning, "app", "recovering_device",
-        {{.key = "reason", .value = std::format("0x{:08X}", static_cast<unsigned long>(_graphics.d3d->GetDeviceRemovedReason()))},
+        {{.key = "reason", .value = std::format("0x{:08X}", static_cast<std::uint32_t>(_graphics.d3d->GetDeviceRemovedReason()))},
          {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
     _bars.clear();
     ScheduleDeviceRetry();
@@ -277,7 +278,7 @@ void App::HandleDeviceLost() {
 
 void App::ScheduleDeviceRetry() {
     _recovering = true;
-    if (SetTimer(_control, kDeviceTimer, static_cast<UINT>(_deviceRetry.count()), nullptr) == 0) {
+    if (SetTimer(_control, kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), nullptr) == 0) {
         ThrowLastError("SetTimer(device)");
     }
 }

@@ -4,6 +4,7 @@
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
 
+#include <cstdint>
 #include <string>
 
 // What a text module shows after its icon.
@@ -18,13 +19,13 @@ struct ModuleText {
 // subclass supplies only the value, formatted with whichever spec it is given: format on the bar, tooltip on hover.
 class TextModule : public IModule {
   public:
-    bool                        Layout(const RenderContext& render) final;
-    D2D1_SIZE_F                 Size() const final;
-    void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const final;
-    std::optional<UINT>         MillisecondsUntilChange() const override;
-    void                        Click(D2D1_POINT_2F point) final;
-    const ModuleActions&        Actions() const final;
-    std::optional<std::wstring> TooltipText() override;
+    bool                         Layout(const RenderContext& render) final;
+    D2D1_SIZE_F                  Size() const final;
+    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const final;
+    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
+    void                         Click(D2D1_POINT_2F point) final;
+    const ModuleActions&         Actions() const final;
+    std::optional<std::wstring>  TooltipText() override;
 
   protected:
     explicit TextModule(TextModuleConfig config);

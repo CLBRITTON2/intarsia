@@ -6,16 +6,17 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 
 // Where a tooltip goes: beside the hovered module, on the side of the bar that faces the desktop. Screen pixels.
 struct TooltipAnchor {
-    RECT module;
-    RECT bar;
-    RECT monitor;
-    Edge edge;
-    UINT dpi;
+    RECT          module;
+    RECT          bar;
+    RECT          monitor;
+    Edge          edge;
+    std::uint32_t dpi;
 };
 
 // The tooltip's rectangle for a tooltip of size pixels: against the bar's desktop side, centered on the module along

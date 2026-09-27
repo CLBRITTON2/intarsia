@@ -4,6 +4,7 @@
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -22,7 +23,7 @@ namespace {
 
 } // namespace
 
-FileWatcher::FileWatcher(const std::filesystem::path& file, HWND target, UINT changedMessage, UINT failedMessage, std::chrono::milliseconds settle) :
+FileWatcher::FileWatcher(const std::filesystem::path& file, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage, std::chrono::milliseconds settle) :
     _fileName(file.filename().wstring()), _target(target), _changedMessage(changedMessage), _failedMessage(failedMessage), _settle(settle),
     _directory(OwnHandle(CreateFileW(file.parent_path().c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr),
@@ -143,5 +144,5 @@ std::vector<std::wstring> ChangedFileNames(std::span<const std::byte> buffer) {
 }
 
 bool SameFileName(std::wstring_view left, std::wstring_view right) {
-    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(left.data(), static_cast<std::int32_t>(left.size()), right.data(), static_cast<std::int32_t>(right.size()), TRUE) == CSTR_EQUAL;
 }

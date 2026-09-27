@@ -8,6 +8,7 @@
 #include <lualib.h>
 #include <shlobj.h>
 
+#include <cstdint>
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -29,12 +30,12 @@ namespace {
     // which aborts the process.
     class TableReader {
       public:
-        TableReader(lua_State* lua, int index, std::string source, std::string path) : _lua(lua), _index(index), _source(std::move(source)), _path(std::move(path)) {}
+        TableReader(lua_State* lua, std::int32_t index, std::string source, std::string path) : _lua(lua), _index(index), _source(std::move(source)), _path(std::move(path)) {}
 
         bool Has(std::string_view key) const {
             Reserve(1);
             lua_pushlstring(_lua, key.data(), key.size());
-            const int type = lua_rawget(_lua, _index);
+            const std::int32_t type = lua_rawget(_lua, _index);
             lua_pop(_lua, 1);
             return type != LUA_TNIL;
         }
@@ -61,7 +62,7 @@ namespace {
         // A sequence of strings such as { "clock", "cpu" }.
         std::vector<std::string> StringList(std::string_view key) const {
             PushField(key, LUA_TTABLE, "a list of strings");
-            const int                listIndex = lua_gettop(_lua);
+            const std::int32_t       listIndex = lua_gettop(_lua);
             const auto               length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
             std::vector<std::string> values;
             values.reserve(static_cast<size_t>(length));
@@ -111,13 +112,13 @@ namespace {
         }
 
       private:
-        std::string StringAt(int index) const {
+        std::string StringAt(std::int32_t index) const {
             size_t      length = 0;
             const char* data   = lua_tolstring(_lua, index, &length);
             return {data, length};
         }
 
-        size_t CountKeys(int tableIndex) const {
+        size_t CountKeys(std::int32_t tableIndex) const {
             size_t count = 0;
             Reserve(2);
             lua_pushnil(_lua);
@@ -130,17 +131,17 @@ namespace {
 
         // Every table read stays on the stack while its TableReader lives, one slot per module, so the stack can grow past
         // the LUA_MINSTACK slots Lua guarantees. Pushing past the allocated stack is unchecked in a release build.
-        void Reserve(int slots) const {
+        void Reserve(std::int32_t slots) const {
             if (lua_checkstack(_lua, slots) == 0) {
                 throw Error(std::format("Lua cannot grow its stack by {} slots to read {}", slots, _path.empty() ? std::string("the returned table") : _path));
             }
         }
 
         // Leaves room for StringList's element on top of the field.
-        void PushField(std::string_view key, int expectedType, std::string_view expectedName) const {
+        void PushField(std::string_view key, std::int32_t expectedType, std::string_view expectedName) const {
             Reserve(2);
             lua_pushlstring(_lua, key.data(), key.size());
-            const int type = lua_rawget(_lua, _index);
+            const std::int32_t type = lua_rawget(_lua, _index);
             if (type == LUA_TNIL) {
                 throw Error(std::format("{} is missing", KeyPath(key)));
             }
@@ -149,10 +150,10 @@ namespace {
             }
         }
 
-        lua_State*  _lua;
-        int         _index;
-        std::string _source;
-        std::string _path;
+        lua_State*   _lua;
+        std::int32_t _index;
+        std::string  _source;
+        std::string  _path;
     };
 
     float PositiveNumber(const TableReader& table, std::string_view key) {
@@ -171,12 +172,12 @@ namespace {
         return value;
     }
 
-    long long PositiveWholeNumber(const TableReader& table, std::string_view key) {
+    std::int64_t PositiveWholeNumber(const TableReader& table, std::string_view key) {
         const float value = PositiveNumber(table, key);
         if (value != std::floor(value)) {
             throw table.Error(std::format("{} must be a whole number, got {}", table.KeyPath(key), value));
         }
-        return static_cast<long long>(value);
+        return static_cast<std::int64_t>(value);
     }
 
     WindowManagerKind ParseWindowManager(const TableReader& table, std::string_view key) {
@@ -221,7 +222,7 @@ namespace {
         const size_t         count = (text.size() - 1) / 2;
         for (size_t channel = 0; channel < count; ++channel) {
             const std::string_view digits = std::string_view(text).substr(1 + (channel * 2), 2);
-            unsigned int           value  = 0;
+            std::uint32_t          value  = 0;
             const auto [end, error]       = std::from_chars(digits.data(), digits.data() + digits.size(), value, 16);
             if (error != std::errc() || end != digits.data() + digits.size()) {
                 throw table.Error(std::format("{} has invalid hex digits '{}' in '{}'", table.KeyPath(key), digits, text));
@@ -288,7 +289,7 @@ namespace {
                 module.RejectUnknownKeys({"type", "horizontal", "vertical"});
                 return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
         }
-        throw std::invalid_argument(std::format("unknown module kind {}", static_cast<int>(kind)));
+        throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
     }
 
     // Every name a _modules list shows must be defined in the modules table, which holds one table per module.
@@ -337,7 +338,7 @@ namespace {
             throw module.Error(std::format("{} names '{}', which is not an existing file or a program on PATH", module.KeyPath(key), argv.front()));
         }
         std::wstring extension = program->extension().wstring();
-        if (CompareStringOrdinal(extension.c_str(), static_cast<int>(extension.size()), L".exe", 4, TRUE) != CSTR_EQUAL) {
+        if (CompareStringOrdinal(extension.c_str(), static_cast<std::int32_t>(extension.size()), L".exe", 4, TRUE) != CSTR_EQUAL) {
             throw module.Error(std::format("{} resolves to {}, which is not an .exe", module.KeyPath(key), ToUtf8(program->wstring())));
         }
         std::vector<std::wstring> arguments;
@@ -353,7 +354,7 @@ namespace {
         action.RejectUnknownKeys({"window_manager"});
         std::string text    = action.String("window_manager");
         const bool  control = std::ranges::any_of(text, [](char character) {
-            const auto byte = static_cast<unsigned char>(character);
+            const auto byte = static_cast<std::uint8_t>(character);
             return byte < 0x20u || byte == 0x7Fu;
         });
         if (text.empty() || control) {
@@ -457,7 +458,7 @@ namespace {
     }
 
     // Far more than any real config needs (a few thousand instructions), and still under a second to reach.
-    constexpr int kMaxConfigInstructions = 50'000'000;
+    constexpr std::int32_t kMaxConfigInstructions = 50'000'000;
 
     // Called once the count is reached. luaL_error raises inside the lua_pcall, so LoadConfig reports it as a ConfigError.
     void AbortRunawayConfig(lua_State* lua, lua_Debug*) {

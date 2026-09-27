@@ -3,6 +3,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <utility>
 
 namespace {
@@ -43,7 +44,7 @@ void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
 }
 
-std::optional<UINT> Workspaces::MillisecondsUntilChange() const {
+std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
@@ -86,14 +87,16 @@ WorkspaceLine JoinWorkspaces(const std::vector<Workspace>& workspaces, std::intp
         if (!line.text.empty()) {
             line.text += kSeparator;
         }
-        line.runs.push_back(
-            LabelRun{.start = static_cast<UINT32>(line.text.size()), .length = static_cast<UINT32>(workspace.label.size()), .focused = workspace.focused, .name = workspace.name});
+        line.runs.push_back(LabelRun{.start   = static_cast<std::uint32_t>(line.text.size()),
+                                     .length  = static_cast<std::uint32_t>(workspace.label.size()),
+                                     .focused = workspace.focused,
+                                     .name    = workspace.name});
         line.text += workspace.label;
     }
     return line;
 }
 
-std::optional<std::string> WorkspaceAt(const WorkspaceLine& line, UINT32 textPosition) {
+std::optional<std::string> WorkspaceAt(const WorkspaceLine& line, std::uint32_t textPosition) {
     for (const LabelRun& run : line.runs) {
         if (textPosition >= run.start && textPosition < run.start + run.length) {
             return run.name;

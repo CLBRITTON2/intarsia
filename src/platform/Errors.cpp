@@ -1,5 +1,6 @@
 #include "platform/Errors.hpp"
 
+#include <cstdint>
 #include <format>
 #include <string>
 #include <system_error>
@@ -7,7 +8,7 @@
 namespace {
 
     std::string DescribeFailure(std::string_view call, HRESULT result) {
-        return std::format("{} failed with 0x{:08X}: {}", call, static_cast<unsigned long>(result), std::system_category().message(result));
+        return std::format("{} failed with 0x{:08X}: {}", call, static_cast<std::uint32_t>(result), std::system_category().message(result));
     }
 
 } // namespace

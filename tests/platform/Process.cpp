@@ -6,6 +6,7 @@
 
 #include <shellapi.h>
 
+#include <cstdint>
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -21,10 +22,10 @@ namespace {
     // What a program started with this command line sees as its arguments, split the way the C runtime splits them.
     std::vector<std::wstring> RoundTrip(const std::vector<std::wstring>& arguments) {
         const std::wstring                                  line  = L"program.exe " + JoinArguments(arguments);
-        int                                                 count = 0;
+        std::int32_t                                        count = 0;
         const std::unique_ptr<LPWSTR, decltype(&LocalFree)> argv(CommandLineToArgvW(line.c_str(), &count), &LocalFree);
         std::vector<std::wstring>                           split;
-        for (int index = 1; index < count; ++index) {
+        for (std::int32_t index = 1; index < count; ++index) {
             split.emplace_back(argv.get()[index]);
         }
         return split;

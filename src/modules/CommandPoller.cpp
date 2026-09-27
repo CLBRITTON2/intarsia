@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstdint>
 #include <algorithm>
 #include <format>
 #include <stdexcept>
@@ -39,7 +40,7 @@ namespace {
         } catch (const Win32Error&) { throw OutputError(std::format("{} is not UTF-8", field)); }
         const auto unsafe = std::ranges::find_if(wide, [allowed](wchar_t unit) { return IsUnsafeCharacter(unit) && allowed.find(unit) == std::wstring_view::npos; });
         if (unsafe != wide.end()) {
-            throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<unsigned int>(*unsafe)));
+            throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<std::uint32_t>(*unsafe)));
         }
     }
 
@@ -106,7 +107,7 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format) {
     } catch (const OutputError& error) {
         return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .detail = error.what()};
     }
-    throw std::invalid_argument(std::format("unknown custom output {}", static_cast<int>(format)));
+    throw std::invalid_argument(std::format("unknown custom output {}", static_cast<std::int32_t>(format)));
 }
 
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :

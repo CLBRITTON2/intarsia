@@ -2,9 +2,10 @@
 
 #include "platform/Log.hpp"
 
+#include <cstdint>
 #include <string>
 
-ChangeSignal::ChangeSignal(HWND target, UINT message) : _target(target), _message(message) {}
+ChangeSignal::ChangeSignal(HWND target, std::uint32_t message) : _target(target), _message(message) {}
 
 void ChangeSignal::Notify(std::string_view component) {
     if (_pending.exchange(true)) {

@@ -2,19 +2,20 @@
 
 #include <shellapi.h>
 
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 
 namespace {
 
-    UINT ShellEdge(Edge edge) {
+    std::uint32_t ShellEdge(Edge edge) {
         switch (edge) {
             case Edge::Top: return ABE_TOP;
             case Edge::Bottom: return ABE_BOTTOM;
             case Edge::Left: return ABE_LEFT;
             case Edge::Right: return ABE_RIGHT;
         }
-        throw std::invalid_argument(std::format("unknown edge {}", static_cast<int>(edge)));
+        throw std::invalid_argument(std::format("unknown edge {}", static_cast<std::int32_t>(edge)));
     }
 
     APPBARDATA AppBarData(HWND window) {
@@ -26,7 +27,7 @@ namespace {
 
 } // namespace
 
-RECT DockedRect(const RECT& area, Edge edge, int thickness) {
+RECT DockedRect(const RECT& area, Edge edge, std::int32_t thickness) {
     RECT rect = area;
     switch (edge) {
         case Edge::Top: rect.bottom = rect.top + thickness; return rect;
@@ -34,10 +35,10 @@ RECT DockedRect(const RECT& area, Edge edge, int thickness) {
         case Edge::Left: rect.right = rect.left + thickness; return rect;
         case Edge::Right: rect.left = rect.right - thickness; return rect;
     }
-    throw std::invalid_argument(std::format("unknown edge {}", static_cast<int>(edge)));
+    throw std::invalid_argument(std::format("unknown edge {}", static_cast<std::int32_t>(edge)));
 }
 
-void RegisterAppBar(HWND window, UINT callbackMessage) {
+void RegisterAppBar(HWND window, std::uint32_t callbackMessage) {
     APPBARDATA data       = AppBarData(window);
     data.uCallbackMessage = callbackMessage;
     if (!SHAppBarMessage(ABM_NEW, &data)) {
@@ -50,7 +51,7 @@ void UnregisterAppBar(HWND window) {
     SHAppBarMessage(ABM_REMOVE, &data);
 }
 
-RECT ReserveAppBarRect(HWND window, const RECT& monitorRect, Edge edge, int thickness) {
+RECT ReserveAppBarRect(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness) {
     APPBARDATA data = AppBarData(window);
     data.uEdge      = ShellEdge(edge);
     data.rc         = monitorRect;

@@ -3,6 +3,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -341,7 +342,7 @@ TEST(Config, TheConfigCannotLoadChunks) {
 TEST(Config, ManyModulesFitOnTheLuaStack) {
     std::string names = "{ ";
     std::string definitions;
-    for (int index = 0; index < 200; ++index) {
+    for (std::int32_t index = 0; index < 200; ++index) {
         names += "\"clock" + std::to_string(index) + "\", ";
         definitions += "        clock" + std::to_string(index) + " = { type = \"clock\", format = \"{:%H:%M}\", icon = \"x\", interval = 60 },\n";
     }

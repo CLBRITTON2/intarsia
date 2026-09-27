@@ -10,6 +10,7 @@
 #include <shellapi.h>
 #include <windowsx.h>
 
+#include <cstdint>
 #include <algorithm>
 #include <format>
 #include <stdexcept>
@@ -17,11 +18,11 @@
 
 namespace {
 
-    constexpr wchar_t  kWindowClass[]  = L"IntarsiaBar";
-    constexpr UINT     kAppBarCallback = WM_APP + 1;
-    constexpr UINT_PTR kChangeTimer    = 1;
+    constexpr wchar_t       kWindowClass[]  = L"IntarsiaBar";
+    constexpr std::uint32_t kAppBarCallback = WM_APP + 1;
+    constexpr UINT_PTR      kChangeTimer    = 1;
 
-    bool               IsHorizontal(Edge edge) {
+    bool                    IsHorizontal(Edge edge) {
         return edge == Edge::Top || edge == Edge::Bottom;
     }
 
@@ -45,13 +46,13 @@ namespace {
             case Edge::Left: return D2D1::RectF(size.width - border, 0, size.width, size.height);
             case Edge::Right: return D2D1::RectF(0, 0, border, size.height);
         }
-        throw std::invalid_argument(std::format("unknown edge {}", static_cast<int>(edge)));
+        throw std::invalid_argument(std::format("unknown edge {}", static_cast<std::int32_t>(edge)));
     }
 
-    std::optional<UINT> EarliestChange(const Sections<std::unique_ptr<IModule>>& modules) {
-        std::optional<UINT> earliest;
+    std::optional<std::uint32_t> EarliestChange(const Sections<std::unique_ptr<IModule>>& modules) {
+        std::optional<std::uint32_t> earliest;
         ForEachInSections(modules, [&earliest](const std::unique_ptr<IModule>& module) {
-            const std::optional<UINT> wait = module->MillisecondsUntilChange();
+            const std::optional<std::uint32_t> wait = module->MillisecondsUntilChange();
             if (wait.has_value() && (!earliest.has_value() || *wait < *earliest)) {
                 earliest = wait;
             }
@@ -67,7 +68,7 @@ namespace {
             case ModuleInput::ScrollUp: return actions.scrollUp;
             case ModuleInput::ScrollDown: return actions.scrollDown;
         }
-        throw std::invalid_argument(std::format("unknown module input {}", static_cast<int>(input)));
+        throw std::invalid_argument(std::format("unknown module input {}", static_cast<std::int32_t>(input)));
     }
 
     HWND LayerZOrder(Layer layer) {
@@ -75,7 +76,7 @@ namespace {
             case Layer::Top: return HWND_TOPMOST;
             case Layer::Bottom: return HWND_BOTTOM;
         }
-        throw std::invalid_argument(std::format("unknown layer {}", static_cast<int>(layer)));
+        throw std::invalid_argument(std::format("unknown layer {}", static_cast<std::int32_t>(layer)));
     }
 
     HWND CreateBarWindow(HINSTANCE instance, void* owner) {
@@ -107,7 +108,7 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 }
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
-         HWND control, UINT deviceLostMessage) :
+         HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
     _placement(placement), _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
@@ -133,7 +134,7 @@ void Bar::Build(HINSTANCE instance) {
     if (!GetClientRect(_window, &client)) {
         ThrowLastError("GetClientRect");
     }
-    _surface         = std::make_unique<Surface>(_graphics, _window, static_cast<UINT>(client.right), static_cast<UINT>(client.bottom), _placement.dpi);
+    _surface         = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     _backgroundBrush = CreateBrush(_surface->Context(), _config.colors.background);
     _borderBrush     = CreateBrush(_surface->Context(), _config.colors.border);
     _foregroundBrush = CreateBrush(_surface->Context(), _config.colors.foreground);
@@ -224,8 +225,8 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
 }
 
 void Bar::Dock() {
-    const int  thickness = DipsToPixels(_config.bar.thicknessDips, _placement.dpi);
-    const RECT rect      = ReserveAppBarRect(_window, _placement.monitorRect, _config.bar.edge, thickness);
+    const std::int32_t thickness = DipsToPixels(_config.bar.thicknessDips, _placement.dpi);
+    const RECT         rect      = ReserveAppBarRect(_window, _placement.monitorRect, _config.bar.edge, thickness);
     if (!MoveWindow(_window, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }
@@ -367,7 +368,7 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
 }
 
 void Bar::ScheduleNextChange() {
-    const std::optional<UINT> wait = EarliestChange(_modules);
+    const std::optional<std::uint32_t> wait = EarliestChange(_modules);
     if (!wait.has_value()) {
         KillTimer(_window, kChangeTimer);
         return;
@@ -404,10 +405,10 @@ void Bar::ShowTooltip() {
     if (!GetWindowRect(_window, &bar)) {
         ThrowLastError("GetWindowRect");
     }
-    const UINT dpi = _placement.dpi;
-    const RECT module{.left   = bar.left + DipsToPixels(box->bounds.left, dpi),
-                      .top    = bar.top + DipsToPixels(box->bounds.top, dpi),
-                      .right  = bar.left + DipsToPixels(box->bounds.right, dpi),
-                      .bottom = bar.top + DipsToPixels(box->bounds.bottom, dpi)};
+    const std::uint32_t dpi = _placement.dpi;
+    const RECT          module{.left   = bar.left + DipsToPixels(box->bounds.left, dpi),
+                               .top    = bar.top + DipsToPixels(box->bounds.top, dpi),
+                               .right  = bar.left + DipsToPixels(box->bounds.right, dpi),
+                               .bottom = bar.top + DipsToPixels(box->bounds.bottom, dpi)};
     _tooltip->Show(*text, TooltipAnchor{.module = module, .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi});
 }

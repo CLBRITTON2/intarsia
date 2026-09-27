@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -55,7 +56,7 @@ class Native final : public IWindowManager {
     };
     using UniqueHook = std::unique_ptr<std::remove_pointer_t<HWINEVENTHOOK>, Unhook>;
 
-    static UniqueHook    HookEvent(DWORD event, DWORD process);
+    static UniqueHook    HookEvent(std::uint32_t event, std::uint32_t process);
     static UniqueHook    HookTitleChanges(HWND window);
     static void CALLBACK OnWinEvent(HWINEVENTHOOK hook, DWORD event, HWND window, LONG object, LONG child, DWORD thread, DWORD time);
     void                 Refocus(HWND window);

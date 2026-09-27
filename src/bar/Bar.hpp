@@ -25,11 +25,11 @@ enum class ModuleInput : std::uint8_t {
 };
 
 struct BarPlacement {
-    HMONITOR monitor;
-    RECT     monitorRect;
-    UINT     dpi;
+    HMONITOR      monitor;
+    RECT          monitorRect;
+    std::uint32_t dpi;
 
-    bool     operator==(const BarPlacement& other) const;
+    bool          operator==(const BarPlacement& other) const;
 };
 
 // Process-wide state the window procedures report into, since exceptions cannot unwind through user32.
@@ -42,7 +42,7 @@ struct AppState {
 class Bar {
   public:
     Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
-        HWND control, UINT deviceLostMessage);
+        HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -101,7 +101,7 @@ class Bar {
     IWindowManager&                    _windowManager; // takes the window_manager actions
     AppState&                          _state;
     HWND                               _control;
-    UINT                               _deviceLostMessage;
+    std::uint32_t                      _deviceLostMessage;
     bool                               _deviceLost = false;
     bool                               _presented  = false;
     BarPlacement                       _placement;

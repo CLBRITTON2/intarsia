@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <cmath>
 #include <format>
 #include <stdexcept>
@@ -33,7 +34,7 @@ GraphicsDevice CreateGraphicsDevice() {
 
 void ThrowIfDeviceFailed(HRESULT result, std::string_view call) {
     if (result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET || result == D2DERR_RECREATE_TARGET) {
-        throw DeviceLostError(std::format("{} lost the graphics device with 0x{:08X}", call, static_cast<unsigned long>(result)));
+        throw DeviceLostError(std::format("{} lost the graphics device with 0x{:08X}", call, static_cast<std::uint32_t>(result)));
     }
     ThrowIfFailed(result, call);
 }
@@ -44,16 +45,16 @@ ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1
     return brush;
 }
 
-int DipsToPixels(float dips, UINT dpi) {
-    return static_cast<int>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
+std::int32_t DipsToPixels(float dips, std::uint32_t dpi) {
+    return static_cast<std::int32_t>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
 }
 
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family) {
     ComPtr<IDWriteFontCollection> fonts;
     ThrowIfFailed(dwrite->GetSystemFontCollection(&fonts, FALSE), "IDWriteFactory::GetSystemFontCollection");
 
-    UINT32 index  = 0;
-    BOOL   exists = FALSE;
+    std::uint32_t index  = 0;
+    BOOL          exists = FALSE;
     ThrowIfFailed(fonts->FindFamilyName(family, &index, &exists), "IDWriteFontCollection::FindFamilyName");
     if (!exists) {
         throw std::runtime_error(std::format("font family is not installed: {}", ToUtf8(family)));

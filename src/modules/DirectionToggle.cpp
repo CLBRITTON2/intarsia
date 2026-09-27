@@ -1,5 +1,6 @@
 #include "modules/DirectionToggle.hpp"
 
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <utility>
@@ -18,7 +19,7 @@ void DirectionToggle::Draw(const RenderContext& render, D2D1_POINT_2F origin) co
     _line.Draw(render, origin);
 }
 
-std::optional<UINT> DirectionToggle::MillisecondsUntilChange() const {
+std::optional<std::uint32_t> DirectionToggle::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
@@ -43,5 +44,5 @@ std::wstring DirectionText(const TilingDirectionConfig& config, std::optional<Ti
         case TilingDirection::Horizontal: return config.horizontal;
         case TilingDirection::Vertical: return config.vertical;
     }
-    throw std::invalid_argument(std::format("unknown tiling direction {}", static_cast<int>(*direction)));
+    throw std::invalid_argument(std::format("unknown tiling direction {}", static_cast<std::int32_t>(*direction)));
 }

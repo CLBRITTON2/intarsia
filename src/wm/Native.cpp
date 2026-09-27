@@ -4,6 +4,7 @@
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -73,7 +74,7 @@ void Native::RunCommand(const std::string& command) {
 }
 
 // process 0 hooks every process.
-Native::UniqueHook Native::HookEvent(DWORD event, DWORD process) {
+Native::UniqueHook Native::HookEvent(std::uint32_t event, std::uint32_t process) {
     HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, process, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (hook == nullptr) {
         ThrowLastError("SetWinEventHook");
@@ -126,12 +127,12 @@ void Native::Retitle() {
 }
 
 std::wstring WindowTitle(HWND window) {
-    const int length = GetWindowTextLengthW(window);
+    const std::int32_t length = GetWindowTextLengthW(window);
     if (length <= 0) {
         return {};
     }
-    std::wstring title(static_cast<size_t>(length) + 1, L'\0');
-    const int    copied = GetWindowTextW(window, title.data(), length + 1);
+    std::wstring       title(static_cast<size_t>(length) + 1, L'\0');
+    const std::int32_t copied = GetWindowTextW(window, title.data(), length + 1);
     title.resize(static_cast<size_t>(copied > 0 ? copied : 0));
     return ReplaceLoneSurrogates(title);
 }

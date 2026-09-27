@@ -7,6 +7,7 @@
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
+#include <cstdint>
 #include <stdexcept>
 #include <string_view>
 
@@ -35,7 +36,7 @@ void                                         ThrowIfDeviceFailed(HRESULT result,
 Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1_COLOR_F& color);
 
 // Rounded to the nearest pixel.
-int DipsToPixels(float dips, UINT dpi);
+std::int32_t DipsToPixels(float dips, std::uint32_t dpi);
 
 // DirectWrite silently substitutes a missing family, which would hide a broken font install.
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family);

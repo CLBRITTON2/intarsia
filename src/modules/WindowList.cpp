@@ -2,6 +2,7 @@
 
 #include "render/Graphics.hpp"
 
+#include <cstdint>
 #include <algorithm>
 #include <iterator>
 #include <utility>
@@ -69,7 +70,7 @@ void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     }
 }
 
-std::optional<UINT> WindowList::MillisecondsUntilChange() const {
+std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 

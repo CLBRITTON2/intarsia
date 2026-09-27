@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <atomic>
 #include <string_view>
 
@@ -10,7 +11,7 @@
 // a posted WM_QUIT only once no other posted message is waiting, so the bar could never quit.
 class ChangeSignal {
   public:
-    ChangeSignal(HWND target, UINT message);
+    ChangeSignal(HWND target, std::uint32_t message);
     ChangeSignal(const ChangeSignal&)            = delete;
     ChangeSignal& operator=(const ChangeSignal&) = delete;
 
@@ -22,6 +23,6 @@ class ChangeSignal {
 
   private:
     HWND              _target;
-    UINT              _message;
+    std::uint32_t     _message;
     std::atomic<bool> _pending = false;
 };

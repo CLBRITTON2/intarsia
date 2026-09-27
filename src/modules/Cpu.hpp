@@ -14,7 +14,7 @@ struct CpuTimes {
 };
 
 // Busy share of the time between two samples, 0 to 100.
-int CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
+std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
 
 // CPU busy time across all cores since the last sample, formatted from an integer percent: format = "{}%".
 class Cpu final : public TextModule {
@@ -27,5 +27,5 @@ class Cpu final : public TextModule {
 
     CpuTimes                              _previous;
     std::chrono::steady_clock::time_point _sampledAt;
-    int                                   _usage = 0;
+    std::int32_t                          _usage = 0;
 };

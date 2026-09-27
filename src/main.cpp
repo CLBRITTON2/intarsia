@@ -6,11 +6,12 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <exception>
 
 namespace {
 
-    constexpr USHORT kGlazeWmPort = 6123;
+    constexpr std::uint16_t kGlazeWmPort = 6123;
 
 } // namespace
 

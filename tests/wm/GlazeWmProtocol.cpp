@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -141,13 +142,13 @@ TEST(GlazeWmProtocol, AWorkspaceHoldingAnUnknownContainerIsAProtocolError) {
 }
 
 TEST(GlazeWmProtocol, DeeplyNestedSplitsDoNotOverflowTheStack) {
-    constexpr int kDepth = 20'000;
-    std::string   nested;
-    for (int depth = 0; depth < kDepth; ++depth) {
+    constexpr std::int32_t kDepth = 20'000;
+    std::string            nested;
+    for (std::int32_t depth = 0; depth < kDepth; ++depth) {
         nested += R"({"type":"split","children":[)";
     }
     nested += R"({"type":"window","id":"x","handle":1,"hasFocus":false})";
-    for (int depth = 0; depth < kDepth; ++depth) {
+    for (std::int32_t depth = 0; depth < kDepth; ++depth) {
         nested += "]}";
     }
     const std::string response =
