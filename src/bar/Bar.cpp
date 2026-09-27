@@ -30,23 +30,48 @@ namespace {
         return IsHorizontal(edge) ? size.width : size.height;
     }
 
-    // Places a module at offset along the main axis, centered across the bar's thickness.
-    D2D1_POINT_2F ModuleOrigin(Edge edge, float offset, D2D1_SIZE_F module, D2D1_SIZE_F bar) {
-        if (IsHorizontal(edge)) {
-            return D2D1::Point2F(offset, (bar.height - module.height) / 2.0f);
-        }
-        return D2D1::Point2F((bar.width - module.width) / 2.0f, offset);
+    float CrossLength(D2D1_SIZE_F size, Edge edge) {
+        return IsHorizontal(edge) ? size.height : size.width;
     }
 
-    // The border sits on the side facing the rest of the desktop.
-    D2D1_RECT_F BorderRect(const D2D1_SIZE_F& size, Edge edge, float border) {
-        switch (edge) {
-            case Edge::Top: return D2D1::RectF(0, size.height - border, size.width, size.height);
-            case Edge::Bottom: return D2D1::RectF(0, 0, size.width, border);
-            case Edge::Left: return D2D1::RectF(size.width - border, 0, size.width, size.height);
-            case Edge::Right: return D2D1::RectF(0, 0, border, size.height);
+    // Spacing is on screen axes, as CSS writes it: along a top or bottom bar is x, along a left or right bar is y.
+    float MainOf(const Spacing& spacing, Edge edge) {
+        return IsHorizontal(edge) ? spacing.xDips : spacing.yDips;
+    }
+
+    float CrossOf(const Spacing& spacing, Edge edge) {
+        return IsHorizontal(edge) ? spacing.yDips : spacing.xDips;
+    }
+
+    // A rectangle from a span along the bar (main) and a span across it (cross).
+    D2D1_RECT_F MainCrossRect(Edge edge, float mainStart, float mainLength, float crossStart, float crossLength) {
+        if (IsHorizontal(edge)) {
+            return D2D1::RectF(mainStart, crossStart, mainStart + mainLength, crossStart + crossLength);
         }
-        throw std::invalid_argument(std::format("unknown edge {}", static_cast<std::int32_t>(edge)));
+        return D2D1::RectF(crossStart, mainStart, crossStart + crossLength, mainStart + mainLength);
+    }
+
+    // Where a module's content starts in its box: past the padding along the bar, centered across it.
+    D2D1_POINT_2F ContentOrigin(Edge edge, const D2D1_RECT_F& box, float padding, D2D1_SIZE_F content) {
+        if (IsHorizontal(edge)) {
+            return D2D1::Point2F(box.left + padding, box.top + ((box.bottom - box.top - content.height) / 2.0f));
+        }
+        return D2D1::Point2F(box.left + ((box.right - box.left - content.width) / 2.0f), box.top + padding);
+    }
+
+    // A border is stroked centered on its outline, so the outline is inset by half the width to keep it inside.
+    void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& box, const BoxStyle& style, const D2D1_COLOR_F& fill) {
+        const float radius = std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f);
+        if (fill.a > 0.0f) {
+            context->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brushes.Get(fill));
+        }
+        const float width = style.borderWidthDips;
+        if (width > 0.0f && style.borderColor.a > 0.0f) {
+            const float       inset = width / 2.0f;
+            const D2D1_RECT_F edge  = D2D1::RectF(box.left + inset, box.top + inset, box.right - inset, box.bottom - inset);
+            const float       round = std::max(radius - inset, 0.0f);
+            context->DrawRoundedRectangle(D2D1::RoundedRect(edge, round, round), brushes.Get(style.borderColor), width);
+        }
     }
 
     std::optional<std::uint32_t> EarliestChange(const Sections<std::unique_ptr<IModule>>& modules) {
@@ -110,7 +135,8 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
          HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
-    _placement(placement), _modules(CreateModules(config, sources)), _window(CreateBarWindow(instance, this)) {
+    _placement(placement), _modules(CreateModules(config, sources)), _styles(MapSections(config.modules, [](const ModuleInstance& instance) { return instance.style; })),
+    _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
@@ -122,9 +148,10 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
 }
 
 void Bar::Build(HINSTANCE instance) {
-    RequireFontFamily(_graphics.dwrite.Get(), _config.font.family.c_str());
-    ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.font.family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                                     _config.font.textSizeDips, L"en-us", &_textFormat),
+    RequireFontFamily(_graphics.dwrite.Get(), _config.style.font.c_str());
+    ForEachInSections(_styles, [this](const ModuleStyle& style) { RequireFontFamily(_graphics.dwrite.Get(), style.icon.font.c_str()); });
+    ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.style.font.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                                     _config.style.fontSizeDips, L"en-us", &_textFormat),
                   "IDWriteFactory::CreateTextFormat");
 
     RegisterAppBar(_window, kAppBarCallback);
@@ -134,13 +161,9 @@ void Bar::Build(HINSTANCE instance) {
     if (!GetClientRect(_window, &client)) {
         ThrowLastError("GetClientRect");
     }
-    _surface         = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
-    _backgroundBrush = CreateBrush(_surface->Context(), _config.colors.background);
-    _borderBrush     = CreateBrush(_surface->Context(), _config.colors.border);
-    _foregroundBrush = CreateBrush(_surface->Context(), _config.colors.foreground);
-    _accentBrush     = CreateBrush(_surface->Context(), _config.colors.accent);
-    _alertBrush      = CreateBrush(_surface->Context(), _config.colors.alert);
-    _tooltip         = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
+    _surface = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
+    _brushes = std::make_unique<BrushCache>(_surface->Context());
+    _tooltip = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
     ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
@@ -189,6 +212,8 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         case WM_MOUSELEAVE:
             _pointed = nullptr;
             _tooltip->Hide();
+            // Draws the box that was under the cursor without its hover.
+            Render();
             return 0;
         case WM_LBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::LeftClick); return 0;
         case WM_RBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::RightClick); return 0;
@@ -238,14 +263,26 @@ void Bar::PlaceInZOrder(HWND insertAfter) {
     }
 }
 
-RenderContext Bar::FrameContext() const {
-    return RenderContext{.context      = _surface->Context(),
-                         .dwrite       = _graphics.dwrite.Get(),
-                         .textFormat   = _textFormat.Get(),
-                         .foreground   = _foregroundBrush.Get(),
-                         .accent       = _accentBrush.Get(),
-                         .alert        = _alertBrush.Get(),
-                         .iconSizeDips = _config.font.iconSizeDips};
+RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
+    return RenderContext{.context       = _surface->Context(),
+                         .dwrite        = _graphics.dwrite.Get(),
+                         .textFormat    = _textFormat.Get(),
+                         .iconFont      = style.icon.font.c_str(),
+                         .iconSizeDips  = style.icon.sizeDips,
+                         .iconGapDips   = style.icon.gapDips,
+                         .foreground    = _brushes->Get(style.color),
+                         .accent        = _brushes->Get(style.icon.color),
+                         .alert         = _brushes->Get(style.alertColor),
+                         .brushes       = _brushes.get(),
+                         .boxHeightDips = BoxCrossLength()};
+}
+
+// A module box spans the bar's thickness less the sections' margin and padding on both sides.
+float Bar::BoxCrossLength() const {
+    const Edge          edge      = _config.bar.edge;
+    const SectionStyle& section   = _config.style.section;
+    const float         thickness = CrossLength(_surface->Context()->GetSize(), edge);
+    return thickness - (2.0f * CrossOf(section.margin, edge)) - (2.0f * CrossOf(section.box.padding, edge));
 }
 
 bool Bar::DeviceLost() const {
@@ -287,30 +324,40 @@ void Bar::Refresh() {
 }
 
 bool Bar::LayOutModules() {
-    const RenderContext render  = FrameContext();
-    bool                changed = false;
+    bool changed = false;
     // Every module lays out, so none is left holding stale content.
-    ForEachInSections(_modules, [&render, &changed](const std::unique_ptr<IModule>& module) { changed = module->Layout(render) || changed; });
+    for (const auto& [modules, styles] : {std::pair{&_modules.left, &_styles.left}, std::pair{&_modules.center, &_styles.center}, std::pair{&_modules.right, &_styles.right}}) {
+        for (size_t index = 0; index < modules->size(); ++index) {
+            changed = (*modules)[index]->Layout(ModuleContext((*styles)[index])) || changed;
+        }
+    }
     return changed;
 }
 
-void Bar::Draw() {
-    const RenderContext         render  = FrameContext();
-    const Edge                  edge    = _config.bar.edge;
-    const D2D1_SIZE_F           barSize = render.context->GetSize();
-    const Sections<D2D1_SIZE_F> sizes   = MapSections(_modules, [](const std::unique_ptr<IModule>& module) { return module->Size(); });
-    const Sections<float>       offsets =
-        ArrangeSections(MapSections(sizes, [edge](D2D1_SIZE_F size) { return MainLength(size, edge); }), MainLength(barSize, edge), _config.bar.spacingDips);
-
-    render.context->BeginDraw();
-    render.context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    render.context->FillRectangle(D2D1::RectF(0, 0, barSize.width, barSize.height), _backgroundBrush.Get());
-    render.context->FillRectangle(BorderRect(barSize, edge, _config.bar.borderDips), _borderBrush.Get());
-    _hitBoxes.clear();
-    for (const auto& boxes : {DrawSection(render, _modules.left, sizes.left, offsets.left, barSize), DrawSection(render, _modules.center, sizes.center, offsets.center, barSize),
-                              DrawSection(render, _modules.right, sizes.right, offsets.right, barSize)}) {
-        _hitBoxes.insert(_hitBoxes.end(), boxes.begin(), boxes.end());
+// Each module's box along the bar: what it draws plus its padding on both sides.
+std::vector<float> Bar::BoxLengths(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles) const {
+    std::vector<float> lengths;
+    lengths.reserve(modules.size());
+    for (size_t index = 0; index < modules.size(); ++index) {
+        lengths.push_back(MainLength(modules[index]->Size(), _config.bar.edge) + (2.0f * MainOf(styles[index].box.padding, _config.bar.edge)));
     }
+    return lengths;
+}
+
+void Bar::Draw() {
+    ID2D1DeviceContext*   context = _surface->Context();
+    const Sections<float> lengths{
+        .left = BoxLengths(_modules.left, _styles.left), .center = BoxLengths(_modules.center, _styles.center), .right = BoxLengths(_modules.right, _styles.right)};
+    const Edge          edge    = _config.bar.edge;
+    const SectionStyle& section = _config.style.section;
+    const BarLayout     layout  = ArrangeBar(lengths, MainLength(context->GetSize(), edge), MainOf(section.margin, edge), MainOf(section.box.padding, edge));
+
+    context->BeginDraw();
+    context->Clear(D2D1::ColorF(0, 0, 0, 0));
+    _hitBoxes.clear();
+    DrawSection(_modules.left, _styles.left, lengths.left, layout.left);
+    DrawSection(_modules.center, _styles.center, lengths.center, layout.center);
+    DrawSection(_modules.right, _styles.right, lengths.right, layout.right);
     _surface->EndDrawAndPresent();
     _presented = true;
 }
@@ -328,16 +375,29 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
     }
 }
 
-std::vector<Bar::HitBox> Bar::DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
-                                          const std::vector<float>& offsets, D2D1_SIZE_F barSize) const {
-    std::vector<HitBox> boxes;
-    boxes.reserve(modules.size());
-    for (size_t index = 0; index < modules.size(); ++index) {
-        const D2D1_POINT_2F origin = ModuleOrigin(_config.bar.edge, offsets[index], sizes[index], barSize);
-        modules[index]->Draw(render, origin);
-        boxes.push_back(HitBox{.module = modules[index].get(), .bounds = D2D1::RectF(origin.x, origin.y, origin.x + sizes[index].width, origin.y + sizes[index].height)});
+// The section's box, then each module's box (its background, and its hover while under the cursor), then the module.
+void Bar::DrawSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths,
+                      const SectionLayout& layout) {
+    if (layout.length <= 0.0f) {
+        return;
     }
-    return boxes;
+    ID2D1DeviceContext* context   = _surface->Context();
+    const Edge          edge      = _config.bar.edge;
+    const SectionStyle& style     = _config.style.section;
+    const float         margin    = CrossOf(style.margin, edge);
+    const float         thickness = CrossLength(context->GetSize(), edge);
+    const D2D1_RECT_F   section   = MainCrossRect(edge, layout.start, layout.length, margin, thickness - (2.0f * margin));
+    DrawBox(context, *_brushes, section, style.box, style.box.background);
+
+    const float boxStart = margin + CrossOf(style.box.padding, edge);
+    for (size_t index = 0; index < modules.size(); ++index) {
+        const ModuleStyle& moduleStyle = styles[index];
+        const D2D1_RECT_F  box         = MainCrossRect(edge, layout.offsets[index], lengths[index], boxStart, BoxCrossLength());
+        DrawBox(context, *_brushes, box, moduleStyle.box, modules[index].get() == _pointed ? moduleStyle.hover : moduleStyle.box.background);
+        const D2D1_POINT_2F origin = ContentOrigin(edge, box, MainOf(moduleStyle.box.padding, edge), modules[index]->Size());
+        modules[index]->Draw(ModuleContext(moduleStyle), origin);
+        _hitBoxes.push_back(HitBox{.module = modules[index].get(), .bounds = box, .contentOrigin = origin});
+    }
 }
 
 // Mouse positions are client pixels, and modules lay out in DIPs.
@@ -363,7 +423,7 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
         _windowManager.RunCommand(windowManagerCommand->text);
     } else if (input == ModuleInput::LeftClick) {
         const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
-        box->module->Click(D2D1::Point2F((static_cast<float>(client.x) * scale) - box->bounds.left, (static_cast<float>(client.y) * scale) - box->bounds.top));
+        box->module->Click(D2D1::Point2F((static_cast<float>(client.x) * scale) - box->contentOrigin.x, (static_cast<float>(client.y) * scale) - box->contentOrigin.y));
     }
 }
 
@@ -390,6 +450,8 @@ void Bar::PointAt(POINT client) {
     if (!TrackMouseEvent(&track)) {
         ThrowLastError("TrackMouseEvent");
     }
+    // Moves the hover to the box now under the cursor.
+    Render();
 }
 
 void Bar::ShowTooltip() {

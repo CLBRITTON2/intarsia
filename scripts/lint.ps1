@@ -89,12 +89,14 @@ Invoke-Checked 'clang-format' { & $clangFormat --dry-run --Werror $sources }
 
 Push-Location $repoRoot
 try {
-    Invoke-Checked 'cmake configure' { cmake --preset debug }
+    # Configure only: clang-tidy needs the compile commands, and the lint preset leaves out the precompiled headers
+    # clang-tidy cannot read.
+    Invoke-Checked 'cmake configure' { cmake --preset lint }
 } finally {
     Pop-Location
 }
 
-$buildDir = Join-Path $repoRoot 'build\debug'
+$buildDir = Join-Path $repoRoot 'build\lint'
 $results  = $units | ForEach-Object -ThrottleLimit ([Environment]::ProcessorCount) -Parallel {
     $output = & $using:clangTidy -p $using:buildDir --quiet $_ 2>&1
     [pscustomobject]@{

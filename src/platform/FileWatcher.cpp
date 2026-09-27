@@ -23,9 +23,10 @@ namespace {
 
 } // namespace
 
-FileWatcher::FileWatcher(const std::filesystem::path& file, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage, std::chrono::milliseconds settle) :
-    _fileName(file.filename().wstring()), _target(target), _changedMessage(changedMessage), _failedMessage(failedMessage), _settle(settle),
-    _directory(OwnHandle(CreateFileW(file.parent_path().c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+FileWatcher::FileWatcher(const std::filesystem::path& directory, std::vector<std::wstring> fileNames, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage,
+                         std::chrono::milliseconds settle) :
+    _fileNames(std::move(fileNames)), _target(target), _changedMessage(changedMessage), _failedMessage(failedMessage), _settle(settle),
+    _directory(OwnHandle(CreateFileW(directory.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr),
                          "CreateFileW(config directory)")),
     _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")), _thread([this] { Watch(); }) {}
@@ -108,8 +109,11 @@ void FileWatcher::WatchUntilStopped() {
                 ThrowLastError("GetOverlappedResult(ReadDirectoryChangesW)");
             }
             // Zero bytes means the change list overflowed the buffer, so the file may have changed.
-            const std::vector<std::wstring> names = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
-            if (bytes == 0 || std::ranges::any_of(names, [this](const std::wstring& name) { return SameFileName(name, _fileName); })) {
+            const std::vector<std::wstring> names   = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
+            const auto                      watched = [this](const std::wstring& name) {
+                return std::ranges::any_of(_fileNames, [&name](const std::wstring& fileName) { return SameFileName(name, fileName); });
+            };
+            if (bytes == 0 || std::ranges::any_of(names, watched)) {
                 pending = true;
             }
             startRead();

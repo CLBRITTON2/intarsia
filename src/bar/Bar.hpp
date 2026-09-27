@@ -1,11 +1,13 @@
 #pragma once
 
+#include "bar/Layout.hpp"
 #include "bar/Sections.hpp"
 #include "bar/Tooltip.hpp"
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
 #include "platform/Process.hpp"
+#include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
 #include "render/RenderContext.hpp"
 #include "render/Surface.hpp"
@@ -69,22 +71,25 @@ class Bar {
     LRESULT Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
     // Everything the constructor does once the window exists.
-    void          Build(HINSTANCE instance);
-    void          Dock();
-    void          PlaceInZOrder(HWND insertAfter);
-    RenderContext FrameContext() const;
+    void Build(HINSTANCE instance);
+    void Dock();
+    void PlaceInZOrder(HWND insertAfter);
+    // What a module lays out and draws with: the bar's fonts and the module's own colors.
+    RenderContext ModuleContext(const ModuleStyle& style) const;
+    float         BoxCrossLength() const;
     // Whether any module's content changed.
-    bool LayOutModules();
-    void Draw();
-    // Where a module was last drawn, for routing clicks to it.
+    bool               LayOutModules();
+    std::vector<float> BoxLengths(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles) const;
+    void               Draw();
+    // Where a module's box was last drawn, and where its content starts, for routing clicks to it.
     struct HitBox {
-        IModule*    module;
-        D2D1_RECT_F bounds;
+        IModule*      module;
+        D2D1_RECT_F   bounds;
+        D2D1_POINT_2F contentOrigin;
     };
 
-    std::vector<HitBox> DrawSection(const RenderContext& render, const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<D2D1_SIZE_F>& sizes,
-                                    const std::vector<float>& offsets, D2D1_SIZE_F barSize) const;
-    void                ScheduleNextChange();
+    void DrawSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths, const SectionLayout& layout);
+    void ScheduleNextChange();
     // Stops drawing and posts to control, once.
     void ReportDeviceLost(const DeviceLostError& error);
     // The box under a point in client pixels, or null between modules.
@@ -106,18 +111,15 @@ class Bar {
     bool                               _presented  = false;
     BarPlacement                       _placement;
     Sections<std::unique_ptr<IModule>> _modules;
+    Sections<ModuleStyle>              _styles; // each module's, in the same places as _modules
     std::vector<HitBox>                _hitBoxes;
     IModule*                           _pointed = nullptr; // the module under the cursor, null when there is none
 
     // Null until the constructor has docked the window and knows its size.
-    std::unique_ptr<Surface>                     _surface;
-    std::unique_ptr<Tooltip>                     _tooltip;
-    Microsoft::WRL::ComPtr<IDWriteTextFormat>    _textFormat;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _backgroundBrush;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _borderBrush;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _foregroundBrush;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _accentBrush;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _alertBrush;
+    std::unique_ptr<Surface>                  _surface;
+    std::unique_ptr<Tooltip>                  _tooltip;
+    std::unique_ptr<BrushCache>               _brushes;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> _textFormat;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.
     HWND _window;

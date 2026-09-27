@@ -18,7 +18,16 @@ struct TextOnlyRender {
     }
 
     RenderContext Context() const {
-        return RenderContext{
-            .context = nullptr, .dwrite = dwrite.Get(), .textFormat = format.Get(), .foreground = nullptr, .accent = nullptr, .alert = nullptr, .iconSizeDips = 12.0f};
+        return RenderContext{.context       = nullptr,
+                             .dwrite        = dwrite.Get(),
+                             .textFormat    = format.Get(),
+                             .iconFont      = L"Segoe UI",
+                             .iconSizeDips  = 12.0f,
+                             .iconGapDips   = 4.0f,
+                             .foreground    = nullptr,
+                             .accent        = nullptr,
+                             .alert         = nullptr,
+                             .brushes       = nullptr,
+                             .boxHeightDips = 24.0f};
     }
 };

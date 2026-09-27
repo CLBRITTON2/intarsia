@@ -1,5 +1,9 @@
 #include "modules/Workspaces.hpp"
 
+#include "../wm/FakeWindowManager.hpp"
+#include "TestStyle.hpp"
+#include "TextOnlyRender.hpp"
+
 #include <gtest/gtest.h>
 
 #include <vector>
@@ -7,40 +11,58 @@
 namespace {
 
     const std::vector<Workspace> kWorkspaces{
-        {.label = L"1", .name = "1", .focused = false, .monitor = 10},
-        {.label = L"web", .name = "5", .focused = true, .monitor = 10},
-        {.label = L"9", .name = "9", .focused = false, .monitor = 20},
+        {.label = L"1", .name = "1", .focused = false, .occupied = true, .monitor = 10},
+        {.label = L"web", .name = "5", .focused = true, .occupied = true, .monitor = 10},
+        {.label = L"3", .name = "3", .focused = false, .occupied = false, .monitor = 10},
+        {.label = L"9", .name = "9", .focused = false, .occupied = true, .monitor = 20},
     };
 
 } // namespace
 
-TEST(Workspaces, JoinsOnlyThisMonitorsLabelsWithTwoSpaces) {
-    const WorkspaceLine line = JoinWorkspaces(kWorkspaces, 10);
-    EXPECT_EQ(line.text, L"1  web");
-    ASSERT_EQ(line.runs.size(), 2u);
-    EXPECT_EQ(line.runs[1].start, 3u);
-    EXPECT_EQ(line.runs[1].length, 3u);
-    EXPECT_TRUE(line.runs[1].focused);
-    EXPECT_EQ(line.runs[1].name, "5");
-    EXPECT_FALSE(line.runs[0].focused);
+TEST(Workspaces, WorkspacesOnMonitorKeepsOnlyThatMonitorsInOrder) {
+    const std::vector<Workspace> shown = WorkspacesOnMonitor(kWorkspaces, 10);
+    ASSERT_EQ(shown.size(), 3u);
+    EXPECT_EQ(shown[0].name, "1");
+    EXPECT_EQ(shown[2].name, "3");
+    EXPECT_TRUE(WorkspacesOnMonitor(kWorkspaces, 30).empty());
 }
 
-TEST(Workspaces, NoWorkspacesOnTheMonitorGivesAnEmptyLine) {
-    const WorkspaceLine line = JoinWorkspaces(kWorkspaces, 30);
-    EXPECT_TRUE(line.text.empty());
-    EXPECT_TRUE(line.runs.empty());
+TEST(Workspaces, FocusedWinsOverOccupiedWhichWinsOverEmpty) {
+    const ModuleStyle style = TestModuleStyle();
+    EXPECT_EQ(&WorkspaceState(kWorkspaces[0], style), &style.occupied);
+    EXPECT_EQ(&WorkspaceState(kWorkspaces[1], style), &style.focused);
+    EXPECT_EQ(&WorkspaceState(kWorkspaces[2], style), &style.empty);
 }
 
-TEST(Workspaces, WorkspaceAtMapsALabelToItsNameNotItsDisplayName) {
-    const WorkspaceLine line = JoinWorkspaces(kWorkspaces, 10);
-    EXPECT_EQ(WorkspaceAt(line, 0), "1");
-    EXPECT_EQ(WorkspaceAt(line, 3), "5");
-    EXPECT_EQ(WorkspaceAt(line, 5), "5");
+TEST(Workspaces, LayoutReportsAChangeOnlyWhenThisMonitorsWorkspacesChange) {
+    FakeWindowManager    windowManager;
+    const TextOnlyRender render;
+    Workspaces           module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
+    windowManager.workspaces = kWorkspaces;
+    EXPECT_TRUE(module.Layout(render.Context()));
+    EXPECT_FALSE(module.Layout(render.Context()));
+    windowManager.workspaces[3].focused = true;
+    EXPECT_FALSE(module.Layout(render.Context()));
+    windowManager.workspaces[2].occupied = true;
+    EXPECT_TRUE(module.Layout(render.Context()));
 }
 
-TEST(Workspaces, WorkspaceAtIsEmptyBetweenAndAfterLabels) {
-    const WorkspaceLine line = JoinWorkspaces(kWorkspaces, 10);
-    EXPECT_FALSE(WorkspaceAt(line, 1).has_value());
-    EXPECT_FALSE(WorkspaceAt(line, 2).has_value());
-    EXPECT_FALSE(WorkspaceAt(line, 6).has_value());
+TEST(Workspaces, ClickFocusesTheWorkspaceUnderItByNameAndNothingInTheGaps) {
+    FakeWindowManager    windowManager;
+    const TextOnlyRender render;
+    Workspaces           module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
+    windowManager.workspaces = {kWorkspaces[0], kWorkspaces[1]};
+    module.Layout(render.Context());
+    const float height = module.Size().height;
+
+    // Each item has 5 of margin on either side, which the module's width includes.
+    module.Click(D2D1::Point2F(module.Size().width - 6.0f, height / 2.0f));
+    EXPECT_EQ(windowManager.focusedWorkspace, "5");
+    windowManager.focusedWorkspace.clear();
+    module.Click(D2D1::Point2F(6.0f, height / 2.0f));
+    EXPECT_EQ(windowManager.focusedWorkspace, "1");
+    windowManager.focusedWorkspace.clear();
+    module.Click(D2D1::Point2F(2.0f, height / 2.0f));
+    module.Click(D2D1::Point2F(module.Size().width - 2.0f, height / 2.0f));
+    EXPECT_TRUE(windowManager.focusedWorkspace.empty());
 }

@@ -1,47 +1,57 @@
 #include "modules/Workspaces.hpp"
 
-#include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <utility>
 
-namespace {
-
-    constexpr std::wstring_view kSeparator = L"  ";
-
-} // namespace
-
-Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor) :
-    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _line{.text = {}, .runs = {}},
-    _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}} {}
+Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleStyle style) :
+    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)), _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}},
+    _disconnected(EmptyIconText()) {}
 
 bool Workspaces::Layout(const RenderContext& render) {
-    const WindowManagerStatus status       = _windowManager.Status();
-    const bool                disconnected = status.connection == Connection::Disconnected;
-    WorkspaceLine             line = disconnected ? WorkspaceLine{.text = status.name + L" disconnected", .runs = {}} : JoinWorkspaces(_windowManager.Workspaces(), _monitor);
-    if (_text.layout != nullptr && line == _line && disconnected == _disconnected) {
+    const WindowManagerStatus status           = _windowManager.Status();
+    std::wstring              disconnectedText = status.connection == Connection::Disconnected ? status.name + L" disconnected" : std::wstring();
+    std::vector<Workspace>    shown            = disconnectedText.empty() ? WorkspacesOnMonitor(_windowManager.Workspaces(), _monitor) : std::vector<Workspace>();
+    if (_laidOut && shown == _shown && disconnectedText == _disconnectedText) {
         return false;
     }
-    _line         = std::move(line);
-    _disconnected = disconnected;
+    _shown            = std::move(shown);
+    _disconnectedText = std::move(disconnectedText);
+    _laidOut          = true;
+    _labels.clear();
+    _states.clear();
+    _disconnected = _disconnectedText.empty() ? EmptyIconText() : LayOutIconText(render, L"", _disconnectedText);
 
-    _text = LayOutIconText(render, L"", _line.text, disconnected ? render.alert : render.foreground);
-    for (const LabelRun& run : _line.runs) {
-        if (run.focused) {
-            ThrowIfFailed(_text.layout->SetDrawingEffect(render.accent, DWRITE_TEXT_RANGE{.startPosition = run.start, .length = run.length}),
-                          "IDWriteTextLayout::SetDrawingEffect");
-        }
+    std::vector<D2D1_SIZE_F>      contents;
+    std::vector<const ItemStyle*> styles;
+    for (const Workspace& workspace : _shown) {
+        const ItemStyle& state = WorkspaceState(workspace, _style);
+        _labels.push_back(LayOutWeightedText(render, workspace.label, state.weight));
+        _states.push_back(state);
+        contents.push_back(_labels.back().size);
+        styles.push_back(&state);
     }
+    _row = ArrangeItems(contents, styles);
     return true;
 }
 
 D2D1_SIZE_F Workspaces::Size() const {
-    return _text.size;
+    return _disconnectedText.empty() ? _row.size : _disconnected.size;
 }
 
 void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
+    if (!_disconnectedText.empty()) {
+        DrawIconText(render, origin, _disconnected, render.alert);
+        return;
+    }
+    for (size_t index = 0; index < _labels.size(); ++index) {
+        const ItemStyle& state = _states[index];
+        DrawItemBackground(render, _row.boxes[index], state, origin);
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], state, origin), _labels[index], render.brushes->Get(state.color));
+    }
 }
 
 std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
@@ -49,19 +59,9 @@ std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
 }
 
 void Workspaces::Click(D2D1_POINT_2F point) {
-    if (_text.layout == nullptr) {
-        return;
-    }
-    BOOL                    trailing = FALSE;
-    BOOL                    inside   = FALSE;
-    DWRITE_HIT_TEST_METRICS metrics{};
-    ThrowIfFailed(_text.layout->HitTestPoint(point.x, point.y, &trailing, &inside, &metrics), "IDWriteTextLayout::HitTestPoint");
-    if (!inside) {
-        return;
-    }
-    const std::optional<std::string> name = WorkspaceAt(_line, metrics.textPosition);
-    if (name.has_value()) {
-        _windowManager.FocusWorkspace(*name);
+    const std::optional<size_t> item = ItemAt(_row, point);
+    if (item.has_value()) {
+        _windowManager.FocusWorkspace(_shown[*item].name);
     }
 }
 
@@ -78,29 +78,15 @@ std::optional<std::wstring> Workspaces::TooltipText() {
     return ToWide(status.detail);
 }
 
-WorkspaceLine JoinWorkspaces(const std::vector<Workspace>& workspaces, std::intptr_t monitor) {
-    WorkspaceLine line{.text = {}, .runs = {}};
-    for (const Workspace& workspace : workspaces) {
-        if (workspace.monitor != monitor) {
-            continue;
-        }
-        if (!line.text.empty()) {
-            line.text += kSeparator;
-        }
-        line.runs.push_back(LabelRun{.start   = static_cast<std::uint32_t>(line.text.size()),
-                                     .length  = static_cast<std::uint32_t>(workspace.label.size()),
-                                     .focused = workspace.focused,
-                                     .name    = workspace.name});
-        line.text += workspace.label;
-    }
-    return line;
+std::vector<Workspace> WorkspacesOnMonitor(const std::vector<Workspace>& workspaces, std::intptr_t monitor) {
+    std::vector<Workspace> shown;
+    std::ranges::copy_if(workspaces, std::back_inserter(shown), [monitor](const Workspace& workspace) { return workspace.monitor == monitor; });
+    return shown;
 }
 
-std::optional<std::string> WorkspaceAt(const WorkspaceLine& line, std::uint32_t textPosition) {
-    for (const LabelRun& run : line.runs) {
-        if (textPosition >= run.start && textPosition < run.start + run.length) {
-            return run.name;
-        }
+const ItemStyle& WorkspaceState(const Workspace& workspace, const ModuleStyle& style) {
+    if (workspace.focused) {
+        return style.focused;
     }
-    return std::nullopt;
+    return workspace.occupied ? style.occupied : style.empty;
 }

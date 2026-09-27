@@ -16,11 +16,12 @@
 #include <thread>
 #include <vector>
 
-// Posts changedMessage to target once a burst of changes to one file settles. Watches the file's directory rather than
-// the file, because editors often save by writing a temp file and renaming it over the original.
+// Posts changedMessage to target once a burst of changes to any of the named files in directory settles. Watches the
+// directory rather than the files, because editors often save by writing a temp file and renaming it over the original.
 class FileWatcher {
   public:
-    FileWatcher(const std::filesystem::path& file, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage, std::chrono::milliseconds settle);
+    FileWatcher(const std::filesystem::path& directory, std::vector<std::wstring> fileNames, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage,
+                std::chrono::milliseconds settle);
     ~FileWatcher();
     FileWatcher(const FileWatcher&)            = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
@@ -32,7 +33,7 @@ class FileWatcher {
     void                      Watch();
     void                      WatchUntilStopped();
 
-    std::wstring              _fileName;
+    std::vector<std::wstring> _fileNames;
     HWND                      _target;
     std::uint32_t             _changedMessage;
     std::uint32_t             _failedMessage;

@@ -1,0 +1,142 @@
+/*
+ * intarsia reads this from %USERPROFILE%\.config\intarsia\style.css, beside config.lua.
+ *
+ * It is a subset of CSS, and anything outside it is an error naming the line:
+ *   *                 the bar-wide font-family, font-size and color, which every module inherits
+ *   section           the box behind each group of modules (left, center, right)
+ *   tooltip           the box shown while the cursor rests on a module
+ *   .module           every module's box, or one type (clock, cpu, workspaces...) or one module by its name (#date)
+ *   .alert            a module's text while it needs attention, such as a failed command
+ *   :hover            a module's box under the cursor
+ *   .icon             a module's icon, as in #cpu .icon
+ *   .item             one workspace, window or binding mode inside its module, with .focused, .occupied or .empty
+ *
+ * Lengths are px. padding and margin take one length, or two: above and below, then left and right. A more specific
+ * selector wins, and a later rule wins a tie, as in any CSS.
+ */
+
+:root {
+    --foreground: #e0def4;
+    --muted: #908caa;
+    --faint: rgba(224, 222, 244, 0.14);
+    --background: rgba(25, 23, 36, 0.9);
+    --background-alt: #1f1d2e;
+    --border: rgba(110, 106, 134, 0.25);
+    --hover: rgba(64, 61, 82, 0.8);
+    --black: #191724;
+    --cyan: #9ccfd8;
+    --magenta: #c4a7e7;
+    --red: #eb6f92;
+}
+
+* {
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 15px;
+    color: var(--foreground);
+}
+
+section {
+    margin: 5px;
+    padding: 4px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+
+tooltip {
+    padding: 6px;
+    background: var(--background-alt);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.module {
+    padding: 0 9px;
+    border-radius: 10px;
+}
+
+/* Propo keeps icon glyphs at their natural width, the plain Nerd Font squeezes them into one cell. */
+.icon {
+    font-family: "JetBrainsMono Nerd Font Propo";
+    font-size: 18px;
+    margin-right: 6px;
+}
+
+.alert {
+    color: var(--red);
+}
+
+clock:hover, cpu:hover, memory:hover, tiling_direction:hover {
+    background: var(--hover);
+}
+
+#workspaces {
+    padding: 0 2px;
+}
+
+#workspaces .item {
+    padding: 2px 6px;
+    margin: 0 1px;
+    border-radius: 10px;
+}
+
+#workspaces .item.focused {
+    color: var(--black);
+    background: var(--cyan);
+    font-weight: bold;
+}
+
+#workspaces .item.empty {
+    color: var(--muted);
+}
+
+#divider {
+    width: 1px;
+    height: 60%;
+    padding: 0 4px;
+    color: var(--border);
+}
+
+/* Window icons draw at the icon's font-size. */
+#apps {
+    padding: 0 2px;
+}
+
+#apps .item {
+    padding: 3px;
+    margin: 0 1.5px;
+    border-radius: 6px;
+}
+
+#apps .item.focused {
+    background: var(--faint);
+}
+
+#mode {
+    padding: 0;
+}
+
+#mode .item {
+    color: var(--magenta);
+    background: var(--faint);
+    font-weight: bold;
+    padding: 2px 8px;
+    margin: 0 3px;
+    border-radius: 999px;
+}
+
+#tiling {
+    padding: 0 3px;
+}
+
+#tiling .icon {
+    color: var(--magenta);
+}
+
+#date .icon, #memory .icon {
+    color: var(--magenta);
+}
+
+#cpu .icon {
+    color: var(--cyan);
+}

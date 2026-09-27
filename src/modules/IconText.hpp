@@ -10,26 +10,41 @@
 #include <string>
 #include <string_view>
 
+// An icon and a line of text beside it, each laid out on its own so the gap between them is a set distance.
 struct IconText {
-    Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
-    D2D1_SIZE_F                               size;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> icon; // null when there is no icon
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> text; // null when there is no text
+    D2D1_SIZE_F                               iconSize;
+    D2D1_SIZE_F                               textSize;
+    float                                     gapDips; // 0 unless there are both
+    D2D1_SIZE_F                               size;    // both, and the gap
 };
 
-// The icon in the accent color at the icon size, two spaces, then the text drawn with textBrush. Just the text when
-// there is no icon.
-IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text, ID2D1Brush* textBrush);
+// The icon in the icon font and size, the icon gap, then the text. Layout only measures: colors are chosen at draw, so
+// laying out needs no device.
+IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text);
 
-// One line of text, laid out again only when the text changes. The brush is the bar's and stays the same.
+// The text alone in weight, as an item's font-weight sets it.
+IconText LayOutWeightedText(const RenderContext& render, std::wstring_view text, DWRITE_FONT_WEIGHT weight);
+
+// Draws the icon in render.accent then the text in textBrush from origin, each centered across the line.
+void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* textBrush);
+
+// Nothing laid out yet.
+IconText EmptyIconText();
+
+// One line of text in render.foreground, laid out again only when the text changes.
 class TextLine {
   public:
     // Whether the text differs from the last update's.
-    bool        Update(const RenderContext& render, std::wstring text, ID2D1Brush* brush);
+    bool        Update(const RenderContext& render, std::wstring text);
     D2D1_SIZE_F Size() const;
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
 
   private:
-    std::wstring _shown; // what _text holds, once it has a layout
-    IconText     _text{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}};
+    std::wstring _shown; // what _text holds, once laid out
+    bool         _laidOut = false;
+    IconText     _text    = EmptyIconText();
 };
 
 template <typename Value>

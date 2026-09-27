@@ -107,7 +107,8 @@ namespace {
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _config(std::make_unique<Config>(LoadConfig(_configPath))),
     _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged),
-    _watcher(std::make_unique<FileWatcher>(_configPath, _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
+    _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
+                                           _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
     _windowIcons(std::make_unique<WindowIcons>(_changes)) {
     Bar::RegisterWindowClass(_instance);

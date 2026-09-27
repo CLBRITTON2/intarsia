@@ -1,0 +1,193 @@
+#include "config/Style.hpp"
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+namespace {
+
+    constexpr std::string_view kBar = R"css(* { font-family: "Some Font"; font-size: 15px; color: #102030; }
+)css";
+
+    StyleSheet                 Parse(std::string_view text) {
+        return ParseStyleSheet(text, "style.css");
+    }
+
+    ModuleStyle StyleOf(std::string_view text, ModuleKind kind, std::string_view name) {
+        const StyleSheet sheet = Parse(std::string(kBar) + std::string(text));
+        return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), kind, name);
+    }
+
+    auto ConfigErrorWith(std::string_view text) {
+        return testing::ThrowsMessage<ConfigError>(testing::HasSubstr(std::string(text)));
+    }
+
+    // Channels as 0 to 255 so a failure reads like the CSS that caused it.
+    std::array<std::int32_t, 4> Rgba(const D2D1_COLOR_F& color) {
+        return {static_cast<std::int32_t>(std::lround(color.r * 255.0f)), static_cast<std::int32_t>(std::lround(color.g * 255.0f)),
+                static_cast<std::int32_t>(std::lround(color.b * 255.0f)), static_cast<std::int32_t>(std::lround(color.a * 255.0f))};
+    }
+
+} // namespace
+
+TEST(Style, BarRulesSetTheFontAndColorEveryModuleInherits) {
+    const StyleSheet  sheet = Parse(kBar);
+    const StyleConfig bar   = ResolveBarStyle(sheet);
+    EXPECT_EQ(bar.font, L"Some Font");
+    EXPECT_FLOAT_EQ(bar.fontSizeDips, 15.0f);
+    const ModuleStyle clock = ResolveModuleStyle(sheet, bar, ModuleKind::Clock, "time");
+    EXPECT_EQ(Rgba(clock.color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
+    EXPECT_EQ(Rgba(clock.icon.color), Rgba(clock.color));
+    EXPECT_EQ(Rgba(clock.item.color), Rgba(clock.color));
+    EXPECT_EQ(clock.icon.font, L"Some Font");
+    EXPECT_EQ(Rgba(clock.box.background), (std::array<std::int32_t, 4>{0, 0, 0, 0}));
+}
+
+TEST(Style, TheBarMustSetFontFamilyFontSizeAndColor) {
+    EXPECT_THAT([] { return ResolveBarStyle(Parse("* { font-size: 15px; color: #fff; }")); }, ConfigErrorWith("* must set font-family"));
+    EXPECT_THAT([] { return ResolveBarStyle(Parse("")); }, ConfigErrorWith("* must set color"));
+}
+
+TEST(Style, ColorsTakeEveryCssForm) {
+    const std::string rules = R"css(
+        #a { color: #abc; }
+        #b { color: #11223380; }
+        #c { color: rgb(1, 2, 3); }
+        #d { color: rgba(255, 0, 0, 0.5); }
+        #e { color: transparent; }
+    )css";
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "a").color), (std::array<std::int32_t, 4>{0xaa, 0xbb, 0xcc, 255}));
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "b").color), (std::array<std::int32_t, 4>{0x11, 0x22, 0x33, 0x80}));
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "c").color), (std::array<std::int32_t, 4>{1, 2, 3, 255}));
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "d").color), (std::array<std::int32_t, 4>{255, 0, 0, 128}));
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "e").color), (std::array<std::int32_t, 4>{0, 0, 0, 0}));
+    EXPECT_THAT([] { return Parse(".module { color: red; }"); }, ConfigErrorWith("must be a color"));
+    EXPECT_THAT([] { return Parse(".module { color: #12345; }"); }, ConfigErrorWith("must be a color"));
+    EXPECT_THAT([] { return Parse(".module { color: rgb(300, 0, 0); }"); }, ConfigErrorWith("outside 0 to 255"));
+}
+
+TEST(Style, CustomPropertiesAreReadThroughVar) {
+    const ModuleStyle style = StyleOf(":root { --accent: #ff0000; } #cpu { color: var(--accent); }", ModuleKind::Cpu, "cpu");
+    EXPECT_EQ(Rgba(style.color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_THAT([] { return Parse("#cpu { color: var(--nope); }"); }, ConfigErrorWith("var(--nope) names no custom property"));
+    EXPECT_THAT([] { return Parse(":root { color: #fff; }"); }, ConfigErrorWith("does not belong in :root"));
+}
+
+TEST(Style, MoreSpecificSelectorsWinAndLaterRulesWinATie) {
+    const std::string rules = R"css(
+        #cpu { color: #0000ff; }
+        .module { color: #ff0000; }
+        cpu { color: #00ff00; }
+        .module { padding: 1px; }
+        .module { padding: 2px; }
+    )css";
+    const ModuleStyle cpu   = StyleOf(rules, ModuleKind::Cpu, "cpu");
+    EXPECT_EQ(Rgba(cpu.color), (std::array<std::int32_t, 4>{0, 0, 255, 255}));
+    EXPECT_FLOAT_EQ(cpu.box.padding.xDips, 2.0f);
+    // A class beats a type.
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "other").color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+}
+
+TEST(Style, TypeSelectorsMatchEveryModuleOfThatType) {
+    const std::string rules = "clock { color: #00ff00; }";
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Clock, "anything").color), (std::array<std::int32_t, 4>{0, 255, 0, 255}));
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "anything").color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
+}
+
+TEST(Style, IconsAndItemsInheritTheModulesColor) {
+    const ModuleStyle style = StyleOf("#ws { color: #ff0000; } #ws .item.focused { color: #00ff00; }", ModuleKind::Workspaces, "ws");
+    EXPECT_EQ(Rgba(style.icon.color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_EQ(Rgba(style.empty.color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_EQ(Rgba(style.focused.color), (std::array<std::int32_t, 4>{0, 255, 0, 255}));
+}
+
+TEST(Style, ItemRulesApplyToEveryStateAndStateRulesToOne) {
+    const std::string rules = R"css(
+        .item { padding: 2px 6px; margin: 0 1px; border-radius: 10px; }
+        .item.focused { background: #9ccfd8; font-weight: bold; }
+        #ws .item.empty { color: #908caa; }
+    )css";
+    const ModuleStyle style = StyleOf(rules, ModuleKind::Workspaces, "ws");
+    EXPECT_FLOAT_EQ(style.occupied.padding.yDips, 2.0f);
+    EXPECT_FLOAT_EQ(style.occupied.padding.xDips, 6.0f);
+    EXPECT_FLOAT_EQ(style.focused.margin.xDips, 1.0f);
+    EXPECT_FLOAT_EQ(style.empty.radiusDips, 10.0f);
+    EXPECT_EQ(style.focused.weight, DWRITE_FONT_WEIGHT_BOLD);
+    EXPECT_EQ(style.occupied.weight, DWRITE_FONT_WEIGHT_NORMAL);
+    EXPECT_EQ(Rgba(style.focused.background), (std::array<std::int32_t, 4>{0x9c, 0xcf, 0xd8, 255}));
+    EXPECT_EQ(Rgba(style.occupied.background), (std::array<std::int32_t, 4>{0, 0, 0, 0}));
+    EXPECT_EQ(Rgba(style.empty.color), (std::array<std::int32_t, 4>{0x90, 0x8c, 0xaa, 255}));
+    // Another module's .item rules stay with that module.
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Workspaces, "other").empty.color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
+}
+
+TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
+    const ModuleStyle style = StyleOf(".module { background: #111111; } cpu:hover { background: #222222; } .alert { color: #ff0000; }", ModuleKind::Cpu, "cpu");
+    EXPECT_EQ(Rgba(style.box.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
+    EXPECT_EQ(Rgba(style.hover), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
+    EXPECT_EQ(Rgba(style.alertColor), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_EQ(Rgba(style.color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
+    // With no :hover rule the box keeps its background under the cursor.
+    EXPECT_EQ(Rgba(StyleOf(".module { background: #111111; }", ModuleKind::Cpu, "cpu").hover), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
+    EXPECT_THAT([] { return Parse("cpu:hover { color: #fff; }"); }, ConfigErrorWith("color does not apply to cpu:hover, which takes: background"));
+}
+
+TEST(Style, BorderShorthandSetsWidthAndColor) {
+    const StyleSheet  sheet = Parse(std::string(kBar) + "section { border: 1px solid rgba(110, 106, 134, 0.25); border-radius: 14px; margin: 5px; padding: 4px; }");
+    const StyleConfig bar   = ResolveBarStyle(sheet);
+    EXPECT_FLOAT_EQ(bar.section.box.borderWidthDips, 1.0f);
+    EXPECT_EQ(Rgba(bar.section.box.borderColor), (std::array<std::int32_t, 4>{110, 106, 134, 64}));
+    EXPECT_FLOAT_EQ(bar.section.margin.yDips, 5.0f);
+    EXPECT_FLOAT_EQ(bar.section.box.padding.xDips, 4.0f);
+    EXPECT_FLOAT_EQ(ResolveBarStyle(Parse(std::string(kBar) + "section { border: 1px solid #fff; border: none; }")).section.box.borderWidthDips, 0.0f);
+    EXPECT_THAT([] { return Parse("section { border: 1px dashed #fff; }"); }, ConfigErrorWith("must be none, or a width, solid and a color"));
+}
+
+TEST(Style, DividersTakeAWidthAndAShareOfTheHeight) {
+    const ModuleStyle divider = StyleOf("divider { width: 1px; height: 60%; color: #ffffff; }", ModuleKind::Divider, "line");
+    EXPECT_FLOAT_EQ(divider.lineWidthDips, 1.0f);
+    EXPECT_FLOAT_EQ(divider.lineHeight, 0.6f);
+    EXPECT_THAT([] { return StyleOf(".module { width: 3px; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith("width sizes a divider's line, and cpu is a cpu module"));
+    EXPECT_THAT([] { return Parse("divider { height: 120%; }"); }, ConfigErrorWith("at most 100%"));
+}
+
+TEST(Style, CommentsAreIgnoredAndLinesStillCount) {
+    const ModuleStyle style = StyleOf("/* one\n two */ #cpu { /* inline */ color: #ff0000; }", ModuleKind::Cpu, "cpu");
+    EXPECT_EQ(Rgba(style.color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_THAT([] { return Parse("/* a\n b\n */ #cpu { colour: #fff; }"); }, ConfigErrorWith("style.css:3: #cpu: colour is not a property"));
+    EXPECT_THAT([] { return Parse("#cpu { } /* never closed"); }, ConfigErrorWith("never closed"));
+}
+
+TEST(Style, SelectorListsApplyTheBlockToEachSelector) {
+    const std::string rules = "cpu, memory { color: #ff0000; }";
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Memory, "m").color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Cpu, "c").color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+}
+
+TEST(Style, AnythingOutsideTheSubsetIsAnErrorNamingTheLine) {
+    EXPECT_THAT([] { return Parse("\n\n@import url(x.css);"); }, ConfigErrorWith("style.css:3: at-rules"));
+    EXPECT_THAT([] { return Parse("#cpu > .icon { color: #fff; }"); }, ConfigErrorWith("combinator"));
+    EXPECT_THAT([] { return Parse("button { color: #fff; }"); }, ConfigErrorWith("'button' is not a type intarsia styles"));
+    EXPECT_THAT([] { return Parse(".active { color: #fff; }"); }, ConfigErrorWith("'.active' is not a class intarsia styles"));
+    EXPECT_THAT([] { return Parse("#cpu:focus { color: #fff; }"); }, ConfigErrorWith(":hover is the only state"));
+    EXPECT_THAT([] { return Parse("#cpu { color: #fff !important; }"); }, ConfigErrorWith("!important is not supported"));
+    EXPECT_THAT([] { return Parse("#cpu { color #fff; }"); }, ConfigErrorWith("must be property: value"));
+    EXPECT_THAT([] { return Parse("#cpu { color: #fff; "); }, ConfigErrorWith("never closed"));
+    EXPECT_THAT([] { return Parse("#cpu { .icon { color: #fff; } }"); }, ConfigErrorWith("rules cannot nest"));
+    EXPECT_THAT([] { return Parse("section { font-size: 12px; }"); }, ConfigErrorWith("font-size does not apply to section"));
+    EXPECT_THAT([] { return Parse(".module { padding: 1px 2px 3px; }"); }, ConfigErrorWith("takes one length for every side, or two"));
+    EXPECT_THAT([] { return Parse(".module { padding: 1em; }"); }, ConfigErrorWith("must be a length in px"));
+    EXPECT_THAT([] { return Parse(".icon { font-family: \"A\", monospace; }"); }, ConfigErrorWith("one font family, not a list"));
+    EXPECT_THAT([] { return Parse("#ws.alert .item { color: #fff; }"); }, ConfigErrorWith("must start with a module"));
+}
+
+TEST(Style, IdsMustNameAModule) {
+    const StyleSheet sheet = Parse("#cpu { color: #fff; } #tpyo .icon { color: #fff; }");
+    EXPECT_THAT([&sheet] { RequireKnownIds(sheet, {"cpu", "memory"}); }, ConfigErrorWith("#tpyo names no module: the config's modules table defines cpu, memory"));
+    EXPECT_NO_THROW(RequireKnownIds(sheet, {"cpu", "tpyo"}));
+}

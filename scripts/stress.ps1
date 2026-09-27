@@ -119,15 +119,14 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $commands)
     $config = @"
 -- stress revision $revision
 return {
-    bar = { edge = "top", layer = "top", thickness = 40, border = 1, spacing = 8 },
-    font = { family = "Segoe UI", text_size = 13, icon_size = 16 },
-    colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7", alert = "#eb6f92" },
+    bar = { edge = "top", layer = "top", thickness = 40 },
     window_manager = "glazewm",
-    modules_left = { "workspaces", "mode", "apps", "title" },
+    modules_left = { "workspaces", "divider", "mode", "apps", "title" },
     modules_center = { "clock" },
     modules_right = { $rightList },
     modules = {
         workspaces = { type = "workspaces" },
+        divider = { type = "divider" },
         mode = { type = "binding_mode" },
         apps = { type = "windows" },
         title = { type = "window", max_length = 60, tooltip = "{}" },
@@ -144,6 +143,25 @@ $definitions
     [System.IO.File]::WriteAllText($path, $config)
 }
 
+# A style that draws every box the bar has: sections, module boxes with hover, items in every state, a divider.
+function New-StressStyle([string] $path) {
+    $style = @'
+:root { --foreground: #e0def4; --border: rgba(110, 106, 134, 0.25); }
+* { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
+section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; }
+tooltip { padding: 6px; background: #1f1d2e; border: 1px solid var(--border); border-radius: 10px; }
+.module { padding: 0 8px; border-radius: 8px; }
+.module:hover { background: rgba(64, 61, 82, 0.8); }
+.icon { font-size: 16px; margin-right: 6px; color: #c4a7e7; }
+.alert { color: #eb6f92; }
+.item { padding: 2px 6px; margin: 0 1px; border-radius: 8px; }
+.item.focused { color: #191724; background: #9ccfd8; font-weight: bold; }
+.item.empty { color: #908caa; }
+#divider { width: 1px; height: 60%; color: var(--border); }
+'@
+    [System.IO.File]::WriteAllText($path, $style)
+}
+
 function Invoke-Scenario([string] $name) {
     $work = Join-Path ([System.IO.Path]::GetTempPath()) "intarsia-stress-$name-$PID"
     New-Item -ItemType Directory -Force $work | Out-Null
@@ -151,6 +169,7 @@ function Invoke-Scenario([string] $name) {
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
     $commands   = if ($name -eq 'idle') { @() } else { @('endless', 'hang', 'fail', 'json') }
     New-StressConfig $configPath 0 $commands
+    New-StressStyle (Join-Path $work 'style.css')
     $port       = Get-FreePort
     $serverName = if ($name -in @('reload', 'idle')) { 'normal' } else { $name }
     $barLog     = Join-Path $work 'intarsia.log'

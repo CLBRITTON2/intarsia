@@ -1,7 +1,9 @@
 #pragma once
 
+#include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/ItemRow.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <cstdint>
@@ -9,24 +11,26 @@
 #include <string>
 #include <vector>
 
-// The active binding modes' names in the accent color, like Waybar's sway/mode. Empty while no mode is active.
+// Each active binding mode's name in the module's .item style, like Waybar's sway/mode. Empty while no mode
+// is active.
 class BindingModes final : public IModule {
   public:
-    explicit BindingModes(const IWindowManager& windowManager);
+    BindingModes(const IWindowManager& windowManager, ModuleStyle style);
 
     bool                         Layout(const RenderContext& render) override;
     D2D1_SIZE_F                  Size() const override;
     void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
-    // None: the module has no config table.
+    // None: the module takes no actions.
     const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    const IWindowManager& _windowManager;
-    TextLine              _line;
+    const IWindowManager&     _windowManager;
+    ModuleStyle               _style;
+    std::vector<std::wstring> _shown;
+    bool                      _laidOut = false;
+    std::vector<IconText>     _labels;
+    ItemRow                   _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
 };
-
-// Mode names joined by two spaces, as workspace labels are.
-std::wstring JoinModes(const std::vector<std::wstring>& modes);

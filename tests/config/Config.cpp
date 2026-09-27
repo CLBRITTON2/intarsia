@@ -18,9 +18,7 @@ namespace {
 
     constexpr std::string_view kValidConfig = R"lua(
 return {
-    bar = { edge = "top", layer = "top", thickness = 54, border = 1, spacing = 8 },
-    font = { family = "Some Font", text_size = 15, icon_size = 18 },
-    colors = { background = "#191724e6", border = "#6e6a8640", foreground = "#e0def4", accent = "#c4a7e7", alert = "#eb6f92" },
+    bar = { edge = "top", layer = "top", thickness = 54 },
     window_manager = "windows",
     modules_left = { "title" },
     modules_center = { "time" },
@@ -32,29 +30,35 @@ return {
 }
 )lua";
 
-    // A config file that deletes itself, so each case runs LoadConfig on a real file.
+    constexpr std::string_view kValidStyle = R"css(
+* { font-family: "Some Font"; font-size: 15px; color: #e0def4; }
+)css";
+
+    // A config and a style.css beside it in a directory that deletes itself, so each case runs LoadConfig on real files.
     class TempConfig {
       public:
-        explicit TempConfig(std::string_view contents) :
-            _path(std::filesystem::temp_directory_path() / ("intarsia-test-" + std::to_string(std::hash<std::string_view>{}(contents)) + ".lua")) {
-            std::ofstream file(_path, std::ios::binary);
-            file << contents;
+        TempConfig(std::string_view config, std::string_view style) :
+            _directory(std::filesystem::temp_directory_path() / ("intarsia-test-" + std::to_string(std::hash<std::string>{}(std::string(config) + std::string(style))))) {
+            std::filesystem::create_directories(_directory);
+            std::ofstream(_directory / "config.lua", std::ios::binary) << config;
+            std::ofstream(_directory / "style.css", std::ios::binary) << style;
         }
         ~TempConfig() {
             std::error_code error;
-            if (!std::filesystem::remove(_path, error) || error) {
-                std::fprintf(stderr, "could not delete temp config %ls: %s\n", _path.c_str(), error.message().c_str());
+            std::filesystem::remove_all(_directory, error);
+            if (error) {
+                std::fprintf(stderr, "could not delete temp config %ls: %s\n", _directory.c_str(), error.message().c_str());
             }
         }
-        TempConfig(const TempConfig&)                             = delete;
-        TempConfig&                  operator=(const TempConfig&) = delete;
+        TempConfig(const TempConfig&)                      = delete;
+        TempConfig&           operator=(const TempConfig&) = delete;
 
-        const std::filesystem::path& Path() const {
-            return _path;
+        std::filesystem::path Path() const {
+            return _directory / "config.lua";
         }
 
       private:
-        std::filesystem::path _path;
+        std::filesystem::path _directory;
     };
 
     // The config text with one snippet swapped. Throws when the snippet is not there, so a stale case cannot pass.
@@ -73,9 +77,13 @@ return {
                        "    modules = {\n" + std::string(definitions) + "\n");
     }
 
-    Config LoadText(std::string_view contents) {
-        const TempConfig config(contents);
-        return LoadConfig(config.Path());
+    Config LoadStyled(std::string_view config, std::string_view style) {
+        const TempConfig files(config, style);
+        return LoadConfig(files.Path());
+    }
+
+    Config LoadText(std::string_view config) {
+        return LoadStyled(config, kValidStyle);
     }
 
     auto ConfigErrorWith(std::string_view text) {
@@ -103,21 +111,56 @@ TEST(Config, ShippedExampleLoads) {
     const Config config = LoadConfig(INTARSIA_EXAMPLE_CONFIG);
     EXPECT_EQ(config.bar.edge, Edge::Top);
     EXPECT_EQ(Kinds(config.modules.center), std::vector<ModuleKind>{ModuleKind::Clock});
+    EXPECT_EQ(config.style.font, L"JetBrainsMono Nerd Font");
 }
 
 TEST(Config, ValidConfigParsesIntoTypedValues) {
     const Config config = LoadText(kValidConfig);
     EXPECT_FLOAT_EQ(config.bar.thicknessDips, 54.0f);
-    EXPECT_FLOAT_EQ(config.bar.spacingDips, 8.0f);
-    EXPECT_EQ(config.font.family, L"Some Font");
-    EXPECT_FLOAT_EQ(config.colors.background.a, 0xe6 / 255.0f);
-    EXPECT_FLOAT_EQ(config.colors.foreground.a, 1.0f);
+    EXPECT_EQ(config.style.font, L"Some Font");
+    EXPECT_FLOAT_EQ(config.style.fontSizeDips, 15.0f);
+    EXPECT_FLOAT_EQ(config.style.color.r, 0xe0 / 255.0f);
     EXPECT_EQ(config.modules.center.at(0).name, "time");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).interval, std::chrono::seconds(60));
 }
 
 TEST(Config, MissingFileIsAnError) {
     EXPECT_THAT([] { return LoadConfig(std::filesystem::temp_directory_path() / "intarsia-test-missing.lua"); }, ConfigErrorWith("cannot open config file"));
+}
+
+TEST(Config, MissingStyleIsAnError) {
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "intarsia-test-no-style";
+    std::filesystem::create_directories(directory);
+    std::ofstream(directory / "config.lua", std::ios::binary) << kValidConfig;
+    EXPECT_THAT([&directory] { return LoadConfig(directory / "config.lua"); }, ConfigErrorWith("cannot open style file"));
+    std::filesystem::remove_all(directory);
+}
+
+TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
+    const Config       config = LoadStyled(kValidConfig, std::string(kValidStyle) + "#time { color: #ff0000; } clock .icon { color: #00ff00; }");
+    const ModuleStyle& time   = config.modules.center.at(0).style;
+    EXPECT_FLOAT_EQ(time.color.r, 1.0f);
+    EXPECT_FLOAT_EQ(time.icon.color.g, 1.0f);
+    // The window module takes the bar's color, since no rule names it.
+    EXPECT_FLOAT_EQ(config.modules.left.at(0).style.color.r, 0xe0 / 255.0f);
+}
+
+TEST(Config, StyleIdsMustNameADefinedModule) {
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "#tmie { color: #ff0000; }"); }, ConfigErrorWith("#tmie names no module"));
+}
+
+TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "\n.module { colour: #ff0000; }"); },
+                ConfigErrorWith("style.css:4: .module: colour is not a property"));
+}
+
+TEST(Config, DividerTakesOnlyItsType) {
+    const Config config = LoadStyled(WithRightModules(R"({ "line" })", R"(        line = { type = "divider" },)"), std::string(kValidStyle) + "#line { width: 2px; height: 50%; }");
+    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Divider});
+    EXPECT_FLOAT_EQ(config.modules.right.at(0).style.lineWidthDips, 2.0f);
+    EXPECT_FLOAT_EQ(config.modules.right.at(0).style.lineHeight, 0.5f);
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "line" })", R"(        line = { type = "divider", width = 2 },)")); },
+                ConfigErrorWith("modules.line.width is not a known key"));
 }
 
 TEST(Config, LuaSyntaxAndRuntimeErrorsAreReported) {
@@ -139,7 +182,7 @@ TEST(Config, WrongTypeNamesPathAndBothTypes) {
 
 TEST(Config, UnknownKeysAreRejectedAtRootAndInsideTables) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "modules_right = {},", "modules_right = {}, extra = 1,")); }, ConfigErrorWith("extra is not a known key"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "spacing = 8", "spacing = 8, padding = 2")); }, ConfigErrorWith("bar.padding is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 54, padding = 2")); }, ConfigErrorWith("bar.padding is not a known key"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 80, width = 3")); }, ConfigErrorWith("modules.title.width is not a known key"));
 }
 
@@ -147,14 +190,8 @@ TEST(Config, EdgeMustBeOneOfFour) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(edge = "top")", R"(edge = "side")")); }, ConfigErrorWith("got 'side'"));
 }
 
-TEST(Config, ColorsMustBeHex) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"("#e0def4")", R"("e0def4")")); }, ConfigErrorWith("colors.foreground must be '#RRGGBB'"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"("#e0def4")", R"("#e0dzf4")")); }, ConfigErrorWith("invalid hex digits 'dz'"));
-}
-
 TEST(Config, SizesMustBePositiveAndIntervalWholeSeconds) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "border = 1", "border = -1")); }, ConfigErrorWith("bar.border must be 0 or more"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ConfigErrorWith("modules.time.interval must be a whole number"));
 }
 
@@ -179,7 +216,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory"));
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -369,7 +406,7 @@ TEST(Config, AnEndlessConfigIsStoppedWithAnError) {
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {
-    const std::string config = Replace(kValidConfig, R"(bar = { edge = "top", layer = "top", thickness = 54, border = 1, spacing = 8 },)",
-                                       R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
+    const std::string config =
+        Replace(kValidConfig, R"(bar = { edge = "top", layer = "top", thickness = 54 },)", R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
     EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("bar.edge is missing"));
 }

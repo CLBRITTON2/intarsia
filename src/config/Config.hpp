@@ -5,13 +5,16 @@
 #include "platform/Process.hpp"
 
 #include <d2d1.h>
+#include <dwrite.h>
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <variant>
 
 // Where the bar sits among other windows, as Waybar's layer option.
@@ -24,27 +27,77 @@ struct BarConfig {
     Edge  edge;
     Layer layer;
     float thicknessDips;
-    float borderDips;
-    float spacingDips;
 };
 
-struct FontConfig {
-    std::wstring family;
-    float        textSizeDips;
-    float        iconSizeDips;
+// Space inside or around a box on screen, as CSS's two-value padding and margin: y above and below, x left and right.
+struct Spacing {
+    float yDips;
+    float xDips;
 };
 
-struct ColorConfig {
+// A rounded box with an optional border: a section, a module, a tooltip.
+struct BoxStyle {
     D2D1_COLOR_F background;
-    D2D1_COLOR_F border;
-    D2D1_COLOR_F foreground;
-    D2D1_COLOR_F accent;
-    D2D1_COLOR_F alert; // for states that need attention, such as a disconnected window manager
+    D2D1_COLOR_F borderColor;
+    float        borderWidthDips; // 0 for none
+    float        radiusDips;      // at most half the box's shorter side
+    Spacing      padding;
 };
 
-enum class WindowManagerKind : std::uint8_t {
-    Windows, // no window manager: the native backend reads windows and focus from Win32 events
-    GlazeWm
+// The box behind each non-empty section (left, center, right).
+struct SectionStyle {
+    BoxStyle box;
+    Spacing  margin; // between the bar's edges and the sections
+};
+
+struct TooltipStyle {
+    BoxStyle     box;
+    D2D1_COLOR_F color;
+};
+
+// What style.css sets for the whole bar. Modules inherit the font and color.
+struct StyleConfig {
+    std::wstring font;
+    float        fontSizeDips;
+    D2D1_COLOR_F color;
+    SectionStyle section;
+    TooltipStyle tooltip;
+};
+
+// A module's icon, drawn before its text in its own font, such as a Nerd Font's proportional variant.
+struct IconStyle {
+    std::wstring font;
+    float        sizeDips; // also the size of a window's icon in the windows module
+    D2D1_COLOR_F color;
+    float        gapDips; // between the icon and the text after it
+};
+
+// One item's box inside a module: a workspace, a window's icon, a binding mode.
+struct ItemStyle {
+    D2D1_COLOR_F       color;
+    D2D1_COLOR_F       background;
+    DWRITE_FONT_WEIGHT weight;
+    Spacing            padding;
+    Spacing            margin; // x on each side of the box, so two items side by side are 2x apart
+    float              radiusDips;
+};
+
+// One module's style, cascaded from every style.css rule that matches it.
+struct ModuleStyle {
+    BoxStyle     box;
+    D2D1_COLOR_F hover; // the box's background under the cursor
+    D2D1_COLOR_F color;
+    D2D1_COLOR_F alertColor; // text in a state that needs attention, such as a failed command
+    IconStyle    icon;
+    // The box of a windows or binding_mode item, and of a focused window. Workspaces are focused, occupied (has
+    // windows) or empty.
+    ItemStyle item;
+    ItemStyle focused;
+    ItemStyle occupied;
+    ItemStyle empty;
+    // A divider's line, in its color.
+    float lineWidthDips;
+    float lineHeight; // a share of the box's height, 0 to 1
 };
 
 enum class ModuleKind : std::uint8_t {
@@ -54,9 +107,34 @@ enum class ModuleKind : std::uint8_t {
     Windows,
     BindingMode,
     TilingDirection,
+    Divider,
     Cpu,
     Memory,
     Custom
+};
+
+// A module type as the config's type key and style.css's type selectors write it.
+struct ModuleTypeName {
+    std::string_view name;
+    ModuleKind       kind;
+};
+
+inline constexpr std::array<ModuleTypeName, 10> kModuleTypes{{
+    {.name = "clock", .kind = ModuleKind::Clock},
+    {.name = "window", .kind = ModuleKind::Window},
+    {.name = "workspaces", .kind = ModuleKind::Workspaces},
+    {.name = "windows", .kind = ModuleKind::Windows},
+    {.name = "binding_mode", .kind = ModuleKind::BindingMode},
+    {.name = "tiling_direction", .kind = ModuleKind::TilingDirection},
+    {.name = "divider", .kind = ModuleKind::Divider},
+    {.name = "cpu", .kind = ModuleKind::Cpu},
+    {.name = "memory", .kind = ModuleKind::Memory},
+    {.name = "custom", .kind = ModuleKind::Custom},
+}};
+
+enum class WindowManagerKind : std::uint8_t {
+    Windows, // no window manager: the native backend reads windows and focus from Win32 events
+    GlazeWm
 };
 
 // A command sent to the window manager as it is written, such as "focus --next-workspace" for GlazeWM.
@@ -113,7 +191,7 @@ struct CustomConfig {
     TextModuleConfig     text;
 };
 
-// The settings from a module's table: workspaces, windows and binding_mode have none.
+// The settings from a module's table: workspaces, windows, binding_mode and divider have none.
 using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
@@ -121,12 +199,12 @@ struct ModuleInstance {
     std::string    name;
     ModuleKind     kind;
     ModuleSettings settings;
+    ModuleStyle    style;
 };
 
 struct Config {
     BarConfig                bar;
-    FontConfig               font;
-    ColorConfig              colors;
+    StyleConfig              style;
     WindowManagerKind        windowManager;
     Sections<ModuleInstance> modules;
 };
@@ -139,5 +217,9 @@ class ConfigError : public std::runtime_error {
 // %USERPROFILE%\.config\intarsia\config.lua
 std::filesystem::path DefaultConfigPath();
 
-// Runs the file as Lua and reads the table it returns. Every key is required and unknown keys are rejected.
+// style.css beside the config, as Waybar keeps its style.
+std::filesystem::path StylePath(const std::filesystem::path& configPath);
+
+// Runs the file as Lua and reads the table it returns, then styles its modules from StylePath. Every config key is
+// required, and unknown keys, selectors and properties are rejected.
 Config LoadConfig(const std::filesystem::path& path);

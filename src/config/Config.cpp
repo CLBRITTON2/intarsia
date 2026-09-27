@@ -1,5 +1,6 @@
 #include "config/Config.hpp"
 
+#include "config/Style.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
@@ -11,7 +12,6 @@
 #include <cstdint>
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cmath>
 #include <format>
 #include <fstream>
@@ -164,14 +164,6 @@ namespace {
         return value;
     }
 
-    float NonNegativeNumber(const TableReader& table, std::string_view key) {
-        const float value = table.Number(key);
-        if (!(value >= 0.0f)) {
-            throw table.Error(std::format("{} must be 0 or more, got {}", table.KeyPath(key), value));
-        }
-        return value;
-    }
-
     std::int64_t PositiveWholeNumber(const TableReader& table, std::string_view key) {
         const float value = PositiveNumber(table, key);
         if (value != std::floor(value)) {
@@ -211,47 +203,9 @@ namespace {
         throw table.Error(std::format("{} must be one of top, bottom, got '{}'", table.KeyPath(key), value));
     }
 
-    // "#RRGGBB" or "#RRGGBBAA".
-    D2D1_COLOR_F ReadColor(const TableReader& table, std::string_view key) {
-        const std::string text = table.String(key);
-        if ((text.size() != 7 && text.size() != 9) || text.front() != '#') {
-            throw table.Error(std::format("{} must be '#RRGGBB' or '#RRGGBBAA', got '{}'", table.KeyPath(key), text));
-        }
-
-        std::array<float, 4> channels{0.0f, 0.0f, 0.0f, 1.0f};
-        const size_t         count = (text.size() - 1) / 2;
-        for (size_t channel = 0; channel < count; ++channel) {
-            const std::string_view digits = std::string_view(text).substr(1 + (channel * 2), 2);
-            std::uint32_t          value  = 0;
-            const auto [end, error]       = std::from_chars(digits.data(), digits.data() + digits.size(), value, 16);
-            if (error != std::errc() || end != digits.data() + digits.size()) {
-                throw table.Error(std::format("{} has invalid hex digits '{}' in '{}'", table.KeyPath(key), digits, text));
-            }
-            channels.at(channel) = static_cast<float>(value) / 255.0f;
-        }
-        return D2D1_COLOR_F{.r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3]};
-    }
-
-    struct ModuleName {
-        std::string_view name;
-        ModuleKind       kind;
-    };
-
-    constexpr std::array<ModuleName, 9> kModuleNames{{
-        {.name = "clock", .kind = ModuleKind::Clock},
-        {.name = "window", .kind = ModuleKind::Window},
-        {.name = "workspaces", .kind = ModuleKind::Workspaces},
-        {.name = "windows", .kind = ModuleKind::Windows},
-        {.name = "binding_mode", .kind = ModuleKind::BindingMode},
-        {.name = "tiling_direction", .kind = ModuleKind::TilingDirection},
-        {.name = "cpu", .kind = ModuleKind::Cpu},
-        {.name = "memory", .kind = ModuleKind::Memory},
-        {.name = "custom", .kind = ModuleKind::Custom},
-    }};
-
-    std::string                         KnownModuleNames() {
+    std::string KnownModuleNames() {
         std::string names;
-        for (const ModuleName& module : kModuleNames) {
+        for (const ModuleTypeName& module : kModuleTypes) {
             names += names.empty() ? "" : ", ";
             names += module.name;
         }
@@ -264,8 +218,8 @@ namespace {
 
     ModuleKind ParseModuleType(const TableReader& module) {
         const std::string type  = module.String("type");
-        const auto        entry = std::ranges::find(kModuleNames, type, &ModuleName::name);
-        if (entry == kModuleNames.end()) {
+        const auto        entry = std::ranges::find(kModuleTypes, type, &ModuleTypeName::name);
+        if (entry == kModuleTypes.end()) {
             throw module.Error(std::format("{} is '{}', known types are: {}", module.KeyPath("type"), type, KnownModuleNames()));
         }
         return entry->kind;
@@ -284,7 +238,8 @@ namespace {
             case ModuleKind::Custom: return ReadCustomConfig(module);
             case ModuleKind::Workspaces:
             case ModuleKind::Windows:
-            case ModuleKind::BindingMode: module.RejectUnknownKeys({"type"}); return std::monostate{};
+            case ModuleKind::BindingMode:
+            case ModuleKind::Divider: module.RejectUnknownKeys({"type"}); return std::monostate{};
             case ModuleKind::TilingDirection:
                 module.RejectUnknownKeys({"type", "horizontal", "vertical"});
                 return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
@@ -293,7 +248,8 @@ namespace {
     }
 
     // Every name a _modules list shows must be defined in the modules table, which holds one table per module.
-    std::vector<ModuleInstance> ReadModuleList(const TableReader& root, const TableReader& definitions, std::string_view listKey) {
+    std::vector<ModuleInstance> ReadModuleList(const TableReader& root, const TableReader& definitions, std::string_view listKey, const StyleSheet& sheet,
+                                               const StyleConfig& style) {
         std::vector<ModuleInstance> instances;
         for (const std::string& name : root.StringList(listKey)) {
             if (!definitions.Has(name)) {
@@ -301,7 +257,7 @@ namespace {
             }
             const TableReader module = definitions.Table(name);
             const ModuleKind  kind   = ParseModuleType(module);
-            instances.push_back(ModuleInstance{.name = name, .kind = kind, .settings = ReadModuleSettings(module, kind)});
+            instances.push_back(ModuleInstance{.name = name, .kind = kind, .settings = ReadModuleSettings(module, kind), .style = ResolveModuleStyle(sheet, style, kind, name)});
         }
         return instances;
     }
@@ -447,10 +403,11 @@ namespace {
         return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .tooltip = ReadTooltip(window), .actions = ReadActions(window)};
     }
 
-    std::string ReadFile(const std::filesystem::path& path) {
+    // what names the file in the error, as "config" or "style".
+    std::string ReadFile(const std::filesystem::path& path, std::string_view what) {
         std::ifstream file(path, std::ios::binary);
         if (!file) {
-            throw ConfigError(std::format("cannot open config file {}", ToUtf8(path.wstring())));
+            throw ConfigError(std::format("cannot open {} file {}", what, ToUtf8(path.wstring())));
         }
         std::ostringstream contents;
         contents << file.rdbuf();
@@ -486,9 +443,13 @@ std::filesystem::path DefaultConfigPath() {
     return std::filesystem::path(owned.get()) / L".config" / L"intarsia" / L"config.lua";
 }
 
+std::filesystem::path StylePath(const std::filesystem::path& configPath) {
+    return configPath.parent_path() / L"style.css";
+}
+
 Config LoadConfig(const std::filesystem::path& path) {
     const std::string source = ToUtf8(path.wstring());
-    const std::string chunk  = ReadFile(path);
+    const std::string chunk  = ReadFile(path, "config");
 
     const LuaState    lua(luaL_newstate(), &lua_close);
     if (lua == nullptr) {
@@ -519,33 +480,21 @@ Config LoadConfig(const std::filesystem::path& path) {
     }
 
     const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
-    root.RejectUnknownKeys({"bar", "font", "colors", "window_manager", "modules_left", "modules_center", "modules_right", "modules"});
+    root.RejectUnknownKeys({"bar", "window_manager", "modules_left", "modules_center", "modules_right", "modules"});
 
+    const std::filesystem::path    stylePath   = StylePath(path);
+    const StyleSheet               sheet       = ParseStyleSheet(ReadFile(stylePath, "style"), ToUtf8(stylePath.wstring()));
+    StyleConfig                    style       = ResolveBarStyle(sheet);
     const TableReader              definitions = root.Table("modules");
-    const Sections<ModuleInstance> modules{.left   = ReadModuleList(root, definitions, "modules_left"),
-                                           .center = ReadModuleList(root, definitions, "modules_center"),
-                                           .right  = ReadModuleList(root, definitions, "modules_right")};
+    const Sections<ModuleInstance> modules{.left   = ReadModuleList(root, definitions, "modules_left", sheet, style),
+                                           .center = ReadModuleList(root, definitions, "modules_center", sheet, style),
+                                           .right  = ReadModuleList(root, definitions, "modules_right", sheet, style)};
     RejectUnshownModules(definitions, modules);
+    RequireKnownIds(sheet, definitions.Keys());
 
     const TableReader bar = root.Table("bar");
-    bar.RejectUnknownKeys({"edge", "layer", "thickness", "border", "spacing"});
-    const BarConfig   barConfig{.edge          = ParseEdge(bar, "edge"),
-                                .layer         = ParseLayer(bar, "layer"),
-                                .thicknessDips = PositiveNumber(bar, "thickness"),
-                                .borderDips    = NonNegativeNumber(bar, "border"),
-                                .spacingDips   = NonNegativeNumber(bar, "spacing")};
-
-    const TableReader font = root.Table("font");
-    font.RejectUnknownKeys({"family", "text_size", "icon_size"});
-    FontConfig        fontConfig{.family = ToWide(font.String("family")), .textSizeDips = PositiveNumber(font, "text_size"), .iconSizeDips = PositiveNumber(font, "icon_size")};
-
-    const TableReader colors = root.Table("colors");
-    colors.RejectUnknownKeys({"background", "border", "foreground", "accent", "alert"});
-    const ColorConfig       colorConfig{.background = ReadColor(colors, "background"),
-                                        .border     = ReadColor(colors, "border"),
-                                        .foreground = ReadColor(colors, "foreground"),
-                                        .accent     = ReadColor(colors, "accent"),
-                                        .alert      = ReadColor(colors, "alert")};
+    bar.RejectUnknownKeys({"edge", "layer", "thickness"});
+    const BarConfig         barConfig{.edge = ParseEdge(bar, "edge"), .layer = ParseLayer(bar, "layer"), .thicknessDips = PositiveNumber(bar, "thickness")};
 
     const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
 
@@ -563,5 +512,5 @@ Config LoadConfig(const std::filesystem::path& path) {
         throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
     }
 
-    return Config{.bar = barConfig, .font = std::move(fontConfig), .colors = colorConfig, .windowManager = windowManager, .modules = modules};
+    return Config{.bar = barConfig, .style = std::move(style), .windowManager = windowManager, .modules = modules};
 }

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/ItemRow.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -11,27 +13,12 @@
 #include <string>
 #include <vector>
 
-struct LabelRun {
-    std::uint32_t start;
-    std::uint32_t length;
-    bool          focused;
-    std::string   name; // the workspace name commands use
-
-    bool          operator==(const LabelRun& other) const = default;
-};
-
-struct WorkspaceLine {
-    std::wstring          text;
-    std::vector<LabelRun> runs;
-
-    bool                  operator==(const WorkspaceLine& other) const = default;
-};
-
-// The workspaces on this bar's monitor, the focused one in the accent color, and a click focuses the one under it.
-// While the window manager is unreachable it shows "<name> disconnected" in the alert color instead.
+// The workspaces on this bar's monitor, one item each: focused, occupied (has windows) or empty, each in its style. A
+// click focuses the workspace under it. While the window manager is unreachable it shows "<name> disconnected" in the
+// module's alert color instead.
 class Workspaces final : public IModule {
   public:
-    Workspaces(IWindowManager& windowManager, HMONITOR monitor);
+    Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleStyle style);
 
     bool                         Layout(const RenderContext& render) override;
     D2D1_SIZE_F                  Size() const override;
@@ -46,14 +33,19 @@ class Workspaces final : public IModule {
   private:
     IWindowManager& _windowManager;
     std::intptr_t   _monitor;
-    // What _text holds, once it has a layout.
-    WorkspaceLine _line;
-    bool          _disconnected = false;
-    IconText      _text;
+    ModuleStyle     _style;
+    // What the items show, once laid out, so an unchanged list lays out nothing.
+    std::vector<Workspace> _shown;
+    std::wstring           _disconnectedText;
+    bool                   _laidOut = false;
+    std::vector<IconText>  _labels; // one per shown workspace
+    std::vector<ItemStyle> _states; // one per shown workspace
+    ItemRow                _row;
+    IconText               _disconnected;
 };
 
-// The labels of the workspaces on one monitor joined by two spaces, with where each label sits in the text.
-WorkspaceLine JoinWorkspaces(const std::vector<Workspace>& workspaces, std::intptr_t monitor);
+// The workspaces on one monitor, in order.
+std::vector<Workspace> WorkspacesOnMonitor(const std::vector<Workspace>& workspaces, std::intptr_t monitor);
 
-// The name of the workspace whose label covers a text position, or nullopt between labels.
-std::optional<std::string> WorkspaceAt(const WorkspaceLine& line, std::uint32_t textPosition);
+// The style a workspace draws in: focused before occupied before empty.
+const ItemStyle& WorkspaceState(const Workspace& workspace, const ModuleStyle& style);

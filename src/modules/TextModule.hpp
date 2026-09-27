@@ -37,6 +37,7 @@ class TextModule : public IModule {
 
   private:
     TextModuleConfig _config;
-    ModuleText       _shown; // what _text holds, once it has a layout
+    ModuleText       _shown; // what _text holds, once laid out
+    bool             _laidOut = false;
     IconText         _text;
 };

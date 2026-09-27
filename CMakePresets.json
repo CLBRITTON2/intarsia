@@ -20,6 +20,14 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTING": "OFF"
       }
+    },
+    {
+      "name": "lint",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/lint",
+      "cacheVariables": {
+        "INTARSIA_PRECOMPILE_HEADERS": "OFF"
+      }
     }
   ],
   "buildPresets": [

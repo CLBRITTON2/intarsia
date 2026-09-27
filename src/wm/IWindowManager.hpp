@@ -13,7 +13,8 @@ struct Workspace {
     std::wstring  label; // the display name when the manager has one, else the name
     std::string   name;  // what commands address the workspace by
     bool          focused;
-    std::intptr_t monitor; // the HMONITOR the workspace is on
+    bool          occupied; // holds at least one window
+    std::intptr_t monitor;  // the HMONITOR the workspace is on
 
     bool          operator==(const Workspace&) const = default;
 };

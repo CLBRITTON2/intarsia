@@ -11,11 +11,6 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-    // Half an icon between icons, as the two spaces between workspace labels are about half a line.
-    constexpr float kGapPerIconSize = 0.5f;
-    // Strength of the icons of windows that do not have focus.
-    constexpr float     kDimmedOpacity = 0.5f;
-
     ComPtr<ID2D1Bitmap> CreateIconBitmap(ID2D1DeviceContext* context, const IconPixels& pixels) {
         ComPtr<ID2D1Bitmap> bitmap;
         ThrowIfDeviceFailed(context->CreateBitmap(D2D1::SizeU(pixels.width, pixels.height), pixels.pbgra.data(), pixels.width * 4,
@@ -26,14 +21,13 @@ namespace {
 
 } // namespace
 
-WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONITOR monitor) :
-    _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)) {}
+WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONITOR monitor, ModuleStyle style) :
+    _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
 
 bool WindowList::Layout(const RenderContext& render) {
     const std::vector<ManagedWindow> shown   = WindowsOnMonitor(_windowManager.Windows(), _monitor);
-    bool                             changed = !_laidOut || shown.size() != _slots.size() || render.iconSizeDips != _iconSizeDips;
-    _iconSizeDips                            = render.iconSizeDips;
-    std::vector<Slot> slots;
+    bool                             changed = !_laidOut || shown.size() != _slots.size();
+    std::vector<Slot>                slots;
     slots.reserve(shown.size());
     for (size_t index = 0; index < shown.size(); ++index) {
         std::shared_ptr<const IconPixels> pixels = _icons.For(shown[index].handle);
@@ -46,28 +40,36 @@ bool WindowList::Layout(const RenderContext& render) {
     }
     _slots   = std::move(slots);
     _laidOut = true;
+
+    const float                   icon = _style.icon.sizeDips;
+    std::vector<const ItemStyle*> styles;
+    styles.reserve(_slots.size());
+    for (const Slot& slot : _slots) {
+        styles.push_back(&StyleOf(slot));
+    }
+    _row = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), styles);
     return changed;
 }
 
 D2D1_SIZE_F WindowList::Size() const {
-    if (_slots.empty()) {
-        return D2D1_SIZE_F{.width = 0.0f, .height = 0.0f};
-    }
-    const auto count = static_cast<float>(_slots.size());
-    return D2D1_SIZE_F{.width = (count * _iconSizeDips) + ((count - 1.0f) * _iconSizeDips * kGapPerIconSize), .height = _iconSizeDips};
+    return _row.size;
 }
 
 void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    const float step = _iconSizeDips * (1.0f + kGapPerIconSize);
+    const float icon = _style.icon.sizeDips;
     for (size_t index = 0; index < _slots.size(); ++index) {
-        const Slot& slot = _slots[index];
-        if (slot.bitmap == nullptr) {
-            continue;
+        const Slot&      slot  = _slots[index];
+        const ItemStyle& style = StyleOf(slot);
+        DrawItemBackground(render, _row.boxes[index], style, origin);
+        if (slot.bitmap != nullptr) {
+            const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
+            render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
         }
-        const float left = origin.x + (static_cast<float>(index) * step);
-        render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(left, origin.y, left + _iconSizeDips, origin.y + _iconSizeDips), slot.window.focused ? 1.0f : kDimmedOpacity,
-                                   D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     }
+}
+
+const ItemStyle& WindowList::StyleOf(const Slot& slot) const {
+    return slot.window.focused ? _style.focused : _style.item;
 }
 
 std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
@@ -75,7 +77,7 @@ std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
 }
 
 void WindowList::Click(D2D1_POINT_2F point) {
-    const std::optional<size_t> index = IconAt(point.x, _slots.size(), _iconSizeDips, _iconSizeDips * kGapPerIconSize);
+    const std::optional<size_t> index = ItemAt(_row, point);
     if (index.has_value()) {
         _windowManager.FocusWindow(_slots[*index].window.id);
     }
@@ -94,17 +96,4 @@ std::vector<ManagedWindow> WindowsOnMonitor(const std::vector<ManagedWindow>& wi
     std::vector<ManagedWindow> shown;
     std::ranges::copy_if(windows, std::back_inserter(shown), [monitor](const ManagedWindow& window) { return window.monitor == monitor; });
     return shown;
-}
-
-std::optional<size_t> IconAt(float x, size_t count, float iconSize, float gap) {
-    if (x < 0.0f) {
-        return std::nullopt;
-    }
-    const float step  = iconSize + gap;
-    const auto  index = static_cast<size_t>(x / step);
-    const float into  = x - (static_cast<float>(index) * step);
-    if (index >= count || into >= iconSize) {
-        return std::nullopt;
-    }
-    return index;
 }

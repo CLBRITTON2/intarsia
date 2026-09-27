@@ -38,6 +38,7 @@ add_library(intarsia_core STATIC
   src/bar/Layout.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
+  src/config/Style.cpp
   src/modules/BindingModes.cpp
   src/modules/Clock.cpp
   src/modules/Cpu.cpp
@@ -46,6 +47,8 @@ add_library(intarsia_core STATIC
   src/modules/CommandPoller.cpp
   src/modules/Custom.cpp
   src/modules/DirectionToggle.cpp
+  src/modules/Divider.cpp
+  src/modules/ItemRow.cpp
   src/modules/ModuleFactory.cpp
   src/modules/TextModule.cpp
   src/modules/Ticks.cpp
@@ -63,6 +66,7 @@ add_library(intarsia_core STATIC
   src/platform/Process.cpp
   src/platform/Text.cpp
   src/platform/WebSocket.cpp
+  src/render/BrushCache.cpp
   src/render/Graphics.cpp
   src/render/Surface.cpp
   src/wm/GlazeWm.cpp
@@ -74,6 +78,18 @@ target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
 target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs)
+
+# Parsing these headers is most of every file's compile time, so each target parses them once. Off for the lint, since
+# clang-tidy cannot read MSVC's precompiled headers.
+option(INTARSIA_PRECOMPILE_HEADERS "Precompile the Windows, DirectX and standard headers" ON)
+set(INTARSIA_PRECOMPILED_HEADERS
+  <windows.h> <d2d1_1.h> <dwrite.h> <wrl/client.h> <nlohmann/json.hpp>
+  <algorithm> <chrono> <filesystem> <format> <functional> <map> <memory> <mutex> <optional> <string> <string_view>
+  <thread> <variant> <vector>
+)
+if(INTARSIA_PRECOMPILE_HEADERS)
+  target_precompile_headers(intarsia_core PRIVATE ${INTARSIA_PRECOMPILED_HEADERS})
+endif()
 
 add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest)
 target_link_libraries(intarsia PRIVATE intarsia_core)
@@ -101,11 +117,13 @@ if(BUILD_TESTING)
     tests/bar/Sections.cpp
     tests/bar/Tooltip.cpp
     tests/config/Config.cpp
+    tests/config/Style.cpp
     tests/modules/BindingModes.cpp
     tests/modules/Clock.cpp
     tests/modules/CommandPoller.cpp
     tests/modules/Cpu.cpp
     tests/modules/DirectionToggle.cpp
+    tests/modules/ItemRow.cpp
     tests/modules/Memory.cpp
     tests/modules/Ticks.cpp
     tests/modules/Window.cpp
@@ -127,6 +145,9 @@ if(BUILD_TESTING)
   # Winsock, BCrypt and CryptoAPI play the far end of a loopback connection in the WebSocket and peer tests.
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/config.lua")
+  if(INTARSIA_PRECOMPILE_HEADERS)
+    target_precompile_headers(intarsia_gtests PRIVATE ${INTARSIA_PRECOMPILED_HEADERS} <gmock/gmock.h> <gtest/gtest.h>)
+  endif()
   gtest_discover_tests(intarsia_gtests)
 
   # The stress tests' IPC server (scripts/stress.ps1), named glazewm.exe because the bar's peer check requires it.

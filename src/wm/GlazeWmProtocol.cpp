@@ -83,10 +83,12 @@ namespace glazewm {
         }
 
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {
-            return Workspace{.label   = DisplayLabel(workspace, "workspace"),
-                             .name    = StringField(workspace, "name", "workspace"),
-                             .focused = BoolField(workspace, "hasFocus", "workspace"),
-                             .monitor = monitor};
+            // A workspace's children are its windows and the split containers holding them, so any child means a window.
+            return Workspace{.label    = DisplayLabel(workspace, "workspace"),
+                             .name     = StringField(workspace, "name", "workspace"),
+                             .focused  = BoolField(workspace, "hasFocus", "workspace"),
+                             .occupied = !ArrayField(workspace, "children", "workspace").empty(),
+                             .monitor  = monitor};
         }
 
     } // namespace

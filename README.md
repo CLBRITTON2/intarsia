@@ -1,8 +1,8 @@
 # intarsia
 
 A native status bar for Windows in the spirit of Waybar. Every monitor gets a bar docked to one screen edge, built
-from small modules that a Lua config places into left, center and right sections. It draws with Direct2D and
-DirectWrite, and runs alongside GlazeWM or on plain Windows.
+from small modules that a Lua config places into left, center and right sections and a CSS file styles. It draws with
+Direct2D and DirectWrite, and runs alongside GlazeWM or on plain Windows.
 
 ## Requirements
 
@@ -58,17 +58,20 @@ This checks formatting with clang-format and runs clang-tidy over `src/` and `te
 
 ## Run
 
-The bar reads `%USERPROFILE%\.config\intarsia\config.lua`. Start from the commented example:
+The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.css` beside it for how it
+looks, as Waybar does. Start from the commented examples:
 
 ```powershell
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\intarsia | Out-Null
-Copy-Item config\config.lua $env:USERPROFILE\.config\intarsia\config.lua
+Copy-Item config\config.lua, config\style.css $env:USERPROFILE\.config\intarsia
 Start-Process build\release\intarsia.exe -RedirectStandardError $env:TEMP\intarsia.log
 ```
 
-`--config <path>` reads another config, and `--glazewm-port <port>` connects to GlazeWM on a port other than 6123.
-Saving the config rebuilds the bars. A config with a wrong key or type stops the bar with a message naming the file
-and the key. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
+`style.css` is a subset of CSS: `*` for the bar-wide font and color, `section` and `tooltip` for their boxes, and each
+module by `.module`, its type (`clock`) or its name in the config (`#date`), with its `.icon` and `.item`s inside. The
+example lists every selector it takes. `--config <path>` reads another config and the `style.css` beside it, and
+`--glazewm-port <port>` connects to GlazeWM on a port other than 6123. Saving either file rebuilds the bars. A wrong
+key, selector or property stops the bar with a message naming the file and where in it. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
 with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen space back.
 
 ## Layout
@@ -78,10 +81,11 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/bar/` | one bar per monitor, section layout, tooltips |
 | `src/modules/` | the modules and the factory that builds them from the config |
 | `src/wm/` | window manager backends: GlazeWM over its IPC, and plain Windows |
-| `src/config/` | the Lua config loader |
+| `src/config/` | the Lua config loader and the style sheet parser |
 | `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
 | `config/config.lua` | the example config, documenting every key |
+| `config/style.css` | the example style, documenting every selector |
 | `tests/` | unit tests mirroring `src/`, and `tests/stress/` for the stress tests' IPC server |
 | `scripts/` | build, test, stress test and lint |
 

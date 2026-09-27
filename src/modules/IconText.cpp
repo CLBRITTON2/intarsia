@@ -2,38 +2,92 @@
 
 #include "platform/Errors.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <utility>
 
-IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text, ID2D1Brush* textBrush) {
-    const std::wstring line = icon.empty() ? std::wstring(text) : std::wstring(icon) + L"  " + std::wstring(text);
+using Microsoft::WRL::ComPtr;
 
-    IconText           laidOut{.layout = nullptr, .size = {.width = 0.0f, .height = 0.0f}};
-    ThrowIfFailed(render.dwrite->CreateTextLayout(line.c_str(), static_cast<std::uint32_t>(line.size()), render.textFormat, std::numeric_limits<float>::max(),
-                                                  std::numeric_limits<float>::max(), &laidOut.layout),
-                  "IDWriteFactory::CreateTextLayout");
-    ThrowIfFailed(laidOut.layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping");
-    if (!icon.empty()) {
-        const DWRITE_TEXT_RANGE iconRange{.startPosition = 0, .length = static_cast<std::uint32_t>(icon.size())};
-        ThrowIfFailed(laidOut.layout->SetFontSize(render.iconSizeDips, iconRange), "IDWriteTextLayout::SetFontSize");
-        ThrowIfFailed(laidOut.layout->SetDrawingEffect(render.accent, iconRange), "IDWriteTextLayout::SetDrawingEffect");
+namespace {
+
+    ComPtr<IDWriteTextLayout> CreateLine(const RenderContext& render, std::wstring_view line) {
+        ComPtr<IDWriteTextLayout> layout;
+        ThrowIfFailed(render.dwrite->CreateTextLayout(line.data(), static_cast<std::uint32_t>(line.size()), render.textFormat, std::numeric_limits<float>::max(),
+                                                      std::numeric_limits<float>::max(), &layout),
+                      "IDWriteFactory::CreateTextLayout");
+        ThrowIfFailed(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping");
+        return layout;
     }
-    const DWRITE_TEXT_RANGE textRange{.startPosition = static_cast<std::uint32_t>(line.size() - text.size()), .length = static_cast<std::uint32_t>(text.size())};
-    ThrowIfFailed(laidOut.layout->SetDrawingEffect(textBrush, textRange), "IDWriteTextLayout::SetDrawingEffect");
 
-    DWRITE_TEXT_METRICS metrics{};
-    ThrowIfFailed(laidOut.layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
-    laidOut.size = D2D1_SIZE_F{.width = metrics.widthIncludingTrailingWhitespace, .height = metrics.height};
-    return laidOut;
+    // Measured last: every font change to a layout moves its size.
+    D2D1_SIZE_F Measure(IDWriteTextLayout* layout) {
+        if (layout == nullptr) {
+            return D2D1_SIZE_F{.width = 0.0f, .height = 0.0f};
+        }
+        DWRITE_TEXT_METRICS metrics{};
+        ThrowIfFailed(layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics");
+        return D2D1_SIZE_F{.width = metrics.widthIncludingTrailingWhitespace, .height = metrics.height};
+    }
+
+    IconText Combined(ComPtr<IDWriteTextLayout> icon, ComPtr<IDWriteTextLayout> text, float iconGapDips) {
+        const D2D1_SIZE_F iconSize = Measure(icon.Get());
+        const D2D1_SIZE_F textSize = Measure(text.Get());
+        const float       gap      = icon != nullptr && text != nullptr ? iconGapDips : 0.0f;
+        return IconText{.icon     = std::move(icon),
+                        .text     = std::move(text),
+                        .iconSize = iconSize,
+                        .textSize = textSize,
+                        .gapDips  = gap,
+                        .size     = D2D1_SIZE_F{.width = iconSize.width + gap + textSize.width, .height = std::max(iconSize.height, textSize.height)}};
+    }
+
+} // namespace
+
+IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std::wstring_view text) {
+    ComPtr<IDWriteTextLayout> iconLayout;
+    if (!icon.empty()) {
+        iconLayout = CreateLine(render, icon);
+        const DWRITE_TEXT_RANGE all{.startPosition = 0, .length = static_cast<std::uint32_t>(icon.size())};
+        ThrowIfFailed(iconLayout->SetFontFamilyName(render.iconFont, all), "IDWriteTextLayout::SetFontFamilyName");
+        ThrowIfFailed(iconLayout->SetFontSize(render.iconSizeDips, all), "IDWriteTextLayout::SetFontSize");
+    }
+    ComPtr<IDWriteTextLayout> textLayout = text.empty() ? nullptr : CreateLine(render, text);
+    return Combined(std::move(iconLayout), std::move(textLayout), render.iconGapDips);
 }
 
-bool TextLine::Update(const RenderContext& render, std::wstring text, ID2D1Brush* brush) {
-    if (_text.layout != nullptr && text == _shown) {
+IconText LayOutWeightedText(const RenderContext& render, std::wstring_view text, DWRITE_FONT_WEIGHT weight) {
+    ComPtr<IDWriteTextLayout> layout = CreateLine(render, text);
+    ThrowIfFailed(layout->SetFontWeight(weight, DWRITE_TEXT_RANGE{.startPosition = 0, .length = static_cast<std::uint32_t>(text.size())}), "IDWriteTextLayout::SetFontWeight");
+    return Combined(nullptr, std::move(layout), 0.0f);
+}
+
+void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* textBrush) {
+    if (laidOut.icon != nullptr) {
+        render.context->DrawTextLayout(D2D1::Point2F(origin.x, origin.y + ((laidOut.size.height - laidOut.iconSize.height) / 2.0f)), laidOut.icon.Get(), render.accent);
+    }
+    if (laidOut.text != nullptr) {
+        const float left = origin.x + laidOut.iconSize.width + laidOut.gapDips;
+        render.context->DrawTextLayout(D2D1::Point2F(left, origin.y + ((laidOut.size.height - laidOut.textSize.height) / 2.0f)), laidOut.text.Get(), textBrush);
+    }
+}
+
+IconText EmptyIconText() {
+    return IconText{.icon     = nullptr,
+                    .text     = nullptr,
+                    .iconSize = {.width = 0.0f, .height = 0.0f},
+                    .textSize = {.width = 0.0f, .height = 0.0f},
+                    .gapDips  = 0.0f,
+                    .size     = {.width = 0.0f, .height = 0.0f}};
+}
+
+bool TextLine::Update(const RenderContext& render, std::wstring text) {
+    if (_laidOut && text == _shown) {
         return false;
     }
-    _text  = LayOutIconText(render, L"", text, brush);
-    _shown = std::move(text);
+    _text    = LayOutIconText(render, L"", text);
+    _shown   = std::move(text);
+    _laidOut = true;
     return true;
 }
 
@@ -42,5 +96,5 @@ D2D1_SIZE_F TextLine::Size() const {
 }
 
 void TextLine::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    render.context->DrawTextLayout(origin, _text.layout.Get(), render.foreground);
+    DrawIconText(render, origin, _text, render.foreground);
 }

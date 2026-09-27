@@ -1,6 +1,8 @@
 #include "modules/WindowList.hpp"
 
 #include "../wm/FakeWindowManager.hpp"
+#include "TestStyle.hpp"
+#include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
 
 #include <gtest/gtest.h>
@@ -19,7 +21,17 @@ namespace {
     };
 
     RenderContext NoDrawing() {
-        return RenderContext{.context = nullptr, .dwrite = nullptr, .textFormat = nullptr, .foreground = nullptr, .accent = nullptr, .alert = nullptr, .iconSizeDips = 20.0f};
+        return RenderContext{.context       = nullptr,
+                             .dwrite        = nullptr,
+                             .textFormat    = nullptr,
+                             .iconFont      = nullptr,
+                             .iconSizeDips  = 20.0f,
+                             .iconGapDips   = 0.0f,
+                             .foreground    = nullptr,
+                             .accent        = nullptr,
+                             .alert         = nullptr,
+                             .brushes       = nullptr,
+                             .boxHeightDips = 24.0f};
     }
 
     class WindowListModule : public testing::Test {
@@ -48,19 +60,8 @@ TEST(WindowList, WindowsOnMonitorKeepsOnlyThatMonitorsInOrder) {
     EXPECT_TRUE(WindowsOnMonitor(kWindows, 30).empty());
 }
 
-TEST(WindowList, IconAtMapsXToAnIconAndNothingInTheGaps) {
-    // Icons 20 wide with 10 between: 0-20, 30-50, 60-80.
-    EXPECT_EQ(IconAt(0.0f, 3, 20.0f, 10.0f), 0u);
-    EXPECT_EQ(IconAt(19.9f, 3, 20.0f, 10.0f), 0u);
-    EXPECT_FALSE(IconAt(25.0f, 3, 20.0f, 10.0f).has_value());
-    EXPECT_EQ(IconAt(30.0f, 3, 20.0f, 10.0f), 1u);
-    EXPECT_EQ(IconAt(79.0f, 3, 20.0f, 10.0f), 2u);
-    EXPECT_FALSE(IconAt(85.0f, 3, 20.0f, 10.0f).has_value());
-    EXPECT_FALSE(IconAt(-1.0f, 3, 20.0f, 10.0f).has_value());
-}
-
 TEST_F(WindowListModule, LayoutReportsAChangeOnlyWhenTheWindowsChange) {
-    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10));
+    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     _windowManager.windows = kWindows;
     EXPECT_TRUE(module.Layout(NoDrawing()));
     EXPECT_FALSE(module.Layout(NoDrawing()));
@@ -75,12 +76,13 @@ TEST_F(WindowListModule, LayoutReportsAChangeOnlyWhenTheWindowsChange) {
     EXPECT_TRUE(module.Layout(NoDrawing()));
 }
 
-TEST_F(WindowListModule, SizeCoversEveryIconAndTheGapsBetween) {
-    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10));
+TEST_F(WindowListModule, SizeCoversEveryPaddedIconAndTheGapsBetween) {
+    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     _windowManager.windows = kWindows;
     module.Layout(NoDrawing());
-    EXPECT_FLOAT_EQ(module.Size().width, 50.0f);
-    EXPECT_FLOAT_EQ(module.Size().height, 20.0f);
+    // Two items of a 20 icon padded 4 across and 2 down, with 5 of margin on either side of each.
+    EXPECT_FLOAT_EQ(module.Size().width, 76.0f);
+    EXPECT_FLOAT_EQ(module.Size().height, 24.0f);
 
     _windowManager.windows.clear();
     module.Layout(NoDrawing());
@@ -101,10 +103,12 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
                                                 D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),
                                                 &target)));
     context->SetTarget(target.Get());
+    BrushCache    brushes(context.Get());
     RenderContext render = NoDrawing();
     render.context       = context.Get();
+    render.brushes       = &brushes;
 
-    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10));
+    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     EXPECT_TRUE(module.Layout(render));
     // The icon is read on the reader thread, whose WM_GETICON this thread answers while it pumps.
     bool       arrived  = false;
@@ -126,13 +130,14 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
 }
 
 TEST_F(WindowListModule, ClickFocusesTheWindowUnderIt) {
-    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10));
+    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     _windowManager.windows = kWindows;
     module.Layout(NoDrawing());
-    module.Click(D2D1::Point2F(35.0f, 5.0f));
+    // Items at 5 to 33 and 43 to 71.
+    module.Click(D2D1::Point2F(45.0f, 5.0f));
     EXPECT_EQ(_windowManager.focusedWindow, "b");
 
     _windowManager.focusedWindow.clear();
-    module.Click(D2D1::Point2F(25.0f, 5.0f));
+    module.Click(D2D1::Point2F(38.0f, 5.0f));
     EXPECT_TRUE(_windowManager.focusedWindow.empty());
 }
