@@ -1,4 +1,4 @@
-// Test IPC server for the stress tests in scripts/smoke.ps1. It answers the bar's queries the way GlazeWM does, plus
+// Test IPC server for the stress tests in scripts/stress.ps1. It answers the bar's queries the way GlazeWM does, plus
 // the load or faults a scenario names. Built as glazewm.exe, the image name the bar's peer check requires.
 //
 //   glazewm.exe --port <n> --scenario <normal|flood|malformed|stall|flap|reject>
@@ -86,7 +86,7 @@ namespace {
     }
 
     std::string Failure(std::string_view clientMessage) {
-        return std::format(R"({{"messageType":"client_response","clientMessage":"{}","success":false,"error":"refused by the smoke scenario","data":null}})", clientMessage);
+        return std::format(R"({{"messageType":"client_response","clientMessage":"{}","success":false,"error":"refused by the stress scenario","data":null}})", clientMessage);
     }
 
     std::string Event(std::string_view eventType) {

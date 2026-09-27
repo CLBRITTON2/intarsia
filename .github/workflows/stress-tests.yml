@@ -1,0 +1,28 @@
+name: Stress tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: Build to stress test
+        type: choice
+        options: [release, debug]
+        default: release
+      seconds:
+        description: Seconds per scenario
+        type: number
+        default: 60
+
+jobs:
+  stress-tests:
+    # windows-2025 carries Visual Studio 2026, and the scripts pin Visual Studio 2022 and its bundled LLVM.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - name: stress tests
+        shell: pwsh
+        # Through the environment, never interpolated into the script, so no input can inject a command.
+        env:
+          STRESS_PRESET: ${{ inputs.preset }}
+          STRESS_SECONDS: ${{ inputs.seconds }}
+        run: ./scripts/stress.ps1 -Preset $env:STRESS_PRESET -Seconds ([int] $env:STRESS_SECONDS)

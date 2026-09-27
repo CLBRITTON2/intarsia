@@ -22,8 +22,8 @@ TEST(LaunchOptions, NoArgumentsKeepTheDefaults) {
 }
 
 TEST(LaunchOptions, ReadsTheConfigPathAndPort) {
-    const LaunchOptions options = Parse({L"--config", L"D:\\smoke\\config.lua", L"--glazewm-port", L"50123"});
-    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\smoke\\config.lua"));
+    const LaunchOptions options = Parse({L"--config", L"D:\\stress\\config.lua", L"--glazewm-port", L"50123"});
+    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\stress\\config.lua"));
     EXPECT_EQ(options.glazeWmPort, 50123);
 }
 

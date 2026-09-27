@@ -129,10 +129,10 @@ if(BUILD_TESTING)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/config.lua")
   gtest_discover_tests(intarsia_gtests)
 
-  # The stress tests' IPC server (scripts/smoke.ps1), named glazewm.exe because the bar's peer check requires it.
-  add_executable(smoke_glazewm_server tests/smoke/GlazeWmServer.cpp)
-  set_target_properties(smoke_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
-  target_compile_definitions(smoke_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_options(smoke_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
-  target_link_libraries(smoke_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
+  # The stress tests' IPC server (scripts/stress.ps1), named glazewm.exe because the bar's peer check requires it.
+  add_executable(stress_glazewm_server tests/stress/GlazeWmServer.cpp)
+  set_target_properties(stress_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
+  target_compile_definitions(stress_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_compile_options(stress_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
+  target_link_libraries(stress_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
 endif()

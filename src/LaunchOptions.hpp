@@ -11,7 +11,7 @@
 // The command line: intarsia.exe [--config <path>] [--glazewm-port <port>].
 struct LaunchOptions {
     std::filesystem::path configPath;
-    std::uint16_t         glazeWmPort; // the smoke harness points the bar at its own server while GlazeWM holds 6123
+    std::uint16_t         glazeWmPort; // the stress tests point the bar at its own server while GlazeWM holds 6123
 };
 
 class LaunchOptionsError : public std::runtime_error {

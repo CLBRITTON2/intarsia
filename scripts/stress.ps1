@@ -4,7 +4,7 @@ Stress tests the running bar. Fails on a crash, a leak or a hang.
 
 .DESCRIPTION
 Each scenario runs build\debug\intarsia.exe with a generated config against build\debug\glazewm.exe, a test IPC server
-(tests/smoke/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
+(tests/stress/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
 objects, threads, CPU, and whether its windows still answer messages. A scenario fails when the bar exits, stops
 answering, logs a fatal error, grows past the thresholds after warming up, or does not exit cleanly on WM_CLOSE.
 
@@ -35,7 +35,7 @@ $warmupSeconds      = 10
 # The idle scenario ticks a clock, cpu and memory each second and gets a GlazeWM event a second, and runs no commands.
 $maxIdleCpuPercent = 3
 
-Add-Type -Namespace Smoke -Name Native -MemberDefinition @'
+Add-Type -Namespace Stress -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr process, uint flags);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string className, string title);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
@@ -56,12 +56,12 @@ function Get-BarWindows([int] $processId) {
     $window  = [IntPtr]::Zero
     while ($true) {
         # [NullString]: PowerShell turns $null into "" for a string parameter, which would match only untitled windows.
-        $window = [Smoke.Native]::FindWindowExW([IntPtr]::Zero, $window, 'IntarsiaBar', [NullString]::Value)
+        $window = [Stress.Native]::FindWindowExW([IntPtr]::Zero, $window, 'IntarsiaBar', [NullString]::Value)
         if ($window -eq [IntPtr]::Zero) {
             break
         }
         [uint32] $owner = 0
-        [void][Smoke.Native]::GetWindowThreadProcessId($window, [ref] $owner)
+        [void][Stress.Native]::GetWindowThreadProcessId($window, [ref] $owner)
         if ($owner -eq $processId) {
             $windows += $window
         }
@@ -79,7 +79,7 @@ function Get-Responsiveness([int] $processId) {
     foreach ($window in $windows) {
         [IntPtr] $result = [IntPtr]::Zero
         # SMTO_ABORTIFHUNG (2)
-        if ([Smoke.Native]::SendMessageTimeoutW($window, 0, [IntPtr]::Zero, [IntPtr]::Zero, 2, 1000, [ref] $result) -eq [IntPtr]::Zero) {
+        if ([Stress.Native]::SendMessageTimeoutW($window, 0, [IntPtr]::Zero, [IntPtr]::Zero, 2, 1000, [ref] $result) -eq [IntPtr]::Zero) {
             return 'hung'
         }
     }
@@ -91,8 +91,8 @@ function Get-Sample([System.Diagnostics.Process] $process) {
     return [pscustomobject]@{
         PrivateMB = [math]::Round($process.PrivateMemorySize64 / 1MB, 1)
         Handles   = $process.HandleCount
-        Gdi       = [Smoke.Native]::GetGuiResources($process.Handle, 0)
-        User      = [Smoke.Native]::GetGuiResources($process.Handle, 1)
+        Gdi       = [Stress.Native]::GetGuiResources($process.Handle, 0)
+        User      = [Stress.Native]::GetGuiResources($process.Handle, 1)
         Threads   = $process.Threads.Count
         Cpu       = $process.TotalProcessorTime
     }
@@ -100,7 +100,7 @@ function Get-Sample([System.Diagnostics.Process] $process) {
 
 # A config with every GlazeWM module and a clock, cpu and memory ticking each second, plus the named custom modules:
 # endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json.
-function New-SmokeConfig([string] $path, [int] $revision, [string[]] $commands) {
+function New-StressConfig([string] $path, [int] $revision, [string[]] $commands) {
     $cmd  = 'C:\\Windows\\System32\\cmd.exe'
     $ping = 'C:\\Windows\\System32\\PING.EXE'
     $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
@@ -117,7 +117,7 @@ function New-SmokeConfig([string] $path, [int] $revision, [string[]] $commands) 
     $rightList   = (@('"tiling"') + ($shown | ForEach-Object { "`"$_`"" }) + @('"cpu"', '"memory"')) -join ', '
     $definitions = ($shown | ForEach-Object { "        $_ = $($commandModules[$_])," }) -join "`n"
     $config = @"
--- smoke revision $revision
+-- stress revision $revision
 return {
     bar = { edge = "top", layer = "top", thickness = 40, border = 1, spacing = 8 },
     font = { family = "Segoe UI", text_size = 13, icon_size = 16 },
@@ -145,12 +145,12 @@ $definitions
 }
 
 function Invoke-Scenario([string] $name) {
-    $work = Join-Path ([System.IO.Path]::GetTempPath()) "intarsia-smoke-$name-$PID"
+    $work = Join-Path ([System.IO.Path]::GetTempPath()) "intarsia-stress-$name-$PID"
     New-Item -ItemType Directory -Force $work | Out-Null
     $configPath = Join-Path $work 'config.lua'
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
     $commands   = if ($name -eq 'idle') { @() } else { @('endless', 'hang', 'fail', 'json') }
-    New-SmokeConfig $configPath 0 $commands
+    New-StressConfig $configPath 0 $commands
     $port       = Get-FreePort
     $serverName = if ($name -in @('reload', 'idle')) { 'normal' } else { $name }
     $barLog     = Join-Path $work 'intarsia.log'
@@ -186,7 +186,7 @@ function Invoke-Scenario([string] $name) {
             if ($name -eq 'reload') {
                 # Twenty saves a second: every settled save rebuilds every bar.
                 for ($save = 0; $save -lt 20; $save++) {
-                    New-SmokeConfig $configPath ($second * 20 + $save) $commands
+                    New-StressConfig $configPath ($second * 20 + $save) $commands
                     Start-Sleep -Milliseconds 50
                 }
             }
@@ -248,5 +248,5 @@ $results = foreach ($name in $Scenario) {
 }
 $results | Format-Table -AutoSize | Out-String -Width 400 | Write-Host
 if (@($results | Where-Object Result -ne 'pass').Count -gt 0) {
-    throw 'smoke scenarios failed'
+    throw 'stress scenarios failed'
 }
