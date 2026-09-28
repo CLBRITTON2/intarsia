@@ -70,3 +70,9 @@ void RequirePlaceholders(std::string_view key, const std::string& format, const 
         FormatPlaceholders(format, samples);
     } catch (const std::format_error& error) { throw ConfigError(std::format("{} '{}' is not a valid format: {}. It can use {}", key, format, error.what(), Names(samples))); }
 }
+
+void RequireOptionalPlaceholders(std::string_view key, const std::optional<std::string>& format, const std::vector<Placeholder>& samples) {
+    if (format.has_value()) {
+        RequirePlaceholders(key, *format, samples);
+    }
+}

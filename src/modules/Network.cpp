@@ -19,9 +19,7 @@ Network::Network(NetworkConfig config, const INetwork& network) : _config(std::m
     RequirePlaceholders("network format_wifi", _config.formatWifi, samples);
     RequirePlaceholders("network format_ethernet", _config.formatEthernet, samples);
     RequirePlaceholders("network format_disconnected", _config.formatDisconnected, samples);
-    if (_config.tooltip.has_value()) {
-        RequirePlaceholders("network tooltip", *_config.tooltip, samples);
-    }
+    RequireOptionalPlaceholders("network tooltip", _config.tooltip, samples);
 }
 
 bool Network::Layout(const RenderContext& render) {

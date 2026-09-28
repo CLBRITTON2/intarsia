@@ -106,12 +106,12 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $commands)
     $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
     $commandModules = [ordered]@{
         # Prints until the output cap kills it, every second.
-        endless = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`" }, timeout = 5, output = `"text`", format = `"{}`", icon = `"`", interval = 1 }"
+        endless = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`" }, timeout = 5, output = `"text`", format = `"{text}`", icon = `"`", interval = 1 }"
         # Outlives its timeout, with a child of its own, every second.
-        hang    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"$ping -n 30 127.0.0.1`" }, timeout = 1, output = `"text`", format = `"{}`", icon = `"`", interval = 1 }"
-        fail    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"exit 3`" }, timeout = 5, output = `"text`", format = `"{}`", icon = `"`", interval = 1 }"
+        hang    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"$ping -n 30 127.0.0.1`" }, timeout = 1, output = `"text`", format = `"{text}`", icon = `"`", interval = 1 }"
+        fail    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"exit 3`" }, timeout = 5, output = `"text`", format = `"{text}`", icon = `"`", interval = 1 }"
         # A process slow to start, printing JSON. cmd.exe would keep the backslashes of escaped quotes.
-        json    = "{ type = `"custom`", command = { `"$powershell`", `"-NoProfile`", `"-Command`", `"'{\`"text\`":\`"ok\`",\`"tooltip\`":\`"line\`",\`"alert\`":true}'`" }, timeout = 5, output = `"json`", format = `"{}`", icon = `"`", interval = 1 }"
+        json    = "{ type = `"custom`", command = { `"$powershell`", `"-NoProfile`", `"-Command`", `"'{\`"text\`":\`"ok\`",\`"tooltip\`":\`"line\`",\`"alert\`":true}'`" }, timeout = 5, output = `"json`", format = `"{text}`", icon = `"`", interval = 1 }"
     }
     $shown       = @($commandModules.Keys | Where-Object { $_ -in $commands })
     $rightList   = (@('"tiling"') + ($shown | ForEach-Object { "`"$_`"" }) + @('"cpu"', '"memory"')) -join ', '
@@ -129,12 +129,12 @@ return {
         divider = { type = "divider" },
         mode = { type = "binding_mode" },
         apps = { type = "windows" },
-        title = { type = "window", max_length = 60, tooltip = "{}" },
+        title = { type = "window", max_length = 60, tooltip = "{title}" },
         tiling = { type = "tiling_direction", horizontal = "H", vertical = "V" },
-        clock = { type = "clock", format = "{:%H:%M:%S}", icon = "", interval = 1,
+        clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1,
                   on_scroll_up = { window_manager = "focus --next-workspace" } },
-        cpu = { type = "cpu", format = "{}%", icon = "", interval = 1 },
-        memory = { type = "memory", format = "{:.1f}", icon = "", interval = 1 },
+        cpu = { type = "cpu", format = "{usage}%", icon = "", interval = 1 },
+        memory = { type = "memory", format = "{used:.1f}", icon = "", interval = 1 },
 $definitions
     },
 }

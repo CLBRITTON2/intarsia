@@ -1,13 +1,10 @@
 #pragma once
 
-#include "config/Config.hpp"
 #include "render/RenderContext.hpp"
 
 #include <wrl/client.h>
 
 #include <cstdint>
-#include <format>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -62,26 +59,3 @@ class TextLine {
     bool       _laidOut = false;
     IconText   _text    = EmptyIconText();
 };
-
-template <typename... Values>
-std::string FormatValue(const std::string& format, Values... values) {
-    return std::vformat(format, std::make_format_args(values...));
-}
-
-// Formats sample values once so a bad spec fails when the config loads, not on the first redraw. Throws ConfigError
-// naming the key.
-template <typename... Values>
-void RequireFormat(std::string_view key, const std::string& format, Values... samples) {
-    try {
-        FormatValue(format, samples...);
-    } catch (const std::format_error& error) { throw ConfigError(std::format("{} '{}' is not a valid std::format spec for its value: {}", key, format, error.what())); }
-}
-
-// RequireFormat for a module's format and, when it has one, its tooltip. module names the type, such as "cpu".
-template <typename... Values>
-void RequireFormats(std::string_view module, const std::string& format, const std::optional<std::string>& tooltip, Values... samples) {
-    RequireFormat(std::format("{} format", module), format, samples...);
-    if (tooltip.has_value()) {
-        RequireFormat(std::format("{} tooltip", module), *tooltip, samples...);
-    }
-}

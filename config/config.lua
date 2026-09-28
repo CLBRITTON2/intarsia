@@ -45,21 +45,21 @@ return {
         tiling = { type = "tiling_direction", horizontal = "⇄", vertical = "⇵" },
         date = {
             type = "clock",
-            format = "{:%a %d %b %Y, %H:%M}", -- std::format chrono spec
-            tooltip = "{:%A %d %B %Y, %H:%M:%S}",
+            format = "{time:%a %d %b %Y, %H:%M}", -- {time} takes a std::format chrono spec
+            tooltip = "{time:%A %d %B %Y, %H:%M:%S}",
             icon = "\u{F1441}",
             interval = 60, -- seconds between redraws, aligned to the clock
         },
         cpu = {
             type = "cpu",
-            format = "{}%", -- the value is an integer percent
+            format = "{usage}%", -- {usage} is a whole percent
             icon = "\u{F4BC}",
             interval = 1,
             on_click = { "C:\\Windows\\System32\\Taskmgr.exe" },
         },
         memory = {
             type = "memory",
-            format = "{:.1f} GB", -- the value is gibibytes in use, as a double
+            format = "{used:.1f} GB", -- {used} is gibibytes in use, as a double
             icon = "\u{EFC5}",
             interval = 1,
             on_click = { "C:\\Windows\\System32\\resmon.exe" },
@@ -121,7 +121,7 @@ return {
         -- title = {
         --     type = "window",
         --     max_length = 80, -- longer titles are cut with an ellipsis
-        --     tooltip = "{}", -- the whole title
+        --     tooltip = "{title}", -- the whole title
         -- },
         --
         -- A custom module runs its command every interval and shows what it printed. The command follows the same
@@ -136,7 +136,7 @@ return {
         --     command = { "C:\\Windows\\System32\\curl.exe", "--silent", "--fail", "https://wttr.in/?format=%c%t" },
         --     timeout = 10,
         --     output = "text",
-        --     format = "{}", -- the value is the output's text, as a string
+        --     format = "{text}", -- {text} is the output's text, as a string
         --     icon = "",
         --     interval = 900,
         -- },

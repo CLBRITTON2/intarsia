@@ -24,10 +24,12 @@ double BytesToGibibytes(std::uint64_t bytes) {
     return static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
 }
 
-Memory::Memory(TextModuleConfig config) : TextModule(std::move(config)) {
-    RequireFormats("memory", Settings().format, Settings().tooltip, 0.0);
-}
+Memory::Memory(TextModuleConfig config) : TextModule(std::move(config), "memory", MemoryPlaceholders(0)) {}
 
 ModuleText Memory::Format(const std::string& spec) {
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatValue(spec, BytesToGibibytes(UsedPhysicalBytes()))), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(UsedPhysicalBytes()))), .alert = false};
+}
+
+std::vector<Placeholder> MemoryPlaceholders(std::uint64_t usedBytes) {
+    return {{.name = "used", .value = BytesToGibibytes(usedBytes)}};
 }

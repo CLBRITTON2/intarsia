@@ -4,22 +4,12 @@
 
 #include <utility>
 
-namespace {
-
-    std::chrono::zoned_time<std::chrono::seconds> LocalTime(std::chrono::system_clock::time_point now) {
-        return {std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(now)};
-    }
-
-} // namespace
-
-Clock::Clock(TextModuleConfig config) : TextModule(std::move(config)) {
-    RequireFormats("clock", Settings().format, Settings().tooltip, LocalTime(std::chrono::system_clock::now()));
-}
+Clock::Clock(TextModuleConfig config) : TextModule(std::move(config), "clock", ClockPlaceholders(std::chrono::system_clock::now())) {}
 
 ModuleText Clock::Format(const std::string& spec) {
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatLocalTime(spec, std::chrono::system_clock::now())), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, ClockPlaceholders(std::chrono::system_clock::now()))), .alert = false};
 }
 
-std::string FormatLocalTime(const std::string& format, std::chrono::system_clock::time_point now) {
-    return FormatValue(format, LocalTime(now));
+std::vector<Placeholder> ClockPlaceholders(std::chrono::system_clock::time_point now) {
+    return {{.name = "time", .value = std::chrono::zoned_time{std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(now)}}};
 }

@@ -4,9 +4,13 @@
 
 #include <cstdint>
 #include <chrono>
+#include <format>
 #include <utility>
 
-TextModule::TextModule(TextModuleConfig config) : _config(std::move(config)) {}
+TextModule::TextModule(TextModuleConfig config, std::string_view type, const std::vector<Placeholder>& samples) : _config(std::move(config)) {
+    RequirePlaceholders(std::format("{} format", type), _config.format, samples);
+    RequireOptionalPlaceholders(std::format("{} tooltip", type), _config.tooltip, samples);
+}
 
 bool TextModule::Layout(const RenderContext& render) {
     return _line.Update(render, Format(_config.format));

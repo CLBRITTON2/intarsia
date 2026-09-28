@@ -24,7 +24,7 @@ return {
     modules_center = { "time" },
     modules_right = {},
     modules = {
-        time = { type = "clock", format = "{:%H:%M}", icon = "x", interval = 60 },
+        time = { type = "clock", format = "{time:%H:%M}", icon = "x", interval = 60 },
         title = { type = "window", max_length = 80 },
     },
 }
@@ -217,7 +217,7 @@ TEST(Config, EveryDefinedModuleMustBeShown) {
 }
 
 TEST(Config, ModuleNamesUseASafeAlphabet) {
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "two words" })", R"(        ["two words"] = { type = "cpu", format = "{}", icon = "", interval = 1 },)")); },
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "two words" })", R"(        ["two words"] = { type = "cpu", format = "{usage}", icon = "", interval = 1 },)")); },
                 ConfigErrorWith("is not a valid module name"));
 }
 
@@ -229,11 +229,11 @@ TEST(Config, TypeMustBeAKnownModuleType) {
 }
 
 TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
-    const Config config = LoadText(WithRightModules(R"({ "cpu", "cpu_slow" })", R"(        cpu = { type = "cpu", format = "{}%", icon = "c", interval = 1 },
-        cpu_slow = { type = "cpu", format = "{}", icon = "", interval = 5 },)"));
+    const Config config = LoadText(WithRightModules(R"({ "cpu", "cpu_slow" })", R"(        cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
+        cpu_slow = { type = "cpu", format = "{usage}", icon = "", interval = 5 },)"));
     EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Cpu}));
     EXPECT_EQ(config.modules.right.at(1).name, "cpu_slow");
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{}%");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(5));
 }
 
@@ -318,10 +318,10 @@ TEST(Config, WindowModuleNeedsAWholeMaxLength) {
 }
 
 TEST(Config, CpuAndMemoryShareTheTextModuleShape) {
-    const Config config = LoadText(WithRightModules(R"({ "cpu", "memory" })", R"(        cpu = { type = "cpu", format = "{}%", icon = "c", interval = 1 },
-        memory = { type = "memory", format = "{:.1f} GB", icon = "m", interval = 2 },)"));
+    const Config config = LoadText(WithRightModules(R"({ "cpu", "memory" })", R"(        cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
+        memory = { type = "memory", format = "{used:.1f} GB", icon = "m", interval = 2 },)"));
     EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Memory}));
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{}%");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(2));
 }
 
@@ -377,7 +377,8 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
 
 TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
     const Config        config = LoadText(WithRightModules(
-        R"({ "hello" })", R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, output = "json", format = "{}", icon = "", interval = 30 },)"));
+        R"({ "hello" })",
+        R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, output = "json", format = "{text}", icon = "", interval = 30 },)"));
     const CustomConfig& custom = SettingsOf<CustomConfig>(config.modules.right, 0);
     EXPECT_EQ(custom.command.program.filename(), L"cmd.exe");
     EXPECT_EQ(custom.command.arguments, (std::vector<std::wstring>{L"/c", L"echo hi"}));
@@ -389,7 +390,8 @@ TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
 TEST(Config, CustomModulesNeedACommand) {
     EXPECT_THAT(
         [] {
-            return LoadText(WithRightModules(R"({ "hello" })", R"(        hello = { type = "custom", timeout = 5, output = "text", format = "{}", icon = "", interval = 30 },)"));
+            return LoadText(
+                WithRightModules(R"({ "hello" })", R"(        hello = { type = "custom", timeout = 5, output = "text", format = "{text}", icon = "", interval = 30 },)"));
         },
         ConfigErrorWith("modules.hello.command is missing"));
 }
@@ -397,8 +399,8 @@ TEST(Config, CustomModulesNeedACommand) {
 TEST(Config, CustomOutputIsTextOrJson) {
     EXPECT_THAT(
         [] {
-            return LoadText(WithRightModules(R"({ "hello" })",
-                                             R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", format = "{}", icon = "", interval = 30 },)"));
+            return LoadText(WithRightModules(
+                R"({ "hello" })", R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", format = "{text}", icon = "", interval = 30 },)"));
         },
         ConfigErrorWith("modules.hello.output must be one of text, json, got 'xml'"));
 }
@@ -419,7 +421,7 @@ TEST(Config, ManyModulesFitOnTheLuaStack) {
     std::string definitions;
     for (std::int32_t index = 0; index < 200; ++index) {
         names += "\"clock" + std::to_string(index) + "\", ";
-        definitions += "        clock" + std::to_string(index) + " = { type = \"clock\", format = \"{:%H:%M}\", icon = \"x\", interval = 60 },\n";
+        definitions += "        clock" + std::to_string(index) + " = { type = \"clock\", format = \"{time:%H:%M}\", icon = \"x\", interval = 60 },\n";
     }
     names += "}";
     EXPECT_EQ(LoadText(WithRightModules(names, definitions)).modules.right.size(), 200u);
@@ -427,8 +429,8 @@ TEST(Config, ManyModulesFitOnTheLuaStack) {
 
 TEST(Config, TooltipIsOptional) {
     EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
-    const Config config = LoadText(Replace(kValidConfig, R"(interval = 60 },)", R"(interval = 60, tooltip = "{:%A %d %B %Y}" },)"));
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{:%A %d %B %Y}");
+    const Config config = LoadText(Replace(kValidConfig, R"(interval = 60 },)", R"(interval = 60, tooltip = "{time:%A %d %B %Y}" },)"));
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{time:%A %d %B %Y}");
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(max_length = 80 })", R"(max_length = 80, tooltip = 7 })")); },
                 ConfigErrorWith("modules.title.tooltip must be a string"));
 }

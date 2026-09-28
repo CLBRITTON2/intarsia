@@ -2,17 +2,22 @@
 
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
+#include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
 
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
-// What its command printed, formatted from a string: format = "{}". While the command fails it shows the reason in the
-// alert color, and nothing before the first run finishes.
+// The values a custom format can name: {text}, what the command printed.
+std::vector<Placeholder> CustomPlaceholders(const std::string& text);
+
+// What its command printed: format = "{text}". While the command fails it shows the reason in the alert color, and
+// nothing before the first run finishes.
 class Custom final : public TextModule {
   public:
-    // Throws ConfigError when the format cannot render a string.
+    // Throws ConfigError when a format names another value or has a spec that cannot render a string.
     Custom(const CustomConfig& config, const CommandPoller& poller);
 
     // Never on its own: the poller posts when the output changes.

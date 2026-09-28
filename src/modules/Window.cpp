@@ -16,9 +16,7 @@ namespace {
 } // namespace
 
 Window::Window(WindowConfig config, const IWindowManager& windowManager) : _config(std::move(config)), _windowManager(windowManager) {
-    if (_config.tooltip.has_value()) {
-        RequireFormat("window tooltip", *_config.tooltip, std::string());
-    }
+    RequireOptionalPlaceholders("window tooltip", _config.tooltip, WindowPlaceholders(L""));
 }
 
 bool Window::Layout(const RenderContext& render) {
@@ -62,7 +60,11 @@ std::optional<std::wstring> Window::TooltipText() {
     if (!_config.tooltip.has_value() || !focused.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatValue(*_config.tooltip, ToUtf8(focused->title)));
+    return ToWide(FormatPlaceholders(*_config.tooltip, WindowPlaceholders(focused->title)));
+}
+
+std::vector<Placeholder> WindowPlaceholders(std::wstring_view title) {
+    return {{.name = "title", .value = ToUtf8(title)}};
 }
 
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {

@@ -20,9 +20,7 @@ Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _a
     const std::vector<Placeholder> samples = AudioPlaceholders(AudioOutput{.device = L"Speakers", .volume = 0.5f, .muted = false});
     RequirePlaceholders("audio format", _config.format, samples);
     RequirePlaceholders("audio format_muted", _config.formatMuted, samples);
-    if (_config.tooltip.has_value()) {
-        RequirePlaceholders("audio tooltip", *_config.tooltip, samples);
-    }
+    RequireOptionalPlaceholders("audio tooltip", _config.tooltip, samples);
 }
 
 bool Audio::Layout(const RenderContext& render) {

@@ -19,20 +19,17 @@ namespace {
 } // namespace
 
 TEST(Clock, FormatRendersLiteralTextAroundTheSpec) {
-    const std::string text = FormatLocalTime("at {:%Y}!", AtMilliseconds(0));
+    const std::string text = FormatPlaceholders("at {time:%Y}!", ClockPlaceholders(AtMilliseconds(0)));
     EXPECT_TRUE(text.starts_with("at 19")) << text;
     EXPECT_TRUE(text.ends_with("!")) << text;
 }
 
 TEST(Clock, FormatKeepsMinutesTwoDigitsWide) {
-    EXPECT_EQ(FormatLocalTime("{:%M}", std::chrono::system_clock::now()).size(), 2u);
-}
-
-TEST(Clock, FormatThrowsOnAnInvalidSpec) {
-    EXPECT_THROW(FormatLocalTime("{:%Q}", AtMilliseconds(0)), std::format_error);
+    EXPECT_EQ(FormatPlaceholders("{time:%M}", ClockPlaceholders(std::chrono::system_clock::now())).size(), 2u);
 }
 
 TEST(Clock, AnInvalidSpecFailsWhenTheModuleIsBuilt) {
-    EXPECT_THROW(Clock(ClockWithFormat("{:%Q}")), ConfigError);
-    EXPECT_NO_THROW(Clock(ClockWithFormat("{:%H:%M}")));
+    EXPECT_THROW(Clock(ClockWithFormat("{time:%Q}")), ConfigError);
+    EXPECT_THROW(Clock(ClockWithFormat("{:%H:%M}")), ConfigError);
+    EXPECT_NO_THROW(Clock(ClockWithFormat("{time:%H:%M}")));
 }

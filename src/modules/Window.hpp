@@ -3,15 +3,18 @@
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/Placeholders.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // The focused window's title, like Waybar's hyprland/window. Empty while nothing has focus.
 class Window final : public IModule {
   public:
+    // Throws ConfigError when the tooltip names another value or has a spec that cannot render a string.
     Window(WindowConfig config, const IWindowManager& windowManager);
 
     bool                         Layout(const RenderContext& render) override;
@@ -31,6 +34,9 @@ class Window final : public IModule {
     const IWindowManager& _windowManager;
     TextLine              _line;
 };
+
+// The values a window tooltip can name: {title}, the whole title.
+std::vector<Placeholder> WindowPlaceholders(std::wstring_view title);
 
 // title cut to at most maxLength UTF-16 code units, ending in an ellipsis when cut. Never splits a surrogate pair.
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength);

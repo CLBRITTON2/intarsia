@@ -11,9 +11,7 @@ Battery::Battery(BatteryConfig config, const IBattery& battery) : _config(std::m
     RequirePlaceholders("battery format_discharging", _config.formatDischarging, samples);
     RequirePlaceholders("battery format_charging", _config.formatCharging, samples);
     RequirePlaceholders("battery format_plugged", _config.formatPlugged, samples);
-    if (_config.tooltip.has_value()) {
-        RequirePlaceholders("battery tooltip", *_config.tooltip, samples);
-    }
+    RequireOptionalPlaceholders("battery tooltip", _config.tooltip, samples);
 }
 
 bool Battery::Layout(const RenderContext& render) {

@@ -7,9 +7,7 @@
 #include <stdexcept>
 #include <string>
 
-Custom::Custom(const CustomConfig& config, const CommandPoller& poller) : TextModule(config.text), _poller(poller) {
-    RequireFormats("custom", Settings().format, Settings().tooltip, std::string());
-}
+Custom::Custom(const CustomConfig& config, const CommandPoller& poller) : TextModule(config.text, "custom", CustomPlaceholders(std::string())), _poller(poller) {}
 
 std::optional<std::uint32_t> Custom::MillisecondsUntilChange() const {
     return std::nullopt;
@@ -30,8 +28,13 @@ ModuleText Custom::Format(const std::string& spec) {
     const CommandResult result = _poller.Result();
     switch (result.outcome) {
         case CommandOutcome::Pending: return ModuleText{.icon = Settings().icon, .text = {}, .alert = false};
-        case CommandOutcome::Succeeded: return ModuleText{.icon = Settings().icon, .text = ToWide(FormatValue(spec, result.text)), .alert = result.alert};
+        case CommandOutcome::Succeeded:
+            return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))), .alert = result.alert};
         case CommandOutcome::Failed: return ModuleText{.icon = Settings().icon, .text = ToWide(result.text), .alert = true};
     }
     throw std::invalid_argument(std::format("unknown command outcome {}", static_cast<std::int32_t>(result.outcome)));
+}
+
+std::vector<Placeholder> CustomPlaceholders(const std::string& text) {
+    return {{.name = "text", .value = text}};
 }

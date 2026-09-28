@@ -40,9 +40,7 @@ std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
     return static_cast<std::int32_t>(((total - idle) * 100 + (total / 2)) / total);
 }
 
-Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config)), _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()) {
-    RequireFormats("cpu", Settings().format, Settings().tooltip, std::int32_t{0});
-}
+Cpu::Cpu(TextModuleConfig config) : TextModule(std::move(config), "cpu", CpuPlaceholders(0)), _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()) {}
 
 // Samples at most once per interval: the bar also redraws for other modules, and a sample over a few milliseconds
 // would swing between 0 and 100. The 50 ms slack is for the redraw timer firing a little early.
@@ -54,5 +52,9 @@ ModuleText Cpu::Format(const std::string& spec) {
         _previous              = current;
         _sampledAt             = now;
     }
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatValue(spec, _usage)), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CpuPlaceholders(_usage))), .alert = false};
+}
+
+std::vector<Placeholder> CpuPlaceholders(std::int32_t usagePercent) {
+    return {{.name = "usage", .value = std::int64_t{usagePercent}}};
 }

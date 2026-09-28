@@ -191,8 +191,8 @@ struct ModuleActions {
 
 // A module that shows an icon and one formatted value, redrawn every interval: clock, cpu, memory.
 struct TextModuleConfig {
-    std::string                format;  // std::format spec for the module's value, such as "{:%H:%M}" or "{}%"
-    std::optional<std::string> tooltip; // a second spec for the same value, shown on hover, none when absent
+    std::string                format;  // the module's value by name, such as "{time:%H:%M}" or "{usage}%"
+    std::optional<std::string> tooltip; // a second format for the same value, shown on hover, none when absent
     std::wstring               icon;
     std::chrono::seconds       interval;
     ModuleActions              actions;
@@ -200,7 +200,7 @@ struct TextModuleConfig {
 
 struct WindowConfig {
     size_t                     maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
-    std::optional<std::string> tooltip;   // std::format spec for the full title, shown on hover, none when absent
+    std::optional<std::string> tooltip;   // a format of {title}, the full title, shown on hover, none when absent
     ModuleActions              actions;
 };
 

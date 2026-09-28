@@ -18,6 +18,6 @@ TEST(Memory, GibibytesUseBinaryUnits) {
 }
 
 TEST(Memory, FormatMustRenderADouble) {
-    EXPECT_THROW(Memory(MemoryWithFormat("{:d} GB")), ConfigError);
-    EXPECT_NO_THROW(Memory(MemoryWithFormat("{:.1f} GB")));
+    EXPECT_THROW(Memory(MemoryWithFormat("{used:d} GB")), ConfigError);
+    EXPECT_NO_THROW(Memory(MemoryWithFormat("{used:.1f} GB")));
 }

@@ -3,9 +3,12 @@
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/Placeholders.hpp"
 
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <vector>
 
 // A module that shows its icon and one formatted value, redrawn on each interval tick: clock, cpu, memory, custom. A
 // subclass supplies only the value, formatted with whichever spec it is given: format on the bar, tooltip on hover.
@@ -24,7 +27,9 @@ class TextModule : public IModule {
     std::optional<D2D1_RECT_F>   TooltipItem() const final;
 
   protected:
-    explicit TextModule(TextModuleConfig config);
+    // Throws ConfigError when the format or tooltip names a value samples lacks or has a spec that does not fit it.
+    // type names the module, such as "cpu".
+    TextModule(TextModuleConfig config, std::string_view type, const std::vector<Placeholder>& samples);
 
     const TextModuleConfig& Settings() const;
 

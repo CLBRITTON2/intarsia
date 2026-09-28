@@ -38,12 +38,12 @@ TEST(Cpu, IdleBeyondTotalIsAnError) {
 }
 
 TEST(Cpu, FormatMustRenderAnInteger) {
-    EXPECT_THROW(Cpu(CpuWithFormat("{:.1f}%")), ConfigError);
-    EXPECT_NO_THROW(Cpu(CpuWithFormat("{}%")));
+    EXPECT_THROW(Cpu(CpuWithFormat("{usage:.1f}%")), ConfigError);
+    EXPECT_NO_THROW(Cpu(CpuWithFormat("{usage}%")));
 }
 
 TEST(Cpu, TooltipIsCheckedLikeTheFormat) {
-    TextModuleConfig config = CpuWithFormat("{}%");
-    config.tooltip          = "{:.1f}";
+    TextModuleConfig config = CpuWithFormat("{usage}%");
+    config.tooltip          = "{usage:.1f}";
     EXPECT_THROW(Cpu(std::move(config)), ConfigError);
 }
