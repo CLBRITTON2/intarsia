@@ -171,7 +171,8 @@ if(BUILD_TESTING)
   )
   # Winsock, BCrypt and CryptoAPI play the far end of a loopback connection in the WebSocket and peer tests.
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
-  target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/config.lua")
+  target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_BASIC_CONFIG="${CMAKE_SOURCE_DIR}/config/basic/config.lua"
+                                                     INTARSIA_EXAMPLE_CONFIG="${CMAKE_SOURCE_DIR}/config/example/config.lua")
   if(INTARSIA_PRECOMPILE_HEADERS)
     target_precompile_headers(intarsia_gtests PRIVATE ${INTARSIA_PRECOMPILED_HEADERS} <gmock/gmock.h> <gtest/gtest.h>)
   endif()

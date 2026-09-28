@@ -112,6 +112,13 @@ return {
 
 } // namespace
 
+TEST(Config, ShippedBasicLoads) {
+    const Config config = LoadConfig(INTARSIA_BASIC_CONFIG);
+    EXPECT_EQ(config.windowManager, WindowManagerKind::Windows);
+    EXPECT_EQ(Kinds(config.modules.right).front(), ModuleKind::Tray);
+    EXPECT_EQ(config.style.font, L"Segoe UI");
+}
+
 TEST(Config, ShippedExampleLoads) {
     const Config config = LoadConfig(INTARSIA_EXAMPLE_CONFIG);
     EXPECT_EQ(config.bar.edge, Edge::Top);

@@ -59,11 +59,12 @@ This checks formatting with clang-format and runs clang-tidy over `src/` and `te
 ## Run
 
 The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.css` beside it for how it
-looks. Start from the commented examples:
+looks. Start from `config\basic`, a plain bar that needs nothing but Windows, or `config\example`, which runs with
+GlazeWM, uses JetBrainsMono Nerd Font and documents every key and selector:
 
 ```powershell
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\intarsia | Out-Null
-Copy-Item config\config.lua, config\style.css $env:USERPROFILE\.config\intarsia
+Copy-Item config\basic\config.lua, config\basic\style.css $env:USERPROFILE\.config\intarsia
 Start-Process build\release\intarsia.exe -RedirectStandardError $env:TEMP\intarsia.log
 ```
 
@@ -84,8 +85,8 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/config/` | the Lua config loader and the style sheet parser |
 | `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
-| `config/config.lua` | the example config, documenting every key |
-| `config/style.css` | the example style, documenting every selector |
+| `config/basic/` | a plain config and style that need nothing but Windows |
+| `config/example/` | a config and style that document every key and selector |
 | `tests/` | unit tests mirroring `src/`, and `tests/stress/` for the stress tests' IPC server |
 | `scripts/` | build, test, stress test and lint |
 
