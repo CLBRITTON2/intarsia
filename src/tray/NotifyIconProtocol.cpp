@@ -17,6 +17,7 @@
 namespace {
 
     static_assert(sizeof(TrayNotifyData) == 964, "TrayNotifyData must match shell32's layout");
+    static_assert(sizeof(NotifyIconIdentifier32) == 40, "NotifyIconIdentifier32 must match shell32's layout");
 
     // Windows keeps handles to 32 significant bits and sign-extends them on 64-bit.
     std::intptr_t WidenHandle(std::uint32_t handle) {
@@ -63,8 +64,19 @@ namespace {
         return icon;
     }
 
+    WORD Signed16(std::int32_t value) {
+        return static_cast<WORD>(static_cast<std::int16_t>(value));
+    }
+
     WPARAM CursorWParam(POINT cursor) {
-        return MAKEWPARAM(static_cast<WORD>(static_cast<std::int16_t>(cursor.x)), static_cast<WORD>(static_cast<std::int16_t>(cursor.y)));
+        return MAKEWPARAM(Signed16(cursor.x), Signed16(cursor.y));
+    }
+
+    // Squared, and 0 inside the rect.
+    std::int64_t DistanceToRect(const RECT& rect, POINT point) {
+        const std::int64_t x = std::max({static_cast<std::int64_t>(rect.left) - point.x, std::int64_t{0}, static_cast<std::int64_t>(point.x) - rect.right});
+        const std::int64_t y = std::max({static_cast<std::int64_t>(rect.top) - point.y, std::int64_t{0}, static_cast<std::int64_t>(point.y) - rect.bottom});
+        return (x * x) + (y * y);
     }
 
 } // namespace
@@ -89,6 +101,46 @@ NotifyIconMessage ParseNotifyIconMessage(std::span<const std::byte> payload) {
                              .stateMask       = raw.data.stateMask,
                              .version         = raw.data.version,
                              .guid            = raw.data.guid};
+}
+
+IconRectQuery ParseIconRectQuery(std::span<const std::byte> payload) {
+    if (payload.size() < sizeof(NotifyIconIdentifier32)) {
+        throw TrayMessageError(std::format("an icon rect query is at least {} bytes, got {}", sizeof(NotifyIconIdentifier32), payload.size()));
+    }
+    NotifyIconIdentifier32 raw{};
+    std::memcpy(&raw, payload.data(), sizeof(raw));
+    if (raw.signature != kTrayNotifySignature) {
+        throw TrayMessageError(std::format("an icon rect query starts with 0x{:08X}, got 0x{:08X}", kTrayNotifySignature, raw.signature));
+    }
+    // Checked before the cast, which would keep only the low byte.
+    if (raw.part != static_cast<std::uint32_t>(IconRectPart::Position) && raw.part != static_cast<std::uint32_t>(IconRectPart::Size)) {
+        throw TrayMessageError(std::format("an icon rect query asks for part 1 or 2, got {}", raw.part));
+    }
+    return IconRectQuery{.part = static_cast<IconRectPart>(raw.part), .owner = WidenHandle(raw.window), .id = raw.id, .guid = raw.guid};
+}
+
+std::optional<RECT> QueriedIconRect(const IconRectQuery& query, const std::vector<TrayIcon>& icons, const std::vector<TrayIconRect>& rects, POINT cursor) {
+    const bool byGuid = query.guid != GUID{};
+    const auto icon   = std::ranges::find_if(
+        icons, [&query, byGuid](const TrayIcon& candidate) { return byGuid ? candidate.guid == query.guid : candidate.owner == query.owner && candidate.id == query.id; });
+    if (icon == icons.end()) {
+        return std::nullopt;
+    }
+    std::optional<RECT> nearest;
+    for (const TrayIconRect& shown : rects) {
+        if (shown.owner == icon->owner && shown.id == icon->id && (!nearest.has_value() || DistanceToRect(shown.rect, cursor) < DistanceToRect(*nearest, cursor))) {
+            nearest = shown.rect;
+        }
+    }
+    return nearest;
+}
+
+LRESULT IconRectAnswer(IconRectPart part, const RECT& rect) {
+    switch (part) {
+        case IconRectPart::Position: return MAKELONG(Signed16(rect.left), Signed16(rect.top));
+        case IconRectPart::Size: return MAKELONG(Signed16(rect.right - rect.left), Signed16(rect.bottom - rect.top));
+    }
+    throw std::invalid_argument(std::format("unknown icon rect part {}", static_cast<std::uint32_t>(part)));
 }
 
 std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {

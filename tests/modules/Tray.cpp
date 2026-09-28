@@ -247,6 +247,28 @@ TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeavi
     EXPECT_EQ(_tray.closed, (std::vector<std::uint32_t>{1u, 1u}));
 }
 
+TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
+    const ModulePlacement placement{.window = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 192};
+    {
+        Tray module(kConfig, _tray, TestModuleStyle());
+        module.Layout(_render);
+        module.Place(placement);
+        EXPECT_TRUE(_tray.rects.empty());
+
+        module.Click(At(module, module.Size().width / 2.0f));
+        module.Layout(_render);
+        module.Place(placement);
+        // Icons at 5 to 33 and 43 to 71 DIPs from the content, at twice the pixels.
+        ASSERT_EQ(_tray.rects.size(), 2u);
+        EXPECT_EQ(_tray.rects[0].id, 1u);
+        EXPECT_EQ(_tray.rects[0].rect.left, 1000 + 210);
+        EXPECT_EQ(_tray.rects[0].rect.right, 1000 + 266);
+        EXPECT_EQ(_tray.rects[1].id, 4u);
+        EXPECT_EQ(_tray.rects[1].rect.left, 1000 + 286);
+    }
+    EXPECT_TRUE(_tray.rects.empty());
+}
+
 TEST_F(TrayModule, NewIconsAndNewPixelsAreChangesButATooltipIsNot) {
     Tray module(kConfig, _tray, TestModuleStyle());
     module.Layout(_render);

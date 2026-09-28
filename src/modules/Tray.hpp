@@ -22,10 +22,15 @@
 class Tray final : public IModule {
   public:
     Tray(TrayConfig config, ITray& tray, ModuleStyle style);
+    ~Tray() override;
+    Tray(const Tray&)                  = delete;
+    Tray&       operator=(const Tray&) = delete;
 
     bool        Layout(const RenderContext& render) override;
     D2D1_SIZE_F Size() const override;
-    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    // Tells the tray where the icons the box's edge fully uncovers are on screen.
+    void Place(const ModulePlacement& placement) override;
+    void Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     // 0 while unfolding, folding or turning, so the bar draws every display frame until the transitions end.
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;

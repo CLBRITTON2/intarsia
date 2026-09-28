@@ -5,6 +5,7 @@
 #include <dcomp.h>
 #include <dwrite.h>
 #include <dxgi1_2.h>
+#include <windows.h>
 #include <wrl/client.h>
 
 #include <cstdint>
@@ -37,6 +38,9 @@ Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* con
 
 // Rounded to the nearest pixel.
 std::int32_t DipsToPixels(float dips, std::uint32_t dpi);
+
+// A rect in DIPs from a window's top left corner, in screen pixels.
+RECT DipsToScreen(const RECT& window, const D2D1_RECT_F& dips, std::uint32_t dpi);
 
 // DirectWrite silently substitutes a missing family, which would hide a broken font install.
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family);

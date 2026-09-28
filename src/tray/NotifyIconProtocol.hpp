@@ -17,9 +17,10 @@
 #include <string_view>
 #include <vector>
 
-// COPYDATASTRUCT::dwData of a Shell_NotifyIcon call to the taskbar window (Shell_TrayWnd). An SHAppBarMessage call
-// sends kAppBarCopyData and Shell_NotifyIconGetRect 3.
+// COPYDATASTRUCT::dwData of a Shell_NotifyIcon call to the taskbar window (Shell_TrayWnd), and of a
+// Shell_NotifyIconGetRect call. An SHAppBarMessage call sends kAppBarCopyData.
 inline constexpr ULONG_PTR kNotifyIconCopyData = 1;
+inline constexpr ULONG_PTR kIconRectCopyData   = 3;
 
 // NOTIFYICONDATAW as shell32 sends it, whatever size the app passed: every handle is 32 bits wide, so 32-bit and
 // 64-bit apps send the same layout.
@@ -73,6 +74,42 @@ struct NotifyIconMessage {
 
 // Throws TrayMessageError when payload is too short or does not start with the signature.
 NotifyIconMessage ParseNotifyIconMessage(std::span<const std::byte> payload);
+
+// The part of an icon's rect a Shell_NotifyIconGetRect message asks for. shell32 asks for the size first and gives up
+// when the answer is 0, then for the top left corner.
+enum class IconRectPart : std::uint8_t {
+    Position = 1,
+    Size     = 2
+};
+
+// The WM_COPYDATA payload of a Shell_NotifyIconGetRect call: a NOTIFYICONIDENTIFIER with a 32-bit window.
+struct NotifyIconIdentifier32 {
+    std::uint32_t signature; // kTrayNotifySignature
+    std::uint32_t part;      // IconRectPart
+    std::uint32_t size;      // the app's NOTIFYICONIDENTIFIER::cbSize
+    std::uint32_t padding;
+    std::uint32_t window;
+    std::uint32_t id;
+    GUID          guid;
+};
+
+// One Shell_NotifyIconGetRect message. The icon is its guid when that is not all zero, else its owner and id.
+struct IconRectQuery {
+    IconRectPart  part;
+    std::intptr_t owner;
+    std::uint32_t id;
+    GUID          guid;
+};
+
+// Throws TrayMessageError when payload is too short, does not start with the signature or asks for an unknown part.
+IconRectQuery ParseIconRectQuery(std::span<const std::byte> payload);
+
+// Where the queried icon is: of every rect the views show it at, the one nearest cursor, since the app asks about the
+// icon the user just clicked or hovered. Nullopt when it is not a tray icon or no view shows it uncovered.
+std::optional<RECT> QueriedIconRect(const IconRectQuery& query, const std::vector<TrayIcon>& icons, const std::vector<TrayIconRect>& rects, POINT cursor);
+
+// The answer to a Shell_NotifyIconGetRect message: the part of rect as two signed 16-bit halves, x low.
+LRESULT IconRectAnswer(IconRectPart part, const RECT& rect);
 
 // At most this many icons: any process can add them, and each holds its pixels.
 inline constexpr size_t kMaxTrayIcons = 128;

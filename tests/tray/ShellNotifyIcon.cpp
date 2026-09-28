@@ -86,7 +86,7 @@ namespace {
         HWND            _window = FindWindowW(kTestClass, nullptr);
     };
 
-    // Stores what shell32 sends the taskbar window.
+    // Stores the last icon or icon rect message shell32 sends the taskbar window.
     LRESULT CALLBACK CaptureCopyData(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_NCCREATE) {
             SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(IntToPointer<CREATESTRUCTW>(lParam)->lpCreateParams));
@@ -94,35 +94,46 @@ namespace {
         auto* captured = IntToPointer<std::vector<std::byte>>(GetWindowLongPtrW(window, GWLP_USERDATA));
         if (message == WM_COPYDATA && captured != nullptr) {
             const auto* data = IntToPointer<const COPYDATASTRUCT>(lParam);
-            if (data->dwData == kNotifyIconCopyData) {
+            if (data->dwData == kNotifyIconCopyData || data->dwData == kIconRectCopyData) {
                 const auto* bytes = static_cast<const std::byte*>(data->lpData);
                 captured->assign(bytes, bytes + data->cbData);
             }
+            // A size of 1 by 0 to an icon rect query, so shell32 goes on to ask for the corner.
             return TRUE;
         }
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
+    // Runs call on a desktop of the test's own, where no Explorer runs, with a taskbar window that captures what shell32
+    // sends it.
+    std::vector<std::byte> CaptureFromShell32(const std::function<void(HWND taskbar)>& call) {
+        std::vector<std::byte> captured;
+        std::thread([&captured, &call] {
+            HDESK desktop = CreateDesktopW(L"intarsia-tray-test", nullptr, nullptr, 0, GENERIC_ALL, nullptr);
+            if (desktop == nullptr || !SetThreadDesktop(desktop)) {
+                return;
+            }
+            HINSTANCE   instance = GetModuleHandleW(nullptr);
+            WNDCLASSEXW registration{};
+            registration.cbSize        = sizeof(registration);
+            registration.lpfnWndProc   = CaptureCopyData;
+            registration.hInstance     = instance;
+            registration.lpszClassName = kTaskbarClass;
+            RegisterClassExW(&registration);
+            HWND taskbar = CreateWindowExW(WS_EX_TOOLWINDOW, kTaskbarClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, &captured);
+            call(taskbar);
+            DestroyWindow(taskbar);
+            UnregisterClassW(kTaskbarClass, instance);
+            CloseDesktop(desktop);
+        }).join();
+        return captured;
+    }
+
 } // namespace
 
-// The real Shell_NotifyIconW, sending to a taskbar window on a desktop of the test's own, where no Explorer runs.
 TEST(ShellNotifyIcon, Shell32SendsTheLayoutTheParserReads) {
-    std::vector<std::byte> captured;
-    bool                   added = false;
-    std::thread([&captured, &added] {
-        HDESK desktop = CreateDesktopW(L"intarsia-tray-test", nullptr, nullptr, 0, GENERIC_ALL, nullptr);
-        if (desktop == nullptr || !SetThreadDesktop(desktop)) {
-            return;
-        }
-        HINSTANCE   instance = GetModuleHandleW(nullptr);
-        WNDCLASSEXW registration{};
-        registration.cbSize        = sizeof(registration);
-        registration.lpfnWndProc   = CaptureCopyData;
-        registration.hInstance     = instance;
-        registration.lpszClassName = kTaskbarClass;
-        RegisterClassExW(&registration);
-        HWND            taskbar = CreateWindowExW(WS_EX_TOOLWINDOW, kTaskbarClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, &captured);
-
+    bool                         added    = false;
+    const std::vector<std::byte> captured = CaptureFromShell32([&added](HWND taskbar) {
         NOTIFYICONDATAW icon{};
         icon.cbSize           = NOTIFYICONDATAW_V2_SIZE;
         icon.hWnd             = taskbar;
@@ -133,11 +144,7 @@ TEST(ShellNotifyIcon, Shell32SendsTheLayoutTheParserReads) {
         icon.dwStateMask      = NIS_HIDDEN;
         std::memcpy(icon.szTip, L"from shell32", sizeof(L"from shell32"));
         added = Shell_NotifyIconW(NIM_ADD, &icon) != FALSE;
-
-        DestroyWindow(taskbar);
-        UnregisterClassW(kTaskbarClass, instance);
-        CloseDesktop(desktop);
-    }).join();
+    });
 
     ASSERT_TRUE(added);
     const NotifyIconMessage message = ParseNotifyIconMessage(captured);
@@ -148,6 +155,28 @@ TEST(ShellNotifyIcon, Shell32SendsTheLayoutTheParserReads) {
     EXPECT_EQ(message.tip, L"from shell32");
     EXPECT_EQ(message.state, static_cast<std::uint32_t>(NIS_HIDDEN));
     EXPECT_EQ(message.stateMask, static_cast<std::uint32_t>(NIS_HIDDEN));
+}
+
+TEST(ShellNotifyIcon, Shell32SendsTheIconRectQueryTheParserReads) {
+    HRESULT                      result   = E_FAIL;
+    std::uintptr_t               owner    = 0;
+    const std::vector<std::byte> captured = CaptureFromShell32([&result, &owner](HWND taskbar) {
+        owner = reinterpret_cast<std::uintptr_t>(taskbar);
+        NOTIFYICONIDENTIFIER icon{};
+        icon.cbSize = sizeof(icon);
+        icon.hWnd   = taskbar;
+        icon.uID    = 42;
+        RECT rect{};
+        result = Shell_NotifyIconGetRect(&icon, &rect);
+    });
+
+    EXPECT_EQ(result, S_OK);
+    const IconRectQuery query = ParseIconRectQuery(captured);
+    // The size came first, so the corner is the last thing asked.
+    EXPECT_EQ(query.part, IconRectPart::Position);
+    EXPECT_EQ(static_cast<std::uintptr_t>(query.owner), owner);
+    EXPECT_EQ(query.id, 42u);
+    EXPECT_EQ(query.guid, GUID{});
 }
 
 TEST_F(ShellNotifyIconTray, AnAddedIconShowsWithItsPixelsAndTooltip) {
@@ -190,6 +219,28 @@ TEST_F(ShellNotifyIconTray, AppBarMessagesAreNotTrayIcons) {
     std::vector<std::byte> appBar(64);
     EXPECT_EQ(Send(_window, kAppBarCopyData, appBar), FALSE);
     EXPECT_TRUE(_tray.Icons().empty());
+}
+
+TEST_F(ShellNotifyIconTray, AnIconRectQueryIsAnsweredWithWhereABarShowsTheIcon) {
+    std::vector<std::byte> add = AddPayload(_owner, 4, nullptr);
+    Send(_window, kNotifyIconCopyData, add);
+    const std::uint8_t view = 0;
+    _tray.ShowRects(&view, {TrayIconRect{.owner = reinterpret_cast<std::intptr_t>(_owner), .id = 4, .rect = RECT{.left = -40, .top = 10, .right = -10, .bottom = 50}}});
+
+    NotifyIconIdentifier32 raw{.signature = kTrayNotifySignature, .part = 2, .size = 32, .padding = 0, .window = Handle32(_owner), .id = 4, .guid = GUID{}};
+    std::vector<std::byte> size(sizeof(raw));
+    std::memcpy(size.data(), &raw, sizeof(raw));
+    EXPECT_EQ(Send(_window, kIconRectCopyData, size), MAKELONG(30, 40));
+    raw.part = 1;
+    std::vector<std::byte> position(sizeof(raw));
+    std::memcpy(position.data(), &raw, sizeof(raw));
+    EXPECT_EQ(static_cast<std::int16_t>(LOWORD(Send(_window, kIconRectCopyData, position))), -40);
+
+    // Once no bar shows it, the answer is none, which shell32 gives the app as E_FAIL.
+    _tray.ShowRects(&view, {});
+    EXPECT_EQ(Send(_window, kIconRectCopyData, size), 0);
+    std::vector<std::byte> malformed(8);
+    EXPECT_EQ(Send(_window, kIconRectCopyData, malformed), 0);
 }
 
 TEST_F(ShellNotifyIconTray, AFloodOfIconsStopsAtTheCap) {

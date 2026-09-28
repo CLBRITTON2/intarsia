@@ -63,6 +63,25 @@ namespace {
             .owner = owner, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = {}, .standardTooltip = false, .pixels = nullptr, .hidden = false};
     }
 
+    std::vector<std::byte> QueryBytes(std::uint32_t part, std::uint32_t owner, std::uint32_t id, const GUID& guid) {
+        const NotifyIconIdentifier32 raw{.signature = kTrayNotifySignature, .part = part, .size = 32, .padding = 0, .window = owner, .id = id, .guid = guid};
+        std::vector<std::byte>       bytes(sizeof(raw));
+        std::memcpy(bytes.data(), &raw, sizeof(raw));
+        return bytes;
+    }
+
+    IconRectQuery Query(std::intptr_t owner, std::uint32_t id, const GUID& guid) {
+        return IconRectQuery{.part = IconRectPart::Size, .owner = owner, .id = id, .guid = guid};
+    }
+
+    TrayIconRect Shown(std::intptr_t owner, std::uint32_t id, RECT rect) {
+        return TrayIconRect{.owner = owner, .id = id, .rect = rect};
+    }
+
+    bool SameRect(const std::optional<RECT>& rect, const RECT& expected) {
+        return rect.has_value() && rect->left == expected.left && rect->top == expected.top && rect->right == expected.right && rect->bottom == expected.bottom;
+    }
+
 } // namespace
 
 TEST(NotifyIconProtocol, ParseReadsTheFieldsShell32Sends) {
@@ -317,4 +336,59 @@ TEST(NotifyIconProtocol, ACallbackBelowWmUserPostsNothing) {
     EXPECT_TRUE(TrayInputMessages(icon, ClickEvents(TrayButton::Left, 0), POINT{.x = 0, .y = 0}).empty());
     icon.callbackMessage = 0;
     EXPECT_TRUE(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 0, .y = 0}).empty());
+}
+
+TEST(NotifyIconProtocol, ParseIconRectQueryReadsThePartAndTheIcon) {
+    const IconRectQuery query = ParseIconRectQuery(QueryBytes(2, 0xFFFF8001, 42, kGuid));
+    EXPECT_EQ(query.part, IconRectPart::Size);
+    EXPECT_EQ(query.owner, -32767);
+    EXPECT_EQ(query.id, 42u);
+    EXPECT_EQ(query.guid, kGuid);
+    EXPECT_EQ(ParseIconRectQuery(QueryBytes(1, 5, 7, GUID{})).part, IconRectPart::Position);
+}
+
+TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
+    std::vector<std::byte> tooShort = QueryBytes(2, 5, 7, GUID{});
+    tooShort.pop_back();
+    EXPECT_THROW(ParseIconRectQuery(tooShort), TrayMessageError);
+    std::vector<std::byte> wrongSignature = QueryBytes(2, 5, 7, GUID{});
+    wrongSignature[0]                     = std::byte{0};
+    EXPECT_THROW(ParseIconRectQuery(wrongSignature), TrayMessageError);
+    EXPECT_THROW(ParseIconRectQuery(QueryBytes(0, 5, 7, GUID{})), TrayMessageError);
+    EXPECT_THROW(ParseIconRectQuery(QueryBytes(3, 5, 7, GUID{})), TrayMessageError);
+    EXPECT_THROW(ParseIconRectQuery(QueryBytes(0x101, 5, 7, GUID{})), TrayMessageError);
+}
+
+TEST(NotifyIconProtocol, AnIconShownOnTwoBarsAnswersWithTheOneNearestTheCursor) {
+    const std::vector<TrayIcon>     icons{Icon(5, 7)};
+    const RECT                      left{.left = -1000, .top = 0, .right = -970, .bottom = 30};
+    const RECT                      right{.left = 1500, .top = 0, .right = 1530, .bottom = 30};
+    const std::vector<TrayIconRect> rects{Shown(5, 7, left), Shown(5, 8, RECT{.left = 0, .top = 0, .right = 30, .bottom = 30}), Shown(5, 7, right)};
+    EXPECT_TRUE(SameRect(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = 1510, .y = 10}), right));
+    EXPECT_TRUE(SameRect(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = -500, .y = 400}), left));
+}
+
+TEST(NotifyIconProtocol, AnIconWithAGuidIsFoundByIt) {
+    TrayIcon icon = Icon(5, 7);
+    icon.guid     = kGuid;
+    const RECT rect{.left = 10, .top = 0, .right = 40, .bottom = 30};
+    EXPECT_TRUE(SameRect(QueriedIconRect(Query(0, 0, kGuid), {icon}, {Shown(5, 7, rect)}, POINT{.x = 0, .y = 0}), rect));
+}
+
+TEST(NotifyIconProtocol, AnIconNoBarShowsHasNoRect) {
+    const std::vector<TrayIconRect> rects{Shown(5, 8, RECT{.left = 0, .top = 0, .right = 30, .bottom = 30})};
+    // Folded away, an icon the tray never had, and a GUID no icon has.
+    EXPECT_FALSE(QueriedIconRect(Query(5, 7, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
+    EXPECT_FALSE(QueriedIconRect(Query(5, 8, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
+    EXPECT_FALSE(QueriedIconRect(Query(5, 8, kGuid), {Icon(5, 8)}, rects, POINT{.x = 0, .y = 0}).has_value());
+}
+
+TEST(NotifyIconProtocol, IconRectAnswerPacksTheCornerOrTheSize) {
+    const RECT    rect{.left = -30, .top = 400, .right = 70, .bottom = 600};
+    const LRESULT position = IconRectAnswer(IconRectPart::Position, rect);
+    EXPECT_EQ(static_cast<std::int16_t>(LOWORD(position)), -30);
+    EXPECT_EQ(HIWORD(position), 400);
+    const LRESULT size = IconRectAnswer(IconRectPart::Size, rect);
+    EXPECT_EQ(LOWORD(size), 100);
+    EXPECT_EQ(HIWORD(size), 200);
 }

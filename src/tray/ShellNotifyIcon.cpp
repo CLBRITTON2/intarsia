@@ -157,6 +157,14 @@ void ShellNotifyIcon::ClosePopup(const TrayIcon& icon) {
     }
 }
 
+void ShellNotifyIcon::ShowRects(const void* view, std::vector<TrayIconRect> rects) {
+    const std::scoped_lock lock(_mutex);
+    std::erase_if(_views, [view](const View& shown) { return shown.view == view; });
+    if (!rects.empty()) {
+        _views.push_back(View{.view = view, .rects = std::move(rects)});
+    }
+}
+
 // Logged once per outage: an elevated app would refuse every move across its icon.
 void ShellNotifyIcon::PostHover(const TrayIcon& icon, std::uint32_t event, POINT cursor) {
     const DWORD error = PostInput(icon, TrayInputMessages(icon, {event}, cursor));
@@ -231,9 +239,12 @@ LRESULT ShellNotifyIcon::HandleMessage(HWND window, UINT message, WPARAM wParam,
     }
 }
 
-// Shell_NotifyIcon gets the tray's answer, and every other message (appbars, icon positions) Explorer's. The payload
-// is read as bytes only, never as an address: the sender chooses every byte, and the window it names in wParam.
+// Shell_NotifyIcon and Shell_NotifyIconGetRect get the tray's answer, and every other message (appbars) Explorer's. The
+// payload is read as bytes only, never as an address: the sender chooses every byte, and the window it names in wParam.
 LRESULT ShellNotifyIcon::HandleCopyData(HWND sender, const COPYDATASTRUCT& data) {
+    if (data.dwData == kIconRectCopyData) {
+        return AnswerIconRect(data);
+    }
     if (data.dwData != kNotifyIconCopyData) {
         return Forward(sender, data);
     }
@@ -267,6 +278,30 @@ bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
     }
     Publish(std::move(*icons));
     return true;
+}
+
+LRESULT ShellNotifyIcon::AnswerIconRect(const COPYDATASTRUCT& data) {
+    IconRectQuery query{};
+    try {
+        query = ParseIconRectQuery(std::span(static_cast<const std::byte*>(data.lpData), data.cbData));
+        _messageLog.Succeeded();
+    } catch (const TrayMessageError& error) {
+        _messageLog.Failed("malformed_message", error);
+        return 0;
+    }
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        _rectLog.Failed("cursor_unavailable", Win32Error("GetCursorPos(tray icon rect)", HRESULT_FROM_WIN32(GetLastError())));
+        return 0;
+    }
+    _rectLog.Succeeded();
+    std::vector<TrayIconRect> rects;
+    const std::scoped_lock    lock(_mutex);
+    for (const View& view : _views) {
+        rects.insert(rects.end(), view.rects.begin(), view.rects.end());
+    }
+    const std::optional<RECT> rect = QueriedIconRect(query, _icons, rects, cursor);
+    return rect.has_value() ? IconRectAnswer(query.part, *rect) : 0;
 }
 
 LRESULT ShellNotifyIcon::Forward(HWND sender, const COPYDATASTRUCT& data) {

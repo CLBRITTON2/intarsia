@@ -1,5 +1,6 @@
 #include "modules/Tray.hpp"
 
+#include "render/Graphics.hpp"
 #include "render/Icon.hpp"
 
 #include <algorithm>
@@ -18,6 +19,10 @@ namespace {
 } // namespace
 
 Tray::Tray(TrayConfig config, ITray& tray, ModuleStyle style) : _config(std::move(config)), _tray(tray), _style(std::move(style)), _toggle(EmptyIconText()) {}
+
+Tray::~Tray() {
+    _tray.ShowRects(this, {});
+}
 
 bool Tray::Layout(const RenderContext& render) {
     const auto  now     = std::chrono::steady_clock::now();
@@ -58,6 +63,20 @@ bool Tray::Layout(const RenderContext& render) {
 
 D2D1_SIZE_F Tray::Size() const {
     return D2D1_SIZE_F{.width = _row.size.width - ToggleShift(), .height = _row.size.height};
+}
+
+void Tray::Place(const ModulePlacement& placement) {
+    std::vector<TrayIconRect> rects;
+    const float               revealed = RevealedWidth();
+    const D2D1_POINT_2F       origin   = placement.contentOrigin;
+    for (size_t index = 0; index < _slots.size() && _row.boxes[index].right <= revealed; ++index) {
+        const D2D1_RECT_F& box = _row.boxes[index];
+        rects.push_back(
+            TrayIconRect{.owner = _slots[index].icon.owner,
+                         .id    = _slots[index].icon.id,
+                         .rect = DipsToScreen(placement.window, D2D1::RectF(origin.x + box.left, origin.y + box.top, origin.x + box.right, origin.y + box.bottom), placement.dpi)});
+    }
+    _tray.ShowRects(this, std::move(rects));
 }
 
 void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {

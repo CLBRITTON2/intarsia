@@ -49,6 +49,13 @@ std::int32_t DipsToPixels(float dips, std::uint32_t dpi) {
     return static_cast<std::int32_t>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
 }
 
+RECT DipsToScreen(const RECT& window, const D2D1_RECT_F& dips, std::uint32_t dpi) {
+    return RECT{.left   = window.left + DipsToPixels(dips.left, dpi),
+                .top    = window.top + DipsToPixels(dips.top, dpi),
+                .right  = window.left + DipsToPixels(dips.right, dpi),
+                .bottom = window.top + DipsToPixels(dips.bottom, dpi)};
+}
+
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family) {
     ComPtr<IDWriteFontCollection> fonts;
     ThrowIfFailed(dwrite->GetSystemFontCollection(&fonts, FALSE), "IDWriteFactory::GetSystemFontCollection");

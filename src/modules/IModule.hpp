@@ -15,7 +15,14 @@ enum class ScrollDirection : std::uint8_t {
     Down
 };
 
-// One piece of a bar, such as the clock. The bar calls Layout, then Size, then Draw for each frame it draws.
+// Where a bar put a module's content for the frame it is about to draw.
+struct ModulePlacement {
+    RECT          window;        // the bar's window, in screen pixels
+    D2D1_POINT_2F contentOrigin; // in DIPs from the window's top left corner
+    std::uint32_t dpi;
+};
+
+// One piece of a bar, such as the clock. The bar calls Layout, then Size, then Place and Draw for each frame it draws.
 class IModule {
   public:
     virtual ~IModule() = default;
@@ -36,6 +43,8 @@ class IModule {
     virtual std::optional<std::uint32_t> MillisecondsUntilChange() const {
         return std::nullopt;
     }
+
+    virtual void Place(const ModulePlacement&) {}
 
     // A left click, in DIPs from the module's origin as last drawn. Only called when no on_click command is configured.
     virtual void Click(D2D1_POINT_2F) {}

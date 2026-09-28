@@ -417,8 +417,15 @@ void Bar::Draw() {
     const Sections<HitBox> boxes{.left   = PlaceSection(_modules.left, _styles.left, lengths.left, layout.left),
                                  .center = PlaceSection(_modules.center, _styles.center, lengths.center, layout.center),
                                  .right  = PlaceSection(_modules.right, _styles.right, lengths.right, layout.right)};
+    RECT                   window{};
+    if (!GetWindowRect(_window, &window)) {
+        ThrowLastError("GetWindowRect");
+    }
     _hitBoxes.clear();
-    ForEachInSections(boxes, [this](const HitBox& box) { _hitBoxes.push_back(box); });
+    ForEachInSections(boxes, [this, &window](const HitBox& box) {
+        _hitBoxes.push_back(box);
+        box.module->Place(ModulePlacement{.window = window, .contentOrigin = box.contentOrigin, .dpi = _placement.dpi});
+    });
     // Items move under a cursor that stays still, as a tray unfolds, and no WM_MOUSEMOVE says so.
     if (_cursor.has_value()) {
         Point(*_cursor);
@@ -596,9 +603,5 @@ void Bar::ShowTooltip() {
     const D2D1_POINT_2F              origin = box->contentOrigin;
     const D2D1_RECT_F   anchor = item.has_value() ? D2D1::RectF(origin.x + item->left, origin.y + item->top, origin.x + item->right, origin.y + item->bottom) : box->bounds;
     const std::uint32_t dpi    = _placement.dpi;
-    const RECT          module{.left   = bar.left + DipsToPixels(anchor.left, dpi),
-                               .top    = bar.top + DipsToPixels(anchor.top, dpi),
-                               .right  = bar.left + DipsToPixels(anchor.right, dpi),
-                               .bottom = bar.top + DipsToPixels(anchor.bottom, dpi)};
-    _tooltip->Show(*text, TooltipAnchor{.module = module, .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi});
+    _tooltip->Show(*text, TooltipAnchor{.module = DipsToScreen(bar, anchor, dpi), .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi});
 }

@@ -22,8 +22,8 @@ inline constexpr wchar_t kTaskbarClass[] = L"Shell_TrayWnd";
 
 // The notification area, taken over from the taskbar. Shell_NotifyIcon and SHAppBarMessage send WM_COPYDATA to the
 // first kTaskbarClass window in z-order, so a hidden topmost window of that class, kept first, receives every app's
-// icons. Everything it receives also goes on to Explorer's taskbar window, which runs the appbars and keeps its own
-// icons, so the taskbar has them all back when the bar exits. The window has its own thread, so a slow frame never
+// icons. Everything it receives but icon rect queries also goes on to Explorer's taskbar window, which runs the appbars
+// and keeps its own icons, so the taskbar has them all back when the bar exits. The window has its own thread, so a slow frame never
 // holds up an app's call, and it reads each icon's pixels as the message arrives, while the app's handle is valid.
 class ShellNotifyIcon final : public ITray {
   public:
@@ -41,6 +41,7 @@ class ShellNotifyIcon final : public ITray {
     void Move(const TrayIcon& icon) override;
     void OpenPopup(const TrayIcon& icon) override;
     void ClosePopup(const TrayIcon& icon) override;
+    void ShowRects(const void* view, std::vector<TrayIconRect> rects) override;
 
     // The error that stopped the thread, set before failedMessage is posted.
     std::exception_ptr TakeError();
@@ -55,7 +56,10 @@ class ShellNotifyIcon final : public ITray {
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleCopyData(HWND sender, const COPYDATASTRUCT& data);
     // Whether the icons took the message, which is what Shell_NotifyIcon returns to the app.
-    bool    ApplyMessage(const COPYDATASTRUCT& data);
+    bool ApplyMessage(const COPYDATASTRUCT& data);
+    // The icon's place on a bar, or 0, which shell32 turns into E_FAIL, when no bar shows it. Never Explorer's answer,
+    // which is somewhere the icon is not.
+    LRESULT AnswerIconRect(const COPYDATASTRUCT& data);
     LRESULT Forward(HWND sender, const COPYDATASTRUCT& data);
     // Explorer's taskbar window, found again once it is gone, or null while Explorer is not running.
     HWND ExplorerTray();
@@ -84,10 +88,16 @@ class ShellNotifyIcon final : public ITray {
     FailureLog _messageLog{"tray"};
     FailureLog _iconLog{"tray"};
     FailureLog _forwardLog{"tray"};
-    // Guards _icons and _error.
+    FailureLog _rectLog{"tray"};
+    // Guards _icons, _views and _error.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;
-    std::exception_ptr    _error;
+    struct View {
+        const void*               view;
+        std::vector<TrayIconRect> rects;
+    };
+    std::vector<View>  _views;
+    std::exception_ptr _error;
     // Started by the constructor once every member above exists.
     std::thread _thread;
 };

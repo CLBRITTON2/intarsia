@@ -3,6 +3,7 @@
 #include "render/Icon.hpp"
 
 #include <guiddef.h>
+#include <windows.h>
 
 #include <cstdint>
 #include <memory>
@@ -40,6 +41,13 @@ inline bool DrawsOwnPopup(const TrayIcon& icon) {
     return icon.version >= kVersion4 && !icon.standardTooltip;
 }
 
+// Where one bar shows an icon, fully uncovered.
+struct TrayIconRect {
+    std::intptr_t owner;
+    std::uint32_t id;
+    RECT          rect; // screen pixels
+};
+
 // The notification area icons apps add, read from the UI thread.
 class ITray {
   public:
@@ -59,4 +67,8 @@ class ITray {
     // Tells an app that draws its own popup (DrawsOwnPopup) that the cursor came to rest on its icon, and that it left.
     virtual void OpenPopup(const TrayIcon& icon)  = 0;
     virtual void ClosePopup(const TrayIcon& icon) = 0;
+
+    // Where view, one tray module, shows its icons now, replacing what it said before, so an app asking where its icon
+    // is (Shell_NotifyIconGetRect) learns its place on a bar. A view reports none once it is gone.
+    virtual void ShowRects(const void* view, std::vector<TrayIconRect> rects) = 0;
 };
