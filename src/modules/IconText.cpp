@@ -30,16 +30,35 @@ namespace {
         return D2D1_SIZE_F{.width = metrics.widthIncludingTrailingWhitespace, .height = metrics.height};
     }
 
+    // Overhangs are measured from the layout's max box, so the max height is first cut to the line's own height.
+    float InkShift(IDWriteTextLayout* layout, D2D1_SIZE_F size) {
+        if (layout == nullptr) {
+            return 0.0f;
+        }
+        ThrowIfFailed(layout->SetMaxHeight(size.height), "IDWriteTextLayout::SetMaxHeight");
+        DWRITE_OVERHANG_METRICS overhang{};
+        ThrowIfFailed(layout->GetOverhangMetrics(&overhang), "IDWriteTextLayout::GetOverhangMetrics");
+        const float inkTop    = -overhang.top;
+        const float inkBottom = size.height + overhang.bottom;
+        // A glyph with no ink, such as a space, has nothing to center.
+        if (inkBottom <= inkTop) {
+            return 0.0f;
+        }
+        return (size.height / 2.0f) - ((inkTop + inkBottom) / 2.0f);
+    }
+
     IconText Combined(ComPtr<IDWriteTextLayout> icon, ComPtr<IDWriteTextLayout> text, float iconGapDips) {
         const D2D1_SIZE_F iconSize = Measure(icon.Get());
+        const float       inkShift = InkShift(icon.Get(), iconSize);
         const D2D1_SIZE_F textSize = Measure(text.Get());
         const float       gap      = icon != nullptr && text != nullptr ? iconGapDips : 0.0f;
-        return IconText{.icon     = std::move(icon),
-                        .text     = std::move(text),
-                        .iconSize = iconSize,
-                        .textSize = textSize,
-                        .gapDips  = gap,
-                        .size     = D2D1_SIZE_F{.width = iconSize.width + gap + textSize.width, .height = std::max(iconSize.height, textSize.height)}};
+        return IconText{.icon             = std::move(icon),
+                        .text             = std::move(text),
+                        .iconSize         = iconSize,
+                        .iconInkShiftDips = inkShift,
+                        .textSize         = textSize,
+                        .gapDips          = gap,
+                        .size             = D2D1_SIZE_F{.width = iconSize.width + gap + textSize.width, .height = std::max(iconSize.height, textSize.height)}};
     }
 
 } // namespace
@@ -64,7 +83,8 @@ IconText LayOutWeightedText(const RenderContext& render, std::wstring_view text,
 
 void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* textBrush) {
     if (laidOut.icon != nullptr) {
-        render.context->DrawTextLayout(D2D1::Point2F(origin.x, origin.y + ((laidOut.size.height - laidOut.iconSize.height) / 2.0f)), laidOut.icon.Get(), render.accent);
+        render.context->DrawTextLayout(D2D1::Point2F(origin.x, origin.y + ((laidOut.size.height - laidOut.iconSize.height) / 2.0f) + laidOut.iconInkShiftDips), laidOut.icon.Get(),
+                                       render.accent);
     }
     if (laidOut.text != nullptr) {
         const float left = origin.x + laidOut.iconSize.width + laidOut.gapDips;
@@ -73,12 +93,13 @@ void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconT
 }
 
 IconText EmptyIconText() {
-    return IconText{.icon     = nullptr,
-                    .text     = nullptr,
-                    .iconSize = {.width = 0.0f, .height = 0.0f},
-                    .textSize = {.width = 0.0f, .height = 0.0f},
-                    .gapDips  = 0.0f,
-                    .size     = {.width = 0.0f, .height = 0.0f}};
+    return IconText{.icon             = nullptr,
+                    .text             = nullptr,
+                    .iconSize         = {.width = 0.0f, .height = 0.0f},
+                    .iconInkShiftDips = 0.0f,
+                    .textSize         = {.width = 0.0f, .height = 0.0f},
+                    .gapDips          = 0.0f,
+                    .size             = {.width = 0.0f, .height = 0.0f}};
 }
 
 const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32_t percent) {

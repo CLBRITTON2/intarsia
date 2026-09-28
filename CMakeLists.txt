@@ -141,6 +141,7 @@ if(BUILD_TESTING)
     tests/modules/CommandPoller.cpp
     tests/modules/Cpu.cpp
     tests/modules/DirectionToggle.cpp
+    tests/modules/IconText.cpp
     tests/modules/ItemRow.cpp
     tests/modules/Memory.cpp
     tests/modules/Network.cpp

@@ -80,10 +80,11 @@ clock:hover, cpu:hover, memory:hover, audio:hover, network:hover, battery:hover,
     padding: 0 2px;
 }
 
+/* A one-character name is a circle: its 9px glyph plus 7px each side matches its line's height plus 2px each side. */
 #workspaces .item {
-    padding: 2px 6px;
+    padding: 2px 7px;
     margin: 0 1px;
-    border-radius: 10px;
+    border-radius: 999px;
 }
 
 /* The workspace or window under the cursor. The focused workspace's own rule is more specific, so it keeps its colors. */
@@ -182,9 +183,4 @@ divider.module {
 
 #cpu .icon, #volume .icon, #battery .icon {
     color: var(--cyan);
-}
-
-/* The Wi-Fi and Ethernet glyphs fill less of their em than cpu's, so they take a larger size to match it. */
-#net .icon {
-    font-size: 21px;
 }
