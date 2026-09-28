@@ -11,8 +11,7 @@
 #include <string>
 #include <vector>
 
-// Each active binding mode's name in the module's .item style, like Waybar's sway/mode. Empty while no mode
-// is active.
+// Each active binding mode's name in the module's .item style. Empty while no mode is active.
 class BindingModes final : public IModule {
   public:
     BindingModes(const IWindowManager& windowManager, ModuleStyle style);

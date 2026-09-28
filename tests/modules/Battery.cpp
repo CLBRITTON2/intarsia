@@ -17,7 +17,7 @@ namespace {
                              .iconCharging      = L"C",
                              .iconPlugged       = L"P",
                              .alertAtPercent    = 15,
-                             .actions           = {.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+                             .actions = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
     }
 
     BatteryState Discharging(std::int32_t percent) {

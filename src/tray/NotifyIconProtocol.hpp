@@ -6,6 +6,7 @@
 #include <windows.h>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -94,7 +95,28 @@ struct TrayInputMessage {
     bool          operator==(const TrayInputMessage&) const = default;
 };
 
-// What the taskbar posts for a click with the cursor at cursor, in the form the icon's version asks for. None when
-// the icon's callback is below WM_USER: apps define their own, and a system message there, such as WM_CLOSE, would
-// let any process that adds an icon have the bar send it to any window.
-std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, TrayButton button, POINT cursor);
+// The events the taskbar tells an icon of a version for a click: the button's down and up, then from version 3 on
+// NIN_SELECT for a left click or WM_CONTEXTMENU for a right one.
+std::vector<std::uint32_t> ClickEvents(TrayButton button, std::uint32_t version);
+
+// The events for the second click of a double click: the button's double click and up. Version 3 and on tell no
+// NIN_SELECT again, since the first click already did.
+std::vector<std::uint32_t> DoubleClickEvents(TrayButton button);
+
+// events posted to the icon's callback with the cursor at cursor, in the form its version asks for. None when the
+// callback is below WM_USER: apps define their own, and a system message there, such as WM_CLOSE, would let any
+// process that adds an icon have the bar send it to any window.
+std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, const std::vector<std::uint32_t>& events, POINT cursor);
+
+// One click on an icon, as double click detection compares them.
+struct TrayClick {
+    std::intptr_t                         owner;
+    std::uint32_t                         id;
+    TrayButton                            button;
+    POINT                                 cursor;
+    std::chrono::steady_clock::time_point time;
+};
+
+// Whether click is the second of a double click after previous: the same button on the same icon, within doubleTime
+// and within the double click rectangle (area, centered on the first click), as Windows tells double clicks apart.
+bool IsDoubleClick(const std::optional<TrayClick>& previous, const TrayClick& click, std::chrono::milliseconds doubleTime, SIZE area);

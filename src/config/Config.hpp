@@ -19,7 +19,7 @@
 #include <variant>
 #include <vector>
 
-// Where the bar sits among other windows, as Waybar's layer option.
+// Where the bar sits among other windows.
 enum class Layer : std::uint8_t {
     Top,   // above other windows, lowered while a fullscreen app runs, as the taskbar does
     Bottom // below other windows, which can cover it
@@ -182,11 +182,12 @@ struct WindowManagerCommand {
 // What an input does: start a program, or send the window manager a command.
 using ModuleAction = std::variant<Command, WindowManagerCommand>;
 
-// What a module does for each input, from the optional on_click, on_right_click, on_scroll_up and on_scroll_down
-// keys. An input with an action replaces the module's own handling of it.
+// What a module does for each input, from the optional on_click, on_right_click, on_middle_click, on_scroll_up and
+// on_scroll_down keys. An input with an action replaces the module's own handling of it.
 struct ModuleActions {
     std::optional<ModuleAction> click;
     std::optional<ModuleAction> rightClick;
+    std::optional<ModuleAction> middleClick;
     std::optional<ModuleAction> scrollUp;
     std::optional<ModuleAction> scrollDown;
 };
@@ -215,7 +216,7 @@ struct TilingDirectionConfig {
 // How a custom module reads what its command printed.
 enum class CustomOutput : std::uint8_t {
     Text, // the first line is the value
-    Json  // one object: text, and optionally tooltip and alert, as Waybar's return-type json
+    Json  // one object: text, and optionally tooltip and alert
 };
 
 // A program run every interval, whose output is shown through format.
@@ -320,7 +321,7 @@ class ConfigError : public std::runtime_error {
 // %USERPROFILE%\.config\intarsia\config.lua
 std::filesystem::path DefaultConfigPath();
 
-// style.css beside the config, as Waybar keeps its style.
+// style.css beside the config.
 std::filesystem::path StylePath(const std::filesystem::path& configPath);
 
 // Runs the file as Lua and reads the table it returns, then styles its modules from StylePath. Every config key is

@@ -4,11 +4,10 @@
 
 namespace {
 
+    // A section whose modules all show nothing has no box, as one with no modules.
     float SectionLength(const std::vector<float>& lengths, float padding) {
-        if (lengths.empty()) {
-            return 0.0f;
-        }
-        return std::accumulate(lengths.begin(), lengths.end(), 0.0f) + (2.0f * padding);
+        const float modules = std::accumulate(lengths.begin(), lengths.end(), 0.0f);
+        return modules > 0.0f ? modules + (2.0f * padding) : 0.0f;
     }
 
     SectionLayout PlaceSection(const std::vector<float>& lengths, float start, float padding) {

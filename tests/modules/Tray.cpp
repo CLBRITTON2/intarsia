@@ -169,6 +169,26 @@ TEST_F(TrayModule, ClicksReachTheIconsApp) {
     // A right click on the toggle does nothing.
     module.RightClick(At(module, module.Size().width - 6.0f));
     EXPECT_EQ(_tray.presses.size(), 2u);
+
+    module.MiddleClick(At(module, 19.0f));
+    module.MiddleClick(At(module, module.Size().width - 6.0f));
+    ASSERT_EQ(_tray.presses.size(), 3u);
+    EXPECT_EQ(_tray.presses[2].id, 1u);
+    EXPECT_EQ(_tray.presses[2].button, TrayButton::Middle);
+}
+
+TEST_F(TrayModule, MovesOverAnIconReachItsAppAndMovesElsewhereDoNot) {
+    Tray module(kConfig, _tray, TestModuleStyle());
+    module.Layout(_render);
+    module.Click(At(module, module.Size().width / 2.0f));
+    module.Layout(_render);
+
+    module.Hover(At(module, 19.0f));
+    module.Hover(At(module, 57.0f));
+    module.Hover(At(module, 38.0f));
+    module.Hover(At(module, module.Size().width - 6.0f));
+    module.Hover(std::nullopt);
+    EXPECT_EQ(_tray.moves, (std::vector<std::uint32_t>{1u, 4u}));
 }
 
 TEST_F(TrayModule, TheIconUnderTheCursorGivesTheTooltip) {

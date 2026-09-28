@@ -103,10 +103,19 @@ void Tray::RightClick(D2D1_POINT_2F point) {
     }
 }
 
+void Tray::MiddleClick(D2D1_POINT_2F point) {
+    if (const Slot* slot = SlotAt(point)) {
+        _tray.Press(slot->icon, TrayButton::Middle);
+    }
+}
+
 bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
     const std::optional<size_t> hovered = point.has_value() ? ItemUnder(*point) : std::nullopt;
     const bool                  changed = hovered != _hovered;
     _hovered                            = hovered;
+    if (const Slot* slot = point.has_value() ? SlotAt(*point) : nullptr) {
+        _tray.Move(slot->icon);
+    }
     return changed;
 }
 

@@ -18,7 +18,7 @@ namespace {
                            .icon        = L"V",
                            .iconMuted   = L"M",
                            .stepPercent = 5,
-                           .actions     = {.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+                           .actions     = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
     }
 
     AudioOutput Speakers(float volume, bool muted) {

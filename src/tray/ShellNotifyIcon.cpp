@@ -10,6 +10,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -100,19 +101,20 @@ std::vector<TrayIcon> ShellNotifyIcon::Icons() const {
 }
 
 void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
-    POINT cursor{};
-    if (!GetCursorPos(&cursor)) {
-        ThrowLastError("GetCursorPos");
-    }
-    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, button, cursor);
+    const POINT     cursor = CursorPosition();
+    const TrayClick click{.owner = icon.owner, .id = icon.id, .button = button, .cursor = cursor, .time = std::chrono::steady_clock::now()};
+    const bool      doubled =
+        IsDoubleClick(_lastClick, click, std::chrono::milliseconds(GetDoubleClickTime()), SIZE{.cx = GetSystemMetrics(SM_CXDOUBLECLK), .cy = GetSystemMetrics(SM_CYDOUBLECLK)});
+    // A third click after a double click starts a new pair, as Windows counts them.
+    _lastClick                                   = doubled ? std::nullopt : std::optional<TrayClick>(click);
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, doubled ? DoubleClickEvents(button) : ClickEvents(button, icon.version), cursor);
     if (messages.empty()) {
         Log(LogLevel::Warning, "tray", "input_refused",
             {{.key = "owner", .value = std::to_string(icon.owner)}, {.key = "callback_message", .value = std::to_string(icon.callbackMessage)}});
         return;
     }
-    HWND  owner     = ToWindow(icon.owner);
     DWORD processId = 0;
-    if (GetWindowThreadProcessId(owner, &processId) == 0) {
+    if (GetWindowThreadProcessId(ToWindow(icon.owner), &processId) == 0) {
         Log(LogLevel::Warning, "tray", "owner_gone", {{.key = "owner", .value = std::to_string(icon.owner)}});
         return;
     }
@@ -120,12 +122,43 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
     if (!AllowSetForegroundWindow(processId)) {
         Log(LogLevel::Warning, "tray", "foreground_refused", {{.key = "process", .value = std::to_string(processId)}, {.key = "error", .value = std::to_string(GetLastError())}});
     }
+    const DWORD error = PostInput(icon, messages);
+    if (error != ERROR_SUCCESS) {
+        Log(LogLevel::Warning, "tray", "input_failed", {{.key = "owner", .value = std::to_string(icon.owner)}, {.key = "error", .value = std::to_string(error)}});
+    }
+}
+
+void ShellNotifyIcon::Move(const TrayIcon& icon) {
+    const POINT cursor = CursorPosition();
+    if (_lastMove.has_value() && _lastMove->x == cursor.x && _lastMove->y == cursor.y) {
+        return;
+    }
+    _lastMove         = cursor;
+    const DWORD error = PostInput(icon, TrayInputMessages(icon, {WM_MOUSEMOVE}, cursor));
+    // Logged once per outage: an elevated app would refuse every move across its icon.
+    if (error != ERROR_SUCCESS) {
+        _moveLog.Failed("move_failed", Win32Error("PostMessageW(tray move)", HRESULT_FROM_WIN32(error)));
+    } else {
+        _moveLog.Succeeded();
+    }
+}
+
+POINT ShellNotifyIcon::CursorPosition() {
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        ThrowLastError("GetCursorPos");
+    }
+    return cursor;
+}
+
+DWORD ShellNotifyIcon::PostInput(const TrayIcon& icon, const std::vector<TrayInputMessage>& messages) {
+    HWND owner = ToWindow(icon.owner);
     for (const TrayInputMessage& message : messages) {
         if (!PostMessageW(owner, message.message, message.wParam, message.lParam)) {
-            Log(LogLevel::Warning, "tray", "input_failed", {{.key = "owner", .value = std::to_string(icon.owner)}, {.key = "error", .value = std::to_string(GetLastError())}});
-            return;
+            return GetLastError();
         }
     }
+    return ERROR_SUCCESS;
 }
 
 std::exception_ptr ShellNotifyIcon::TakeError() {

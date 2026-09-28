@@ -374,7 +374,7 @@ namespace {
     }
 
     bool SendsWindowManagerCommands(const ModuleActions& actions) {
-        return std::ranges::any_of(std::array{&actions.click, &actions.rightClick, &actions.scrollUp, &actions.scrollDown},
+        return std::ranges::any_of(std::array{&actions.click, &actions.rightClick, &actions.middleClick, &actions.scrollUp, &actions.scrollDown},
                                    [](const std::optional<ModuleAction>* action) { return action->has_value() && std::holds_alternative<WindowManagerCommand>(**action); });
     }
 
@@ -402,16 +402,17 @@ namespace {
     }
 
     ModuleActions ReadActions(const TableReader& module) {
-        return ModuleActions{.click      = ReadAction(module, "on_click"),
-                             .rightClick = ReadAction(module, "on_right_click"),
-                             .scrollUp   = ReadAction(module, "on_scroll_up"),
-                             .scrollDown = ReadAction(module, "on_scroll_down")};
+        return ModuleActions{.click       = ReadAction(module, "on_click"),
+                             .rightClick  = ReadAction(module, "on_right_click"),
+                             .middleClick = ReadAction(module, "on_middle_click"),
+                             .scrollUp    = ReadAction(module, "on_scroll_up"),
+                             .scrollDown  = ReadAction(module, "on_scroll_down")};
     }
 
     // A module's own keys plus the optional tooltip and input actions every module with settings takes.
     std::vector<std::string_view> WithOptionalKeys(std::initializer_list<std::string_view> keys) {
         std::vector<std::string_view> known(keys);
-        known.insert(known.end(), {"tooltip", "on_click", "on_right_click", "on_scroll_up", "on_scroll_down"});
+        known.insert(known.end(), {"tooltip", "on_click", "on_right_click", "on_middle_click", "on_scroll_up", "on_scroll_down"});
         return known;
     }
 

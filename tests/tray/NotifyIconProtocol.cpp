@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -221,26 +222,62 @@ TEST(NotifyIconProtocol, DrawableTooltipKeepsLineBreaksAndReplacesTheUnsafe) {
 }
 
 TEST(NotifyIconProtocol, VersionZeroPostsTheIdAndTheMouseMessage) {
-    const std::vector<TrayInputMessage> messages = TrayInputMessages(Icon(5, 7), TrayButton::Left, POINT{.x = 10, .y = 20});
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(Icon(5, 7), ClickEvents(TrayButton::Left, 0), POINT{.x = 10, .y = 20});
     EXPECT_EQ(messages, (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = 7, .lParam = WM_LBUTTONDOWN}, {.message = WM_APP, .wParam = 7, .lParam = WM_LBUTTONUP}}));
 }
 
 TEST(NotifyIconProtocol, VersionThreeAddsSelectAndContextMenu) {
+    EXPECT_EQ(ClickEvents(TrayButton::Left, NOTIFYICON_VERSION), (std::vector<std::uint32_t>{WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT}));
+    EXPECT_EQ(ClickEvents(TrayButton::Right, NOTIFYICON_VERSION), (std::vector<std::uint32_t>{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU}));
+}
+
+TEST(NotifyIconProtocol, AMiddleClickIsItsButtonAloneInEveryVersion) {
+    EXPECT_EQ(ClickEvents(TrayButton::Middle, 0), (std::vector<std::uint32_t>{WM_MBUTTONDOWN, WM_MBUTTONUP}));
+    EXPECT_EQ(ClickEvents(TrayButton::Middle, NOTIFYICON_VERSION_4), (std::vector<std::uint32_t>{WM_MBUTTONDOWN, WM_MBUTTONUP}));
+}
+
+TEST(NotifyIconProtocol, TheSecondClickOfADoubleClickIsTheDoubleClickAndUp) {
+    EXPECT_EQ(DoubleClickEvents(TrayButton::Left), (std::vector<std::uint32_t>{WM_LBUTTONDBLCLK, WM_LBUTTONUP}));
+    EXPECT_EQ(DoubleClickEvents(TrayButton::Right), (std::vector<std::uint32_t>{WM_RBUTTONDBLCLK, WM_RBUTTONUP}));
+    EXPECT_EQ(DoubleClickEvents(TrayButton::Middle), (std::vector<std::uint32_t>{WM_MBUTTONDBLCLK, WM_MBUTTONUP}));
+}
+
+TEST(NotifyIconProtocol, ADoubleClickIsTheSameButtonOnTheSameIconSoonAndNear) {
+    const auto      start = std::chrono::steady_clock::now();
+    const TrayClick first{.owner = 5, .id = 7, .button = TrayButton::Left, .cursor = POINT{.x = 100, .y = 10}, .time = start};
+    const auto      second = [&first](std::chrono::milliseconds after, POINT cursor) {
+        TrayClick click = first;
+        click.cursor    = cursor;
+        click.time      = first.time + after;
+        return click;
+    };
+    const std::chrono::milliseconds doubleTime(500);
+    const SIZE                      area{.cx = 4, .cy = 4};
+    EXPECT_TRUE(IsDoubleClick(first, second(std::chrono::milliseconds(200), POINT{.x = 102, .y = 8}), doubleTime, area));
+    EXPECT_FALSE(IsDoubleClick(std::nullopt, first, doubleTime, area));
+    EXPECT_FALSE(IsDoubleClick(first, second(std::chrono::milliseconds(501), POINT{.x = 100, .y = 10}), doubleTime, area));
+    EXPECT_FALSE(IsDoubleClick(first, second(std::chrono::milliseconds(200), POINT{.x = 103, .y = 10}), doubleTime, area));
+    TrayClick other = second(std::chrono::milliseconds(200), first.cursor);
+    other.id        = 8;
+    EXPECT_FALSE(IsDoubleClick(first, other, doubleTime, area));
+    other        = second(std::chrono::milliseconds(200), first.cursor);
+    other.button = TrayButton::Right;
+    EXPECT_FALSE(IsDoubleClick(first, other, doubleTime, area));
+}
+
+TEST(NotifyIconProtocol, AMoveTravelsInTheIconsVersionForm) {
     TrayIcon icon = Icon(5, 7);
-    icon.version  = NOTIFYICON_VERSION;
-    EXPECT_EQ(TrayInputMessages(icon, TrayButton::Left, POINT{.x = 0, .y = 0}).back().lParam, NIN_SELECT);
-    const std::vector<TrayInputMessage> right = TrayInputMessages(icon, TrayButton::Right, POINT{.x = 0, .y = 0});
-    ASSERT_EQ(right.size(), 3u);
-    EXPECT_EQ(right[0].lParam, WM_RBUTTONDOWN);
-    EXPECT_EQ(right[1].lParam, WM_RBUTTONUP);
-    EXPECT_EQ(right[2].lParam, WM_CONTEXTMENU);
+    EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}), (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = 7, .lParam = WM_MOUSEMOVE}}));
+    icon.version = NOTIFYICON_VERSION_4;
+    EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}),
+              (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = MAKEWPARAM(3, 4), .lParam = MAKELPARAM(WM_MOUSEMOVE, 7)}}));
 }
 
 TEST(NotifyIconProtocol, VersionFourPostsTheCursorAndPacksTheIdWithTheEvent) {
     TrayIcon icon = Icon(5, 7);
     icon.version  = NOTIFYICON_VERSION_4;
     // A monitor left of the primary has negative coordinates, which travel as 16-bit two's complement.
-    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, TrayButton::Right, POINT{.x = -100, .y = 40});
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, ClickEvents(TrayButton::Right, icon.version), POINT{.x = -100, .y = 40});
     ASSERT_EQ(messages.size(), 3u);
     for (const TrayInputMessage& message : messages) {
         EXPECT_EQ(static_cast<std::int16_t>(LOWORD(message.wParam)), -100);
@@ -253,7 +290,7 @@ TEST(NotifyIconProtocol, VersionFourPostsTheCursorAndPacksTheIdWithTheEvent) {
 TEST(NotifyIconProtocol, ACallbackBelowWmUserPostsNothing) {
     TrayIcon icon        = Icon(5, 7);
     icon.callbackMessage = WM_CLOSE;
-    EXPECT_TRUE(TrayInputMessages(icon, TrayButton::Left, POINT{.x = 0, .y = 0}).empty());
+    EXPECT_TRUE(TrayInputMessages(icon, ClickEvents(TrayButton::Left, 0), POINT{.x = 0, .y = 0}).empty());
     icon.callbackMessage = 0;
-    EXPECT_TRUE(TrayInputMessages(icon, TrayButton::Right, POINT{.x = 0, .y = 0}).empty());
+    EXPECT_TRUE(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 0, .y = 0}).empty());
 }

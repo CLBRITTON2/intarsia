@@ -13,7 +13,7 @@ TEST(Window, LayoutReportsAChangeOnlyWhenTheTitleChanges) {
     const TextOnlyRender render;
     Window               window(WindowConfig{.maxLength = 50,
                                              .tooltip   = std::nullopt,
-                                             .actions   = {.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}},
+                                             .actions = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}},
                                 windowManager);
 
     windowManager.focused = FocusedWindow{.title = L"one"};

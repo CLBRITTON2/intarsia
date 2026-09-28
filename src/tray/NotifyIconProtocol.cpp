@@ -5,10 +5,13 @@
 #include <shellapi.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <format>
 #include <iterator>
+#include <stdexcept>
 #include <utility>
 
 namespace {
@@ -136,18 +139,29 @@ std::wstring DrawableTooltip(std::wstring_view tip) {
     return ReplaceLoneSurrogates(kept);
 }
 
-// Explorer's order: the button's down and up, then from version 3 on the select or context menu notification.
-std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, TrayButton button, POINT cursor) {
+std::vector<std::uint32_t> ClickEvents(TrayButton button, std::uint32_t version) {
+    const bool notifies = version >= NOTIFYICON_VERSION;
+    switch (button) {
+        case TrayButton::Left: return notifies ? std::vector<std::uint32_t>{WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT} : std::vector<std::uint32_t>{WM_LBUTTONDOWN, WM_LBUTTONUP};
+        case TrayButton::Right:
+            return notifies ? std::vector<std::uint32_t>{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU} : std::vector<std::uint32_t>{WM_RBUTTONDOWN, WM_RBUTTONUP};
+        case TrayButton::Middle: return {WM_MBUTTONDOWN, WM_MBUTTONUP};
+    }
+    throw std::invalid_argument(std::format("unknown tray button {}", static_cast<std::int32_t>(button)));
+}
+
+std::vector<std::uint32_t> DoubleClickEvents(TrayButton button) {
+    switch (button) {
+        case TrayButton::Left: return {WM_LBUTTONDBLCLK, WM_LBUTTONUP};
+        case TrayButton::Right: return {WM_RBUTTONDBLCLK, WM_RBUTTONUP};
+        case TrayButton::Middle: return {WM_MBUTTONDBLCLK, WM_MBUTTONUP};
+    }
+    throw std::invalid_argument(std::format("unknown tray button {}", static_cast<std::int32_t>(button)));
+}
+
+std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, const std::vector<std::uint32_t>& events, POINT cursor) {
     if (icon.callbackMessage < WM_USER) {
         return {};
-    }
-    std::vector<std::uint32_t> events;
-    switch (button) {
-        case TrayButton::Left: events = {WM_LBUTTONDOWN, WM_LBUTTONUP}; break;
-        case TrayButton::Right: events = {WM_RBUTTONDOWN, WM_RBUTTONUP}; break;
-    }
-    if (icon.version >= NOTIFYICON_VERSION) {
-        events.push_back(button == TrayButton::Left ? NIN_SELECT : WM_CONTEXTMENU);
     }
     std::vector<TrayInputMessage> messages;
     messages.reserve(events.size());
@@ -161,4 +175,13 @@ std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, TrayButton
         }
     }
     return messages;
+}
+
+bool IsDoubleClick(const std::optional<TrayClick>& previous, const TrayClick& click, std::chrono::milliseconds doubleTime, SIZE area) {
+    if (!previous.has_value() || previous->owner != click.owner || previous->id != click.id || previous->button != click.button) {
+        return false;
+    }
+    const auto elapsed = click.time - previous->time;
+    return elapsed >= std::chrono::steady_clock::duration::zero() && elapsed <= doubleTime && std::abs(click.cursor.x - previous->cursor.x) <= area.cx / 2 &&
+        std::abs(click.cursor.y - previous->cursor.y) <= area.cy / 2;
 }

@@ -1,6 +1,6 @@
 # intarsia
 
-A native status bar for Windows in the spirit of Waybar. Every monitor gets a bar docked to one screen edge, built
+A native status bar for Windows. Every monitor gets a bar docked to one screen edge, built
 from small modules that a Lua config places into left, center and right sections and a CSS file styles. It draws with
 Direct2D and DirectWrite, and runs alongside GlazeWM or on plain Windows.
 
@@ -59,7 +59,7 @@ This checks formatting with clang-format and runs clang-tidy over `src/` and `te
 ## Run
 
 The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.css` beside it for how it
-looks, as Waybar does. Start from the commented examples:
+looks. Start from the commented examples:
 
 ```powershell
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\intarsia | Out-Null

@@ -19,7 +19,7 @@ namespace {
                              .iconsWifi          = {L"0", L"1", L"2", L"3", L"4"},
                              .iconEthernet       = L"E",
                              .iconDisconnected   = L"X",
-                             .actions            = {.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+                             .actions = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
     }
 
     NetworkState Wifi(std::optional<std::int32_t> signal) {

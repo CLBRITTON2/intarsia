@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-// The focused window's title, like Waybar's hyprland/window. Empty while nothing has focus.
+// The focused window's title. Empty while nothing has focus.
 class Window final : public IModule {
   public:
     // Throws ConfigError when the tooltip names another value or has a spec that cannot render a string.

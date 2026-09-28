@@ -12,6 +12,14 @@ TEST(Layout, EmptySectionsHaveNoLength) {
     EXPECT_TRUE(layout.left.offsets.empty());
 }
 
+TEST(Layout, ASectionWhoseModulesAllShowNothingHasNoLength) {
+    const BarLayout layout = ArrangeBar({.left = {0.0f, 0.0f}, .center = {}, .right = {30.0f, 0.0f}}, 1000.0f, 5.0f, 4.0f);
+    EXPECT_EQ(layout.left.length, 0.0f);
+    // An empty module adds nothing, so the section ends one padding after the module before it.
+    EXPECT_EQ(layout.right.length, 38.0f);
+    EXPECT_EQ(layout.right.start, 1000.0f - 5.0f - 38.0f);
+}
+
 TEST(Layout, LeftStartsOneMarginInAndPadsItsModules) {
     const BarLayout layout = ArrangeBar({.left = {100.0f, 50.0f}, .center = {}, .right = {}}, 1000.0f, 5.0f, 4.0f);
     EXPECT_EQ(layout.left.start, 5.0f);

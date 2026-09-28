@@ -61,6 +61,10 @@ namespace {
 
     // A border is stroked centered on its outline, so the outline is inset by half the width to keep it inside.
     void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& box, const BoxStyle& style, const D2D1_COLOR_F& fill) {
+        // An empty module's box has no length, and its inset border would draw inside out.
+        if (box.right <= box.left || box.bottom <= box.top) {
+            return;
+        }
         const float radius = std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f);
         if (fill.a > 0.0f) {
             context->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brushes.Get(fill));
@@ -90,6 +94,7 @@ namespace {
         switch (input) {
             case ModuleInput::LeftClick: return actions.click;
             case ModuleInput::RightClick: return actions.rightClick;
+            case ModuleInput::MiddleClick: return actions.middleClick;
             case ModuleInput::ScrollUp: return actions.scrollUp;
             case ModuleInput::ScrollDown: return actions.scrollDown;
         }
@@ -229,6 +234,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         case WM_LBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::LeftClick); return 0;
         case WM_RBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::RightClick); return 0;
+        case WM_MBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::MiddleClick); return 0;
         case WM_MOUSEWHEEL: {
             // Wheel messages carry screen coordinates, unlike button messages.
             POINT point{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)};
@@ -350,12 +356,14 @@ bool Bar::LayOutModules() {
     return changed;
 }
 
-// Each module's box along the bar: what it draws plus its padding on both sides.
+// Each module's box along the bar: what it draws plus its padding on both sides. A module showing nothing, such as a
+// battery module with no battery, takes no room at all.
 std::vector<float> Bar::BoxLengths(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles) const {
     std::vector<float> lengths;
     lengths.reserve(modules.size());
     for (size_t index = 0; index < modules.size(); ++index) {
-        lengths.push_back(MainLength(modules[index]->Size(), _config.bar.edge) + (2.0f * MainOf(styles[index].box.padding, _config.bar.edge)));
+        const float content = MainLength(modules[index]->Size(), _config.bar.edge);
+        lengths.push_back(content > 0.0f ? content + (2.0f * MainOf(styles[index].box.padding, _config.bar.edge)) : 0.0f);
     }
     return lengths;
 }
@@ -464,6 +472,9 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
         Refresh();
     } else if (input == ModuleInput::RightClick) {
         box->module->RightClick(ContentPoint(client, *box));
+        Refresh();
+    } else if (input == ModuleInput::MiddleClick) {
+        box->module->MiddleClick(ContentPoint(client, *box));
         Refresh();
     } else if (input == ModuleInput::ScrollUp || input == ModuleInput::ScrollDown) {
         box->module->Scroll(input == ModuleInput::ScrollUp ? ScrollDirection::Up : ScrollDirection::Down);

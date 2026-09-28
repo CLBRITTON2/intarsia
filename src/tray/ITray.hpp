@@ -13,7 +13,8 @@
 // A mouse button pressed and released over a tray icon.
 enum class TrayButton : std::uint8_t {
     Left,
-    Right
+    Right,
+    Middle
 };
 
 // One notification area icon an app added through Shell_NotifyIcon.
@@ -39,6 +40,11 @@ class ITray {
     // Every icon, in the order apps added them, hidden ones included.
     virtual std::vector<TrayIcon> Icons() const = 0;
 
-    // Tells the icon's app that button was clicked on it, as the taskbar would, so it can open its window or menu.
+    // Tells the icon's app that button was clicked on it, as the taskbar would, so it can open its window or menu. A
+    // second click soon enough and close enough to the first reaches it as a double click.
     virtual void Press(const TrayIcon& icon, TrayButton button) = 0;
+
+    // Tells the icon's app that the cursor moved over it, as the taskbar does. A move that leaves the cursor where the
+    // last one did, as the bar reports after every frame, is not told again.
+    virtual void Move(const TrayIcon& icon) = 0;
 };

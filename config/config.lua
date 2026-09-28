@@ -36,8 +36,8 @@ return {
     -- tiling_direction, divider, cpu, memory, audio, network, battery, tray or custom. One type can appear under several names with different
     -- settings, such as a second clock with its own format.
     --
-    -- clock, window, cpu, memory, audio, network, battery and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
-    -- actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
+    -- clock, window, cpu, memory, audio, network, battery and custom take optional on_click, on_right_click,
+    -- on_middle_click, on_scroll_up and on_scroll_down actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
     -- config loads), and it starts without a shell, so arguments reach it exactly as written.
     -- { window_manager = "focus --next-workspace" } sends the window manager a command in its own syntax instead,
     -- without starting a process (glazewm only).

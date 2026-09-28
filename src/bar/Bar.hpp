@@ -24,6 +24,7 @@
 enum class ModuleInput : std::uint8_t {
     LeftClick,
     RightClick,
+    MiddleClick,
     ScrollUp,
     ScrollDown
 };

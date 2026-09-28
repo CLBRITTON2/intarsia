@@ -384,13 +384,15 @@ TEST(Config, CpuAndMemoryShareTheTextModuleShape) {
 }
 
 TEST(Config, ActionsResolveToAbsoluteExecutables) {
-    const Config         config  = LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" } })"));
+    const Config config =
+        LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" }, on_middle_click = { "cmd" } })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.click.has_value());
     const Command& click = std::get<Command>(*actions.click);
     EXPECT_TRUE(click.program.is_absolute());
     EXPECT_EQ(click.arguments, (std::vector<std::wstring>{L"/c", L"exit 0"}));
     EXPECT_TRUE(actions.scrollUp.has_value());
+    EXPECT_TRUE(actions.middleClick.has_value());
     EXPECT_FALSE(actions.rightClick.has_value());
     EXPECT_FALSE(actions.scrollDown.has_value());
 }

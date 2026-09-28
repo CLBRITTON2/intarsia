@@ -43,6 +43,9 @@ class IModule {
     // A right click, as Click. Only called when no on_right_click action is configured.
     virtual void RightClick(D2D1_POINT_2F) {}
 
+    // A middle click, as Click. Only called when no on_middle_click action is configured.
+    virtual void MiddleClick(D2D1_POINT_2F) {}
+
     // A wheel notch over the module. Only called when no on_scroll_up or on_scroll_down action is configured for it.
     virtual void Scroll(ScrollDirection) {}
 
@@ -66,4 +69,4 @@ class IModule {
 };
 
 // Actions() for a module whose config binds none.
-inline const ModuleActions kNoActions{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
+inline const ModuleActions kNoActions{.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};

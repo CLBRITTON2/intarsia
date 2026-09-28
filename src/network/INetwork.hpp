@@ -5,7 +5,7 @@
 #include <string>
 
 // How the machine reaches the internet: through no interface, a Wi-Fi one, or any other. Ethernet stands for every
-// link that is not Wi-Fi (a cable, cellular, a VPN's virtual adapter), as Waybar's format-ethernet does.
+// link that is not Wi-Fi (a cable, cellular, a VPN's virtual adapter).
 enum class NetworkLink : std::uint8_t {
     None,
     Ethernet,
