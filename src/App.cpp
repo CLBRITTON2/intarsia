@@ -199,10 +199,12 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             std::rethrow_exception(error);
         }
         case kAnimationFrame:
-            _frames.Acknowledge();
             for (const std::unique_ptr<Bar>& bar : _bars) {
                 bar->Refresh();
             }
+            // Only after drawing: GetMessage takes posted messages before input, so a frame posted while the bars drew
+            // would starve clicks until the animation ended.
+            _frames.Acknowledge();
             if (std::ranges::none_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->Animating(); })) {
                 _frames.Stop();
             }

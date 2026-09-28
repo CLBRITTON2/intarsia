@@ -22,7 +22,7 @@ class FrameClock {
 
     void        Start();
     void        Stop();
-    // The UI thread, as it handles frameMessage and before it draws, so the next frame posts again.
+    // The UI thread, once it has drawn the frame, so the next frame posts again at the following composition.
     void Acknowledge();
     // The error that stopped the thread, set before failedMessage is posted.
     std::exception_ptr TakeError();
