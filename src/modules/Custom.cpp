@@ -27,10 +27,11 @@ std::optional<std::wstring> Custom::TooltipText() {
 ModuleText Custom::Format(const std::string& spec) {
     const CommandResult result = _poller.Result();
     switch (result.outcome) {
-        case CommandOutcome::Pending: return ModuleText{.icon = Settings().icon, .text = {}, .alert = false};
+        case CommandOutcome::Pending: return ModuleText{.icon = Settings().icon, .text = {}, .state = TextState::Normal};
         case CommandOutcome::Succeeded:
-            return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))), .alert = result.alert};
-        case CommandOutcome::Failed: return ModuleText{.icon = Settings().icon, .text = ToWide(result.text), .alert = true};
+            return ModuleText{
+                .icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))), .state = result.alert ? TextState::Alert : TextState::Normal};
+        case CommandOutcome::Failed: return ModuleText{.icon = Settings().icon, .text = ToWide(result.text), .state = TextState::Alert};
     }
     throw std::invalid_argument(std::format("unknown command outcome {}", static_cast<std::int32_t>(result.outcome)));
 }

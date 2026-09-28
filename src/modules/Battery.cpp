@@ -46,17 +46,19 @@ std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {
 
 ModuleText FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state) {
     if (!state.has_value()) {
-        return ModuleText{.icon = {}, .text = {}, .alert = false};
+        return ModuleText{.icon = {}, .text = {}, .state = TextState::Normal};
     }
     switch (state->charge) {
         case ChargeState::Discharging:
             return ModuleText{.icon  = LevelIcon(config.icons, state->percent),
                               .text  = ToWide(FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state))),
-                              .alert = state->percent <= config.alertAtPercent};
+                              .state = state->percent <= config.criticalAtPercent ? TextState::Critical :
+                                  state->percent <= config.warningAtPercent       ? TextState::Warning :
+                                                                                    TextState::Normal};
         case ChargeState::Charging:
-            return ModuleText{.icon = config.iconCharging, .text = ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))), .alert = false};
+            return ModuleText{.icon = config.iconCharging, .text = ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))), .state = TextState::Normal};
         case ChargeState::Plugged:
-            return ModuleText{.icon = config.iconPlugged, .text = ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))), .alert = false};
+            return ModuleText{.icon = config.iconPlugged, .text = ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))), .state = TextState::Normal};
     }
     throw std::invalid_argument(std::format("unknown battery charge {}", static_cast<std::int32_t>(state->charge)));
 }

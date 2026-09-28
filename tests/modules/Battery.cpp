@@ -16,7 +16,8 @@ namespace {
                              .icons             = {L"0", L"1", L"2", L"3", L"4"},
                              .iconCharging      = L"C",
                              .iconPlugged       = L"P",
-                             .alertAtPercent    = 15,
+                             .warningAtPercent  = 40,
+                             .criticalAtPercent = 15,
                              .actions = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
     }
 
@@ -27,23 +28,28 @@ namespace {
 } // namespace
 
 TEST(Battery, EachChargeHasItsFormatAndIcon) {
-    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)), (ModuleText{.icon = L"3", .text = L"64% 1:15", .alert = false}));
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)), (ModuleText{.icon = L"3", .text = L"64% 1:15", .state = TextState::Normal}));
     BatteryState charging = Discharging(64);
     charging.charge       = ChargeState::Charging;
-    EXPECT_EQ(FormatBattery(TestConfig(), charging), (ModuleText{.icon = L"C", .text = L"64% charging", .alert = false}));
+    EXPECT_EQ(FormatBattery(TestConfig(), charging), (ModuleText{.icon = L"C", .text = L"64% charging", .state = TextState::Normal}));
     BatteryState plugged = Discharging(100);
     plugged.charge       = ChargeState::Plugged;
-    EXPECT_EQ(FormatBattery(TestConfig(), plugged), (ModuleText{.icon = L"P", .text = L"", .alert = false}));
-    EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .alert = false}));
+    EXPECT_EQ(FormatBattery(TestConfig(), plugged), (ModuleText{.icon = L"P", .text = L"", .state = TextState::Normal}));
+    EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .state = TextState::Normal}));
 }
 
-TEST(Battery, AlertsOnlyWhileDischargingAtOrUnderTheThreshold) {
-    EXPECT_TRUE(FormatBattery(TestConfig(), Discharging(15)).alert);
-    EXPECT_FALSE(FormatBattery(TestConfig(), Discharging(16)).alert);
+TEST(Battery, WarnsThenTurnsCriticalOnlyWhileDischargingAtOrUnderEachThreshold) {
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(41)).state, TextState::Normal);
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(40)).state, TextState::Warning);
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(16)).state, TextState::Warning);
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(15)).state, TextState::Critical);
     EXPECT_EQ(FormatBattery(TestConfig(), Discharging(3)).icon, L"0");
     BatteryState charging = Discharging(5);
     charging.charge       = ChargeState::Charging;
-    EXPECT_FALSE(FormatBattery(TestConfig(), charging).alert);
+    EXPECT_EQ(FormatBattery(TestConfig(), charging).state, TextState::Normal);
+    BatteryState plugged = Discharging(5);
+    plugged.charge       = ChargeState::Plugged;
+    EXPECT_EQ(FormatBattery(TestConfig(), plugged).state, TextState::Normal);
 }
 
 TEST(Battery, TimeLeftIsHoursAndMinutes) {

@@ -52,7 +52,7 @@ ModuleText Cpu::Format(const std::string& spec) {
         _previous              = current;
         _sampledAt             = now;
     }
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CpuPlaceholders(_usage))), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CpuPlaceholders(_usage))), .state = TextState::Normal};
 }
 
 std::vector<Placeholder> CpuPlaceholders(std::int32_t usagePercent) {

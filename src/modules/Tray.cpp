@@ -83,7 +83,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     D2D1_MATRIX_3X2_F   transform{};
     render.context->GetTransform(&transform);
     render.context->SetTransform(D2D1::Matrix3x2F::Rotation(_angleShown, center) * *D2D1::Matrix3x2F::ReinterpretBaseType(&transform));
-    DrawIconText(render, start, _toggle, render.foreground);
+    DrawIconText(render, start, _toggle, render.accent, render.foreground);
     render.context->SetTransform(transform);
 }
 

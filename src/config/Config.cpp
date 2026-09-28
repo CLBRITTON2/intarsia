@@ -501,11 +501,22 @@ namespace {
                              .actions            = ReadActions(module)};
     }
 
+    std::int64_t ChargePercent(const TableReader& module, std::string_view key) {
+        const std::int64_t percent = PositiveWholeNumber(module, key);
+        if (percent > 100) {
+            throw module.Error(std::format("{} is a percent of full charge, from 1 to 100, got {}", module.KeyPath(key), percent));
+        }
+        return percent;
+    }
+
     BatteryConfig ReadBatteryConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithOptionalKeys({"type", "format_discharging", "format_charging", "format_plugged", "icons", "icon_charging", "icon_plugged", "alert_at"}));
-        const std::int64_t alertAt = PositiveWholeNumber(module, "alert_at");
-        if (alertAt > 100) {
-            throw module.Error(std::format("{} is a percent of full charge, from 1 to 100, got {}", module.KeyPath("alert_at"), alertAt));
+        module.RejectUnknownKeys(
+            WithOptionalKeys({"type", "format_discharging", "format_charging", "format_plugged", "icons", "icon_charging", "icon_plugged", "warning_at", "critical_at"}));
+        const std::int64_t warningAt  = ChargePercent(module, "warning_at");
+        const std::int64_t criticalAt = ChargePercent(module, "critical_at");
+        if (criticalAt >= warningAt) {
+            throw module.Error(std::format("{} ({}) must be under {} ({}), since a battery runs low before it is nearly empty", module.KeyPath("critical_at"), criticalAt,
+                                           module.KeyPath("warning_at"), warningAt));
         }
         return BatteryConfig{.formatDischarging = module.String("format_discharging"),
                              .formatCharging    = module.String("format_charging"),
@@ -514,7 +525,8 @@ namespace {
                              .icons             = ReadLevelIcons(module, "icons", "emptiest"),
                              .iconCharging      = ToWide(module.String("icon_charging")),
                              .iconPlugged       = ToWide(module.String("icon_plugged")),
-                             .alertAtPercent    = static_cast<std::int32_t>(alertAt),
+                             .warningAtPercent  = static_cast<std::int32_t>(warningAt),
+                             .criticalAtPercent = static_cast<std::int32_t>(criticalAt),
                              .actions           = ReadActions(module)};
     }
 

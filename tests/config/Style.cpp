@@ -156,6 +156,33 @@ TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
     EXPECT_THAT([] { return Parse("cpu:hover { color: #fff; }"); }, ConfigErrorWith("color does not apply to cpu:hover, which takes: background"));
 }
 
+TEST(Style, BatteryLevelsColorTheTextAndTheIconOverTheModulesOwnRules) {
+    const std::string rules = R"css(
+        #power .icon { color: #00ffff; }
+        #power.warning .icon { color: #ffff00; }
+        battery.critical { color: #ff0000; }
+    )css";
+    const ModuleStyle style = StyleOf(rules, ModuleKind::Battery, "power");
+    EXPECT_EQ(Rgba(style.warning.icon), (std::array<std::int32_t, 4>{255, 255, 0, 255}));
+    EXPECT_EQ(Rgba(style.warning.text), Rgba(style.color));
+    EXPECT_EQ(Rgba(style.critical.text), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    // No rule targets the critical icon, so the id's .icon rule still applies to it.
+    EXPECT_EQ(Rgba(style.critical.icon), (std::array<std::int32_t, 4>{0, 255, 255, 255}));
+    const ModuleStyle bare = StyleOf("battery.critical { color: #ff0000; }", ModuleKind::Battery, "power");
+    EXPECT_EQ(Rgba(bare.critical.icon), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_EQ(Rgba(bare.warning.icon), Rgba(bare.icon.color));
+}
+
+TEST(Style, LevelRulesTakeColorOnlyAndMatchOnlyABattery) {
+    EXPECT_THAT([] { return Parse("battery.warning { padding: 2px; }"); }, ConfigErrorWith("padding does not apply to battery.warning, which takes: color"));
+    EXPECT_THAT([] { return Parse("battery.warning .icon { font-size: 20px; }"); }, ConfigErrorWith("which takes: color"));
+    EXPECT_THAT([] { return Parse("battery.warning .item { color: #fff; }"); }, ConfigErrorWith("style a battery's text and .icon only"));
+    EXPECT_THAT([] { return Parse("battery.warning.critical { color: #fff; }"); }, ConfigErrorWith("a module is in one at a time"));
+    EXPECT_THAT([] { return Parse("battery.warning:hover { background: #fff; }"); }, ConfigErrorWith("combines a state with :hover"));
+    EXPECT_THAT([] { return StyleOf(".warning { color: #fff; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith("cpu is a cpu module"));
+    EXPECT_NO_THROW(StyleOf("battery.warning { color: #fff; }", ModuleKind::Cpu, "cpu"));
+}
+
 TEST(Style, ItemHoverChangesColorsAndLosesToAMoreSpecificStateRule) {
     const std::string rules = R"css(
         .item { background: #111111; }

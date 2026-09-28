@@ -111,13 +111,22 @@ struct ItemStyle {
     D2D1_COLOR_F hoverBackground;
 };
 
+// The text and icon colors of one state a module's value can be in.
+struct StateColors {
+    D2D1_COLOR_F text;
+    D2D1_COLOR_F icon;
+};
+
 // One module's style, cascaded from every style.css rule that matches it.
 struct ModuleStyle {
     BoxStyle     box;
     D2D1_COLOR_F hover; // the box's background under the cursor
     D2D1_COLOR_F color;
     D2D1_COLOR_F alertColor; // text in a state that needs attention, such as a failed command
-    IconStyle    icon;
+    // A battery discharging at or under warning_at (.warning) and critical_at (.critical).
+    StateColors warning;
+    StateColors critical;
+    IconStyle   icon;
     // The box of a windows or binding_mode item, and of a focused window. Workspaces are focused, occupied (has
     // windows) or empty.
     ItemStyle item;
@@ -270,8 +279,10 @@ struct BatteryConfig {
     std::vector<std::wstring>  icons; // emptiest to fullest while discharging, the range split evenly between them
     std::wstring               iconCharging;
     std::wstring               iconPlugged;
-    std::int32_t               alertAtPercent; // discharging at or under this charge draws the text in .alert
-    ModuleActions              actions;
+    // Discharging at or under these charges draws the module in .warning, then .critical, colors.
+    std::int32_t  warningAtPercent;
+    std::int32_t  criticalAtPercent; // under warningAtPercent
+    ModuleActions actions;
 };
 
 // What the tray's toggle shows, such as a Nerd Font chevron. How it turns as the tray unfolds is the style's.

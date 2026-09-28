@@ -27,7 +27,7 @@ double BytesToGibibytes(std::uint64_t bytes) {
 Memory::Memory(TextModuleConfig config) : TextModule(std::move(config), "memory", MemoryPlaceholders(0)) {}
 
 ModuleText Memory::Format(const std::string& spec) {
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(UsedPhysicalBytes()))), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(UsedPhysicalBytes()))), .state = TextState::Normal};
 }
 
 std::vector<Placeholder> MemoryPlaceholders(std::uint64_t usedBytes) {

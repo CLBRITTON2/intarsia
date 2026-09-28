@@ -13,7 +13,7 @@ enum class StyleTarget : std::uint8_t {
     Bar,     // *: the bar-wide font and color
     Section, // section
     Tooltip, // tooltip
-    Module,  // a module's box: by type (clock), id (its name in the config, #time) or .module, with .alert or :hover
+    Module,  // a module's box: by type (clock), id (its name in the config, #time) or .module, with a state or :hover
     Icon,    // .icon, alone or inside a module selector
     Item     // .item with an optional .focused, .occupied, .empty or .toggle and :hover, alone or inside a module selector
 };

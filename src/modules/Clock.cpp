@@ -7,7 +7,7 @@
 Clock::Clock(TextModuleConfig config) : TextModule(std::move(config), "clock", ClockPlaceholders(std::chrono::system_clock::now())) {}
 
 ModuleText Clock::Format(const std::string& spec) {
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, ClockPlaceholders(std::chrono::system_clock::now()))), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, ClockPlaceholders(std::chrono::system_clock::now()))), .state = TextState::Normal};
 }
 
 std::vector<Placeholder> ClockPlaceholders(std::chrono::system_clock::time_point now) {

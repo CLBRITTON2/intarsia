@@ -368,17 +368,21 @@ TEST(Config, AudioParsesItsFormatsIconsAndStep) {
                 ConfigErrorWith("modules.volume.icon_muted is missing"));
 }
 
-TEST(Config, BatteryParsesItsFormatsIconsAndAlertThreshold) {
-    const std::string battery =
-        R"(        power = { type = "battery", format_discharging = "{capacity}%", format_charging = "", format_plugged = "", icons = { "e", "f" }, icon_charging = "c", icon_plugged = "p", alert_at = 15 },)";
+TEST(Config, BatteryParsesItsFormatsIconsAndThresholds) {
+    const std::string    battery  = R"(        power = { type = "battery", format_discharging = "{capacity}%", format_charging = "", format_plugged = "", icons = { "e", "f" }, )"
+                                    R"(icon_charging = "c", icon_plugged = "p", warning_at = 40, critical_at = 15 },)";
     const Config         config   = LoadText(WithRightModules(R"({ "power" })", battery));
     const BatteryConfig& settings = SettingsOf<BatteryConfig>(config.modules.right, 0);
     EXPECT_EQ(settings.formatDischarging, "{capacity}%");
     EXPECT_EQ(settings.icons, (std::vector<std::wstring>{L"e", L"f"}));
     EXPECT_EQ(settings.iconPlugged, L"p");
-    EXPECT_EQ(settings.alertAtPercent, 15);
-    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "alert_at = 15", "alert_at = 101"))); },
-                ConfigErrorWith("modules.power.alert_at is a percent of full charge, from 1 to 100, got 101"));
+    EXPECT_EQ(settings.warningAtPercent, 40);
+    EXPECT_EQ(settings.criticalAtPercent, 15);
+    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "warning_at = 40", "warning_at = 101"))); },
+                ConfigErrorWith("modules.power.warning_at is a percent of full charge, from 1 to 100, got 101"));
+    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "critical_at = 15", "critical_at = 40"))); },
+                ConfigErrorWith("modules.power.critical_at (40) must be under modules.power.warning_at (40)"));
+    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, ", critical_at = 15", ""))); }, ConfigErrorWith("critical_at"));
     EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, R"({ "e", "f" })", "{}"))); },
                 ConfigErrorWith("modules.power.icons must hold at least one icon, emptiest first"));
 }

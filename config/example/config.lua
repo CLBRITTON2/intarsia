@@ -123,8 +123,9 @@ return {
             icons = { "\u{F008E}", "\u{F007C}", "\u{F007E}", "\u{F0081}", "\u{F0079}" },
             icon_charging = "\u{F0084}",
             icon_plugged = "\u{F06A5}",
-            -- Discharging at or under this percent draws the text in the .alert color.
-            alert_at = 20,
+            -- Discharging at or under these percents draws the module in its .warning, then .critical, colors.
+            warning_at = 40,
+            critical_at = 20,
             tooltip = "{capacity}% {time}\nHealth {health}%",
             on_click = { "C:\\Windows\\explorer.exe", "ms-settings:batterysaver" },
         },

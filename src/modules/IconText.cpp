@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <format>
 #include <limits>
+#include <stdexcept>
 #include <utility>
 
 using Microsoft::WRL::ComPtr;
@@ -81,10 +83,10 @@ IconText LayOutWeightedText(const RenderContext& render, std::wstring_view text,
     return Combined(nullptr, std::move(layout), 0.0f);
 }
 
-void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* textBrush) {
+void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* iconBrush, ID2D1Brush* textBrush) {
     if (laidOut.icon != nullptr) {
         render.context->DrawTextLayout(D2D1::Point2F(origin.x, origin.y + ((laidOut.size.height - laidOut.iconSize.height) / 2.0f) + laidOut.iconInkShiftDips), laidOut.icon.Get(),
-                                       render.accent);
+                                       iconBrush);
     }
     if (laidOut.text != nullptr) {
         const float left = origin.x + laidOut.iconSize.width + laidOut.gapDips;
@@ -123,5 +125,11 @@ D2D1_SIZE_F TextLine::Size() const {
 }
 
 void TextLine::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    DrawIconText(render, origin, _text, _shown.alert ? render.alert : render.foreground);
+    switch (_shown.state) {
+        case TextState::Normal: DrawIconText(render, origin, _text, render.accent, render.foreground); return;
+        case TextState::Alert: DrawIconText(render, origin, _text, render.accent, render.alert); return;
+        case TextState::Warning: DrawIconText(render, origin, _text, render.warning.icon, render.warning.text); return;
+        case TextState::Critical: DrawIconText(render, origin, _text, render.critical.icon, render.critical.text); return;
+    }
+    throw std::invalid_argument(std::format("unknown text state {}", static_cast<std::int32_t>(_shown.state)));
 }

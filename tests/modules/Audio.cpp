@@ -28,9 +28,9 @@ namespace {
 } // namespace
 
 TEST(Audio, FormatsTheVolumeOrTheMutedTextWithTheirIcons) {
-    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, false)), (ModuleText{.icon = L"V", .text = L"42%", .alert = false}));
-    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, true)), (ModuleText{.icon = L"M", .text = L"muted", .alert = false}));
-    EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .alert = false}));
+    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, false)), (ModuleText{.icon = L"V", .text = L"42%", .state = TextState::Normal}));
+    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, true)), (ModuleText{.icon = L"M", .text = L"muted", .state = TextState::Normal}));
+    EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .state = TextState::Normal}));
 }
 
 TEST(Audio, FormatsNameTheDeviceAndTakeASpec) {

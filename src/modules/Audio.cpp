@@ -67,10 +67,10 @@ std::int32_t VolumePercent(float volume) {
 
 ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output) {
     if (!output.has_value()) {
-        return ModuleText{.icon = {}, .text = {}, .alert = false};
+        return ModuleText{.icon = {}, .text = {}, .state = TextState::Normal};
     }
     const std::string& format = output->muted ? config.formatMuted : config.format;
-    return ModuleText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output))), .alert = false};
+    return ModuleText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output))), .state = TextState::Normal};
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {

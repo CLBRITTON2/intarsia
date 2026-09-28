@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 
-// The battery's charge: its format and icon while discharging (the icon by charge), charging or plugged in, with the
-// text in the module's .alert color while discharging at or under alert_at. Shows nothing on a machine with no
-// battery. Input does nothing unless the config binds actions.
+// The battery's charge: its format and icon while discharging (the icon by charge), charging or plugged in, drawn in
+// the module's .warning colors while discharging at or under warning_at and its .critical colors at or under
+// critical_at. Shows nothing on a machine with no battery. Input does nothing unless the config binds actions.
 class Battery final : public IModule {
   public:
     // Throws ConfigError when a format uses a name it has no value for.

@@ -374,9 +374,9 @@ namespace {
         return {Declaration{.property = "border-width", .value = *width, .line = border.line}, Declaration{.property = "border-color", .value = *color, .line = border.line}};
     }
 
-    constexpr std::array<std::string_view, 9> kClasses{"module", "alert", "expanded", "icon", "item", "focused", "occupied", "empty", "toggle"};
+    constexpr std::array<std::string_view, 11> kClasses{"module", "alert", "warning", "critical", "expanded", "icon", "item", "focused", "occupied", "empty", "toggle"};
 
-    bool                                      IsModuleType(std::string_view type) {
+    bool                                       IsModuleType(std::string_view type) {
         return std::ranges::find(kModuleTypes, type, &ModuleTypeName::name) != kModuleTypes.end();
     }
 
@@ -428,8 +428,10 @@ namespace {
                 compound.id = std::string(name);
             } else if (marker == '.') {
                 if (std::ranges::find(kClasses, name) == kClasses.end()) {
-                    throw std::invalid_argument(std::format(
-                        "'.{}' is not a class intarsia styles, known classes are: .module, .alert, .expanded, .icon, .item, .focused, .occupied, .empty, .toggle", name));
+                    throw std::invalid_argument(
+                        std::format("'.{}' is not a class intarsia styles, known classes are: .module, .alert, .warning, .critical, .expanded, .icon, .item, .focused, .occupied, "
+                                    ".empty, .toggle",
+                                    name));
                 }
                 compound.classes.emplace_back(name);
             } else if (name == "hover") {
@@ -445,10 +447,21 @@ namespace {
         return std::ranges::find(compound.classes, name) != compound.classes.end();
     }
 
-    // A module's box: a module type, an id, .module, .alert or .expanded, and :hover.
+    // A battery's charge levels, which color its icon as well as its text.
+    bool HasLevel(const Compound& compound) {
+        return HasClass(compound, "warning") || HasClass(compound, "critical");
+    }
+
+    // The classes naming a state a module is in, of which it is in one at a time.
+    std::int64_t StateCount(const Compound& compound) {
+        return std::ranges::count_if(compound.classes, [](const std::string& name) { return name == "alert" || name == "warning" || name == "critical" || name == "expanded"; });
+    }
+
+    // A module's box: a module type, an id, .module, .alert, .warning, .critical or .expanded, and :hover.
     bool IsModuleCompound(const Compound& compound) {
-        const bool onlyModuleClasses = std::ranges::all_of(compound.classes, [](const std::string& name) { return name == "module" || name == "alert" || name == "expanded"; });
-        const bool typed             = compound.type.empty() || IsModuleType(compound.type);
+        const bool onlyModuleClasses = std::ranges::all_of(
+            compound.classes, [](const std::string& name) { return name == "module" || name == "alert" || name == "warning" || name == "critical" || name == "expanded"; });
+        const bool typed = compound.type.empty() || IsModuleType(compound.type);
         return onlyModuleClasses && typed && (!compound.type.empty() || !compound.id.empty() || !compound.classes.empty());
     }
 
@@ -482,6 +495,9 @@ namespace {
             }
             return last.type == "section" ? StyleTarget::Section : StyleTarget::Tooltip;
         }
+        if (!compounds.empty() && StateCount(compounds.front()) > 1) {
+            throw std::invalid_argument(std::format("'{}' combines two of .alert, .warning, .critical and .expanded, and a module is in one at a time", text));
+        }
         if (const std::optional<StyleTarget> part = PartTarget(last)) {
             if (compounds.size() == 2 && (!IsModuleCompound(compounds[0]) || compounds[0].hover || HasClass(compounds[0], "alert"))) {
                 throw std::invalid_argument(std::format("'{}' must start with a module, as #cpu .icon, without .alert or :hover", text));
@@ -489,14 +505,17 @@ namespace {
             if (compounds.size() == 2 && HasClass(compounds[0], "expanded") && *part != StyleTarget::Icon) {
                 throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
             }
+            if (compounds.size() == 2 && HasLevel(compounds[0]) && *part != StyleTarget::Icon) {
+                throw std::invalid_argument(std::format("'{}': .warning and .critical style a battery's text and .icon only, as #battery.warning .icon", text));
+            }
             return *part;
         }
         if (compounds.size() == 1 && IsModuleCompound(last) && HasClass(last, "expanded")) {
             throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
         }
         if (compounds.size() == 1 && IsModuleCompound(last)) {
-            if (last.hover && HasClass(last, "alert")) {
-                throw std::invalid_argument(std::format("'{}' combines .alert and :hover, which style different things: text color and background", text));
+            if (last.hover && StateCount(last) > 0) {
+                throw std::invalid_argument(std::format("'{}' combines a state with :hover, which style different things: text color and background", text));
             }
             return StyleTarget::Module;
         }
@@ -530,7 +549,8 @@ namespace {
         return Selector{.compounds = compounds, .target = target, .specificity = SpecificityOf(compounds)};
     }
 
-    // What each target takes. :hover takes background only and .alert takes color only: each changes one thing.
+    // What each target takes. :hover takes background only and a state color only: each changes one thing, and none
+    // changes a size.
     std::vector<std::string_view> AllowedProperties(const Selector& selector) {
         constexpr std::array<std::string_view, 5> kBox{"background", "border-width", "border-color", "border-radius", "padding"};
         std::vector<std::string_view>             allowed;
@@ -549,6 +569,9 @@ namespace {
                 if (selector.compounds.size() == 2 && HasClass(selector.compounds.front(), "expanded")) {
                     return {"transform"};
                 }
+                if (selector.compounds.size() == 2 && HasLevel(selector.compounds.front())) {
+                    return {"color"};
+                }
                 return {"font-family", "font-size", "color", "margin-right", "transform", "transition"};
             case StyleTarget::Item:
                 // An item under the cursor changes color only: a change of size would move every item after it.
@@ -561,7 +584,7 @@ namespace {
                 if (compound.hover) {
                     return {"background"};
                 }
-                if (HasClass(compound, "alert")) {
+                if (HasClass(compound, "alert") || HasLevel(compound)) {
                     return {"color"};
                 }
                 allowed.assign(kBox.begin(), kBox.end());
@@ -829,6 +852,26 @@ namespace {
         return entry->name;
     }
 
+    // A module's text and icon colors in one state: rules for the state win over the module's own by specificity, and
+    // the icon inherits the state's text color.
+    StateColors ReadStateColors(const StyleSheet& sheet, std::string_view type, std::string_view name, std::string_view state, const D2D1_COLOR_F& color) {
+        const Element      module{.type = type, .id = name, .classes = {"module", state}, .hover = false};
+        const Element      icon{.type = {}, .id = {}, .classes = {"icon"}, .hover = false};
+        const D2D1_COLOR_F text = Cascaded(sheet, StyleTarget::Module, &module, nullptr).Color("color", color);
+        return StateColors{.text = text, .icon = Cascaded(sheet, StyleTarget::Icon, &module, &icon).Color("color", text)};
+    }
+
+    // Only a battery has charge levels, so a .warning or .critical rule matching another module would do nothing.
+    void RequireNoLevelRules(const StyleSheet& sheet, std::string_view type, std::string_view name) {
+        const Element levelled{.type = type, .id = name, .classes = {"module", "warning", "critical"}, .hover = false};
+        for (const StyleRule& rule : sheet.rules) {
+            const Compound& module = rule.selector.compounds.front();
+            if (HasLevel(module) && Matches(module, levelled)) {
+                throw StyleError(sheet.source, rule.line, std::format(".warning and .critical color a battery's charge, and {} is a {} module", name, type));
+            }
+        }
+    }
+
     const Declaration& Required(const Cascaded& bar, std::string_view property, std::string_view example) {
         const Declaration* declaration = bar.Find(property);
         if (declaration == nullptr) {
@@ -899,11 +942,16 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
             }
         }
     }
+    if (kind != ModuleKind::Battery) {
+        RequireNoLevelRules(sheet, type, name);
+    }
     const float rotation = iconRules.Read("transform", ReadRotation, 0.0f);
     return ModuleStyle{.box                         = boxStyle,
                        .hover                       = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
                        .color                       = color,
                        .alertColor                  = Cascaded(sheet, StyleTarget::Module, &alerted, nullptr).Color("color", color),
+                       .warning                     = ReadStateColors(sheet, type, name, "warning", color),
+                       .critical                    = ReadStateColors(sheet, type, name, "critical", color),
                        .icon                        = {.font            = iconRules.Read("font-family", ReadFamily, bar.font),
                                                        .sizeDips        = iconRules.Read("font-size", ReadPositiveLength, bar.fontSizeDips),
                                                        .color           = iconRules.Color("color", color),

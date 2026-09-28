@@ -21,6 +21,8 @@ inline ModuleStyle TestModuleStyle() {
         .hover                       = D2D1::ColorF(0, 0.0f),
         .color                       = D2D1::ColorF(0xFFFFFF),
         .alertColor                  = D2D1::ColorF(0xFF0000),
+        .warning                     = {.text = D2D1::ColorF(0xFFFF00), .icon = D2D1::ColorF(0xFFFF01)},
+        .critical                    = {.text = D2D1::ColorF(0xFF0001), .icon = D2D1::ColorF(0xFF0002)},
         .icon                        = {.font            = L"Segoe UI",
                                         .sizeDips        = 20.0f,
                                         .color           = D2D1::ColorF(0xFFFFFF),

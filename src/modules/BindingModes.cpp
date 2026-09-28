@@ -31,7 +31,7 @@ void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const
     for (size_t index = 0; index < _labels.size(); ++index) {
         const bool hovered = _hovered == index;
         DrawItemBackground(render, _row.boxes[index], item, hovered ? item.hoverBackground : item.background, origin);
-        DrawIconText(render, ItemContentOrigin(_row.boxes[index], item, origin), _labels[index], render.brushes->Get(hovered ? item.hoverColor : item.color));
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], item, origin), _labels[index], render.accent, render.brushes->Get(hovered ? item.hoverColor : item.color));
     }
 }
 

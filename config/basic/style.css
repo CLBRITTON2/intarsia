@@ -8,6 +8,7 @@
     --border: rgba(255, 255, 255, 0.08);
     --hover: rgba(255, 255, 255, 0.1);
     --red: #f87171;
+    --yellow: #facc15;
 }
 
 * {
@@ -44,6 +45,14 @@ tooltip {
 }
 
 .alert {
+    color: var(--red);
+}
+
+battery.warning .icon {
+    color: var(--yellow);
+}
+
+battery.critical, battery.critical .icon {
     color: var(--red);
 }
 
