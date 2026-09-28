@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, as major.minor.patch, with a section in CHANGELOG.md
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # windows-2025 carries Visual Studio 2026, and the scripts pin Visual Studio 2022 and its bundled LLVM.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - name: unit and config tests
+        shell: pwsh
+        run: ./scripts/test.ps1
+      - name: build and package
+        shell: pwsh
+        # Through the environment, never interpolated into the script, so no input can inject a command.
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: ./scripts/release.ps1 -Version $env:RELEASE_VERSION
+      - name: upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: intarsia-${{ inputs.version }}
+          path: build/dist/intarsia-*.zip
+          if-no-files-found: error
+      - name: publish
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/publish-release.ps1 -Version $env:RELEASE_VERSION -Commit $env:RELEASE_COMMIT -Token $env:RELEASE_TOKEN

@@ -56,6 +56,20 @@ pwsh -File scripts/lint.ps1
 This checks formatting with clang-format and runs clang-tidy over `src/` and `tests/`, with the rules in
 `.clang-format` and `.clang-tidy`. It refuses any LLVM major other than 19, since formatting changes between majors.
 
+## Release
+
+```powershell
+pwsh -File scripts/changelog.ps1 -Version 0.2.0 -From v0.1.0
+pwsh -File scripts/release.ps1 -Version 0.2.0
+```
+
+`changelog.ps1` adds a section for the version to `CHANGELOG.md`, one line per commit since the previous release's tag
+(for the first release, pass the first commit). Edit it and commit. `release.ps1` then builds from a clean
+`build\dist` with the version stamped into `intarsia.exe`, and packages `build\dist\intarsia-<version>.zip` with both
+configs, this README, the license and the changelog, and `build\dist\release-notes.md` with the version's section. It
+refuses uncommitted changes and a version the changelog lacks. The Release workflow runs the tests and both steps on
+`windows-2022`, then `scripts/publish-release.ps1` publishes the zip as the GitHub release `v<version>`.
+
 ## Run
 
 The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.css` beside it for how it
@@ -88,7 +102,8 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `config/basic/` | a plain config and style that need nothing but Windows |
 | `config/example/` | a config and style that document every key and selector |
 | `tests/` | unit tests mirroring `src/`, and `tests/stress/` for the stress tests' IPC server |
-| `scripts/` | build, test, stress test and lint |
+| `CHANGELOG.md` | what each release changed |
+| `scripts/` | build, test, stress test, lint, changelog and release |
 
 ## License
 

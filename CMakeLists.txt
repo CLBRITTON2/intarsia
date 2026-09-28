@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
-project(intarsia LANGUAGES CXX)
+project(intarsia LANGUAGES CXX RC)
+
+# The version intarsia.exe's version resource carries. scripts/release.ps1 sets it, every other build stays 0.0.0.
+set(INTARSIA_VERSION "0.0.0" CACHE STRING "Version stamped into intarsia.exe, as major.minor.patch")
+if(NOT INTARSIA_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+  message(FATAL_ERROR "INTARSIA_VERSION must be major.minor.patch, got '${INTARSIA_VERSION}'")
+endif()
+set(INTARSIA_VERSION_MAJOR ${CMAKE_MATCH_1})
+set(INTARSIA_VERSION_MINOR ${CMAKE_MATCH_2})
+set(INTARSIA_VERSION_PATCH ${CMAKE_MATCH_3})
+configure_file(src/intarsia.rc.in ${CMAKE_BINARY_DIR}/intarsia.rc @ONLY)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -104,7 +114,7 @@ if(INTARSIA_PRECOMPILE_HEADERS)
   target_precompile_headers(intarsia_core PRIVATE ${INTARSIA_PRECOMPILED_HEADERS})
 endif()
 
-add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest)
+add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest ${CMAKE_BINARY_DIR}/intarsia.rc)
 target_link_libraries(intarsia PRIVATE intarsia_core)
 # 0x800 is LOAD_LIBRARY_SEARCH_SYSTEM32: the loader resolves the executable's imports (d2d1, winhttp, the C runtime)
 # from System32 only, never from a DLL planted beside it.
