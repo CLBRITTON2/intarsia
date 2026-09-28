@@ -39,18 +39,28 @@ IconText EmptyIconText();
 // the range takes the nearest end.
 const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32_t percent);
 
-// One line of text in render.foreground, laid out again only when the text changes.
+// What a module shows as one line: its icon, the text after it, either of them empty.
+struct ModuleText {
+    std::wstring icon;
+    std::wstring text;
+    bool         alert; // drawn in the alert color, for a value that needs attention such as a failed command
+
+    bool         operator==(const ModuleText&) const = default;
+};
+
+// A ModuleText, laid out again only when it changes. The text draws in render.alert for an alert, else in
+// render.foreground.
 class TextLine {
   public:
-    // Whether the text differs from the last update's.
-    bool        Update(const RenderContext& render, std::wstring text);
+    // Whether content differs from the last update's.
+    bool        Update(const RenderContext& render, ModuleText content);
     D2D1_SIZE_F Size() const;
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
 
   private:
-    std::wstring _shown; // what _text holds, once laid out
-    bool         _laidOut = false;
-    IconText     _text    = EmptyIconText();
+    ModuleText _shown{.icon = {}, .text = {}, .alert = false}; // what _text holds, once laid out
+    bool       _laidOut = false;
+    IconText   _text    = EmptyIconText();
 };
 
 template <typename... Values>

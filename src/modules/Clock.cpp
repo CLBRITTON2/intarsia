@@ -17,7 +17,7 @@ Clock::Clock(TextModuleConfig config) : TextModule(std::move(config)) {
 }
 
 ModuleText Clock::Format(const std::string& spec) {
-    return ModuleText{.text = ToWide(FormatLocalTime(spec, std::chrono::system_clock::now())), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatLocalTime(spec, std::chrono::system_clock::now())), .alert = false};
 }
 
 std::string FormatLocalTime(const std::string& format, std::chrono::system_clock::time_point now) {

@@ -54,5 +54,5 @@ ModuleText Cpu::Format(const std::string& spec) {
         _previous              = current;
         _sampledAt             = now;
     }
-    return ModuleText{.text = ToWide(FormatValue(spec, _usage)), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatValue(spec, _usage)), .alert = false};
 }

@@ -8,7 +8,7 @@
 #include <string_view>
 #include <utility>
 
-Network::Network(NetworkConfig config, const INetwork& network) : _config(std::move(config)), _network(network), _shown{.icon = {}, .text = {}}, _text(EmptyIconText()) {
+Network::Network(NetworkConfig config, const INetwork& network) : _config(std::move(config)), _network(network) {
     const std::vector<Placeholder> samples = NetworkPlaceholders(NetworkState{.link                   = NetworkLink::Wifi,
                                                                               .interfaceName          = L"Wi-Fi",
                                                                               .ssid                   = L"home",
@@ -25,22 +25,15 @@ Network::Network(NetworkConfig config, const INetwork& network) : _config(std::m
 }
 
 bool Network::Layout(const RenderContext& render) {
-    NetworkText shown = FormatNetwork(_config, _network.State());
-    if (_laidOut && shown == _shown) {
-        return false;
-    }
-    _text    = shown.text.empty() && shown.icon.empty() ? EmptyIconText() : LayOutIconText(render, shown.icon, shown.text);
-    _shown   = std::move(shown);
-    _laidOut = true;
-    return true;
+    return _line.Update(render, FormatNetwork(_config, _network.State()));
 }
 
 D2D1_SIZE_F Network::Size() const {
-    return _text.size;
+    return _line.Size();
 }
 
 void Network::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    DrawIconText(render, origin, _text, render.foreground);
+    _line.Draw(render, origin);
 }
 
 std::optional<std::uint32_t> Network::MillisecondsUntilChange() const {
@@ -81,12 +74,15 @@ std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {
             {.name = "up", .value = FormatRate(state.sentBytesPerSecond)}};
 }
 
-NetworkText FormatNetwork(const NetworkConfig& config, const NetworkState& state) {
+ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state) {
     switch (state.link) {
-        case NetworkLink::None: return NetworkText{.icon = config.iconDisconnected, .text = ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state)))};
-        case NetworkLink::Ethernet: return NetworkText{.icon = config.iconEthernet, .text = ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state)))};
+        case NetworkLink::None:
+            return ModuleText{.icon = config.iconDisconnected, .text = ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state))), .alert = false};
+        case NetworkLink::Ethernet:
+            return ModuleText{.icon = config.iconEthernet, .text = ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state))), .alert = false};
         case NetworkLink::Wifi:
-            return NetworkText{.icon = WifiIcon(config.iconsWifi, state.signalPercent), .text = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state)))};
+            return ModuleText{
+                .icon = WifiIcon(config.iconsWifi, state.signalPercent), .text = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))), .alert = false};
     }
     throw std::invalid_argument(std::format("unknown network link {}", static_cast<std::int32_t>(state.link)));
 }

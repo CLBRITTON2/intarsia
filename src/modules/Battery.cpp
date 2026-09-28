@@ -6,8 +6,7 @@
 #include <stdexcept>
 #include <utility>
 
-Battery::Battery(BatteryConfig config, const IBattery& battery) :
-    _config(std::move(config)), _battery(battery), _shown{.icon = {}, .text = {}, .alert = false}, _text(EmptyIconText()) {
+Battery::Battery(BatteryConfig config, const IBattery& battery) : _config(std::move(config)), _battery(battery) {
     const std::vector<Placeholder> samples = BatteryPlaceholders(BatteryState{.charge = ChargeState::Discharging, .percent = 80, .secondsLeft = 3600, .healthPercent = 90});
     RequirePlaceholders("battery format_discharging", _config.formatDischarging, samples);
     RequirePlaceholders("battery format_charging", _config.formatCharging, samples);
@@ -18,22 +17,15 @@ Battery::Battery(BatteryConfig config, const IBattery& battery) :
 }
 
 bool Battery::Layout(const RenderContext& render) {
-    BatteryText shown = FormatBattery(_config, _battery.State());
-    if (_laidOut && shown == _shown) {
-        return false;
-    }
-    _text    = shown.text.empty() && shown.icon.empty() ? EmptyIconText() : LayOutIconText(render, shown.icon, shown.text);
-    _shown   = std::move(shown);
-    _laidOut = true;
-    return true;
+    return _line.Update(render, FormatBattery(_config, _battery.State()));
 }
 
 D2D1_SIZE_F Battery::Size() const {
-    return _text.size;
+    return _line.Size();
 }
 
 void Battery::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    DrawIconText(render, origin, _text, _shown.alert ? render.alert : render.foreground);
+    _line.Draw(render, origin);
 }
 
 std::optional<std::uint32_t> Battery::MillisecondsUntilChange() const {
@@ -72,19 +64,19 @@ std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {
             {.name = "health", .value = state.healthPercent.has_value() ? std::to_string(*state.healthPercent) : std::string()}};
 }
 
-BatteryText FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state) {
+ModuleText FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state) {
     if (!state.has_value()) {
-        return BatteryText{.icon = {}, .text = {}, .alert = false};
+        return ModuleText{.icon = {}, .text = {}, .alert = false};
     }
     switch (state->charge) {
         case ChargeState::Discharging:
-            return BatteryText{.icon  = LevelIcon(config.icons, state->percent),
-                               .text  = ToWide(FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state))),
-                               .alert = state->percent <= config.alertAtPercent};
+            return ModuleText{.icon  = LevelIcon(config.icons, state->percent),
+                              .text  = ToWide(FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state))),
+                              .alert = state->percent <= config.alertAtPercent};
         case ChargeState::Charging:
-            return BatteryText{.icon = config.iconCharging, .text = ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))), .alert = false};
+            return ModuleText{.icon = config.iconCharging, .text = ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))), .alert = false};
         case ChargeState::Plugged:
-            return BatteryText{.icon = config.iconPlugged, .text = ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))), .alert = false};
+            return ModuleText{.icon = config.iconPlugged, .text = ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))), .alert = false};
     }
     throw std::invalid_argument(std::format("unknown battery charge {}", static_cast<std::int32_t>(state->charge)));
 }

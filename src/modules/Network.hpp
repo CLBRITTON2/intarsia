@@ -11,14 +11,6 @@
 #include <string>
 #include <vector>
 
-// What the network module shows for the state as it is.
-struct NetworkText {
-    std::wstring icon;
-    std::wstring text;
-
-    bool         operator==(const NetworkText&) const = default;
-};
-
 // The interface the default route leaves through: its format and icon for Wi-Fi (the icon by signal strength),
 // Ethernet or no connection. Input does nothing unless the config binds actions.
 class Network final : public IModule {
@@ -41,15 +33,13 @@ class Network final : public IModule {
   private:
     NetworkConfig   _config;
     const INetwork& _network;
-    NetworkText     _shown; // what _text holds, once laid out
-    bool            _laidOut = false;
-    IconText        _text;
+    TextLine        _line;
 };
 
 // The values every network format can name, from the state.
 std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state);
 
-NetworkText              FormatNetwork(const NetworkConfig& config, const NetworkState& state);
+ModuleText               FormatNetwork(const NetworkConfig& config, const NetworkState& state);
 
 // The Wi-Fi icon for a signal: icons split 0 to 100 evenly, weakest first. The strongest while the signal is unknown.
 const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent);

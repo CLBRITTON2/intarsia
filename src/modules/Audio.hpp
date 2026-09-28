@@ -9,14 +9,6 @@
 #include <optional>
 #include <string>
 
-// What the audio module shows for the output as it is.
-struct AudioText {
-    std::wstring icon;
-    std::wstring text;
-
-    bool         operator==(const AudioText&) const = default;
-};
-
 // The default output device's volume through format, or format_muted and icon_muted while it is muted. A click
 // toggles mute and a scroll changes the volume by step, unless the config binds those inputs to actions. Shows
 // nothing while there is no output device.
@@ -40,16 +32,14 @@ class Audio final : public IModule {
   private:
     AudioConfig _config;
     IAudio&     _audio;
-    AudioText   _shown; // what _text holds, once laid out
-    bool        _laidOut = false;
-    IconText    _text;
+    TextLine    _line;
 };
 
 // The volume as the formats get it: a whole percent.
 std::int32_t VolumePercent(float volume);
 
 // The icon and text for output, empty while there is none.
-AudioText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output);
+ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output);
 
 // The volume one scroll notch away: stepPercent up or down, landing on a whole percent within 0 to 1.
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction);

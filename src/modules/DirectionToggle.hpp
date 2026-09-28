@@ -31,9 +31,7 @@ class DirectionToggle final : public IModule {
   private:
     TilingDirectionConfig _config;
     IWindowManager&       _windowManager;
-    std::wstring          _shown; // what _glyph holds, once laid out
-    bool                  _laidOut = false;
-    IconText              _glyph;
+    TextLine              _glyph;
 };
 
 // What the module shows for a direction.

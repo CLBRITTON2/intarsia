@@ -7,14 +7,6 @@
 #include <cstdint>
 #include <string>
 
-// What a text module shows after its icon.
-struct ModuleText {
-    std::wstring text;
-    bool         alert; // drawn in the alert color, for a value that needs attention such as a failed command
-
-    bool         operator==(const ModuleText& other) const = default;
-};
-
 // A module that shows its icon and one formatted value, redrawn on each interval tick: clock, cpu, memory, custom. A
 // subclass supplies only the value, formatted with whichever spec it is given: format on the bar, tooltip on hover.
 class TextModule : public IModule {
@@ -36,12 +28,10 @@ class TextModule : public IModule {
 
     const TextModuleConfig& Settings() const;
 
-    // The module's current value run through spec.
+    // The module's icon and its current value run through spec.
     virtual ModuleText Format(const std::string& spec) = 0;
 
   private:
     TextModuleConfig _config;
-    ModuleText       _shown; // what _text holds, once laid out
-    bool             _laidOut = false;
-    IconText         _text;
+    TextLine         _line;
 };

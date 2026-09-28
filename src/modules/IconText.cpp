@@ -87,12 +87,12 @@ const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32
     return icons[static_cast<size_t>(index)];
 }
 
-bool TextLine::Update(const RenderContext& render, std::wstring text) {
-    if (_laidOut && text == _shown) {
+bool TextLine::Update(const RenderContext& render, ModuleText content) {
+    if (_laidOut && content == _shown) {
         return false;
     }
-    _text    = LayOutIconText(render, L"", text);
-    _shown   = std::move(text);
+    _text    = LayOutIconText(render, content.icon, content.text);
+    _shown   = std::move(content);
     _laidOut = true;
     return true;
 }
@@ -102,5 +102,5 @@ D2D1_SIZE_F TextLine::Size() const {
 }
 
 void TextLine::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    DrawIconText(render, origin, _text, render.foreground);
+    DrawIconText(render, origin, _text, _shown.alert ? render.alert : render.foreground);
 }

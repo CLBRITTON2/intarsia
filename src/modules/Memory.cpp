@@ -29,5 +29,5 @@ Memory::Memory(TextModuleConfig config) : TextModule(std::move(config)) {
 }
 
 ModuleText Memory::Format(const std::string& spec) {
-    return ModuleText{.text = ToWide(FormatValue(spec, BytesToGibibytes(UsedPhysicalBytes()))), .alert = false};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatValue(spec, BytesToGibibytes(UsedPhysicalBytes()))), .alert = false};
 }

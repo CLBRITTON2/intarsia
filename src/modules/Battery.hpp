@@ -11,15 +11,6 @@
 #include <string>
 #include <vector>
 
-// What the battery module shows for the state as it is.
-struct BatteryText {
-    std::wstring icon;
-    std::wstring text;
-    bool         alert;
-
-    bool         operator==(const BatteryText&) const = default;
-};
-
 // The battery's charge: its format and icon while discharging (the icon by charge), charging or plugged in, with the
 // text in the module's .alert color while discharging at or under alert_at. Shows nothing on a machine with no
 // battery. Input does nothing unless the config binds actions.
@@ -43,15 +34,13 @@ class Battery final : public IModule {
   private:
     BatteryConfig   _config;
     const IBattery& _battery;
-    BatteryText     _shown; // what _text holds, once laid out
-    bool            _laidOut = false;
-    IconText        _text;
+    TextLine        _line;
 };
 
 // The values every battery format can name, from the state.
 std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state);
 
-BatteryText              FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state);
+ModuleText               FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state);
 
 // Seconds as hours and minutes, "1:05". Empty while Windows has no estimate.
 std::string FormatTimeLeft(std::optional<std::int32_t> seconds);

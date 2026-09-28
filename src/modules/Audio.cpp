@@ -16,7 +16,7 @@ namespace {
 
 } // namespace
 
-Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _audio(audio), _shown{.icon = {}, .text = {}}, _text(EmptyIconText()) {
+Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _audio(audio) {
     const std::vector<Placeholder> samples = AudioPlaceholders(AudioOutput{.device = L"Speakers", .volume = 0.5f, .muted = false});
     RequirePlaceholders("audio format", _config.format, samples);
     RequirePlaceholders("audio format_muted", _config.formatMuted, samples);
@@ -26,22 +26,15 @@ Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _a
 }
 
 bool Audio::Layout(const RenderContext& render) {
-    AudioText shown = FormatAudio(_config, _audio.Output());
-    if (_laidOut && shown == _shown) {
-        return false;
-    }
-    _text    = shown.text.empty() && shown.icon.empty() ? EmptyIconText() : LayOutIconText(render, shown.icon, shown.text);
-    _shown   = std::move(shown);
-    _laidOut = true;
-    return true;
+    return _line.Update(render, FormatAudio(_config, _audio.Output()));
 }
 
 D2D1_SIZE_F Audio::Size() const {
-    return _text.size;
+    return _line.Size();
 }
 
 void Audio::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    DrawIconText(render, origin, _text, render.foreground);
+    _line.Draw(render, origin);
 }
 
 std::optional<std::uint32_t> Audio::MillisecondsUntilChange() const {
@@ -88,12 +81,12 @@ std::int32_t VolumePercent(float volume) {
     return static_cast<std::int32_t>(std::lround(volume * 100.0f));
 }
 
-AudioText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output) {
+ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output) {
     if (!output.has_value()) {
-        return AudioText{.icon = {}, .text = {}};
+        return ModuleText{.icon = {}, .text = {}, .alert = false};
     }
     const std::string& format = output->muted ? config.formatMuted : config.format;
-    return AudioText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output)))};
+    return ModuleText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output))), .alert = false};
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {
