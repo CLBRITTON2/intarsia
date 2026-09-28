@@ -58,7 +58,8 @@ namespace {
     }
 
     TrayIcon Icon(std::intptr_t owner, std::uint32_t id) {
-        return TrayIcon{.owner = owner, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = {}, .pixels = nullptr, .hidden = false};
+        return TrayIcon{
+            .owner = owner, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = {}, .standardTooltip = false, .pixels = nullptr, .hidden = false};
     }
 
 } // namespace
@@ -196,6 +197,28 @@ TEST(NotifyIconProtocol, SetVersionIsKeptPerIcon) {
     ASSERT_EQ(icons.size(), 2u);
     EXPECT_EQ(icons[0].version, static_cast<std::uint32_t>(NOTIFYICON_VERSION_4));
     EXPECT_EQ(icons[1].version, 0u);
+}
+
+TEST(NotifyIconProtocol, ShowTipIsReadOnAddAndOnModifiesThatSetTheTip) {
+    const std::vector<TrayIcon> added = Applied({}, Message(NIM_ADD, 5, 1, NIF_TIP | NIF_SHOWTIP), nullptr);
+    ASSERT_EQ(added.size(), 1u);
+    EXPECT_TRUE(added[0].standardTooltip);
+    // Swapping only the icon keeps the standard tooltip.
+    const std::vector<TrayIcon> iconOnly = Applied(added, Message(NIM_MODIFY, 5, 1, NIF_ICON), nullptr);
+    ASSERT_EQ(iconOnly.size(), 1u);
+    EXPECT_TRUE(iconOnly[0].standardTooltip);
+    const std::vector<TrayIcon> ownTip = Applied(added, Message(NIM_MODIFY, 5, 1, NIF_TIP), nullptr);
+    ASSERT_EQ(ownTip.size(), 1u);
+    EXPECT_FALSE(ownTip[0].standardTooltip);
+}
+
+TEST(NotifyIconProtocol, OnlyVersionFourIconsWithoutTheStandardTooltipDrawTheirOwnPopup) {
+    TrayIcon icon = Icon(5, 1);
+    EXPECT_FALSE(DrawsOwnPopup(icon));
+    icon.version = NOTIFYICON_VERSION_4;
+    EXPECT_TRUE(DrawsOwnPopup(icon));
+    icon.standardTooltip = true;
+    EXPECT_FALSE(DrawsOwnPopup(icon));
 }
 
 TEST(NotifyIconProtocol, TheSamePixelsKeepTheirPointer) {

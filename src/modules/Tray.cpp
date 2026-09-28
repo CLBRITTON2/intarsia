@@ -8,6 +8,15 @@
 #include <iterator>
 #include <utility>
 
+namespace {
+
+    // Icons change as their apps modify them, so the same icon is the same owner and id.
+    bool SameIcon(const TrayIcon& first, const TrayIcon& second) {
+        return first.owner == second.owner && first.id == second.id;
+    }
+
+} // namespace
+
 Tray::Tray(TrayConfig config, ITray& tray, ModuleStyle style) : _config(std::move(config)), _tray(tray), _style(std::move(style)), _toggle(EmptyIconText()) {}
 
 bool Tray::Layout(const RenderContext& render) {
@@ -113,7 +122,12 @@ bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
     const std::optional<size_t> hovered = point.has_value() ? ItemUnder(*point) : std::nullopt;
     const bool                  changed = hovered != _hovered;
     _hovered                            = hovered;
-    if (const Slot* slot = point.has_value() ? SlotAt(*point) : nullptr) {
+    const Slot* slot                    = point.has_value() ? SlotAt(*point) : nullptr;
+    if (_popup.has_value() && (slot == nullptr || !SameIcon(slot->icon, *_popup))) {
+        _tray.ClosePopup(*_popup);
+        _popup.reset();
+    }
+    if (slot != nullptr) {
         _tray.Move(slot->icon);
     }
     return changed;
@@ -124,10 +138,21 @@ const ModuleActions& Tray::Actions() const {
 }
 
 std::optional<std::wstring> Tray::TooltipText() {
-    if (!_hovered.has_value() || *_hovered >= _slots.size() || _slots[*_hovered].icon.tooltip.empty()) {
+    if (!_hovered.has_value() || *_hovered >= _slots.size()) {
         return std::nullopt;
     }
-    return _slots[*_hovered].icon.tooltip;
+    const TrayIcon& icon = _slots[*_hovered].icon;
+    if (DrawsOwnPopup(icon)) {
+        if (!_popup.has_value()) {
+            _tray.OpenPopup(icon);
+            _popup = icon;
+        }
+        return std::nullopt;
+    }
+    if (icon.tooltip.empty()) {
+        return std::nullopt;
+    }
+    return icon.tooltip;
 }
 
 std::optional<D2D1_RECT_F> Tray::TooltipItem() const {

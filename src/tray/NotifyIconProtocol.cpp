@@ -49,6 +49,10 @@ namespace {
         if ((message.flags & NIF_TIP) != 0) {
             icon.tooltip = DrawableTooltip(message.tip);
         }
+        // An app that swaps only its icon may leave NIF_SHOWTIP out without meaning to drop the tooltip.
+        if (message.command == NIM_ADD || (message.flags & NIF_TIP) != 0) {
+            icon.standardTooltip = (message.flags & NIF_SHOWTIP) != 0;
+        }
         if ((message.flags & NIF_ICON) != 0) {
             const bool same = icon.pixels != nullptr && pixels != nullptr && *icon.pixels == *pixels;
             icon.pixels     = same ? icon.pixels : std::move(pixels);
@@ -100,9 +104,16 @@ std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>
             if (updated.size() >= kMaxTrayIcons) {
                 return std::nullopt;
             }
-            updated.push_back(Updated(
-                TrayIcon{.owner = message.owner, .id = message.id, .guid = std::nullopt, .callbackMessage = 0, .version = 0, .tooltip = {}, .pixels = nullptr, .hidden = false},
-                message, std::move(pixels)));
+            updated.push_back(Updated(TrayIcon{.owner           = message.owner,
+                                               .id              = message.id,
+                                               .guid            = std::nullopt,
+                                               .callbackMessage = 0,
+                                               .version         = 0,
+                                               .tooltip         = {},
+                                               .standardTooltip = false,
+                                               .pixels          = nullptr,
+                                               .hidden          = false},
+                                      message, std::move(pixels)));
             return updated;
         case NIM_MODIFY:
             if (!found) {

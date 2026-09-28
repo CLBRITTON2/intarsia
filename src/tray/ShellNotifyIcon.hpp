@@ -39,6 +39,8 @@ class ShellNotifyIcon final : public ITray {
     // Post the icon's input messages to its app. An app running elevated refuses them (UIPI), which is logged.
     void Press(const TrayIcon& icon, TrayButton button) override;
     void Move(const TrayIcon& icon) override;
+    void OpenPopup(const TrayIcon& icon) override;
+    void ClosePopup(const TrayIcon& icon) override;
 
     // The error that stopped the thread, set before failedMessage is posted.
     std::exception_ptr TakeError();
@@ -47,6 +49,7 @@ class ShellNotifyIcon final : public ITray {
     static POINT CursorPosition();
     // ERROR_SUCCESS, or the error of the first message the owner refused.
     static DWORD            PostInput(const TrayIcon& icon, const std::vector<TrayInputMessage>& messages);
+    void                    PostHover(const TrayIcon& icon, std::uint32_t event, POINT cursor);
     static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleCopyData(HWND sender, const COPYDATASTRUCT& data);
@@ -72,7 +75,7 @@ class ShellNotifyIcon final : public ITray {
     // The UI thread's alone, which Press and Move are called on.
     std::optional<TrayClick> _lastClick; // null after a double click, so a third click starts a new pair
     std::optional<POINT>     _lastMove;
-    FailureLog               _moveLog{"tray"};
+    FailureLog               _hoverLog{"tray"};
     // The tray thread's alone.
     HWND       _window   = nullptr;
     HWND       _explorer = nullptr;

@@ -25,12 +25,20 @@ struct TrayIcon {
     std::uint32_t       callbackMessage; // posted to owner on input, 0 for none
     std::uint32_t       version;         // NIM_SETVERSION's, which decides how input is posted
     std::wstring        tooltip;         // safe to draw, may hold line breaks
+    bool                standardTooltip; // NIF_SHOWTIP on the app's last add or modify
     // Null until the app gives an icon that reads. Kept as the same pointer while the pixels stay the same.
     std::shared_ptr<const IconPixels> pixels;
     bool                              hidden; // NIS_HIDDEN
 
     bool                              operator==(const TrayIcon&) const = default;
 };
+
+// Whether the icon's app shows its own popup on hover in place of the tooltip: from version 4, unless it asked for the
+// standard tooltip.
+inline bool DrawsOwnPopup(const TrayIcon& icon) {
+    constexpr std::uint32_t kVersion4 = 4; // NOTIFYICON_VERSION_4
+    return icon.version >= kVersion4 && !icon.standardTooltip;
+}
 
 // The notification area icons apps add, read from the UI thread.
 class ITray {
@@ -47,4 +55,8 @@ class ITray {
     // Tells the icon's app that the cursor moved over it, as the taskbar does. A move that leaves the cursor where the
     // last one did, as the bar reports after every frame, is not told again.
     virtual void Move(const TrayIcon& icon) = 0;
+
+    // Tells an app that draws its own popup (DrawsOwnPopup) that the cursor came to rest on its icon, and that it left.
+    virtual void OpenPopup(const TrayIcon& icon)  = 0;
+    virtual void ClosePopup(const TrayIcon& icon) = 0;
 };

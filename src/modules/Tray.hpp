@@ -31,10 +31,11 @@ class Tray final : public IModule {
     void                         Click(D2D1_POINT_2F point) override;
     void                         RightClick(D2D1_POINT_2F point) override;
     void                         MiddleClick(D2D1_POINT_2F point) override;
-    // Over an icon, also tells its app the cursor moved.
+    // Over an icon, also tells its app the cursor moved. Leaving the icon whose popup is open closes it.
     bool Hover(std::optional<D2D1_POINT_2F> point) override;
     // None: clicks go to the icon under the cursor, or fold and unfold the tray.
-    const ModuleActions&        Actions() const override;
+    const ModuleActions& Actions() const override;
+    // The tooltip of the icon the cursor rests on. An icon whose app draws its own popup has none: its popup opens.
     std::optional<std::wstring> TooltipText() override;
     // The icon under the cursor.
     std::optional<D2D1_RECT_F> TooltipItem() const override;
@@ -69,9 +70,10 @@ class Tray final : public IModule {
     std::vector<Slot> _slots; // empty while fully folded
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.
-    ItemRow               _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
-    std::optional<size_t> _hovered; // the item under the cursor
-    bool                  _laidOut = false;
+    ItemRow                 _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
+    std::optional<size_t>   _hovered; // the item under the cursor
+    std::optional<TrayIcon> _popup;   // the icon whose app's popup is open
+    bool                    _laidOut = false;
 };
 
 // The icons a tray shows: those with pixels that their app has not hidden.

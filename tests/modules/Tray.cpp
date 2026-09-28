@@ -19,7 +19,15 @@ namespace {
     const TrayConfig kConfig{.icon = L">"};
 
     TrayIcon         Icon(std::uint32_t id, std::shared_ptr<const IconPixels> pixels, bool hidden) {
-        return TrayIcon{.owner = 1, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = L"icon", .pixels = std::move(pixels), .hidden = hidden};
+        return TrayIcon{.owner           = 1,
+                                .id              = id,
+                                .guid            = std::nullopt,
+                                .callbackMessage = WM_APP,
+                                .version         = 0,
+                                .tooltip         = L"icon",
+                                .standardTooltip = false,
+                                .pixels          = std::move(pixels),
+                                .hidden          = hidden};
     }
 
     std::shared_ptr<const IconPixels> Pixels() {
@@ -210,6 +218,33 @@ TEST_F(TrayModule, TheIconUnderTheCursorGivesTheTooltip) {
     EXPECT_FALSE(module.Hover(At(module, 60.0f)));
     EXPECT_TRUE(module.Hover(std::nullopt));
     EXPECT_EQ(module.TooltipText(), std::nullopt);
+}
+
+TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeaving) {
+    _tray.icons[0].version = 4;
+    Tray module(kConfig, _tray, TestModuleStyle());
+    module.Layout(_render);
+    module.Click(At(module, module.Size().width / 2.0f));
+    module.Layout(_render);
+
+    module.Hover(At(module, 19.0f));
+    EXPECT_EQ(module.TooltipText(), std::nullopt);
+    // Resting again opens nothing more.
+    EXPECT_EQ(module.TooltipText(), std::nullopt);
+    EXPECT_EQ(_tray.opened, std::vector<std::uint32_t>{1u});
+    module.Hover(At(module, 20.0f));
+    EXPECT_TRUE(_tray.closed.empty());
+
+    // The next icon has the bar's tooltip, and moving to it closes the popup.
+    module.Hover(At(module, 57.0f));
+    EXPECT_EQ(_tray.closed, std::vector<std::uint32_t>{1u});
+    EXPECT_EQ(module.TooltipText(), L"icon");
+
+    module.Hover(At(module, 19.0f));
+    module.TooltipText();
+    module.Hover(std::nullopt);
+    EXPECT_EQ(_tray.opened, (std::vector<std::uint32_t>{1u, 1u}));
+    EXPECT_EQ(_tray.closed, (std::vector<std::uint32_t>{1u, 1u}));
 }
 
 TEST_F(TrayModule, NewIconsAndNewPixelsAreChangesButATooltipIsNot) {

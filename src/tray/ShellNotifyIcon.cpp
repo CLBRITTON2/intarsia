@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <format>
 #include <memory>
 #include <optional>
 #include <span>
@@ -133,13 +134,25 @@ void ShellNotifyIcon::Move(const TrayIcon& icon) {
     if (_lastMove.has_value() && _lastMove->x == cursor.x && _lastMove->y == cursor.y) {
         return;
     }
-    _lastMove         = cursor;
-    const DWORD error = PostInput(icon, TrayInputMessages(icon, {WM_MOUSEMOVE}, cursor));
-    // Logged once per outage: an elevated app would refuse every move across its icon.
+    _lastMove = cursor;
+    PostHover(icon, WM_MOUSEMOVE, cursor);
+}
+
+void ShellNotifyIcon::OpenPopup(const TrayIcon& icon) {
+    PostHover(icon, NIN_POPUPOPEN, CursorPosition());
+}
+
+void ShellNotifyIcon::ClosePopup(const TrayIcon& icon) {
+    PostHover(icon, NIN_POPUPCLOSE, CursorPosition());
+}
+
+// Logged once per outage: an elevated app would refuse every move across its icon.
+void ShellNotifyIcon::PostHover(const TrayIcon& icon, std::uint32_t event, POINT cursor) {
+    const DWORD error = PostInput(icon, TrayInputMessages(icon, {event}, cursor));
     if (error != ERROR_SUCCESS) {
-        _moveLog.Failed("move_failed", Win32Error("PostMessageW(tray move)", HRESULT_FROM_WIN32(error)));
+        _hoverLog.Failed("hover_failed", Win32Error(std::format("PostMessageW(tray event {})", event), HRESULT_FROM_WIN32(error)));
     } else {
-        _moveLog.Succeeded();
+        _hoverLog.Succeeded();
     }
 }
 

@@ -15,7 +15,9 @@ class FakeTray final : public ITray {
 
     std::vector<TrayIcon>      icons;
     std::vector<Pressed>       presses;
-    std::vector<std::uint32_t> moves; // the id of each icon moved over
+    std::vector<std::uint32_t> moves;  // the id of each icon moved over
+    std::vector<std::uint32_t> opened; // the id of each icon whose popup opened
+    std::vector<std::uint32_t> closed;
 
     std::vector<TrayIcon>      Icons() const override {
         return icons;
@@ -27,5 +29,13 @@ class FakeTray final : public ITray {
 
     void Move(const TrayIcon& icon) override {
         moves.push_back(icon.id);
+    }
+
+    void OpenPopup(const TrayIcon& icon) override {
+        opened.push_back(icon.id);
+    }
+
+    void ClosePopup(const TrayIcon& icon) override {
+        closed.push_back(icon.id);
     }
 };
