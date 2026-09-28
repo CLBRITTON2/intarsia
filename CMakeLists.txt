@@ -63,6 +63,8 @@ add_library(intarsia_core STATIC
   src/modules/Placeholders.cpp
   src/network/IpHelper.cpp
   src/modules/CommandPoller.cpp
+  src/modules/Counter.cpp
+  src/modules/CounterSampler.cpp
   src/modules/Custom.cpp
   src/modules/DirectionToggle.cpp
   src/modules/Divider.cpp
@@ -83,6 +85,7 @@ add_library(intarsia_core STATIC
   src/platform/Handle.cpp
   src/platform/Log.cpp
   src/platform/PeerProcess.cpp
+  src/platform/PerformanceCounter.cpp
   src/platform/Process.cpp
   src/platform/Text.cpp
   src/platform/WebSocket.cpp
@@ -100,7 +103,7 @@ add_library(intarsia_core STATIC
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi dwmapi shlwapi)
+target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi dwmapi shlwapi pdh)
 
 # Parsing these headers is most of every file's compile time, so each target parses them once. Off for the lint, since
 # clang-tidy cannot read MSVC's precompiled headers.
@@ -149,6 +152,8 @@ if(BUILD_TESTING)
     tests/modules/BindingModes.cpp
     tests/modules/Clock.cpp
     tests/modules/CommandPoller.cpp
+    tests/modules/Counter.cpp
+    tests/modules/CounterSampler.cpp
     tests/modules/Cpu.cpp
     tests/modules/DirectionToggle.cpp
     tests/modules/IconText.cpp
@@ -170,6 +175,7 @@ if(BUILD_TESTING)
     tests/platform/FrameClock.cpp
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
+    tests/platform/PerformanceCounter.cpp
     tests/platform/Text.cpp
     tests/platform/WebSocket.cpp
     tests/platform/WorkQueue.cpp

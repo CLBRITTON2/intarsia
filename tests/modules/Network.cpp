@@ -57,14 +57,6 @@ TEST(Network, WifiIconsSplitTheSignalRangeEvenly) {
     EXPECT_EQ(WifiIcon({L"only"}, 3), L"only");
 }
 
-TEST(Network, RatesUseSiUnits) {
-    EXPECT_EQ(FormatRate(0.0), "0 B/s");
-    EXPECT_EQ(FormatRate(999.0), "999 B/s");
-    EXPECT_EQ(FormatRate(1250.0), "1.2 kB/s");
-    EXPECT_EQ(FormatRate(3'400'000.0), "3.4 MB/s");
-    EXPECT_EQ(FormatRate(5e12), "5000.0 GB/s");
-}
-
 TEST(Network, TooltipCarriesTheAddressAndRates) {
     FakeNetwork network;
     network.state = Wifi(50);

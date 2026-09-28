@@ -158,7 +158,8 @@ enum class ModuleKind : std::uint8_t {
     Network,
     Battery,
     Tray,
-    Custom
+    Custom,
+    Counter
 };
 
 // A module type as the config's type key and style.css's type selectors write it.
@@ -167,7 +168,7 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 14> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 15> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
@@ -182,6 +183,7 @@ inline constexpr std::array<ModuleTypeName, 14> kModuleTypes{{
     {.name = "battery", .kind = ModuleKind::Battery},
     {.name = "tray", .kind = ModuleKind::Tray},
     {.name = "custom", .kind = ModuleKind::Custom},
+    {.name = "counter", .kind = ModuleKind::Counter},
 }};
 
 enum class WindowManagerKind : std::uint8_t {
@@ -244,6 +246,22 @@ struct CustomConfig {
     TextModuleConfig     text;
 };
 
+// How a counter's instances make one value.
+enum class CounterCombine : std::uint8_t {
+    Sum,
+    Max,
+    Average
+};
+
+// A performance counter sampled every interval, such as GPU use over every 3D engine. The format and tooltip can use
+// {value} (the combined value, a number for a spec such as "{value:.0f}") and {rate} (the value read as bytes per
+// second, as "3.4 MB/s").
+struct CounterConfig {
+    std::wstring     path; // English, local: "\GPU Engine(*engtype_3D)\Utilization Percentage"
+    CounterCombine   combine;
+    TextModuleConfig text;
+};
+
 // The default output device's volume. The formats and tooltip can use {volume} (a whole percent) and {device} (its
 // name).
 struct AudioConfig {
@@ -292,7 +310,8 @@ struct TrayConfig {
 };
 
 // The settings from a module's table: workspaces, windows, binding_mode and divider have none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig, TrayConfig>;
+using ModuleSettings =
+    std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig, TrayConfig, CounterConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {

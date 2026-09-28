@@ -36,10 +36,10 @@ return {
     },
 
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
-    -- tiling_direction, divider, cpu, memory, audio, network, battery, tray or custom. One type can appear under several names with different
-    -- settings, such as a second clock with its own format.
+    -- tiling_direction, divider, cpu, memory, audio, network, battery, tray, custom or counter. One type can appear
+    -- under several names with different settings, such as a second clock with its own format.
     --
-    -- clock, window, cpu, memory, audio, network, battery and custom take optional on_click, on_right_click,
+    -- clock, window, cpu, memory, audio, network, battery, custom and counter take optional on_click, on_right_click,
     -- on_middle_click, on_scroll_up and on_scroll_down actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
     -- config loads), and it starts without a shell, so arguments reach it exactly as written.
     -- { window_manager = "focus --next-workspace" } sends the window manager a command in its own syntax instead,
@@ -69,6 +69,9 @@ return {
         cpu = {
             type = "cpu",
             format = "{usage}%", -- {usage} is a whole percent
+            -- {ghz} is the current clock speed as a double, {max_core} the busiest logical processor as a whole percent,
+            -- and {cores} every logical processor's usage, four to a line
+            tooltip = "Speed {ghz:.2f} GHz\n{cores}",
             icon = "\u{F4BC}",
             interval = 1,
             on_click = { "C:\\Windows\\System32\\Taskmgr.exe" },
@@ -76,6 +79,8 @@ return {
         memory = {
             type = "memory",
             format = "{used:.1f} GB", -- {used} is gibibytes in use, as a double
+            -- {total}, {available}, {cached}, {committed} and {commit_limit} are gibibytes too, {percent} the share in use
+            tooltip = "{used:.1f} of {total:.0f} GB ({percent}%)\nCached {cached:.1f} GB\nCommitted {committed:.1f} of {commit_limit:.0f} GB",
             icon = "\u{EFC5}",
             interval = 1,
             on_click = { "C:\\Windows\\System32\\resmon.exe" },
@@ -156,6 +161,20 @@ return {
         --     format = "{text}", -- {text} is the output's text, as a string
         --     icon = "",
         --     interval = 900,
+        -- },
+        --
+        -- A counter module samples a Windows performance counter every interval, by its English path (as typeperf
+        -- -q lists them), on this machine only. A * instance matches every instance, following them as they come and
+        -- go, and combine makes them one value: sum, max or average (0 while none exist). The format and tooltip can
+        -- use {value} (a number, as {value:.0f}) and {rate} (the value read as bytes per second, as "3.4 MB/s"). A
+        -- path this machine has no counter for stops the config from loading. Add "gpu" to a list to show it.
+        -- gpu = {
+        --     type = "counter",
+        --     counter = "\\GPU Engine(*engtype_3D)\\Utilization Percentage",
+        --     combine = "sum",
+        --     format = "{value:.0f}%",
+        --     icon = "",
+        --     interval = 2,
         -- },
     },
 }

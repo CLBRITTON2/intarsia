@@ -61,3 +61,11 @@ TEST(Placeholders, ConfigErrorsListTheNamesAFormatCanUse) {
                 testing::ThrowsMessage<ConfigError>(
                     testing::HasSubstr("network format_wifi '{essid}' is not a valid format: {essid} is not a value this format has. It can use {ssid}, {signal}, {rate}")));
 }
+
+TEST(Placeholders, RatesUseSiUnits) {
+    EXPECT_EQ(FormatRate(0.0), "0 B/s");
+    EXPECT_EQ(FormatRate(999.0), "999 B/s");
+    EXPECT_EQ(FormatRate(1250.0), "1.2 kB/s");
+    EXPECT_EQ(FormatRate(3'400'000.0), "3.4 MB/s");
+    EXPECT_EQ(FormatRate(5e12), "5000.0 GB/s");
+}

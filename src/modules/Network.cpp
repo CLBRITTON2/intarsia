@@ -9,7 +9,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -99,15 +98,4 @@ const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::option
         return icons.back();
     }
     return LevelIcon(icons, *signalPercent);
-}
-
-std::string FormatRate(double bytesPerSecond) {
-    constexpr std::array<std::string_view, 4> kUnits{"B/s", "kB/s", "MB/s", "GB/s"};
-    double                                    value = bytesPerSecond;
-    size_t                                    unit  = 0;
-    while (value >= 1000.0 && unit + 1 < kUnits.size()) {
-        value /= 1000.0;
-        ++unit;
-    }
-    return unit == 0 ? std::format("{:.0f} {}", value, kUnits[unit]) : std::format("{:.1f} {}", value, kUnits[unit]);
 }

@@ -26,5 +26,8 @@ bool FormatNames(std::string_view format, std::string_view name);
 // naming the key and the names the format may use.
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples);
 
+// A rate in SI units with one decimal, as "850 B/s", "1.2 kB/s" or "3.4 MB/s".
+std::string FormatRate(double bytesPerSecond);
+
 // RequirePlaceholders for a format the config may leave out, such as a tooltip.
 void RequireOptionalPlaceholders(std::string_view key, const std::optional<std::string>& format, const std::vector<Placeholder>& samples);

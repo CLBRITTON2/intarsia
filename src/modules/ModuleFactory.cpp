@@ -3,6 +3,7 @@
 #include "modules/Audio.hpp"
 #include "modules/BindingModes.hpp"
 #include "modules/Clock.hpp"
+#include "modules/Counter.hpp"
 #include "modules/Cpu.hpp"
 #include "modules/Custom.hpp"
 #include "modules/Battery.hpp"
@@ -57,6 +58,7 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), RequireSource(sources.battery, instance));
         case ModuleKind::Tray: return std::make_unique<Tray>(RequireSettings<TrayConfig>(instance), RequireSource(sources.tray, instance), instance.style);
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
+        case ModuleKind::Counter: return std::make_unique<Counter>(RequireSettings<CounterConfig>(instance), sources.counterSamplers.For(instance.name));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));
 }

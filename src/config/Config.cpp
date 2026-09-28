@@ -2,6 +2,7 @@
 
 #include "config/Style.hpp"
 #include "platform/Errors.hpp"
+#include "platform/PerformanceCounter.hpp"
 #include "platform/Text.hpp"
 
 #include <lauxlib.h>
@@ -262,6 +263,7 @@ namespace {
     TextModuleConfig ReadTextModuleConfig(const TableReader& module);
     WindowConfig     ReadWindowConfig(const TableReader& window);
     CustomConfig     ReadCustomConfig(const TableReader& module);
+    CounterConfig    ReadCounterConfig(const TableReader& module);
     AudioConfig      ReadAudioConfig(const TableReader& module);
     NetworkConfig    ReadNetworkConfig(const TableReader& module);
     BatteryConfig    ReadBatteryConfig(const TableReader& module);
@@ -273,6 +275,7 @@ namespace {
             case ModuleKind::Memory: return ReadTextModuleConfig(module);
             case ModuleKind::Window: return ReadWindowConfig(module);
             case ModuleKind::Custom: return ReadCustomConfig(module);
+            case ModuleKind::Counter: return ReadCounterConfig(module);
             case ModuleKind::Audio: return ReadAudioConfig(module);
             case ModuleKind::Network: return ReadNetworkConfig(module);
             case ModuleKind::Battery: return ReadBatteryConfig(module);
@@ -410,6 +413,9 @@ namespace {
         if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
             return &custom->text.actions;
         }
+        if (const auto* counter = std::get_if<CounterConfig>(&settings)) {
+            return &counter->text.actions;
+        }
         return nullptr;
     }
 
@@ -460,6 +466,37 @@ namespace {
                             .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")),
                             .output  = ParseCustomOutput(module, "output"),
                             .text    = ReadTextFields(module)};
+    }
+
+    CounterCombine ParseCounterCombine(const TableReader& module, std::string_view key) {
+        const std::string value = module.String(key);
+        if (value == "sum")
+            return CounterCombine::Sum;
+        if (value == "max")
+            return CounterCombine::Max;
+        if (value == "average")
+            return CounterCombine::Average;
+        throw module.Error(std::format("{} must be one of sum, max, average, got '{}'", module.KeyPath(key), value));
+    }
+
+    // Added to a query of its own here, so a path this system has no counter for stops the load rather than the bar.
+    // Only local counters: another machine's would have the bar open a network connection.
+    std::wstring ReadCounterPath(const TableReader& module, std::string_view key) {
+        const std::string path = module.String(key);
+        if (!path.starts_with('\\') || path.starts_with("\\\\")) {
+            throw module.Error(
+                std::format(R"({} must be a local counter path starting with one backslash, as "\\Processor(_Total)\\% Processor Time", got '{}')", module.KeyPath(key), path));
+        }
+        std::wstring wide = ToWide(path);
+        try {
+            const PerformanceCounter counter(wide);
+        } catch (const PdhError& error) { throw module.Error(std::format("{} names no counter this system has: {}", module.KeyPath(key), error.what())); }
+        return wide;
+    }
+
+    CounterConfig ReadCounterConfig(const TableReader& module) {
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "counter", "combine", "format", "icon", "interval"}));
+        return CounterConfig{.path = ReadCounterPath(module, "counter"), .combine = ParseCounterCombine(module, "combine"), .text = ReadTextFields(module)};
     }
 
     AudioConfig ReadAudioConfig(const TableReader& module) {

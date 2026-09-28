@@ -133,7 +133,8 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged), _frames(_control, kAnimationFrame, kFrameClockFailed),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
-    _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)) {
+    _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
+    _counterSamplers(std::make_unique<CounterSamplers>(*_config, _changes)) {
     MatchSourcesToConfig();
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
@@ -149,6 +150,7 @@ App::~App() {
     _network.reset();
     _audio.reset();
     _windowIcons.reset();
+    _counterSamplers.reset();
     _commandPollers.reset();
     _windowManager.reset();
     _watcher.reset();
@@ -256,14 +258,15 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
     try {
         for (const BarPlacement& placement : _placements) {
             _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
-                                                  ModuleSources{.windowManager  = *_windowManager,
-                                                                .commandPollers = *_commandPollers,
-                                                                .windowIcons    = _windowIcons.get(),
-                                                                .audio          = _audio.get(),
-                                                                .network        = _network.get(),
-                                                                .battery        = _battery.get(),
-                                                                .tray           = _tray.get(),
-                                                                .monitor        = placement.monitor},
+                                                  ModuleSources{.windowManager   = *_windowManager,
+                                                                .commandPollers  = *_commandPollers,
+                                                                .counterSamplers = *_counterSamplers,
+                                                                .windowIcons     = _windowIcons.get(),
+                                                                .audio           = _audio.get(),
+                                                                .network         = _network.get(),
+                                                                .battery         = _battery.get(),
+                                                                .tray            = _tray.get(),
+                                                                .monitor         = placement.monitor},
                                                   _launcher, _frames, placement, AppBarRouteForTray(), _state, _control, kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
@@ -299,12 +302,14 @@ void App::HandleConfigChanged() {
 void App::ReloadConfig() {
     auto config = std::make_unique<Config>(LoadConfig(_configPath));
     _bars.clear();
+    _counterSamplers.reset();
     _commandPollers.reset();
     // Reset before creating the replacement: the native backend allows one instance at a time.
     _windowManager.reset();
-    _config         = std::move(config);
-    _windowManager  = CreateWindowManager(_config->windowManager, _changes, _glazeWmPort);
-    _commandPollers = std::make_unique<CommandPollers>(*_config, _changes);
+    _config          = std::move(config);
+    _windowManager   = CreateWindowManager(_config->windowManager, _changes, _glazeWmPort);
+    _commandPollers  = std::make_unique<CommandPollers>(*_config, _changes);
+    _counterSamplers = std::make_unique<CounterSamplers>(*_config, _changes);
     MatchSourcesToConfig();
     // A pending device recovery builds the bars from this config once it has a device.
     if (!_recovering) {

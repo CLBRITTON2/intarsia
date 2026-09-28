@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -313,7 +314,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
                 ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, "
-                                "network, battery, tray, custom"));
+                                "network, battery, tray, custom, counter"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -491,6 +492,35 @@ TEST(Config, CustomOutputIsTextOrJson) {
                 R"({ "hello" })", R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", format = "{text}", icon = "", interval = 30 },)"));
         },
         ConfigErrorWith("modules.hello.output must be one of text, json, got 'xml'"));
+}
+
+TEST(Config, CounterModulesReadTheirPathAndCombine) {
+    const Config         config  = LoadText(WithRightModules(
+        R"({ "gpu" })", R"(        gpu = { type = "counter", counter = "\\Processor(*)\\% Processor Time", combine = "max", format = "{value:.0f}%", icon = "", interval = 2 },)"));
+    const CounterConfig& counter = SettingsOf<CounterConfig>(config.modules.right, 0);
+    EXPECT_EQ(counter.path, L"\\Processor(*)\\% Processor Time");
+    EXPECT_EQ(counter.combine, CounterCombine::Max);
+    EXPECT_EQ(counter.text.interval, std::chrono::seconds(2));
+}
+
+TEST(Config, CounterPathsMustNameALocalCounterThisSystemHas) {
+    const auto load = [](std::string_view path) {
+        return LoadText(WithRightModules(
+            R"({ "c" })", std::format(R"(        c = {{ type = "counter", counter = "{}", combine = "sum", format = "{{value}}", icon = "", interval = 1 }},)", path)));
+    };
+    EXPECT_THAT([&load] { return load(R"(\\No Such Object\\Nothing)"); }, ConfigErrorWith("modules.c.counter names no counter this system has: PdhAddEnglishCounterW"));
+    EXPECT_THAT([&load] { return load(R"(\\Processor(_Total)\\No Such Counter)"); }, ConfigErrorWith("modules.c.counter names no counter this system has"));
+    EXPECT_THAT([&load] { return load(R"(Processor(_Total)\\% Processor Time)"); }, ConfigErrorWith("modules.c.counter must be a local counter path"));
+    EXPECT_THAT([&load] { return load(R"(\\\\otherhost\\Processor(_Total)\\% Processor Time)"); }, ConfigErrorWith("modules.c.counter must be a local counter path"));
+}
+
+TEST(Config, CounterCombineIsSumMaxOrAverage) {
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithRightModules(
+                R"({ "c" })", R"(        c = { type = "counter", counter = "\\Memory\\Available MBytes", combine = "median", format = "{value}", icon = "", interval = 1 },)"));
+        },
+        ConfigErrorWith("modules.c.combine must be one of sum, max, average, got 'median'"));
 }
 
 TEST(Config, TheConfigCannotReadFiles) {

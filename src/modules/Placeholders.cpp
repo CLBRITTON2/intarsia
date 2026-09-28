@@ -3,6 +3,7 @@
 #include "config/Config.hpp"
 
 #include <algorithm>
+#include <array>
 #include <format>
 #include <functional>
 
@@ -79,6 +80,17 @@ bool FormatNames(std::string_view format, std::string_view name) {
     bool names = false;
     WalkFormat(format, [](std::string_view) {}, [&names, name](std::string_view field, std::string_view) { names = names || field == name; });
     return names;
+}
+
+std::string FormatRate(double bytesPerSecond) {
+    constexpr std::array<std::string_view, 4> kUnits{"B/s", "kB/s", "MB/s", "GB/s"};
+    double                                    value = bytesPerSecond;
+    size_t                                    unit  = 0;
+    while (value >= 1000.0 && unit + 1 < kUnits.size()) {
+        value /= 1000.0;
+        ++unit;
+    }
+    return unit == 0 ? std::format("{:.0f} {}", value, kUnits[unit]) : std::format("{:.1f} {}", value, kUnits[unit]);
 }
 
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples) {

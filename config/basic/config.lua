@@ -13,7 +13,7 @@ return {
 
     modules_left = { "title" },
     modules_center = { "clock" },
-    modules_right = { "tray", "cpu", "memory", "volume", "battery" },
+    modules_right = { "tray", "cpu", "memory", "disk", "volume", "battery" },
 
     layouts = {},
 
@@ -29,6 +29,14 @@ return {
         tray = { type = "tray", icon = "\u{E76C}" },
         cpu = { type = "cpu", format = "{usage}%", icon = "\u{E950}", interval = 2 },
         memory = { type = "memory", format = "{used:.1f} GB", icon = "\u{E964}", interval = 2 },
+        disk = {
+            type = "counter",
+            counter = "\\PhysicalDisk(_Total)\\Disk Bytes/sec",
+            combine = "sum",
+            format = "{rate}",
+            icon = "\u{EDA2}",
+            interval = 2,
+        },
         volume = {
             type = "audio",
             format = "{volume}%",
