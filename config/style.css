@@ -137,7 +137,6 @@ divider.module {
 
 #tray .icon {
     font-size: 16px;
-    color: var(--rose);
     transition: transform 300ms ease;
 }
 
@@ -173,14 +172,15 @@ divider.module {
     padding: 0 3px;
 }
 
-#tiling .icon {
+/* Icons cycle rose, magenta, cyan from left to right: date, tray, tiling, net, cpu, memory, volume, battery. */
+#date .icon, #net .icon, #volume .icon {
+    color: var(--rose);
+}
+
+#tray .icon, #cpu .icon, #battery .icon {
     color: var(--magenta);
 }
 
-#date .icon, #memory .icon {
-    color: var(--magenta);
-}
-
-#cpu .icon, #volume .icon, #battery .icon {
+#tiling .icon, #memory .icon {
     color: var(--cyan);
 }
