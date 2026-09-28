@@ -320,6 +320,7 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .alert         = _brushes->Get(style.alertColor),
                          .warning       = {.text = _brushes->Get(style.warning.text), .icon = _brushes->Get(style.warning.icon)},
                          .critical      = {.text = _brushes->Get(style.critical.text), .icon = _brushes->Get(style.critical.icon)},
+                         .muted         = {.text = _brushes->Get(style.muted.text), .icon = _brushes->Get(style.muted.icon)},
                          .brushes       = _brushes.get(),
                          .boxHeightDips = BoxCrossLength()};
 }

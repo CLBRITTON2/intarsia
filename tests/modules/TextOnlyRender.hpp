@@ -29,6 +29,7 @@ struct TextOnlyRender {
                              .alert         = nullptr,
                              .warning       = {.text = nullptr, .icon = nullptr},
                              .critical      = {.text = nullptr, .icon = nullptr},
+                             .muted         = {.text = nullptr, .icon = nullptr},
                              .brushes       = nullptr,
                              .boxHeightDips = 24.0f};
     }

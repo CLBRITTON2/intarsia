@@ -126,6 +126,7 @@ struct ModuleStyle {
     // A battery discharging at or under warning_at (.warning) and critical_at (.critical).
     StateColors warning;
     StateColors critical;
+    StateColors muted; // an audio output that is muted (.muted)
     IconStyle   icon;
     // The box of a windows or binding_mode item, and of a focused window. Workspaces are focused, occupied (has
     // windows) or empty.

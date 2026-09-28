@@ -70,7 +70,9 @@ ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioOutpu
         return ModuleText{.icon = {}, .text = {}, .state = TextState::Normal};
     }
     const std::string& format = output->muted ? config.formatMuted : config.format;
-    return ModuleText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output))), .state = TextState::Normal};
+    return ModuleText{.icon  = output->muted ? config.iconMuted : config.icon,
+                      .text  = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output))),
+                      .state = output->muted ? TextState::Muted : TextState::Normal};
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {

@@ -56,6 +56,10 @@ battery.critical, battery.critical .icon {
     color: var(--red);
 }
 
+audio.muted, audio.muted .icon {
+    color: var(--muted);
+}
+
 clock:hover, cpu:hover, memory:hover, audio:hover, battery:hover {
     background: var(--hover);
 }

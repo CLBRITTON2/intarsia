@@ -173,14 +173,23 @@ TEST(Style, BatteryLevelsColorTheTextAndTheIconOverTheModulesOwnRules) {
     EXPECT_EQ(Rgba(bare.warning.icon), Rgba(bare.icon.color));
 }
 
-TEST(Style, LevelRulesTakeColorOnlyAndMatchOnlyABattery) {
+TEST(Style, MutedColorsTheAudioTextAndIcon) {
+    const ModuleStyle style = StyleOf("#volume .icon { color: #00ffff; } audio.muted { color: #808080; } #volume.muted .icon { color: #ff0000; }", ModuleKind::Audio, "volume");
+    EXPECT_EQ(Rgba(style.muted.text), (std::array<std::int32_t, 4>{0x80, 0x80, 0x80, 255}));
+    EXPECT_EQ(Rgba(style.muted.icon), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_EQ(Rgba(style.icon.color), (std::array<std::int32_t, 4>{0, 255, 255, 255}));
+}
+
+TEST(Style, OwnedStateRulesTakeColorOnlyAndMatchOnlyTheirModuleType) {
     EXPECT_THAT([] { return Parse("battery.warning { padding: 2px; }"); }, ConfigErrorWith("padding does not apply to battery.warning, which takes: color"));
     EXPECT_THAT([] { return Parse("battery.warning .icon { font-size: 20px; }"); }, ConfigErrorWith("which takes: color"));
-    EXPECT_THAT([] { return Parse("battery.warning .item { color: #fff; }"); }, ConfigErrorWith("style a battery's text and .icon only"));
+    EXPECT_THAT([] { return Parse("audio.muted .item { color: #fff; }"); }, ConfigErrorWith("style a module's text and .icon only"));
     EXPECT_THAT([] { return Parse("battery.warning.critical { color: #fff; }"); }, ConfigErrorWith("a module is in one at a time"));
-    EXPECT_THAT([] { return Parse("battery.warning:hover { background: #fff; }"); }, ConfigErrorWith("combines a state with :hover"));
-    EXPECT_THAT([] { return StyleOf(".warning { color: #fff; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith("cpu is a cpu module"));
-    EXPECT_NO_THROW(StyleOf("battery.warning { color: #fff; }", ModuleKind::Cpu, "cpu"));
+    EXPECT_THAT([] { return Parse("audio.muted:hover { background: #fff; }"); }, ConfigErrorWith("combines a state with :hover"));
+    EXPECT_THAT([] { return StyleOf(".warning { color: #fff; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith(".warning colors only battery modules, and cpu is a cpu module"));
+    EXPECT_THAT([] { return StyleOf(".muted { color: #fff; }", ModuleKind::Battery, "power"); },
+                ConfigErrorWith(".muted colors only audio modules, and power is a battery module"));
+    EXPECT_NO_THROW(StyleOf("battery.warning { color: #fff; } audio.muted { color: #fff; }", ModuleKind::Cpu, "cpu"));
 }
 
 TEST(Style, ItemHoverChangesColorsAndLosesToAMoreSpecificStateRule) {

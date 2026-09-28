@@ -9,6 +9,7 @@
  *   .alert            a module's text while it needs attention, such as a failed command
  *   .warning          a battery running low, and .critical nearly empty: its text, or its icon as #battery.warning .icon,
  *                     which take color only
+ *   .muted            an audio module while its output is muted, its text or its icon, which take color only
  *   .expanded         a tray while unfolded, as #tray.expanded .icon, which takes transform only
  *   :hover            a module's box or an .item under the cursor, which changes only color and background
  *   .icon             a module's icon, as in #cpu .icon

@@ -25,6 +25,7 @@ struct RenderContext {
     ID2D1SolidColorBrush* alert;
     StateBrushes          warning;
     StateBrushes          critical;
+    StateBrushes          muted;
     // Any other color a module draws, such as a workspace state's background.
     BrushCache* brushes;
     // The height of the box a module draws in, across the bar, for a module that fills it such as a divider.

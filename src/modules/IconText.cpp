@@ -130,6 +130,7 @@ void TextLine::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
         case TextState::Alert: DrawIconText(render, origin, _text, render.accent, render.alert); return;
         case TextState::Warning: DrawIconText(render, origin, _text, render.warning.icon, render.warning.text); return;
         case TextState::Critical: DrawIconText(render, origin, _text, render.critical.icon, render.critical.text); return;
+        case TextState::Muted: DrawIconText(render, origin, _text, render.muted.icon, render.muted.text); return;
     }
     throw std::invalid_argument(std::format("unknown text state {}", static_cast<std::int32_t>(_shown.state)));
 }
