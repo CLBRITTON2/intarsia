@@ -13,7 +13,9 @@
 #include <cstdint>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <format>
 #include <fstream>
 #include <initializer_list>
@@ -299,9 +301,12 @@ namespace {
             if (!definitions.Has(name)) {
                 throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
             }
-            const TableReader module = definitions.Table(name);
-            const ModuleKind  kind   = ParseModuleType(module);
-            instances.push_back(ModuleInstance{.name = name, .kind = kind, .settings = ReadModuleSettings(module, kind), .style = ResolveModuleStyle(sheet, style, kind, name)});
+            const TableReader   module   = definitions.Table(name);
+            const ModuleKind    kind     = ParseModuleType(module);
+            ModuleSettings      settings = ReadModuleSettings(module, kind);
+            const CustomConfig* custom   = std::get_if<CustomConfig>(&settings);
+            ModuleStyle         styled   = ResolveModuleStyle(sheet, style, kind, name, custom != nullptr ? custom->classes : std::vector<std::string>{});
+            instances.push_back(ModuleInstance{.name = name, .kind = kind, .settings = std::move(settings), .style = std::move(styled)});
         }
         return instances;
     }
@@ -460,11 +465,33 @@ namespace {
         throw module.Error(std::format("{} must be one of text, json, got '{}'", module.KeyPath(key), value));
     }
 
+    // Each a CSS class name that style.css writes as .name, none of intarsia's own, none twice.
+    std::vector<std::string> ReadCustomClasses(const TableReader& module, std::string_view key) {
+        std::vector<std::string> classes = module.StringList(key);
+        for (size_t index = 0; index < classes.size(); ++index) {
+            const std::string& name = classes[index];
+            const bool         ident =
+                !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, IsModuleNameCharacter);
+            if (!ident) {
+                throw module.Error(
+                    std::format("{} lists '{}', which is not a class name: use letters, digits, '_' or '-', starting with a letter or '_'", module.KeyPath(key), name));
+            }
+            if (IsStyledClass(name)) {
+                throw module.Error(std::format("{} lists '{}', a class intarsia styles itself", module.KeyPath(key), name));
+            }
+            if (std::ranges::find(classes.begin(), classes.begin() + static_cast<std::ptrdiff_t>(index), name) != classes.begin() + static_cast<std::ptrdiff_t>(index)) {
+                throw module.Error(std::format("{} lists '{}' twice", module.KeyPath(key), name));
+            }
+        }
+        return classes;
+    }
+
     CustomConfig ReadCustomConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "output", "format", "icon", "interval"}));
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "output", "classes", "format", "icon", "interval"}));
         return CustomConfig{.command = ReadCommand(module, "command"),
                             .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")),
                             .output  = ParseCustomOutput(module, "output"),
+                            .classes = ReadCustomClasses(module, "classes"),
                             .text    = ReadTextFields(module)};
     }
 
@@ -735,6 +762,13 @@ Config LoadConfig(const std::filesystem::path& path) {
         .bar = barConfig, .style = std::move(style), .windowManager = ParseWindowManager(root, "window_manager"), .modules = std::move(modules), .layouts = std::move(layouts)};
     RejectUnshownModules(definitions, config);
     RequireKnownIds(sheet, definitions.Keys());
+    std::vector<DeclaredClasses> declared;
+    ForEachModuleInConfig(config, [&declared](const ModuleInstance& instance) {
+        if (const auto* custom = std::get_if<CustomConfig>(&instance.settings)) {
+            declared.push_back(DeclaredClasses{.module = instance.name, .classes = custom->classes});
+        }
+    });
+    RequireDeclaredClasses(sheet, declared);
 
     for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"}, std::pair{ModuleKind::BindingMode, "binding_mode"},
                                     std::pair{ModuleKind::TilingDirection, "tiling_direction"}}) {

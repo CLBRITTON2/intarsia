@@ -427,12 +427,7 @@ namespace {
                 }
                 compound.id = std::string(name);
             } else if (marker == '.') {
-                if (std::ranges::find(kClasses, name) == kClasses.end()) {
-                    throw std::invalid_argument(std::format(
-                        "'.{}' is not a class intarsia styles, known classes are: .module, .alert, .warning, .critical, .muted, .expanded, .icon, .item, .focused, .occupied, "
-                        ".empty, .toggle",
-                        name));
-                }
+                // A class intarsia does not style is a custom module's, checked against the config by RequireDeclaredClasses.
                 compound.classes.emplace_back(name);
             } else if (name == "hover") {
                 compound.hover = true;
@@ -460,12 +455,17 @@ namespace {
         return std::ranges::find(kOwnedStates, name, &OwnedState::name) != kOwnedStates.end();
     }
 
-    bool HasOwnedState(const Compound& compound) {
-        return std::ranges::any_of(compound.classes, [](const std::string& name) { return IsOwnedState(name); });
+    // An owned state or a custom module's class: either colors a module's text and its .icon.
+    bool IsColoringState(std::string_view name) {
+        return IsOwnedState(name) || !IsStyledClass(name);
+    }
+
+    bool HasColoringState(const Compound& compound) {
+        return std::ranges::any_of(compound.classes, [](const std::string& name) { return IsColoringState(name); });
     }
 
     bool IsState(std::string_view name) {
-        return name == "alert" || name == "expanded" || IsOwnedState(name);
+        return name == "alert" || name == "expanded" || IsColoringState(name);
     }
 
     // The classes naming a state a module is in, of which it is in one at a time.
@@ -511,7 +511,8 @@ namespace {
             return last.type == "section" ? StyleTarget::Section : StyleTarget::Tooltip;
         }
         if (!compounds.empty() && StateCount(compounds.front()) > 1) {
-            throw std::invalid_argument(std::format("'{}' combines two of .alert, .warning, .critical, .muted and .expanded, and a module is in one at a time", text));
+            throw std::invalid_argument(
+                std::format("'{}' combines two of .alert, .warning, .critical, .muted, .expanded and a custom module's classes, and a module is in one at a time", text));
         }
         if (const std::optional<StyleTarget> part = PartTarget(last)) {
             if (compounds.size() == 2 && (!IsModuleCompound(compounds[0]) || compounds[0].hover || HasClass(compounds[0], "alert"))) {
@@ -520,8 +521,9 @@ namespace {
             if (compounds.size() == 2 && HasClass(compounds[0], "expanded") && *part != StyleTarget::Icon) {
                 throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
             }
-            if (compounds.size() == 2 && HasOwnedState(compounds[0]) && *part != StyleTarget::Icon) {
-                throw std::invalid_argument(std::format("'{}': .warning, .critical and .muted style a module's text and .icon only, as #battery.warning .icon", text));
+            if (compounds.size() == 2 && HasColoringState(compounds[0]) && *part != StyleTarget::Icon) {
+                throw std::invalid_argument(
+                    std::format("'{}': .warning, .critical, .muted and a custom module's classes style a module's text and .icon only, as #battery.warning .icon", text));
             }
             return *part;
         }
@@ -584,7 +586,7 @@ namespace {
                 if (selector.compounds.size() == 2 && HasClass(selector.compounds.front(), "expanded")) {
                     return {"transform"};
                 }
-                if (selector.compounds.size() == 2 && HasOwnedState(selector.compounds.front())) {
+                if (selector.compounds.size() == 2 && HasColoringState(selector.compounds.front())) {
                     return {"color"};
                 }
                 return {"font-family", "font-size", "color", "margin-right", "transform", "transition"};
@@ -599,7 +601,7 @@ namespace {
                 if (compound.hover) {
                     return {"background"};
                 }
-                if (HasClass(compound, "alert") || HasOwnedState(compound)) {
+                if (HasClass(compound, "alert") || HasColoringState(compound)) {
                     return {"color"};
                 }
                 allowed.assign(kBox.begin(), kBox.end());
@@ -935,7 +937,7 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
                        .tooltip      = {.box = ReadBox(tooltip), .color = tooltip.Color("color", color)}};
 }
 
-ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name) {
+ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes) {
     const std::string_view type = TypeName(kind);
     const Element          normal{.type = type, .id = name, .classes = {"module"}, .hover = false};
     const Element          hovered{.type = type, .id = name, .classes = {"module"}, .hover = true};
@@ -963,7 +965,12 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
         }
     }
     RequireOwnStates(sheet, kind, type, name);
-    const float rotation = iconRules.Read("transform", ReadRotation, 0.0f);
+    const float              rotation = iconRules.Read("transform", ReadRotation, 0.0f);
+    std::vector<ClassColors> classColors;
+    classColors.reserve(classes.size());
+    for (const std::string& declared : classes) {
+        classColors.push_back(ClassColors{.name = declared, .colors = ReadStateColors(sheet, type, name, declared, color)});
+    }
     return ModuleStyle{.box                         = boxStyle,
                        .hover                       = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
                        .color                       = color,
@@ -971,6 +978,7 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
                        .warning                     = ReadStateColors(sheet, type, name, "warning", color),
                        .critical                    = ReadStateColors(sheet, type, name, "critical", color),
                        .muted                       = ReadStateColors(sheet, type, name, "muted", color),
+                       .classes                     = std::move(classColors),
                        .icon                        = {.font            = iconRules.Read("font-family", ReadFamily, bar.font),
                                                        .sizeDips        = iconRules.Read("font-size", ReadPositiveLength, bar.fontSizeDips),
                                                        .color           = iconRules.Color("color", color),
@@ -995,6 +1003,32 @@ void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& na
                 throw StyleError(sheet.source, rule.line,
                                  std::format("#{} names no module: the config's modules table defines {}", compound.id,
                                              names.empty() ? std::string("none") : Joined(std::vector<std::string_view>(names.begin(), names.end()))));
+            }
+        }
+    }
+}
+
+bool IsStyledClass(std::string_view name) {
+    return std::ranges::find(kClasses, name) != kClasses.end();
+}
+
+// Only a rule's first part holds a module's classes: a later part's are .icon or .item ones, which parsing checked.
+void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<DeclaredClasses>& declared) {
+    for (const StyleRule& rule : sheet.rules) {
+        const Compound& first = rule.selector.compounds.front();
+        for (const std::string& name : first.classes) {
+            if (IsStyledClass(name)) {
+                continue;
+            }
+            const bool matchesADeclarer = std::ranges::any_of(declared, [&first, &name](const DeclaredClasses& module) {
+                const Element element{.type = TypeName(ModuleKind::Custom), .id = module.module, .classes = {"module", name}, .hover = false};
+                return std::ranges::find(module.classes, name) != module.classes.end() && Matches(first, element);
+            });
+            if (!matchesADeclarer) {
+                throw StyleError(sheet.source, rule.line,
+                                 std::format("'.{}' is not a class intarsia styles, known classes are: .module, .alert, .warning, .critical, .muted, .expanded, .icon, .item, "
+                                             ".focused, .occupied, .empty, .toggle, or one a custom module this rule matches lists in its classes",
+                                             name));
             }
         }
     }

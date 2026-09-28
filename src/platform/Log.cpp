@@ -8,6 +8,8 @@
 #include <shlobj.h>
 
 #include <chrono>
+#include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <format>
@@ -108,16 +110,28 @@ namespace {
         }
     }
 
-    [[noreturn]] void LogTerminate() {
-        std::string reason = "std::terminate with no exception";
-        if (const std::exception_ptr current = std::current_exception()) {
-            try {
-                std::rethrow_exception(current);
-            } catch (const std::exception& error) { reason = error.what(); } catch (...) {
-                reason = "std::terminate on an exception that is not a std::exception";
-            }
+    std::string CurrentExceptionReason(std::string_view none) {
+        const std::exception_ptr current = std::current_exception();
+        if (!current) {
+            return std::string(none);
         }
-        LogCrash(FormatLine(LogLevel::Error, "app", "fatal", {{.key = "reason", .value = reason}}));
+        try {
+            std::rethrow_exception(current);
+        } catch (const std::exception& error) { return error.what(); } catch (...) {
+            return "an exception that is not a std::exception";
+        }
+    }
+
+    // MSVC keeps a terminate handler per thread, so a worker thread's std::terminate reaches only this: abort raises
+    // SIGABRT for the whole process, on the thread that aborts, while the exception that ended it is still current.
+    void LogAbort(std::int32_t /*signal*/) {
+        LogCrash(FormatLine(LogLevel::Error, "app", "fatal", {{.key = "reason", .value = CurrentExceptionReason("abort with no exception")}}));
+    }
+
+    [[noreturn]] void LogTerminate() {
+        LogCrash(FormatLine(LogLevel::Error, "app", "fatal", {{.key = "reason", .value = CurrentExceptionReason("std::terminate with no exception")}}));
+        // Past the SIGABRT handler, which would log the same line again.
+        std::signal(SIGABRT, SIG_DFL);
         std::abort();
     }
 
@@ -157,6 +171,7 @@ void LogToFile(const std::filesystem::path& path) {
 
 void LogCrashes() {
     std::set_terminate(LogTerminate);
+    std::signal(SIGABRT, [](int signal) { LogAbort(signal); });
     SetUnhandledExceptionFilter(LogUnhandledException);
 }
 

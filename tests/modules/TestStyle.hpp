@@ -24,6 +24,7 @@ inline ModuleStyle TestModuleStyle() {
         .warning                     = {.text = D2D1::ColorF(0xFFFF00), .icon = D2D1::ColorF(0xFFFF01)},
         .critical                    = {.text = D2D1::ColorF(0xFF0001), .icon = D2D1::ColorF(0xFF0002)},
         .muted                       = {.text = D2D1::ColorF(0x808080), .icon = D2D1::ColorF(0x808081)},
+        .classes                     = {},
         .icon                        = {.font            = L"Segoe UI",
                                         .sizeDips        = 20.0f,
                                         .color           = D2D1::ColorF(0xFFFFFF),

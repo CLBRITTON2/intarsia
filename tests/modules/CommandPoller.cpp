@@ -2,13 +2,22 @@
 
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
-    CommandResult Succeeded(std::string text, std::optional<std::string> tooltip, bool alert) {
-        return CommandResult{.outcome = CommandOutcome::Succeeded, .text = std::move(text), .tooltip = std::move(tooltip), .alert = alert, .detail = {}};
+    const std::vector<std::string> kClasses{"sunny", "rain"};
+
+    CommandResult                  Succeeded(std::string text, std::optional<std::string> tooltip, bool alert) {
+        return CommandResult{
+                             .outcome = CommandOutcome::Succeeded, .text = std::move(text), .tooltip = std::move(tooltip), .alert = alert, .classIndex = std::nullopt, .detail = {}};
+    }
+
+    CommandResult ParseOutput(std::string_view output, CustomOutput format) {
+        return ::ParseOutput(output, format, kClasses);
     }
 
     void ExpectFailure(std::string_view output, CustomOutput format, std::string_view reason) {
@@ -48,12 +57,23 @@ TEST(CommandPoller, JsonOutputSetsTextTooltipAndAlert) {
     EXPECT_EQ(ParseOutput("{\"text\": \"3\"}\r\n", CustomOutput::Json), Succeeded("3", std::nullopt, false));
 }
 
+TEST(CommandPoller, AJsonClassIsOneTheModuleDeclares) {
+    const CommandResult result = ParseOutput(R"({"text": "21C", "class": "rain"})", CustomOutput::Json);
+    EXPECT_EQ(result.outcome, CommandOutcome::Succeeded);
+    EXPECT_EQ(result.classIndex, std::optional<size_t>(1));
+    ExpectFailure(R"({"text": "21C", "class": "snow"})", CustomOutput::Json, "printed a JSON class the module's classes do not list");
+    ExpectFailure(R"({"text": "21C", "class": 2})", CustomOutput::Json, "printed a JSON class that is not a string");
+    ExpectFailure(R"({"text": "21C", "class": "rain", "alert": true})", CustomOutput::Json, "printed both a JSON class and alert, and a module is in one state at a time");
+    // An alert set false is no state, so a class may come with it.
+    EXPECT_EQ(ParseOutput(R"({"text": "21C", "class": "sunny", "alert": false})", CustomOutput::Json).classIndex, std::optional<size_t>(0));
+}
+
 TEST(CommandPoller, JsonOutputIsCheckedFieldByField) {
     ExpectFailure("not json", CustomOutput::Json, "printed invalid JSON");
     ExpectFailure(R"(["3"])", CustomOutput::Json, "printed JSON that is not an object");
     ExpectFailure(R"({"tooltip": "x"})", CustomOutput::Json, "printed JSON without a text string");
     ExpectFailure(R"({"text": 3})", CustomOutput::Json, "printed JSON without a text string");
-    ExpectFailure(R"({"text": "3", "class": "warning"})", CustomOutput::Json, "printed a JSON field other than text, tooltip and alert");
+    ExpectFailure(R"({"text": "3", "color": "red"})", CustomOutput::Json, "printed a JSON field other than text, tooltip, alert and class");
     ExpectFailure(R"({"text": "3", "tooltip": 1})", CustomOutput::Json, "printed a JSON tooltip that is not a string");
     ExpectFailure(R"({"text": "3", "alert": "yes"})", CustomOutput::Json, "printed a JSON alert that is not true or false");
 }

@@ -41,10 +41,29 @@ namespace {
     CommandResult ParseText(std::string_view output) {
         const std::string_view line = FirstLine(output);
         RequireDrawable(line, "output", L"");
-        return CommandResult{.outcome = CommandOutcome::Succeeded, .text = std::string(line), .tooltip = std::nullopt, .alert = false, .detail = {}};
+        return CommandResult{.outcome = CommandOutcome::Succeeded, .text = std::string(line), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}};
     }
 
-    CommandResult ParseJson(std::string_view output) {
+    // The failure never quotes the class, which is output.
+    std::optional<size_t> ReadClass(const nlohmann::json& value, bool alert, const std::vector<std::string>& classes) {
+        const auto found = value.find("class");
+        if (found == value.end()) {
+            return std::nullopt;
+        }
+        if (!found->is_string()) {
+            throw OutputError("printed a JSON class that is not a string");
+        }
+        if (alert) {
+            throw OutputError("printed both a JSON class and alert, and a module is in one state at a time");
+        }
+        const auto declared = std::ranges::find(classes, found->get<std::string>());
+        if (declared == classes.end()) {
+            throw OutputError("printed a JSON class the module's classes do not list");
+        }
+        return static_cast<size_t>(declared - classes.begin());
+    }
+
+    CommandResult ParseJson(std::string_view output, const std::vector<std::string>& classes) {
         const nlohmann::json value = nlohmann::json::parse(output.begin(), output.end(), nullptr, false);
         if (value.is_discarded()) {
             throw OutputError("printed invalid JSON");
@@ -53,8 +72,8 @@ namespace {
             throw OutputError("printed JSON that is not an object");
         }
         for (const auto& [key, field] : value.items()) {
-            if (key != "text" && key != "tooltip" && key != "alert") {
-                throw OutputError("printed a JSON field other than text, tooltip and alert");
+            if (key != "text" && key != "tooltip" && key != "alert" && key != "class") {
+                throw OutputError("printed a JSON field other than text, tooltip, alert and class");
             }
         }
         const auto text = value.find("text");
@@ -70,11 +89,13 @@ namespace {
             throw OutputError("printed a JSON alert that is not true or false");
         }
 
-        CommandResult result{.outcome = CommandOutcome::Succeeded,
-                             .text    = text->get<std::string>(),
-                             .tooltip = tooltip == value.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
-                             .alert   = alert != value.end() && alert->get<bool>(),
-                             .detail  = {}};
+        const bool    alerted = alert != value.end() && alert->get<bool>();
+        CommandResult result{.outcome    = CommandOutcome::Succeeded,
+                             .text       = text->get<std::string>(),
+                             .tooltip    = tooltip == value.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
+                             .alert      = alerted,
+                             .classIndex = ReadClass(value, alerted, classes),
+                             .detail     = {}};
         RequireDrawable(result.text, "text", L"");
         if (result.tooltip.has_value()) {
             RequireDrawable(*result.tooltip, "tooltip", L"\n");
@@ -92,22 +113,22 @@ std::string_view FirstLine(std::string_view text) {
     return line;
 }
 
-CommandResult ParseOutput(std::string_view output, CustomOutput format) {
+CommandResult ParseOutput(std::string_view output, CustomOutput format, const std::vector<std::string>& classes) {
     try {
         switch (format) {
             case CustomOutput::Text: return ParseText(output);
-            case CustomOutput::Json: return ParseJson(output);
+            case CustomOutput::Json: return ParseJson(output, classes);
         }
     } catch (const OutputError& error) {
-        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .detail = error.what()};
+        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
     }
     throw std::invalid_argument(std::format("unknown custom output {}", static_cast<std::int32_t>(format)));
 }
 
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :
-    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _changes(changes),
-    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")),
-    _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .detail = {}}, _thread([this] { Run(); }) {}
+    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _classes(config.classes),
+    _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")),
+    _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}}, _thread([this] { Run(); }) {}
 
 CommandPoller::~CommandPoller() {
     SetEvent(_stopEvent.get());
@@ -141,12 +162,13 @@ CommandResult CommandPoller::RunOnce() const {
     try {
         output = CaptureOutput(_command, _timeout, kMaxOutputBytes, _stopEvent.get());
     } catch (const CommandError& error) {
-        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .detail = error.what()};
+        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
     } catch (const Win32Error& error) {
-        return CommandResult{.outcome = CommandOutcome::Failed, .text = "could not run", .tooltip = std::nullopt, .alert = false, .detail = error.what()};
+        return CommandResult{
+            .outcome = CommandOutcome::Failed, .text = "could not run", .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
     }
     // Parsed here so the UI thread only ever meets text it can draw.
-    return ParseOutput(output, _output);
+    return ParseOutput(output, _output, _classes);
 }
 
 // Posts and logs only on a change, so a command that keeps failing the same way logs once.

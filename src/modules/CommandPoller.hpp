@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 enum class CommandOutcome : std::uint8_t {
     Pending, // the first run has not finished yet
@@ -24,10 +25,11 @@ enum class CommandOutcome : std::uint8_t {
 
 struct CommandResult {
     CommandOutcome             outcome;
-    std::string                text;    // Succeeded: the value, safe to draw. Failed: a reason short enough for the bar.
-    std::optional<std::string> tooltip; // from json output, shown instead of the tooltip format, may hold line breaks
-    bool                       alert;   // from json output, draws the value in the alert color
-    std::string                detail;  // Failed: the full failure, for the log and the tooltip
+    std::string                text;       // Succeeded: the value, safe to draw. Failed: a reason short enough for the bar.
+    std::optional<std::string> tooltip;    // from json output, shown instead of the tooltip format, may hold line breaks
+    bool                       alert;      // from json output, draws the value in the alert color
+    std::optional<size_t>      classIndex; // from json output, which declared class draws the value
+    std::string                detail;     // Failed: the full failure, for the log and the tooltip
 
     bool                       operator==(const CommandResult&) const = default;
 };
@@ -36,8 +38,9 @@ struct CommandResult {
 std::string_view FirstLine(std::string_view text);
 
 // What a successful run printed, read as format says. Output is untrusted: text must be UTF-8 with no control or
-// bidirectional override characters, and a tooltip may also hold line breaks. Anything else is a Failed result.
-CommandResult ParseOutput(std::string_view output, CustomOutput format);
+// bidirectional override characters, a tooltip may also hold line breaks, and a json class must be one of classes and
+// cannot come with alert. Anything else is a Failed result.
+CommandResult ParseOutput(std::string_view output, CustomOutput format, const std::vector<std::string>& classes);
 
 // Runs a custom module's command on its own thread, first at once and then every interval, keeping the latest result
 // and notifying changes whenever it changes.
@@ -52,19 +55,20 @@ class CommandPoller {
     CommandResult  Result() const;
 
   private:
-    void                 Run();
-    CommandResult        RunOnce() const;
-    void                 Publish(CommandResult result);
+    void                     Run();
+    CommandResult            RunOnce() const;
+    void                     Publish(CommandResult result);
 
-    std::string          _name;
-    Command              _command;
-    std::chrono::seconds _interval;
-    std::chrono::seconds _timeout;
-    CustomOutput         _output;
-    ChangeSignal&        _changes;
-    UniqueHandle         _stopEvent;
-    mutable std::mutex   _mutex;
-    CommandResult        _result;
+    std::string              _name;
+    Command                  _command;
+    std::chrono::seconds     _interval;
+    std::chrono::seconds     _timeout;
+    CustomOutput             _output;
+    std::vector<std::string> _classes;
+    ChangeSignal&            _changes;
+    UniqueHandle             _stopEvent;
+    mutable std::mutex       _mutex;
+    CommandResult            _result;
     // Declared last so every member above exists before the thread starts.
     std::thread _thread;
 };

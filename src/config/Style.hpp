@@ -57,8 +57,22 @@ StyleSheet ParseStyleSheet(std::string_view text, std::string source);
 StyleConfig ResolveBarStyle(const StyleSheet& sheet);
 
 // Every rule matching one module, by specificity and then file order, as CSS cascades. Color and font inherit from the
-// bar, and the icon's and items' colors from the module.
-ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name);
+// bar, and the icon's and items' colors from the module. classes are those a custom module declares, colored in turn.
+ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes);
 
 // Every #id names a module the config defines, so a misspelled name is an error rather than a rule that never applies.
 void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& names);
+
+// Whether name is one of the classes intarsia styles itself (.module, .alert, .icon ...), which a custom module cannot
+// declare.
+bool IsStyledClass(std::string_view name);
+
+// The classes one custom module declares.
+struct DeclaredClasses {
+    std::string              module;
+    std::vector<std::string> classes;
+};
+
+// Every class a rule names that intarsia does not style itself must be one a custom module declares and the rule
+// matches, so a misspelled class is an error rather than a rule that never applies.
+void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<DeclaredClasses>& declared);

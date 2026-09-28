@@ -149,15 +149,18 @@ return {
         -- A custom module runs its command every interval and shows what it printed. The command follows the same
         -- rules as on_click, runs with no window, and is killed with everything it started after timeout seconds.
         -- output = "text" shows the first line. output = "json" reads one object, { "text": "...", "tooltip": "...",
-        -- "alert": true }, where only text is required, tooltip may span lines, and alert draws the text in the
-        -- module's .alert color. Control characters (other than line breaks in a tooltip) fail the run, as does a
-        -- failed command, and either shows its reason as an alert. Add "weather" to a list to show it.
+        -- "alert": true, "class": "..." }, where only text is required, tooltip may span lines, alert draws the text
+        -- in the module's .alert color, and class draws it in the color style.css gives that class, as
+        -- #weather.rain. A class must be one the module's classes list, and style.css may style only those.
+        -- Control characters (other than line breaks in a tooltip) fail the run, as does a failed command or an
+        -- unlisted class, and each shows its reason as an alert. Add "weather" to a list to show it.
         -- weather = {
         --     type = "custom",
         --     -- Absolute, so another curl.exe earlier on PATH (such as MSYS2's) is never picked instead.
         --     command = { "C:\\Windows\\System32\\curl.exe", "--silent", "--fail", "https://wttr.in/?format=%c%t" },
         --     timeout = 10,
         --     output = "text",
+        --     classes = {}, -- the classes a JSON output may name
         --     format = "{text}", -- {text} is the output's text, as a string
         --     icon = "",
         --     interval = 900,

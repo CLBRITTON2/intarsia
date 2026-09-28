@@ -21,7 +21,7 @@ namespace {
 
     ModuleStyle StyleOf(std::string_view text, ModuleKind kind, std::string_view name) {
         const StyleSheet sheet = Parse(std::string(kBar) + std::string(text));
-        return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), kind, name);
+        return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), kind, name, {});
     }
 
     auto ConfigErrorWith(std::string_view text) {
@@ -41,7 +41,7 @@ TEST(Style, BarRulesSetTheFontAndColorEveryModuleInherits) {
     const StyleConfig bar   = ResolveBarStyle(sheet);
     EXPECT_EQ(bar.font, L"Some Font");
     EXPECT_FLOAT_EQ(bar.fontSizeDips, 15.0f);
-    const ModuleStyle clock = ResolveModuleStyle(sheet, bar, ModuleKind::Clock, "time");
+    const ModuleStyle clock = ResolveModuleStyle(sheet, bar, ModuleKind::Clock, "time", {});
     EXPECT_EQ(Rgba(clock.color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
     EXPECT_EQ(Rgba(clock.icon.color), Rgba(clock.color));
     EXPECT_EQ(Rgba(clock.item.color), Rgba(clock.color));
@@ -288,7 +288,9 @@ TEST(Style, AnythingOutsideTheSubsetIsAnErrorNamingTheLine) {
     EXPECT_THAT([] { return Parse("\n\n@import url(x.css);"); }, ConfigErrorWith("style.css:3: at-rules"));
     EXPECT_THAT([] { return Parse("#cpu > .icon { color: #fff; }"); }, ConfigErrorWith("combinator"));
     EXPECT_THAT([] { return Parse("button { color: #fff; }"); }, ConfigErrorWith("'button' is not a type intarsia styles"));
-    EXPECT_THAT([] { return Parse(".active { color: #fff; }"); }, ConfigErrorWith("'.active' is not a class intarsia styles"));
+    // A class intarsia does not style parses, as a custom module may declare it, and fails once no module does.
+    EXPECT_THAT([] { RequireDeclaredClasses(Parse(".active { color: #fff; }"), {}); }, ConfigErrorWith("style.css:1: '.active' is not a class intarsia styles"));
+    EXPECT_NO_THROW(RequireDeclaredClasses(Parse(".active { color: #fff; }"), {DeclaredClasses{.module = "weather", .classes = {"active"}}}));
     EXPECT_THAT([] { return Parse("#cpu:focus { color: #fff; }"); }, ConfigErrorWith(":hover is the only state"));
     EXPECT_THAT([] { return Parse("#cpu { color: #fff !important; }"); }, ConfigErrorWith("!important is not supported"));
     EXPECT_THAT([] { return Parse("#cpu { color #fff; }"); }, ConfigErrorWith("must be property: value"));

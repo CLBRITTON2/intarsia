@@ -467,20 +467,63 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
 TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
     const Config        config = LoadText(WithRightModules(
         R"({ "hello" })",
-        R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, output = "json", format = "{text}", icon = "", interval = 30 },)"));
+        R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, output = "json", classes = { "sunny", "rain" }, format = "{text}", icon = "", interval = 30 },)"));
     const CustomConfig& custom = SettingsOf<CustomConfig>(config.modules.right, 0);
     EXPECT_EQ(custom.command.program.filename(), L"cmd.exe");
     EXPECT_EQ(custom.command.arguments, (std::vector<std::wstring>{L"/c", L"echo hi"}));
     EXPECT_EQ(custom.timeout, std::chrono::seconds(5));
     EXPECT_EQ(custom.output, CustomOutput::Json);
+    EXPECT_EQ(custom.classes, (std::vector<std::string>{"sunny", "rain"}));
     EXPECT_EQ(custom.text.interval, std::chrono::seconds(30));
+}
+
+namespace {
+
+    std::string WithWeather(std::string_view classes) {
+        return WithRightModules(
+            R"({ "weather" })",
+            std::format(
+                R"(        weather = {{ type = "custom", command = {{ "cmd" }}, timeout = 5, output = "json", classes = {}, format = "{{text}}", icon = "", interval = 30 }},)",
+                classes));
+    }
+
+} // namespace
+
+TEST(Config, DeclaredClassesColorTheirCustomModule) {
+    const Config       config = LoadStyled(WithWeather(R"({ "sunny", "rain" })"),
+                                           std::string(kValidStyle) + "#weather.sunny { color: #ff0000; } #weather.sunny .icon { color: #00ff00; } custom.rain { color: #0000ff; }");
+    const ModuleStyle& style  = config.modules.right.at(0).style;
+    ASSERT_EQ(style.classes.size(), 2u);
+    EXPECT_EQ(style.classes[0].name, "sunny");
+    EXPECT_FLOAT_EQ(style.classes[0].colors.text.r, 1.0f);
+    EXPECT_FLOAT_EQ(style.classes[0].colors.icon.g, 1.0f);
+    EXPECT_EQ(style.classes[1].name, "rain");
+    // The icon takes the class's text color when no rule colors it.
+    EXPECT_FLOAT_EQ(style.classes[1].colors.icon.b, 1.0f);
+}
+
+TEST(Config, AClassNoCustomModuleDeclaresIsAnError) {
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "#weather.snowy { color: #ff0000; }"); },
+                ConfigErrorWith("'.snowy' is not a class intarsia styles"));
+    // Declared by the weather module, but the rule names a clock.
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "#time.sunny { color: #ff0000; }"); },
+                ConfigErrorWith("'.sunny' is not a class intarsia styles"));
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "#weather.sunny .item { color: #ff0000; }"); },
+                ConfigErrorWith("style a module's text and .icon only"));
+}
+
+TEST(Config, DeclaredClassesAreClassNamesOfTheirOwn) {
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "two words" })")); }, ConfigErrorWith("modules.weather.classes lists 'two words', which is not a class name"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "9lives" })")); }, ConfigErrorWith("which is not a class name"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "alert" })")); }, ConfigErrorWith("modules.weather.classes lists 'alert', a class intarsia styles itself"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "sunny", "sunny" })")); }, ConfigErrorWith("modules.weather.classes lists 'sunny' twice"));
 }
 
 TEST(Config, CustomModulesNeedACommand) {
     EXPECT_THAT(
         [] {
-            return LoadText(
-                WithRightModules(R"({ "hello" })", R"(        hello = { type = "custom", timeout = 5, output = "text", format = "{text}", icon = "", interval = 30 },)"));
+            return LoadText(WithRightModules(R"({ "hello" })",
+                                             R"(        hello = { type = "custom", timeout = 5, output = "text", classes = {}, format = "{text}", icon = "", interval = 30 },)"));
         },
         ConfigErrorWith("modules.hello.command is missing"));
 }
@@ -489,7 +532,8 @@ TEST(Config, CustomOutputIsTextOrJson) {
     EXPECT_THAT(
         [] {
             return LoadText(WithRightModules(
-                R"({ "hello" })", R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", format = "{text}", icon = "", interval = 30 },)"));
+                R"({ "hello" })",
+                R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", classes = {}, format = "{text}", icon = "", interval = 30 },)"));
         },
         ConfigErrorWith("modules.hello.output must be one of text, json, got 'xml'"));
 }

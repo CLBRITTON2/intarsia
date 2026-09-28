@@ -84,7 +84,7 @@ ModuleText Cpu::Format(const std::string& spec) {
         Sample();
         _sampledAt = now;
     }
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))), .state = TextState::Normal};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))), .state = TextState::Normal, .classIndex = 0};
 }
 
 void Cpu::Sample() {

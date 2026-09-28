@@ -309,6 +309,11 @@ void Bar::PlaceInZOrder(HWND insertAfter) {
 }
 
 RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
+    std::vector<StateBrushes> classes;
+    classes.reserve(style.classes.size());
+    for (const ClassColors& declared : style.classes) {
+        classes.push_back(StateBrushes{.text = _brushes->Get(declared.colors.text), .icon = _brushes->Get(declared.colors.icon)});
+    }
     return RenderContext{.context       = _surface->Context(),
                          .dwrite        = _graphics.dwrite.Get(),
                          .textFormat    = _textFormat.Get(),
@@ -321,6 +326,7 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .warning       = {.text = _brushes->Get(style.warning.text), .icon = _brushes->Get(style.warning.icon)},
                          .critical      = {.text = _brushes->Get(style.critical.text), .icon = _brushes->Get(style.critical.icon)},
                          .muted         = {.text = _brushes->Get(style.muted.text), .icon = _brushes->Get(style.muted.icon)},
+                         .classes       = std::move(classes),
                          .brushes       = _brushes.get(),
                          .boxHeightDips = BoxCrossLength()};
 }

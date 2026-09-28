@@ -27,11 +27,15 @@ std::optional<std::wstring> Custom::TooltipText() {
 ModuleText Custom::Format(const std::string& spec) {
     const CommandResult result = _poller.Result();
     switch (result.outcome) {
-        case CommandOutcome::Pending: return ModuleText{.icon = Settings().icon, .text = {}, .state = TextState::Normal};
+        case CommandOutcome::Pending: return ModuleText{.icon = Settings().icon, .text = {}, .state = TextState::Normal, .classIndex = 0};
         case CommandOutcome::Succeeded:
-            return ModuleText{
-                .icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))), .state = result.alert ? TextState::Alert : TextState::Normal};
-        case CommandOutcome::Failed: return ModuleText{.icon = Settings().icon, .text = ToWide(result.text), .state = TextState::Alert};
+            return ModuleText{.icon       = Settings().icon,
+                              .text       = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))),
+                              .state      = result.alert             ? TextState::Alert :
+                                       result.classIndex.has_value() ? TextState::Classed :
+                                                                       TextState::Normal,
+                              .classIndex = result.classIndex.value_or(0)};
+        case CommandOutcome::Failed: return ModuleText{.icon = Settings().icon, .text = ToWide(result.text), .state = TextState::Alert, .classIndex = 0};
     }
     throw std::invalid_argument(std::format("unknown command outcome {}", static_cast<std::int32_t>(result.outcome)));
 }

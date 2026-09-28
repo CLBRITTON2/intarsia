@@ -28,14 +28,14 @@ namespace {
 } // namespace
 
 TEST(Battery, EachChargeHasItsFormatAndIcon) {
-    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)), (ModuleText{.icon = L"3", .text = L"64% 1:15", .state = TextState::Normal}));
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)), (ModuleText{.icon = L"3", .text = L"64% 1:15", .state = TextState::Normal, .classIndex = 0}));
     BatteryState charging = Discharging(64);
     charging.charge       = ChargeState::Charging;
-    EXPECT_EQ(FormatBattery(TestConfig(), charging), (ModuleText{.icon = L"C", .text = L"64% charging", .state = TextState::Normal}));
+    EXPECT_EQ(FormatBattery(TestConfig(), charging), (ModuleText{.icon = L"C", .text = L"64% charging", .state = TextState::Normal, .classIndex = 0}));
     BatteryState plugged = Discharging(100);
     plugged.charge       = ChargeState::Plugged;
-    EXPECT_EQ(FormatBattery(TestConfig(), plugged), (ModuleText{.icon = L"P", .text = L"", .state = TextState::Normal}));
-    EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .state = TextState::Normal}));
+    EXPECT_EQ(FormatBattery(TestConfig(), plugged), (ModuleText{.icon = L"P", .text = L"", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .state = TextState::Normal, .classIndex = 0}));
 }
 
 TEST(Battery, WarnsThenTurnsCriticalOnlyWhileDischargingAtOrUnderEachThreshold) {

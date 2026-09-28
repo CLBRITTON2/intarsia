@@ -9,7 +9,7 @@ DirectionToggle::DirectionToggle(TilingDirectionConfig config, IWindowManager& w
 
 // The direction's text is a glyph, so it draws as an icon: icon font, icon size, icon color.
 bool DirectionToggle::Layout(const RenderContext& render) {
-    return _glyph.Update(render, ModuleText{.icon = DirectionText(_config, _windowManager.Direction()), .text = {}, .state = TextState::Normal});
+    return _glyph.Update(render, ModuleText{.icon = DirectionText(_config, _windowManager.Direction()), .text = {}, .state = TextState::Normal, .classIndex = 0});
 }
 
 D2D1_SIZE_F DirectionToggle::Size() const {

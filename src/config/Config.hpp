@@ -117,6 +117,12 @@ struct StateColors {
     D2D1_COLOR_F icon;
 };
 
+// A class a custom module declares, as its style colors it (#weather.sunny, #weather.sunny .icon).
+struct ClassColors {
+    std::string name;
+    StateColors colors;
+};
+
 // One module's style, cascaded from every style.css rule that matches it.
 struct ModuleStyle {
     BoxStyle     box;
@@ -127,7 +133,9 @@ struct ModuleStyle {
     StateColors warning;
     StateColors critical;
     StateColors muted; // an audio output that is muted (.muted)
-    IconStyle   icon;
+    // A custom module's declared classes, in the order its classes key lists them.
+    std::vector<ClassColors> classes;
+    IconStyle                icon;
     // The box of a windows or binding_mode item, and of a focused window. Workspaces are focused, occupied (has
     // windows) or empty.
     ItemStyle item;
@@ -243,7 +251,9 @@ struct CustomConfig {
     Command              command;
     std::chrono::seconds timeout; // the command and everything it started are killed after this long
     CustomOutput         output;
-    TextModuleConfig     text;
+    // What the json output's "class" may name, each drawn in the module's .name colors. Output naming any other fails.
+    std::vector<std::string> classes;
+    TextModuleConfig         text;
 };
 
 // How a counter's instances make one value.

@@ -76,14 +76,18 @@ std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {
 ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state) {
     switch (state.link) {
         case NetworkLink::None:
-            return ModuleText{
-                .icon = config.iconDisconnected, .text = ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state))), .state = TextState::Normal};
+            return ModuleText{.icon       = config.iconDisconnected,
+                              .text       = ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state))),
+                              .state      = TextState::Normal,
+                              .classIndex = 0};
         case NetworkLink::Ethernet:
-            return ModuleText{.icon = config.iconEthernet, .text = ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state))), .state = TextState::Normal};
+            return ModuleText{
+                .icon = config.iconEthernet, .text = ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state))), .state = TextState::Normal, .classIndex = 0};
         case NetworkLink::Wifi:
-            return ModuleText{.icon  = WifiIcon(config.iconsWifi, state.signalPercent),
-                              .text  = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))),
-                              .state = TextState::Normal};
+            return ModuleText{.icon       = WifiIcon(config.iconsWifi, state.signalPercent),
+                              .text       = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))),
+                              .state      = TextState::Normal,
+                              .classIndex = 0};
     }
     throw std::invalid_argument(std::format("unknown network link {}", static_cast<std::int32_t>(state.link)));
 }

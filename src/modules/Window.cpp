@@ -21,8 +21,9 @@ Window::Window(WindowConfig config, const IWindowManager& windowManager) : _conf
 
 bool Window::Layout(const RenderContext& render) {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
-    return _line.Update(render,
-                        ModuleText{.icon = {}, .text = focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring(), .state = TextState::Normal});
+    return _line.Update(
+        render,
+        ModuleText{.icon = {}, .text = focused.has_value() ? TruncateTitle(focused->title, _config.maxLength) : std::wstring(), .state = TextState::Normal, .classIndex = 0});
 }
 
 D2D1_SIZE_F Window::Size() const {

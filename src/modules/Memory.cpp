@@ -38,7 +38,7 @@ Memory::Memory(TextModuleConfig config) :
     TextModule(std::move(config), "memory", MemoryPlaceholders(MemoryUsage{.totalBytes = 1, .availableBytes = 0, .cachedBytes = 0, .committedBytes = 0, .commitLimitBytes = 0})) {}
 
 ModuleText Memory::Format(const std::string& spec) {
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(ReadMemoryUsage()))), .state = TextState::Normal};
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(ReadMemoryUsage()))), .state = TextState::Normal, .classIndex = 0};
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {
