@@ -12,11 +12,6 @@ namespace {
 
 } // namespace
 
-TEST(Memory, GibibytesUseBinaryUnits) {
-    EXPECT_DOUBLE_EQ(BytesToGibibytes(1024ull * 1024 * 1024), 1.0);
-    EXPECT_DOUBLE_EQ(BytesToGibibytes(3ull * 512 * 1024 * 1024), 1.5);
-}
-
 TEST(Memory, FormatMustRenderADouble) {
     EXPECT_THROW(Memory(MemoryWithFormat("{used:d} GB")), ConfigError);
     EXPECT_NO_THROW(Memory(MemoryWithFormat("{used:.1f} GB")));

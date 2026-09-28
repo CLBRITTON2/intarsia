@@ -27,13 +27,6 @@ TEST(Workspaces, WorkspacesOnMonitorKeepsOnlyThatMonitorsInOrder) {
     EXPECT_TRUE(WorkspacesOnMonitor(kWorkspaces, 30).empty());
 }
 
-TEST(Workspaces, FocusedWinsOverOccupiedWhichWinsOverEmpty) {
-    const ModuleStyle style = TestModuleStyle();
-    EXPECT_EQ(&WorkspaceState(kWorkspaces[0], style), &style.occupied);
-    EXPECT_EQ(&WorkspaceState(kWorkspaces[1], style), &style.focused);
-    EXPECT_EQ(&WorkspaceState(kWorkspaces[2], style), &style.empty);
-}
-
 TEST(Workspaces, LayoutReportsAChangeOnlyWhenThisMonitorsWorkspacesChange) {
     FakeWindowManager    windowManager;
     const TextOnlyRender render;

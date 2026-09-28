@@ -16,7 +16,12 @@ struct IconPixels {
     bool                      operator==(const IconPixels&) const = default;
 };
 
-// The icon's pixels. Throws Win32Error when WIC cannot read it. The calling thread needs a COM apartment.
+// The largest icon read, per side. Any process can hand the tray an icon of any size, and every bar keeps a copy on
+// its device, while a bar draws icons at a font size.
+inline constexpr std::uint32_t kMaxIconSide = 256;
+
+// The icon's pixels. Throws Win32Error when WIC cannot read it or it is empty or larger than kMaxIconSide. The calling
+// thread needs a COM apartment.
 IconPixels IconToPixels(HICON icon);
 
 // The pixels uploaded to context's device. Throws DeviceLostError when the device is gone.

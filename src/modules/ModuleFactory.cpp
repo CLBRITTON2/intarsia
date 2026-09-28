@@ -31,6 +31,14 @@ namespace {
         return *settings;
     }
 
+    template <typename Source>
+    Source& RequireSource(Source* source, const ModuleInstance& instance) {
+        if (source == nullptr) {
+            throw std::logic_error(std::format("module {} reads a source App created no instance of for its kind", instance.name));
+        }
+        return *source;
+    }
+
 } // namespace
 
 std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources) {
@@ -38,20 +46,16 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Clock: return std::make_unique<Clock>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Window: return std::make_unique<Window>(RequireSettings<WindowConfig>(instance), sources.windowManager);
         case ModuleKind::Workspaces: return std::make_unique<Workspaces>(sources.windowManager, sources.monitor, instance.style);
-        case ModuleKind::Windows: return std::make_unique<WindowList>(sources.windowManager, sources.windowIcons, sources.monitor, instance.style);
+        case ModuleKind::Windows: return std::make_unique<WindowList>(sources.windowManager, RequireSource(sources.windowIcons, instance), sources.monitor, instance.style);
         case ModuleKind::BindingMode: return std::make_unique<BindingModes>(sources.windowManager, instance.style);
         case ModuleKind::TilingDirection: return std::make_unique<DirectionToggle>(RequireSettings<TilingDirectionConfig>(instance), sources.windowManager);
         case ModuleKind::Divider: return std::make_unique<Divider>(instance.style);
         case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
-        case ModuleKind::Audio: return std::make_unique<Audio>(RequireSettings<AudioConfig>(instance), sources.audio);
-        case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), sources.network);
-        case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), sources.battery);
-        case ModuleKind::Tray:
-            if (sources.tray == nullptr) {
-                throw std::logic_error(std::format("module {} is a tray, and App created no tray for it", instance.name));
-            }
-            return std::make_unique<Tray>(RequireSettings<TrayConfig>(instance), *sources.tray, instance.style);
+        case ModuleKind::Audio: return std::make_unique<Audio>(RequireSettings<AudioConfig>(instance), RequireSource(sources.audio, instance));
+        case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), RequireSource(sources.network, instance));
+        case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), RequireSource(sources.battery, instance));
+        case ModuleKind::Tray: return std::make_unique<Tray>(RequireSettings<TrayConfig>(instance), RequireSource(sources.tray, instance), instance.style);
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));

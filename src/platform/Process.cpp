@@ -268,6 +268,10 @@ std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program) {
         std::error_code error;
         return std::filesystem::is_regular_file(path, error) ? std::optional<std::filesystem::path>(path) : std::nullopt;
     }
+    // SearchPathW resolves a name with any directory part against the current directory, whatever path it is given.
+    if (path.has_parent_path()) {
+        return std::nullopt;
+    }
     // An explicit search path keeps SearchPathW from also looking in the current directory.
     const std::wstring         searchPath = PathVariable();
     std::array<wchar_t, 32768> found{};

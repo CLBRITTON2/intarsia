@@ -20,9 +20,9 @@ struct Command {
     bool                      operator==(const Command&) const = default;
 };
 
-// The absolute path of a program: as given when it is already absolute, else the first match in the PATH directories
-// (".exe" added when the name has no extension). Never the current directory, where a planted program would win.
-// Nullopt when there is no such file.
+// The absolute path of a program: as given when it is already absolute, else a bare file name's first match in the
+// PATH directories (".exe" added when the name has no extension). Never the current directory, where a planted program
+// would win, so a relative path with a directory part resolves to nothing. Nullopt when there is no such file.
 std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program);
 
 // Arguments joined into one command line that CommandLineToArgvW and the C runtime split back into the same arguments.

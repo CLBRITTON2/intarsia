@@ -1,6 +1,13 @@
 #include "platform/AppBar.hpp"
 
+#include "platform/Win32Cast.hpp"
+
 #include <gtest/gtest.h>
+
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <type_traits>
 
 namespace {
 
@@ -26,4 +33,17 @@ TEST(AppBar, DockedRectKeepsASecondaryMonitorOffset) {
 
 TEST(AppBar, DockedRectDoesNotClampAThicknessLargerThanTheMonitor) {
     EXPECT_TRUE(SameRect(DockedRect(kMonitor, Edge::Top, 2000), RECT{.left = 0, .top = 0, .right = 1920, .bottom = 2000}));
+}
+
+// An ABM_SETPOS for a 3440x54 strip at the top, byte for byte as shell32 sent it to the taskbar window.
+TEST(AppBar, AppBarRequestIsWhatShell32Sends) {
+    constexpr std::array<std::uint32_t, 16> kSent{0x28, 0x002b0848, 0, ABE_TOP, 0, 0, 3440, 54, 0, 0, ABM_SETPOS, 0, 0x669b7a70, 0x19f, 0x8dbc, 0};
+    APPBARDATA                              data{};
+    data.cbSize                 = sizeof(data);
+    data.hWnd                   = IntToPointer<std::remove_pointer_t<HWND>>(0x002b0848);
+    data.uEdge                  = ABE_TOP;
+    data.rc                     = RECT{.left = 0, .top = 0, .right = 3440, .bottom = 54};
+    const AppBarCommand request = AppBarRequest(ABM_SETPOS, data, 0x19f669b7a70, 0x8dbc);
+    ASSERT_EQ(sizeof(request), sizeof(kSent));
+    EXPECT_EQ(std::memcmp(&request, kSent.data(), sizeof(request)), 0);
 }

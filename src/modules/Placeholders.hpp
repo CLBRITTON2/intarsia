@@ -19,6 +19,9 @@ struct Placeholder {
 // placeholder has, a spec that does not fit the value, or an unmatched brace.
 std::string FormatPlaceholders(std::string_view format, const std::vector<Placeholder>& placeholders);
 
+// Whether the format has a {name} or {name:spec} field. Throws std::format_error for an unmatched brace.
+bool FormatNames(std::string_view format, std::string_view name);
+
 // Formats sample values once so a bad format fails when the config loads, not on the first redraw. Throws ConfigError
 // naming the key and the names the format may use.
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples);

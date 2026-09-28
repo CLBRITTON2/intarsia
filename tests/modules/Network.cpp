@@ -86,6 +86,20 @@ TEST(Network, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
     EXPECT_GT(module.Size().width, 0.0f);
 }
 
+// The backend tells of link changes only, so a rate on the bar is read on a tick, and one only in the tooltip is not.
+TEST(Network, ARateInAFormatMakesTheModuleTick) {
+    FakeNetwork network;
+    EXPECT_FALSE(ShowsRates(TestConfig()));
+    EXPECT_EQ(Network(TestConfig(), network).MillisecondsUntilChange(), std::nullopt);
+    NetworkConfig rates  = TestConfig();
+    rates.formatEthernet = "{interface} {down}";
+    EXPECT_TRUE(ShowsRates(rates));
+    EXPECT_EQ(Network(rates, network).MillisecondsUntilChange(), 1000u);
+    NetworkConfig literal = TestConfig();
+    literal.formatWifi    = "{{down}}";
+    EXPECT_FALSE(ShowsRates(literal));
+}
+
 TEST(Network, AFormatNamingAnUnknownValueIsAConfigError) {
     FakeNetwork   network;
     NetworkConfig config = TestConfig();

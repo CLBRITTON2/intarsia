@@ -178,9 +178,12 @@ namespace {
         std::string  _path;
     };
 
-    float PositiveNumber(const TableReader& table, std::string_view key) {
+    // Whole numbers are read through a float, which holds every whole number up to 2^24 exactly.
+    constexpr float kMaxWholeNumber = 16777216.0f;
+
+    float           PositiveNumber(const TableReader& table, std::string_view key) {
         const float value = table.Number(key);
-        if (!(value > 0.0f)) {
+        if (!(value > 0.0f) || !std::isfinite(value)) {
             throw table.Error(std::format("{} must be greater than 0, got {}", table.KeyPath(key), value));
         }
         return value;
@@ -188,8 +191,8 @@ namespace {
 
     std::int64_t PositiveWholeNumber(const TableReader& table, std::string_view key) {
         const float value = PositiveNumber(table, key);
-        if (value != std::floor(value)) {
-            throw table.Error(std::format("{} must be a whole number, got {}", table.KeyPath(key), value));
+        if (value != std::floor(value) || value > kMaxWholeNumber) {
+            throw table.Error(std::format("{} must be a whole number up to {}, got {}", table.KeyPath(key), kMaxWholeNumber, value));
         }
         return static_cast<std::int64_t>(value);
     }
@@ -520,7 +523,8 @@ namespace {
         return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .tooltip = ReadTooltip(window), .actions = ReadActions(window)};
     }
 
-    // what names the file in the error, as "config" or "style".
+    // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
+    // converting one later cannot fail.
     std::string ReadFile(const std::filesystem::path& path, std::string_view what) {
         std::ifstream file(path, std::ios::binary);
         if (!file) {
@@ -528,14 +532,64 @@ namespace {
         }
         std::ostringstream contents;
         contents << file.rdbuf();
-        return contents.str();
+        std::string text = contents.str();
+        if (!IsValidUtf8(text)) {
+            throw ConfigError(std::format("{} file {} is not valid UTF-8", what, ToUtf8(path.wstring())));
+        }
+        return text;
     }
 
     // Far more than any real config needs (a few thousand instructions), and still under a second to reach.
     constexpr std::int32_t kMaxConfigInstructions = 50'000'000;
+    // Far more than any real config allocates (a few hundred KiB with the libraries), and a string built in one C call
+    // runs no instructions for the count hook to see.
+    constexpr size_t kMaxConfigBytes = size_t{16} << 20;
 
-    // Called once the count is reached. luaL_error raises inside the lua_pcall, so LoadConfig reports it as a ConfigError.
+    // What the Lua state may use, and whether it was stopped, shared with the allocator and the hook through the
+    // allocator's user data.
+    struct LuaLimits {
+        lua_Alloc allocate; // Lua's own allocator, which the limited one bounds
+        void*     allocateData;
+        size_t    usedBytes;
+        size_t    limitBytes;
+        bool      runaway;
+    };
+
+    // Lua's own allocator with a ceiling: a refused request raises a memory error inside the lua_pcall.
+    void* LimitedAlloc(void* userData, void* block, size_t oldSize, size_t newSize) {
+        auto* limits = static_cast<LuaLimits*>(userData);
+        // oldSize is the block's size only for a live block, else a tag of what is being allocated.
+        const size_t held = block == nullptr ? 0 : oldSize;
+        if (newSize > held && limits->usedBytes + (newSize - held) > limits->limitBytes) {
+            return nullptr;
+        }
+        void* resized = limits->allocate(limits->allocateData, block, oldSize, newSize);
+        if (newSize != 0 && resized == nullptr) {
+            return nullptr;
+        }
+        limits->usedBytes = limits->usedBytes - held + newSize;
+        return resized;
+    }
+
+    // Puts the limited allocator over the state's own, counting from what the state holds already so that freeing it
+    // later balances.
+    void LimitAllocations(lua_State* lua, LuaLimits& limits) {
+        limits.allocate  = lua_getallocf(lua, &limits.allocateData);
+        limits.usedBytes = (static_cast<size_t>(lua_gc(lua, LUA_GCCOUNT)) << 10) + static_cast<size_t>(lua_gc(lua, LUA_GCCOUNTB));
+        lua_setallocf(lua, LimitedAlloc, &limits);
+    }
+
+    LuaLimits& LimitsOf(lua_State* lua) {
+        void* userData = nullptr;
+        lua_getallocf(lua, &userData);
+        return *static_cast<LuaLimits*>(userData);
+    }
+
+    // Called once the count is reached. The error raised is catchable, so from here on every instruction raises again
+    // until it reaches LoadConfig's own call, though no protected call is left in the sandbox to catch it.
     void AbortRunawayConfig(lua_State* lua, lua_Debug*) {
+        LimitsOf(lua).runaway = true;
+        lua_sethook(lua, AbortRunawayConfig, LUA_MASKCOUNT, 1);
         luaL_error(lua, "the config ran %d instructions without finishing, is there an endless loop?", kMaxConfigInstructions);
     }
 
@@ -549,6 +603,17 @@ namespace {
         std::string text    = message == nullptr ? std::string("non-string Lua error") : std::string(message);
         lua_pop(lua, 1);
         return text;
+    }
+
+    // The ConfigError for a load or call that did not return LUA_OK.
+    ConfigError LuaError(lua_State* lua, std::int32_t status, std::string_view source) {
+        if (LimitsOf(lua).runaway) {
+            return ConfigError(std::format("{}: the config ran {} instructions without finishing, is there an endless loop?", source, kMaxConfigInstructions));
+        }
+        if (status == LUA_ERRMEM) {
+            return ConfigError(std::format("{}: the config used more than {} MiB of memory", source, kMaxConfigBytes >> 20));
+        }
+        return ConfigError(PopErrorMessage(lua));
     }
 
 } // namespace
@@ -568,29 +633,35 @@ Config LoadConfig(const std::filesystem::path& path) {
     const std::string source = ToUtf8(path.wstring());
     const std::string chunk  = ReadFile(path, "config");
 
-    const LuaState    lua(luaL_newstate(), &lua_close);
+    // Declared before the state, whose close frees through the limited allocator.
+    LuaLimits      limits{.allocate = nullptr, .allocateData = nullptr, .usedBytes = 0, .limitBytes = kMaxConfigBytes, .runaway = false};
+    const LuaState lua(luaL_newstate(), &lua_close);
     if (lua == nullptr) {
         throw ConfigError("luaL_newstate failed to allocate a Lua state");
     }
+    LimitAllocations(lua.get(), limits);
     // Only libraries that cannot reach the filesystem or other processes: base minus its loaders. load goes too, since it
-    // accepts precompiled chunks and Lua does not verify bytecode.
+    // accepts precompiled chunks and Lua does not verify bytecode, pcall since a config is data with nothing to recover
+    // from, and setmetatable since Lua runs a __gc metamethod with hooks off, where an endless loop could not be stopped.
     OpenLibrary(lua.get(), LUA_GNAME, luaopen_base);
     OpenLibrary(lua.get(), LUA_STRLIBNAME, luaopen_string);
     OpenLibrary(lua.get(), LUA_TABLIBNAME, luaopen_table);
     OpenLibrary(lua.get(), LUA_MATHLIBNAME, luaopen_math);
-    for (const char* loader : {"dofile", "loadfile", "load"}) {
+    for (const char* removed : {"dofile", "loadfile", "load", "pcall", "xpcall", "setmetatable"}) {
         lua_pushnil(lua.get());
-        lua_setglobal(lua.get(), loader);
+        lua_setglobal(lua.get(), removed);
     }
     // Reload runs on the UI thread, so a config that never finishes would freeze the bar: stop it instead.
     lua_sethook(lua.get(), AbortRunawayConfig, LUA_MASKCOUNT, kMaxConfigInstructions);
 
-    const std::string chunkName = "@" + source;
-    if (luaL_loadbufferx(lua.get(), chunk.data(), chunk.size(), chunkName.c_str(), "t") != LUA_OK) {
-        throw ConfigError(PopErrorMessage(lua.get()));
+    const std::string  chunkName = "@" + source;
+    const std::int32_t loaded    = luaL_loadbufferx(lua.get(), chunk.data(), chunk.size(), chunkName.c_str(), "t");
+    if (loaded != LUA_OK) {
+        throw LuaError(lua.get(), loaded, source);
     }
-    if (lua_pcall(lua.get(), 0, 1, 0) != LUA_OK) {
-        throw ConfigError(PopErrorMessage(lua.get()));
+    const std::int32_t ran = lua_pcall(lua.get(), 0, 1, 0);
+    if (ran != LUA_OK) {
+        throw LuaError(lua.get(), ran, source);
     }
     if (lua_type(lua.get(), -1) != LUA_TTABLE) {
         throw ConfigError(std::format("{}: must return a table, got {}", source, luaL_typename(lua.get(), -1)));

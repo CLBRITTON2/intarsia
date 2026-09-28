@@ -45,9 +45,11 @@ class App {
     void                    CreateBars(std::vector<BarPlacement> placements);
     void                    HandleConfigChanged();
     void                    ReloadConfig();
-    // Creates the tray when the config shows one and there is none yet, or destroys it when the config shows none.
-    void MatchTrayToConfig();
-    void RebuildBarsIfMonitorsChanged();
+    // Creates each data source the config shows a module for and there is none of yet, and destroys those it shows
+    // none for.
+    void        MatchSourcesToConfig();
+    AppBarRoute AppBarRouteForTray() const;
+    void        RebuildBarsIfMonitorsChanged();
     // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
     void                  HandleDeviceLost();
     void                  ScheduleDeviceRetry();
@@ -78,15 +80,13 @@ class App {
     std::unique_ptr<IWindowManager> _windowManager;
     // Created before the bars and destroyed after them, like the window manager, since custom modules read them.
     std::unique_ptr<CommandPollers> _commandPollers;
-    // Kept across reloads: icons belong to windows, not to a config. Trimmed to the listed windows on every change.
-    std::unique_ptr<WindowIcons> _windowIcons;
-    // Kept across reloads: the output device belongs to the system, not to a config.
-    std::unique_ptr<IAudio> _audio;
-    // Kept across reloads, like the audio device, and sampled whether or not a module shows it.
-    std::unique_ptr<INetwork> _network;
-    // Kept across reloads, like the network.
-    std::unique_ptr<IBattery> _battery;
-    // Null while the config shows no tray module, and kept across reloads that show one.
+    // Each null while the config shows no module of its kind, and kept across reloads that show one, since its state
+    // (icons, the output device) belongs to the system, not to a config. Window icons are trimmed to the listed
+    // windows on every change.
+    std::unique_ptr<WindowIcons>     _windowIcons;
+    std::unique_ptr<IAudio>          _audio;
+    std::unique_ptr<INetwork>        _network;
+    std::unique_ptr<IBattery>        _battery;
     std::unique_ptr<ShellNotifyIcon> _tray;
     // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;

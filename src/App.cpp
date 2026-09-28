@@ -17,6 +17,8 @@
 #include <chrono>
 #include <exception>
 #include <format>
+#include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -49,7 +51,21 @@ namespace {
     constexpr std::chrono::milliseconds kFirstDeviceRetry{500};
     constexpr std::chrono::milliseconds kLongestDeviceRetry{10000};
 
-    std::vector<std::intptr_t>          WindowHandles(const std::vector<ManagedWindow>& windows) {
+    bool                                ShowsKind(const Config& config, ModuleKind kind) {
+        return AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
+    }
+
+    // A source kept while the config shows a module of its kind, so its state survives reloads that keep it, and
+    // dropped otherwise, since it samples the system for as long as it exists.
+    template <typename Source>
+    std::unique_ptr<Source> MatchedToConfig(std::unique_ptr<Source> source, bool shown, const std::function<std::unique_ptr<Source>()>& create) {
+        if (!shown) {
+            return nullptr;
+        }
+        return source != nullptr ? std::move(source) : create();
+    }
+
+    std::vector<std::intptr_t> WindowHandles(const std::vector<ManagedWindow>& windows) {
         std::vector<std::intptr_t> handles;
         handles.reserve(windows.size());
         for (const ManagedWindow& window : windows) {
@@ -117,16 +133,16 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged), _frames(_control, kAnimationFrame, kFrameClockFailed),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
-    _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
-    _windowIcons(std::make_unique<WindowIcons>(_changes)), _audio(std::make_unique<CoreAudio>(_changes)), _network(std::make_unique<IpHelper>(_changes)),
-    _battery(std::make_unique<PowerStatus>(_changes)) {
-    MatchTrayToConfig();
+    _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)) {
+    MatchSourcesToConfig();
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
 }
 
 App::~App() {
+    // Nothing may post to the control window once the bars are gone, and the frame clock posts while it runs.
+    _frames.Stop();
     _bars.clear();
     _tray.reset();
     _battery.reset();
@@ -174,7 +190,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 KillTimer(_control, kRedrawTimer);
                 _redrawPending = false;
                 _changes.Acknowledge();
-                _windowIcons->Retain(WindowHandles(_windowManager->Windows()));
+                if (_windowIcons != nullptr) {
+                    _windowIcons->Retain(WindowHandles(_windowManager->Windows()));
+                }
                 for (const std::unique_ptr<Bar>& bar : _bars) {
                     bar->Refresh();
                 }
@@ -240,13 +258,13 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
             _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                                   ModuleSources{.windowManager  = *_windowManager,
                                                                 .commandPollers = *_commandPollers,
-                                                                .windowIcons    = *_windowIcons,
-                                                                .audio          = *_audio,
-                                                                .network        = *_network,
-                                                                .battery        = *_battery,
+                                                                .windowIcons    = _windowIcons.get(),
+                                                                .audio          = _audio.get(),
+                                                                .network        = _network.get(),
+                                                                .battery        = _battery.get(),
                                                                 .tray           = _tray.get(),
                                                                 .monitor        = placement.monitor},
-                                                  _launcher, _frames, placement, _state, _control, kDeviceLost));
+                                                  _launcher, _frames, placement, AppBarRouteForTray(), _state, _control, kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }
@@ -287,28 +305,32 @@ void App::ReloadConfig() {
     _config         = std::move(config);
     _windowManager  = CreateWindowManager(_config->windowManager, _changes, _glazeWmPort);
     _commandPollers = std::make_unique<CommandPollers>(*_config, _changes);
-    MatchTrayToConfig();
+    MatchSourcesToConfig();
     // A pending device recovery builds the bars from this config once it has a device.
     if (!_recovering) {
         CreateBars(PlacementsForAllMonitors());
     }
 }
 
-// The tray takes every app's icons from the taskbar, so it exists only while the config shows it, and stays across
-// reloads that keep it so the icons stay too.
-void App::MatchTrayToConfig() {
-    const bool shown = AnyModuleInConfig(*_config, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Tray; });
-    if (!shown) {
-        _tray.reset();
-        return;
-    }
-    if (_tray == nullptr) {
-        _tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control, kTrayFailed);
+void App::MatchSourcesToConfig() {
+    _windowIcons = MatchedToConfig<WindowIcons>(std::move(_windowIcons), ShowsKind(*_config, ModuleKind::Windows), [this] { return std::make_unique<WindowIcons>(_changes); });
+    _audio       = MatchedToConfig<IAudio>(std::move(_audio), ShowsKind(*_config, ModuleKind::Audio), [this] { return std::make_unique<CoreAudio>(_changes); });
+    _network     = MatchedToConfig<INetwork>(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this] { return std::make_unique<IpHelper>(_changes); });
+    _battery     = MatchedToConfig<IBattery>(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
+    _tray        = MatchedToConfig<ShellNotifyIcon>(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
+        auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control, kTrayFailed);
         // Apps add their icons again for the taskbar's class only, so a tray of another class has no one to tell.
         if (_trayClass == kTaskbarClass) {
             AnnounceTray();
         }
-    }
+        return tray;
+    });
+}
+
+// While the tray is the first taskbar window, the bars' own SHAppBarMessage calls would land in this process and never
+// reach Explorer.
+AppBarRoute App::AppBarRouteForTray() const {
+    return _tray != nullptr && _trayClass == kTaskbarClass ? AppBarRoute::Taskbar : AppBarRoute::Shell;
 }
 
 // A monitor added, removed, moved, resized or rescaled gets fresh bars. The window manager and the command pollers

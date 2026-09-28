@@ -2,28 +2,48 @@
 
 #include "platform/Text.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cstdint>
 #include <format>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
-Network::Network(NetworkConfig config, const INetwork& network) : _config(std::move(config)), _network(network) {
-    const std::vector<Placeholder> samples = NetworkPlaceholders(NetworkState{.link                   = NetworkLink::Wifi,
-                                                                              .interfaceName          = L"Wi-Fi",
-                                                                              .ssid                   = L"home",
-                                                                              .signalPercent          = 80,
-                                                                              .ipv4                   = L"192.0.2.1",
-                                                                              .receivedBytesPerSecond = 1000.0,
-                                                                              .sentBytesPerSecond     = 1000.0});
-    RequirePlaceholders("network format_wifi", _config.formatWifi, samples);
-    RequirePlaceholders("network format_ethernet", _config.formatEthernet, samples);
-    RequirePlaceholders("network format_disconnected", _config.formatDisconnected, samples);
-    RequireOptionalPlaceholders("network tooltip", _config.tooltip, samples);
-}
+namespace {
+
+    // How often a rate shown on the bar is read again, the backend's own sampling interval.
+    constexpr std::uint32_t kRateTickMs = 1000;
+
+    // The config once every format is known to be valid. Throws ConfigError.
+    NetworkConfig Validated(NetworkConfig config) {
+        const std::vector<Placeholder> samples = NetworkPlaceholders(NetworkState{.link                   = NetworkLink::Wifi,
+                                                                                  .interfaceName          = L"Wi-Fi",
+                                                                                  .ssid                   = L"home",
+                                                                                  .signalPercent          = 80,
+                                                                                  .ipv4                   = L"192.0.2.1",
+                                                                                  .receivedBytesPerSecond = 1000.0,
+                                                                                  .sentBytesPerSecond     = 1000.0});
+        RequirePlaceholders("network format_wifi", config.formatWifi, samples);
+        RequirePlaceholders("network format_ethernet", config.formatEthernet, samples);
+        RequirePlaceholders("network format_disconnected", config.formatDisconnected, samples);
+        RequireOptionalPlaceholders("network tooltip", config.tooltip, samples);
+        return config;
+    }
+
+} // namespace
+
+Network::Network(NetworkConfig config, const INetwork& network) : _config(Validated(std::move(config))), _network(network), _showsRates(ShowsRates(_config)) {}
 
 bool Network::Layout(const RenderContext& render) {
     return _line.Update(render, FormatNetwork(_config, _network.State()));
+}
+
+std::optional<std::uint32_t> Network::MillisecondsUntilChange() const {
+    return _showsRates ? std::optional<std::uint32_t>(kRateTickMs) : std::nullopt;
 }
 
 D2D1_SIZE_F Network::Size() const {
@@ -65,6 +85,11 @@ ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state)
                 .icon = WifiIcon(config.iconsWifi, state.signalPercent), .text = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))), .alert = false};
     }
     throw std::invalid_argument(std::format("unknown network link {}", static_cast<std::int32_t>(state.link)));
+}
+
+bool ShowsRates(const NetworkConfig& config) {
+    return std::ranges::any_of(std::array{&config.formatWifi, &config.formatEthernet, &config.formatDisconnected},
+                               [](const std::string* format) { return FormatNames(*format, "down") || FormatNames(*format, "up"); });
 }
 
 const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent) {

@@ -15,17 +15,18 @@
 
 #include <memory>
 
-// What a module reads beyond its own config: shared data sources, and the monitor of the bar it belongs to.
+// What a module reads beyond its own config: shared data sources, and the monitor of the bar it belongs to. Each
+// pointer is null unless the config shows a module of its kind, since a source samples the system for as long as it
+// exists, and the tray takes over every app's icons.
 struct ModuleSources {
     IWindowManager&       windowManager;
     const CommandPollers& commandPollers;
-    WindowIcons&          windowIcons;
-    IAudio&               audio;
-    const INetwork&       network;
-    const IBattery&       battery;
-    // Null unless the config shows a tray module: the tray takes over every app's icons while it exists.
-    ITray*   tray;
-    HMONITOR monitor;
+    WindowIcons*          windowIcons;
+    IAudio*               audio;
+    const INetwork*       network;
+    const IBattery*       battery;
+    ITray*                tray;
+    HMONITOR              monitor;
 };
 
 std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources);

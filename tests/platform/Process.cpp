@@ -109,3 +109,16 @@ TEST(Process, MissingProgramsDoNotResolve) {
     EXPECT_FALSE(ResolveProgram(L"intarsia-no-such-program").has_value());
     EXPECT_FALSE(ResolveProgram(L"C:\\intarsia\\no-such-program.exe").has_value());
 }
+
+// SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
+// when the file exists there.
+TEST(Process, RelativePathsWithDirectoriesDoNotResolve) {
+    const std::filesystem::path cmd = SystemProgram(L"cmd");
+    EXPECT_TRUE(std::filesystem::exists(cmd));
+    const std::wstring relative = std::filesystem::relative(cmd, std::filesystem::current_path()).wstring();
+    EXPECT_FALSE(ResolveProgram(relative).has_value());
+    EXPECT_FALSE(ResolveProgram(L".\\cmd.exe").has_value());
+    EXPECT_FALSE(ResolveProgram(L"System32\\cmd.exe").has_value());
+    EXPECT_FALSE(ResolveProgram(L"\\Windows\\System32\\cmd.exe").has_value());
+    EXPECT_FALSE(ResolveProgram(L"C:cmd.exe").has_value());
+}

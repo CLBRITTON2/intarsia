@@ -237,9 +237,8 @@ function Invoke-Scenario([string] $name) {
     $serverName = if ($name -in @('reload', 'idle', 'tray')) { 'normal' } else { $name }
     $barLog     = Join-Path $work 'intarsia.log'
 
-    $server = Start-Process $serverExe -ArgumentList '--port', $port, '--scenario', $serverName -PassThru -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $work 'server.out') -RedirectStandardError (Join-Path $work 'server.err')
-    $bar = Start-Process $barExe -ArgumentList '--config', "`"$configPath`"", '--glazewm-port', $port, '--tray-class', $trayClass -PassThru -RedirectStandardError $barLog
+    $server = $null
+    $bar    = $null
     $sender = $null
     $senderStarts = 0
 
@@ -247,6 +246,9 @@ function Invoke-Scenario([string] $name) {
     $samples    = [System.Collections.Generic.List[object]]::new()
     $cpuPercent = $null
     try {
+        $server = Start-Process $serverExe -ArgumentList '--port', $port, '--scenario', $serverName -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput (Join-Path $work 'server.out') -RedirectStandardError (Join-Path $work 'server.err')
+        $bar = Start-Process $barExe -ArgumentList '--config', "`"$configPath`"", '--glazewm-port', $port, '--tray-class', $trayClass -PassThru -RedirectStandardError $barLog
         for ($second = 1; $second -le $Seconds; $second++) {
             Start-Sleep -Seconds 1
             if ($bar.HasExited) {
@@ -296,7 +298,10 @@ function Invoke-Scenario([string] $name) {
             $samples.Add((Get-Sample $bar))
         }
 
-        if ($failures.Count -eq 0 -and $samples.Count -gt $warmupSeconds + 5) {
+        if ($failures.Count -eq 0 -and $samples.Count -le $warmupSeconds + 5) {
+            $failures.Add("ran only $($samples.Count) s, too short to judge growth after the $warmupSeconds s warmup")
+        }
+        if ($failures.Count -eq 0) {
             $baseline = $samples[$warmupSeconds]
             $final    = $samples[$samples.Count - 1]
             if ($final.PrivateMB - $baseline.PrivateMB -gt $maxPrivateGrowthMB) { $failures.Add("private memory grew $($baseline.PrivateMB) to $($final.PrivateMB) MB") }
@@ -311,7 +316,7 @@ function Invoke-Scenario([string] $name) {
         if ($null -ne $sender -and -not $sender.HasExited) {
             Stop-Process -Id $sender.Id -Force
         }
-        if (-not $bar.HasExited) {
+        if ($null -ne $bar -and -not $bar.HasExited) {
             # WM_CLOSE through taskkill without /F, as a user would stop it: every bar must release its strip and exit.
             taskkill /PID $bar.Id | Out-Null
             if (-not $bar.WaitForExit(10000)) {
@@ -321,7 +326,9 @@ function Invoke-Scenario([string] $name) {
                 $failures.Add("exited with code $($bar.ExitCode) on WM_CLOSE")
             }
         }
-        Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+        if ($null -ne $server) {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+        }
     }
 
     $last = if ($samples.Count -gt 0) { $samples[$samples.Count - 1] } else { $null }

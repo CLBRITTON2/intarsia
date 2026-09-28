@@ -8,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 # build.ps1 entered the dev shell in this process, so VS's ctest is already first on PATH.
 & (Join-Path $PSScriptRoot 'build.ps1') -Preset debug
 
-ctest --test-dir (Join-Path (Split-Path -Parent $PSScriptRoot) 'build\debug') --output-on-failure
+# A test that hangs (a thread that never joins) fails instead of holding the job.
+ctest --test-dir (Join-Path (Split-Path -Parent $PSScriptRoot) 'build\debug') --output-on-failure --timeout 300
 if ($LASTEXITCODE -ne 0) {
     throw "ctest failed with exit code $LASTEXITCODE"
 }

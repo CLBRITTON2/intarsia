@@ -112,18 +112,10 @@ return {
 
 } // namespace
 
-TEST(Config, ShippedBasicLoads) {
-    const Config config = LoadConfig(INTARSIA_BASIC_CONFIG);
-    EXPECT_EQ(config.windowManager, WindowManagerKind::Windows);
-    EXPECT_EQ(Kinds(config.modules.right).front(), ModuleKind::Tray);
-    EXPECT_EQ(config.style.font, L"Segoe UI");
-}
-
-TEST(Config, ShippedExampleLoads) {
-    const Config config = LoadConfig(INTARSIA_EXAMPLE_CONFIG);
-    EXPECT_EQ(config.bar.edge, Edge::Top);
-    EXPECT_EQ(Kinds(config.modules.left).back(), ModuleKind::Clock);
-    EXPECT_EQ(config.style.font, L"JetBrainsMono Nerd Font");
+// The shipped configs must load with their style, so neither drifts from the loader. What they show is theirs to change.
+TEST(Config, ShippedConfigsLoad) {
+    EXPECT_NO_THROW(LoadConfig(INTARSIA_BASIC_CONFIG));
+    EXPECT_NO_THROW(LoadConfig(INTARSIA_EXAMPLE_CONFIG));
 }
 
 TEST(Config, ValidConfigParsesIntoTypedValues) {
@@ -132,8 +124,11 @@ TEST(Config, ValidConfigParsesIntoTypedValues) {
     EXPECT_EQ(config.style.font, L"Some Font");
     EXPECT_FLOAT_EQ(config.style.fontSizeDips, 15.0f);
     EXPECT_FLOAT_EQ(config.style.color.r, 0xe0 / 255.0f);
+    EXPECT_EQ(config.windowManager, WindowManagerKind::Windows);
     EXPECT_EQ(config.modules.center.at(0).name, "time");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).interval, std::chrono::seconds(60));
+    EXPECT_EQ(Kinds(config.modules.left), std::vector<ModuleKind>{ModuleKind::Window});
+    EXPECT_EQ(SettingsOf<WindowConfig>(config.modules.left, 0).maxLength, 80u);
 }
 
 TEST(Config, MissingFileIsAnError) {
@@ -212,6 +207,35 @@ TEST(Config, EdgeMustBeOneOfFour) {
 TEST(Config, SizesMustBePositiveAndIntervalWholeSeconds) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ConfigErrorWith("modules.time.interval must be a whole number"));
+}
+
+// inf passes a floor check and casts to an undefined integer, and a float holds whole numbers exactly only up to 2^24.
+TEST(Config, NumbersMustBeFiniteAndWholeNumbersBounded) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = math.huge")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0/0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = math.huge")); }, ConfigErrorWith("modules.time.interval must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1e30")); }, ConfigErrorWith("modules.time.interval must be a whole number up to 16777216"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 2^24 + 2")); },
+                ConfigErrorWith("modules.title.max_length must be a whole number up to 16777216"));
+}
+
+TEST(Config, ModuleTableKeysMustBeStrings) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "    modules = {\n", "    modules = {\n        [1] = { type = \"clock\" },\n")); },
+                ConfigErrorWith("modules has a key that is not a string"));
+}
+
+TEST(Config, ConfigFilesMustBeUtf8) {
+    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); }, ConfigErrorWith("config file"));
+    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); }, ConfigErrorWith("is not valid UTF-8"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, "/* \xC0\xAF */"); }, ConfigErrorWith("style file"));
+}
+
+// A relative path with a directory part would resolve against the bar's current directory.
+TEST(Config, ActionsRefuseRelativePathsWithDirectories) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { ".\\cmd.exe" } })")); },
+                ConfigErrorWith("not an existing file or a program on PATH"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "System32\\cmd.exe" } })")); },
+                ConfigErrorWith("not an existing file or a program on PATH"));
 }
 
 TEST(Config, ModuleListsMustBePlainListsOfStrings) {
@@ -300,13 +324,6 @@ TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
     EXPECT_EQ(config.modules.right.at(1).name, "cpu_slow");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(5));
-}
-
-TEST(Config, WindowManagerAndWindowModuleParse) {
-    const Config config = LoadText(kValidConfig);
-    EXPECT_EQ(config.windowManager, WindowManagerKind::Windows);
-    EXPECT_EQ(Kinds(config.modules.left), std::vector<ModuleKind>{ModuleKind::Window});
-    EXPECT_EQ(SettingsOf<WindowConfig>(config.modules.left, 0).maxLength, 80u);
 }
 
 TEST(Config, WindowManagerMustBeAKnownBackend) {
@@ -482,6 +499,28 @@ TEST(Config, TheConfigCannotLoadChunks) {
     EXPECT_THAT([] { return LoadText("load('return 1')"); }, ConfigErrorWith("attempt to call a nil value (global 'load')"));
 }
 
+TEST(Config, TheConfigHasNoLibraryThatReachesOutsideTheProcess) {
+    for (const std::string_view library : {"os", "io", "package", "debug", "coroutine", "utf8"}) {
+        const std::string config = std::string("return ") + std::string(library) + ".x";
+        EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith(std::string("attempt to index a nil value (global '") + std::string(library) + "')"));
+    }
+    EXPECT_THAT([] { return LoadText("return require('os')"); }, ConfigErrorWith("attempt to call a nil value (global 'require')"));
+}
+
+// A protected call could swallow the abort, and Lua runs a __gc metamethod with hooks off, so an endless loop there
+// could never be stopped: neither can be written.
+TEST(Config, AnEndlessConfigCannotCatchOrHideFromItsAbort) {
+    EXPECT_THAT([] { return LoadText("while true do pcall(function() while true do end end) end"); }, ConfigErrorWith("attempt to call a nil value (global 'pcall')"));
+    EXPECT_THAT([] { return LoadText("xpcall(function() end, print)"); }, ConfigErrorWith("attempt to call a nil value (global 'xpcall')"));
+    EXPECT_THAT([] { return LoadText("setmetatable({}, { __gc = function() while true do end end })"); }, ConfigErrorWith("attempt to call a nil value (global 'setmetatable')"));
+}
+
+// One C call can allocate any amount while running no instructions the count hook sees.
+TEST(Config, AConfigThatAllocatesTooMuchIsStoppedWithAnError) {
+    EXPECT_THAT([] { return LoadText("return { x = ('x'):rep(2^25) }"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));
+    EXPECT_THAT([] { return LoadText("local t = {} for i = 1, 1e7 do t[i] = i end return t"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));
+}
+
 // Each module's table stays on the Lua stack while the config is read, far past the slots Lua guarantees.
 TEST(Config, ManyModulesFitOnTheLuaStack) {
     std::string names = "{ ";
@@ -518,10 +557,4 @@ TEST(Config, SpaceIsReserveOrShare) {
 
 TEST(Config, AnEndlessConfigIsStoppedWithAnError) {
     EXPECT_THAT([] { return LoadText("while true do end"); }, ConfigErrorWith("without finishing, is there an endless loop?"));
-}
-
-TEST(Config, ErroringIndexMetamethodIsNotRun) {
-    const std::string config = Replace(kValidConfig, R"(bar = { edge = "top", layer = "top", space = "reserve", thickness = 54 },)",
-                                       R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
-    EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("bar.edge is missing"));
 }

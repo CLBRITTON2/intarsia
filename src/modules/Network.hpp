@@ -12,28 +12,34 @@
 #include <vector>
 
 // The interface the default route leaves through: its format and icon for Wi-Fi (the icon by signal strength),
-// Ethernet or no connection. Input does nothing unless the config binds actions.
+// Ethernet or no connection. Input does nothing unless the config binds actions. The backend tells of link changes
+// only, so a format showing a rate makes the module tick each second instead.
 class Network final : public IModule {
   public:
     // Throws ConfigError when a format uses a name it has no value for.
     Network(NetworkConfig config, const INetwork& network);
 
-    bool                        Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                 Size() const override;
-    void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    const ModuleActions&        Actions() const override;
-    std::optional<std::wstring> TooltipText() override;
+    bool                         Layout(const RenderContext& render) override;
+    D2D1_SIZE_F                  Size() const override;
+    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    const ModuleActions&         Actions() const override;
+    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
+    std::optional<std::wstring>  TooltipText() override;
 
   private:
     NetworkConfig   _config;
     const INetwork& _network;
     TextLine        _line;
+    bool            _showsRates;
 };
 
 // The values every network format can name, from the state.
 std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state);
 
 ModuleText               FormatNetwork(const NetworkConfig& config, const NetworkState& state);
+
+// Whether a format drawn on the bar (not the tooltip, read only as it shows) names {down} or {up}.
+bool ShowsRates(const NetworkConfig& config);
 
 // The Wi-Fi icon for a signal: icons split 0 to 100 evenly, weakest first. The strongest while the signal is unknown.
 const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent);

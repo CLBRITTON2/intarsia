@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <format>
+#include <functional>
 
 namespace {
 
@@ -22,47 +23,62 @@ namespace {
         return names.empty() ? std::string("none") : names;
     }
 
+    // Walks the format, giving literal text to onText and each {name:spec} field to onField, with an empty spec when
+    // the field has none. Throws std::format_error for an unmatched brace.
+    void WalkFormat(std::string_view format, const std::function<void(std::string_view)>& onText, const std::function<void(std::string_view, std::string_view)>& onField) {
+        size_t index = 0;
+        while (index < format.size()) {
+            const char character = format[index];
+            const bool doubled   = index + 1 < format.size() && format[index + 1] == character;
+            if (character == '}') {
+                if (!doubled) {
+                    throw std::format_error(std::format("'}}' at {} has no '{{' before it, write '}}}}' for a brace", index));
+                }
+                onText("}");
+                index += 2;
+                continue;
+            }
+            if (character != '{') {
+                onText(format.substr(index, 1));
+                ++index;
+                continue;
+            }
+            if (doubled) {
+                onText("{");
+                index += 2;
+                continue;
+            }
+            const size_t close = format.find('}', index);
+            if (close == std::string_view::npos) {
+                throw std::format_error(std::format("'{{' at {} is never closed with '}}'", index));
+            }
+            const std::string_view inside = format.substr(index + 1, close - index - 1);
+            const size_t           colon  = inside.find(':');
+            onField(inside.substr(0, colon), colon == std::string_view::npos ? std::string_view() : inside.substr(colon + 1));
+            index = close + 1;
+        }
+    }
+
 } // namespace
 
 std::string FormatPlaceholders(std::string_view format, const std::vector<Placeholder>& placeholders) {
     std::string result;
-    size_t      index = 0;
-    while (index < format.size()) {
-        const char character = format[index];
-        const bool doubled   = index + 1 < format.size() && format[index + 1] == character;
-        if (character == '}') {
-            if (!doubled) {
-                throw std::format_error(std::format("'}}' at {} has no '{{' before it, write '}}}}' for a brace", index));
+    WalkFormat(
+        format, [&result](std::string_view text) { result += text; },
+        [&result, &placeholders](std::string_view name, std::string_view spec) {
+            const auto found = std::ranges::find(placeholders, name, &Placeholder::name);
+            if (found == placeholders.end()) {
+                throw std::format_error(std::format("{{{}}} is not a value this format has", name));
             }
-            result += '}';
-            index += 2;
-            continue;
-        }
-        if (character != '{') {
-            result += character;
-            ++index;
-            continue;
-        }
-        if (doubled) {
-            result += '{';
-            index += 2;
-            continue;
-        }
-        const size_t close = format.find('}', index);
-        if (close == std::string_view::npos) {
-            throw std::format_error(std::format("'{{' at {} is never closed with '}}'", index));
-        }
-        const std::string_view inside = format.substr(index + 1, close - index - 1);
-        const size_t           colon  = inside.find(':');
-        const std::string_view name   = inside.substr(0, colon);
-        const auto             found  = std::ranges::find(placeholders, name, &Placeholder::name);
-        if (found == placeholders.end()) {
-            throw std::format_error(std::format("{{{}}} is not a value this format has", name));
-        }
-        result += FormatOne(*found, colon == std::string_view::npos ? std::string_view() : inside.substr(colon + 1));
-        index = close + 1;
-    }
+            result += FormatOne(*found, spec);
+        });
     return result;
+}
+
+bool FormatNames(std::string_view format, std::string_view name) {
+    bool names = false;
+    WalkFormat(format, [](std::string_view) {}, [&names, name](std::string_view field, std::string_view) { names = names || field == name; });
+    return names;
 }
 
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples) {

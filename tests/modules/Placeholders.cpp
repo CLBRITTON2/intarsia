@@ -37,6 +37,25 @@ TEST(Placeholders, UnknownNamesBadSpecsAndStrayBracesThrow) {
     EXPECT_THROW(FormatPlaceholders("{}", kValues), std::format_error);
 }
 
+// A spec is handed to std::format, so a brace inside it must not open a second replacement field.
+TEST(Placeholders, ASpecCannotNestAnotherField) {
+    EXPECT_THROW(FormatPlaceholders("{ssid:{}}", kValues), std::format_error);
+    EXPECT_THROW(FormatPlaceholders("{ssid:{signal}}", kValues), std::format_error);
+    EXPECT_THROW(FormatPlaceholders("{ssid:>{signal}}", kValues), std::format_error);
+    EXPECT_THROW(FormatPlaceholders("{:>3}", kValues), std::format_error);
+    EXPECT_THROW(FormatPlaceholders("{ ssid}", kValues), std::format_error);
+    EXPECT_EQ(FormatPlaceholders("{ssid:}", kValues), "home");
+}
+
+TEST(Placeholders, FormatNamesFindsAFieldByItsName) {
+    EXPECT_TRUE(FormatNames("{down} x", "down"));
+    EXPECT_TRUE(FormatNames("{down:>3}", "down"));
+    EXPECT_FALSE(FormatNames("{{down}}", "down"));
+    EXPECT_FALSE(FormatNames("{up} download", "down"));
+    EXPECT_FALSE(FormatNames("", "down"));
+    EXPECT_THROW(FormatNames("{down", "down"), std::format_error);
+}
+
 TEST(Placeholders, ConfigErrorsListTheNamesAFormatCanUse) {
     EXPECT_THAT([] { RequirePlaceholders("network format_wifi", "{essid}", kValues); },
                 testing::ThrowsMessage<ConfigError>(

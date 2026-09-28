@@ -3,12 +3,26 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <initializer_list>
 #include <string>
 
-TEST(Text, RoundTripsAscii) {
-    EXPECT_EQ(ToUtf8(L"intarsia"), "intarsia");
-    EXPECT_EQ(ToWide("intarsia"), L"intarsia");
-}
+namespace {
+
+    // UTF-8 from its bytes, for a bidi mark that a string literal must not hold as text.
+    std::string Utf8(std::initializer_list<std::uint8_t> bytes) {
+        std::string text;
+        for (const std::uint8_t byte : bytes) {
+            text += static_cast<char>(byte);
+        }
+        return text;
+    }
+
+    const std::string kOverride = Utf8({0xE2, 0x80, 0xAE}); // U+202E
+    const std::string kIsolate  = Utf8({0xE2, 0x81, 0xA6}); // U+2066
+
+} // namespace
 
 TEST(Text, RoundTripsAnAstralPlaneNerdFontGlyph) {
     const std::wstring glyph = L"\U000F1441";
@@ -64,4 +78,47 @@ TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
 TEST(Text, LogExcerptNeverSplitsAUtf8Sequence) {
     // "a" then U+00E9 (two bytes): a cut after its first byte backs off to before it.
     EXPECT_EQ(LogExcerpt("a\xC3\xA9z", 2), "a...(3 more bytes)");
+}
+
+// A C1 control, a bidi override and a line separator are valid UTF-8 and would still reorder or break the log line.
+TEST(Text, LogExcerptEscapesUnsafeCodePointsThatAreValidUtf8) {
+    std::string text = "a\xC2\x85"
+                       "b";
+    text += kOverride;
+    text += "c\xE2\x80\xA8"
+            "d";
+    text += kIsolate;
+    EXPECT_EQ(LogExcerpt(text, 100), "a\\u0085b\\u202ec\\u2028d\\u2066");
+}
+
+TEST(Text, IsValidUtf8AcceptsWellFormedSequencesOnly) {
+    EXPECT_TRUE(IsValidUtf8(""));
+    EXPECT_TRUE(IsValidUtf8("plain"));
+    EXPECT_TRUE(IsValidUtf8("\xC3\xA9\xF3\xB1\x91\x81"));
+    EXPECT_FALSE(IsValidUtf8("\xFF"));
+    EXPECT_FALSE(IsValidUtf8("\xC0\xAF"));     // overlong '/'
+    EXPECT_FALSE(IsValidUtf8("\xED\xA0\x80")); // encoded surrogate
+    EXPECT_FALSE(IsValidUtf8("\xE2\x82"));     // truncated
+}
+
+TEST(Text, DrawableTextReplacesUnsafeCharactersAndInvalidBytes) {
+    constexpr auto kReplacement = static_cast<wchar_t>(0xFFFD);
+    std::string    text         = kOverride;
+    text += "ab\x01\xE2\x80\xA9";
+    EXPECT_EQ(DrawableText(text), (std::wstring{kReplacement, L'a', L'b', kReplacement, kReplacement}));
+    const std::wstring invalid = DrawableText("\xFF\xC0\xAF");
+    EXPECT_FALSE(invalid.empty());
+    EXPECT_TRUE(std::ranges::all_of(invalid, [](wchar_t unit) { return unit == kReplacement; }));
+}
+
+TEST(Text, UnsafeCharactersAreControlsSeparatorsAndBidiMarks) {
+    EXPECT_TRUE(IsUnsafeCharacter(L'\n'));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x7F)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x9F)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x2028)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x202E)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x2069)));
+    EXPECT_FALSE(IsUnsafeCharacter(L' '));
+    EXPECT_FALSE(IsUnsafeCharacter(static_cast<wchar_t>(0x200D))); // a zero width joiner, which emoji sequences need
+    EXPECT_FALSE(IsUnsafeCharacter(static_cast<wchar_t>(0x2027)));
 }

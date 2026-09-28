@@ -6,6 +6,7 @@
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
+#include "platform/AppBar.hpp"
 #include "platform/FrameClock.hpp"
 #include "platform/Process.hpp"
 #include "render/BrushCache.hpp"
@@ -47,7 +48,7 @@ struct AppState {
 class Bar {
   public:
     Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
-        const BarPlacement& placement, AppState& state, HWND control, std::uint32_t deviceLostMessage);
+        const BarPlacement& placement, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -59,6 +60,9 @@ class Bar {
 
     // Render, drawing only when some module's content changed: an unchanged frame costs a present for nothing.
     void Refresh();
+
+    // Draws the modules as last laid out, for a change of colors alone, such as the hover moving.
+    void Redraw();
 
     // True once drawing failed because the graphics device was lost. The bar draws nothing more.
     bool DeviceLost() const;
@@ -127,6 +131,7 @@ class Bar {
     bool                               _deviceLost = false;
     bool                               _presented  = false;
     BarPlacement                       _placement;
+    AppBarRoute                        _route;
     Sections<std::unique_ptr<IModule>> _modules;
     Sections<ModuleStyle>              _styles; // each module's, in the same places as _modules
     std::vector<HitBox>                _hitBoxes;

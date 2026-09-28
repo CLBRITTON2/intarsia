@@ -178,7 +178,7 @@ void IpHelper::Run() {
         bool changed = false;
         {
             const std::scoped_lock lock(_mutex);
-            changed = !(state == _state);
+            changed = !SameLink(state, _state);
             _state  = std::move(state);
         }
         if (changed) {
@@ -188,6 +188,11 @@ void IpHelper::Run() {
     if (WaitForSingleObject(_stopEvent.get(), 0) != WAIT_OBJECT_0) {
         Log(LogLevel::Error, "network", "wait_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
     }
+}
+
+bool SameLink(const NetworkState& first, const NetworkState& second) {
+    return first.link == second.link && first.interfaceName == second.interfaceName && first.ssid == second.ssid && first.signalPercent == second.signalPercent &&
+        first.ipv4 == second.ipv4;
 }
 
 double BytesPerSecond(std::uint64_t before, std::uint64_t after, double seconds) {

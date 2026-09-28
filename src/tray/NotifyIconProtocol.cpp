@@ -17,8 +17,6 @@
 namespace {
 
     static_assert(sizeof(TrayNotifyData) == 964, "TrayNotifyData must match shell32's layout");
-    static_assert(sizeof(AppBarData32) == 40, "AppBarData32 must match shell32's layout");
-    static_assert(sizeof(AppBarCommand) == 64, "AppBarCommand must match shell32's layout");
 
     // Windows keeps handles to 32 significant bits and sign-extends them on 64-bit.
     std::intptr_t WidenHandle(std::uint32_t handle) {
@@ -91,24 +89,6 @@ NotifyIconMessage ParseNotifyIconMessage(std::span<const std::byte> payload) {
                              .stateMask       = raw.data.stateMask,
                              .version         = raw.data.version,
                              .guid            = raw.data.guid};
-}
-
-AppBarCommand ParseAppBarCommand(std::span<const std::byte> payload) {
-    if (payload.size() < sizeof(AppBarCommand)) {
-        throw TrayMessageError(std::format("an appbar message is at least {} bytes, got {}", sizeof(AppBarCommand), payload.size()));
-    }
-    AppBarCommand command{};
-    std::memcpy(&command, payload.data(), sizeof(command));
-    return command;
-}
-
-std::vector<std::byte> WithAppBarResult(std::span<const std::byte> payload, std::uint64_t result, std::uint32_t resultProcess) {
-    AppBarCommand command = ParseAppBarCommand(payload);
-    command.result        = result;
-    command.resultProcess = resultProcess;
-    std::vector<std::byte> replaced(payload.begin(), payload.end());
-    std::memcpy(replaced.data(), &command, sizeof(command));
-    return replaced;
 }
 
 std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {

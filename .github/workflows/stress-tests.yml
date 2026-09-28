@@ -17,6 +17,8 @@ jobs:
   stress-tests:
     # windows-2025 carries Visual Studio 2026, and the scripts pin Visual Studio 2022 and its bundled LLVM.
     runs-on: windows-2022
+    # A hung scenario would otherwise burn the six hour default of the account's Windows minutes.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - name: stress tests

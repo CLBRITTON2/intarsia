@@ -1,5 +1,6 @@
 #include "tray/ShellNotifyIcon.hpp"
 
+#include "platform/AppBar.hpp"
 #include "platform/Win32Cast.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 

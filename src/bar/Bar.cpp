@@ -6,6 +6,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/WindowProc.hpp"
+#include "tray/ShellNotifyIcon.hpp"
 
 #include <shellapi.h>
 #include <windowsx.h>
@@ -116,10 +117,26 @@ namespace {
         return pixels * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(placement.dpi);
     }
 
+    RECT ReserveRect(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, AppBarRoute route) {
+        switch (route) {
+            case AppBarRoute::Shell: return ReserveAppBarRect(window, monitorRect, edge, thickness);
+            case AppBarRoute::Taskbar: {
+                HWND taskbar = ExplorerTaskbar(kTaskbarClass);
+                // No Explorer, no one to reserve space with: SHAppBarMessage would find no taskbar either.
+                if (taskbar == nullptr) {
+                    Log(LogLevel::Warning, "bar", "taskbar_missing", {});
+                    return DockedRect(monitorRect, edge, thickness);
+                }
+                return ReserveAppBarRectThroughTaskbar(window, monitorRect, edge, thickness, taskbar);
+            }
+        }
+        throw std::invalid_argument(std::format("unknown appbar route {}", static_cast<std::int32_t>(route)));
+    }
+
     // A shared bar stays a registered appbar, so the shell still tells it of fullscreen apps and of other appbars moving.
-    RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness) {
+    RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness, AppBarRoute route) {
         switch (bar.space) {
-            case Space::Reserve: return ReserveAppBarRect(window, monitorRect, bar.edge, thickness);
+            case Space::Reserve: return ReserveRect(window, monitorRect, bar.edge, thickness, route);
             case Space::Share: return DockedRect(monitorRect, bar.edge, thickness);
         }
         throw std::invalid_argument(std::format("unknown space {}", static_cast<std::int32_t>(bar.space)));
@@ -154,9 +171,10 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 }
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
-         const BarPlacement& placement, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
+         const BarPlacement& placement, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _frames(frames), _windowManager(sources.windowManager), _state(state), _control(control),
-    _deviceLostMessage(deviceLostMessage), _placement(placement), _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
+    _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
+    _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
     _styles(MapSections(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), [](const ModuleInstance& instance) { return instance.style; })),
     _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
@@ -239,7 +257,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             _cursor  = std::nullopt;
             _tooltip->Hide();
             // Draws the box that was under the cursor without its hover.
-            Render();
+            Redraw();
             return 0;
         case WM_LBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::LeftClick); return 0;
         case WM_RBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::RightClick); return 0;
@@ -278,7 +296,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
 
 void Bar::Dock() {
     const std::int32_t thickness = DipsToPixels(_config.bar.thicknessDips, _placement.dpi);
-    const RECT         rect      = BarRect(_window, _placement.monitorRect, _config.bar, thickness);
+    const RECT         rect      = BarRect(_window, _placement.monitorRect, _config.bar, thickness, _route);
     if (!MoveWindow(_window, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }
@@ -352,6 +370,15 @@ void Bar::Refresh() {
         return;
     }
     ScheduleNextChange();
+}
+
+void Bar::Redraw() {
+    if (_surface == nullptr || _deviceLost) {
+        return;
+    }
+    try {
+        Draw();
+    } catch (const DeviceLostError& error) { ReportDeviceLost(error); }
 }
 
 bool Bar::LayOutModules() {
@@ -536,7 +563,7 @@ bool Bar::Point(POINT client) {
 void Bar::PointAt(POINT client) {
     _cursor = client;
     if (Point(client)) {
-        Render();
+        Redraw();
     }
 }
 

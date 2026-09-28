@@ -1,14 +1,28 @@
 #include "platform/AppBar.hpp"
 
+#include "platform/Errors.hpp"
+#include "platform/Log.hpp"
+
 #include <shellapi.h>
+#include <shlwapi.h>
 
 #include <cstdint>
+#include <cstring>
 #include <format>
+#include <functional>
+#include <memory>
 #include <stdexcept>
+#include <string>
 
 namespace {
 
-    std::uint32_t ShellEdge(Edge edge) {
+    static_assert(sizeof(AppBarData32) == 40, "AppBarData32 must match shell32's layout");
+    static_assert(sizeof(AppBarCommand) == 64, "AppBarCommand must match shell32's layout");
+
+    // The bar waits on the answer, so a hung Explorer must not hold it for long.
+    constexpr std::uint32_t kTaskbarTimeoutMs = 2000;
+
+    std::uint32_t           ShellEdge(Edge edge) {
         switch (edge) {
             case Edge::Top: return ABE_TOP;
             case Edge::Bottom: return ABE_BOTTOM;
@@ -25,7 +39,65 @@ namespace {
         return data;
     }
 
+    // Frees a SHAllocShared handle that process holds.
+    struct FreeShared {
+        DWORD process;
+
+        void  operator()(HANDLE handle) const {
+            SHFreeShared(handle, process);
+        }
+    };
+
+    // Sends the request as shell32 does and copies the taskbar's answer back into data.
+    void SendToTaskbar(HWND taskbar, DWORD taskbarProcess, std::uint32_t message, APPBARDATA& data) {
+        // The taskbar reads the request from the block it answers in, since shell32 sets only the block's size.
+        AppBarData32                            answer = AppBarRequest(message, data, 0, 0).data;
+        const std::unique_ptr<void, FreeShared> block(SHAllocShared(&answer, sizeof(answer), taskbarProcess), FreeShared{.process = taskbarProcess});
+        if (block == nullptr) {
+            ThrowLastError("SHAllocShared(appbar result)");
+        }
+        AppBarCommand  request = AppBarRequest(message, data, reinterpret_cast<std::uint64_t>(block.get()), taskbarProcess);
+        COPYDATASTRUCT copy{.dwData = kAppBarCopyData, .cbData = sizeof(request), .lpData = &request};
+        DWORD_PTR      result = 0;
+        if (SendMessageTimeoutW(taskbar, WM_COPYDATA, reinterpret_cast<WPARAM>(data.hWnd), reinterpret_cast<LPARAM>(&copy), SMTO_ABORTIFHUNG, kTaskbarTimeoutMs, &result) == 0) {
+            Log(LogLevel::Warning, "bar", "taskbar_unanswered", {{.key = "message", .value = std::to_string(message)}, {.key = "error", .value = std::to_string(GetLastError())}});
+            return;
+        }
+        void* view = SHLockShared(block.get(), taskbarProcess);
+        if (view == nullptr) {
+            ThrowLastError("SHLockShared(appbar result)");
+        }
+        std::memcpy(&answer, view, sizeof(answer));
+        SHUnlockShared(view);
+        data.rc = answer.rect;
+    }
+
+    // QUERYPOS only moves the side facing the edge, so the thickness is reapplied from that side before SETPOS.
+    RECT Reserve(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, const std::function<void(std::uint32_t, APPBARDATA&)>& send) {
+        APPBARDATA data = AppBarData(window);
+        data.uEdge      = ShellEdge(edge);
+        data.rc         = monitorRect;
+        send(ABM_QUERYPOS, data);
+        data.rc = DockedRect(data.rc, edge, thickness);
+        send(ABM_SETPOS, data);
+        return data.rc;
+    }
+
 } // namespace
+
+AppBarCommand AppBarRequest(std::uint32_t message, const APPBARDATA& data, std::uint64_t result, std::uint32_t resultProcess) {
+    return AppBarCommand{.data          = AppBarData32{.size            = sizeof(AppBarData32),
+                                                       .window          = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(data.hWnd)),
+                                                       .callbackMessage = data.uCallbackMessage,
+                                                       .edge            = data.uEdge,
+                                                       .rect            = data.rc,
+                                                       .lParam          = static_cast<std::int64_t>(data.lParam)},
+                         .message       = message,
+                         .reserved      = 0,
+                         .result        = result,
+                         .resultProcess = resultProcess,
+                         .reserved2     = 0};
+}
 
 RECT DockedRect(const RECT& area, Edge edge, std::int32_t thickness) {
     RECT rect = area;
@@ -52,14 +124,16 @@ void UnregisterAppBar(HWND window) {
 }
 
 RECT ReserveAppBarRect(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness) {
-    APPBARDATA data = AppBarData(window);
-    data.uEdge      = ShellEdge(edge);
-    data.rc         = monitorRect;
-    SHAppBarMessage(ABM_QUERYPOS, &data);
-    // QUERYPOS only moves the side facing the edge, so the thickness is reapplied from that side.
-    data.rc = DockedRect(data.rc, edge, thickness);
-    SHAppBarMessage(ABM_SETPOS, &data);
-    return data.rc;
+    return Reserve(window, monitorRect, edge, thickness, [](std::uint32_t message, APPBARDATA& data) { SHAppBarMessage(message, &data); });
+}
+
+RECT ReserveAppBarRectThroughTaskbar(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, HWND taskbar) {
+    DWORD taskbarProcess = 0;
+    if (GetWindowThreadProcessId(taskbar, &taskbarProcess) == 0) {
+        ThrowLastError("GetWindowThreadProcessId(taskbar)");
+    }
+    return Reserve(window, monitorRect, edge, thickness,
+                   [taskbar, taskbarProcess](std::uint32_t message, APPBARDATA& data) { SendToTaskbar(taskbar, taskbarProcess, message, data); });
 }
 
 void NotifyAppBarActivated(HWND window) {

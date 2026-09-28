@@ -7,6 +7,7 @@
 #include <wincodec.h>
 
 #include <cstdint>
+#include <format>
 
 using Microsoft::WRL::ComPtr;
 
@@ -22,6 +23,9 @@ IconPixels IconToPixels(HICON icon) {
 
     IconPixels pixels{.width = 0, .height = 0, .pbgra = {}};
     ThrowIfFailed(converter->GetSize(&pixels.width, &pixels.height), "IWICFormatConverter::GetSize");
+    if (pixels.width == 0 || pixels.height == 0 || pixels.width > kMaxIconSide || pixels.height > kMaxIconSide) {
+        throw Win32Error(std::format("icon of {}x{} pixels, the largest read is {}x{}", pixels.width, pixels.height, kMaxIconSide, kMaxIconSide), E_INVALIDARG);
+    }
     const std::uint32_t stride = pixels.width * 4;
     pixels.pbgra.resize(static_cast<size_t>(stride) * pixels.height);
     ThrowIfFailed(converter->CopyPixels(nullptr, stride, static_cast<std::uint32_t>(pixels.pbgra.size()), pixels.pbgra.data()), "IWICFormatConverter::CopyPixels");

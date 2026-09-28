@@ -23,6 +23,16 @@ namespace {
         return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data() + at, static_cast<std::int32_t>(bytes), nullptr, 0) > 0 ? bytes : 0;
     }
 
+    // The code point of a valid UTF-8 sequence, already checked by Utf8SequenceBytes.
+    char32_t DecodeUtf8(std::string_view sequence) {
+        const auto lead = static_cast<std::uint8_t>(sequence[0]);
+        char32_t   code = sequence.size() == 4 ? lead & 0x07u : sequence.size() == 3 ? lead & 0x0Fu : lead & 0x1Fu;
+        for (size_t index = 1; index < sequence.size(); ++index) {
+            code = (code << 6) | (static_cast<std::uint8_t>(sequence[index]) & 0x3Fu);
+        }
+        return code;
+    }
+
 } // namespace
 
 std::string ToUtf8(std::wstring_view text) {
@@ -63,8 +73,16 @@ std::wstring ReplaceLoneSurrogates(std::wstring_view text) {
     return valid;
 }
 
+bool IsUnsafeCodePoint(char32_t code) {
+    return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x2028 || code == 0x2029 || (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069);
+}
+
 bool IsUnsafeCharacter(wchar_t unit) {
-    return unit < 0x20 || (unit >= 0x7F && unit <= 0x9F) || (unit >= 0x202A && unit <= 0x202E) || (unit >= 0x2066 && unit <= 0x2069);
+    return IsUnsafeCodePoint(static_cast<char32_t>(unit));
+}
+
+bool IsValidUtf8(std::string_view bytes) {
+    return bytes.empty() || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<std::int32_t>(bytes.size()), nullptr, 0) > 0;
 }
 
 std::wstring DrawableText(std::string_view bytes) {
@@ -101,10 +119,16 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
             if (bytes == 0) {
                 excerpt += std::format("\\x{:02x}", byte);
                 ++at;
-            } else {
-                excerpt += shown.substr(at, bytes);
-                at += bytes;
+                continue;
             }
+            const std::string_view sequence = shown.substr(at, bytes);
+            const char32_t         code     = DecodeUtf8(sequence);
+            if (IsUnsafeCodePoint(code)) {
+                excerpt += std::format("\\u{:04x}", static_cast<std::uint32_t>(code));
+            } else {
+                excerpt += sequence;
+            }
+            at += bytes;
             continue;
         }
         if (character == '"' || character == '\\') {

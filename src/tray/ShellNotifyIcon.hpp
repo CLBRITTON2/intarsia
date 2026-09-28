@@ -46,7 +46,8 @@ class ShellNotifyIcon final : public ITray {
     std::exception_ptr TakeError();
 
   private:
-    static POINT CursorPosition();
+    // Null while the cursor cannot be read (another desktop has the input), logged once per outage.
+    std::optional<POINT> CursorPosition();
     // ERROR_SUCCESS, or the error of the first message the owner refused.
     static DWORD            PostInput(const TrayIcon& icon, const std::vector<TrayInputMessage>& messages);
     void                    PostHover(const TrayIcon& icon, std::uint32_t event, POINT cursor);
@@ -56,8 +57,6 @@ class ShellNotifyIcon final : public ITray {
     // Whether the icons took the message, which is what Shell_NotifyIcon returns to the app.
     bool    ApplyMessage(const COPYDATASTRUCT& data);
     LRESULT Forward(HWND sender, const COPYDATASTRUCT& data);
-    // Forwards an SHAppBarMessage call of this process's own bars.
-    LRESULT ForwardOwnAppBar(HWND sender, const COPYDATASTRUCT& data);
     // Explorer's taskbar window, found again once it is gone, or null while Explorer is not running.
     HWND ExplorerTray();
     // Moves the window back to the top when another topmost window rose above it, as windows do when they activate.
@@ -78,13 +77,13 @@ class ShellNotifyIcon final : public ITray {
     std::optional<TrayClick> _lastClick; // null after a double click, so a third click starts a new pair
     std::optional<POINT>     _lastMove;
     FailureLog               _hoverLog{"tray"};
+    FailureLog               _cursorLog{"tray"};
     // The tray thread's alone.
     HWND       _window   = nullptr;
     HWND       _explorer = nullptr;
     FailureLog _messageLog{"tray"};
     FailureLog _iconLog{"tray"};
     FailureLog _forwardLog{"tray"};
-    FailureLog _appBarLog{"tray"};
     // Guards _icons and _error.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;
@@ -92,6 +91,9 @@ class ShellNotifyIcon final : public ITray {
     // Started by the constructor once every member above exists.
     std::thread _thread;
 };
+
+// Explorer's window of the class, or null while Explorer shows none. Never this process's own window.
+HWND ExplorerTaskbar(const std::wstring& windowClass);
 
 // Tells every app that a taskbar started, as Explorer does after a restart (TaskbarCreated), so each adds its icons
 // again and they reach a tray created after them.
