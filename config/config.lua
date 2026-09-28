@@ -19,6 +19,19 @@ return {
     modules_center = {},
     modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
 
+    -- A layout replaces the three lists above on a bar whose monitor is at least min_length DIPs long along the bar's
+    -- edge (its width for a top or bottom bar, pixels divided by the scale). The last layout a monitor reaches wins, so
+    -- each min_length must be greater than the one before. {} shows the lists above everywhere.
+    layouts = {
+        -- Wider than 1920 DIPs, the date moves to the center.
+        {
+            min_length = 1921,
+            modules_left = { "workspaces", "divider", "apps" },
+            modules_center = { "date" },
+            modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
+        },
+    },
+
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
     -- tiling_direction, divider, cpu, memory, audio, network, battery, tray or custom. One type can appear under several names with different
     -- settings, such as a second clock with its own format.

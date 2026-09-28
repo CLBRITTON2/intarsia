@@ -57,6 +57,6 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));
 }
 
-Sections<std::unique_ptr<IModule>> CreateModules(const Config& config, const ModuleSources& sources) {
-    return MapSections(config.modules, [&sources](const ModuleInstance& instance) { return CreateModule(instance, sources); });
+Sections<std::unique_ptr<IModule>> CreateModules(const Sections<ModuleInstance>& modules, const ModuleSources& sources) {
+    return MapSections(modules, [&sources](const ModuleInstance& instance) { return CreateModule(instance, sources); });
 }

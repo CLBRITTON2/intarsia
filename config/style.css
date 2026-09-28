@@ -183,3 +183,8 @@ divider.module {
 #cpu .icon, #volume .icon, #battery .icon {
     color: var(--cyan);
 }
+
+/* The Wi-Fi and Ethernet glyphs fill less of their em than cpu's, so they take a larger size to match it. */
+#net .icon {
+    font-size: 21px;
+}

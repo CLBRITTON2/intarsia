@@ -73,11 +73,27 @@ namespace {
                 values.push_back(StringAt(-1));
                 lua_pop(_lua, 1);
             }
-            if (CountKeys(listIndex) != static_cast<size_t>(length)) {
-                throw Error(std::format("{} must be a plain list, it has keys other than 1 to {}", KeyPath(key), length));
-            }
+            RequirePlainList(listIndex, key, length);
             lua_pop(_lua, 1);
             return values;
+        }
+
+        // A sequence of tables such as { { min_length = 1921 } }, each read as layouts[1] and so on.
+        std::vector<TableReader> TableList(std::string_view key) const {
+            PushField(key, LUA_TTABLE, "a list of tables");
+            const std::int32_t       listIndex = lua_gettop(_lua);
+            const auto               length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+            std::vector<TableReader> entries;
+            entries.reserve(static_cast<size_t>(length));
+            for (lua_Integer position = 1; position <= length; ++position) {
+                Reserve(1);
+                if (lua_rawgeti(_lua, listIndex, position) != LUA_TTABLE) {
+                    throw Error(std::format("{}[{}] must be a table, got {}", KeyPath(key), position, luaL_typename(_lua, -1)));
+                }
+                entries.emplace_back(_lua, lua_gettop(_lua), _source, std::format("{}[{}]", KeyPath(key), position));
+            }
+            RequirePlainList(listIndex, key, length);
+            return entries;
         }
 
         // Every key of the table, which must all be strings.
@@ -127,6 +143,12 @@ namespace {
                 lua_pop(_lua, 1);
             }
             return count;
+        }
+
+        void RequirePlainList(std::int32_t listIndex, std::string_view key, lua_Integer length) const {
+            if (CountKeys(listIndex) != static_cast<size_t>(length)) {
+                throw Error(std::format("{} must be a plain list, it has keys other than 1 to {}", KeyPath(key), length));
+            }
         }
 
         // Every table read stays on the stack while its TableReader lives, one slot per module, so the stack can grow past
@@ -255,12 +277,12 @@ namespace {
     }
 
     // Every name a _modules list shows must be defined in the modules table, which holds one table per module.
-    std::vector<ModuleInstance> ReadModuleList(const TableReader& root, const TableReader& definitions, std::string_view listKey, const StyleSheet& sheet,
+    std::vector<ModuleInstance> ReadModuleList(const TableReader& lists, const TableReader& definitions, std::string_view listKey, const StyleSheet& sheet,
                                                const StyleConfig& style) {
         std::vector<ModuleInstance> instances;
-        for (const std::string& name : root.StringList(listKey)) {
+        for (const std::string& name : lists.StringList(listKey)) {
             if (!definitions.Has(name)) {
-                throw root.Error(std::format("{} shows '{}', which is not defined in modules", listKey, name));
+                throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
             }
             const TableReader module = definitions.Table(name);
             const ModuleKind  kind   = ParseModuleType(module);
@@ -269,24 +291,37 @@ namespace {
         return instances;
     }
 
-    bool Shows(const Sections<ModuleInstance>& modules, std::string_view name) {
-        return AnyInSections(modules, [name](const ModuleInstance& instance) { return instance.name == name; });
+    Sections<ModuleInstance> ReadSections(const TableReader& lists, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        return Sections<ModuleInstance>{.left   = ReadModuleList(lists, definitions, "modules_left", sheet, style),
+                                        .center = ReadModuleList(lists, definitions, "modules_center", sheet, style),
+                                        .right  = ReadModuleList(lists, definitions, "modules_right", sheet, style)};
+    }
+
+    // ModulesForEdgeLength takes the last layout an edge reaches, so each must start past the one before.
+    std::vector<LayoutConfig> ReadLayouts(const TableReader& root, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        std::vector<LayoutConfig> layouts;
+        for (const TableReader& layout : root.TableList("layouts")) {
+            layout.RejectUnknownKeys({"min_length", "modules_left", "modules_center", "modules_right"});
+            const float minLength = PositiveNumber(layout, "min_length");
+            if (!layouts.empty() && minLength <= layouts.back().minLengthDips) {
+                throw layout.Error(
+                    std::format("{} is {}, it must be greater than the layout before it ({})", layout.KeyPath("min_length"), minLength, layouts.back().minLengthDips));
+            }
+            layouts.push_back(LayoutConfig{.minLengthDips = minLength, .modules = ReadSections(layout, definitions, sheet, style)});
+        }
+        return layouts;
     }
 
     // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
-    void RejectUnshownModules(const TableReader& definitions, const Sections<ModuleInstance>& modules) {
+    void RejectUnshownModules(const TableReader& definitions, const Config& config) {
         for (const std::string& name : definitions.Keys()) {
             if (name.empty() || !std::ranges::all_of(name, IsModuleNameCharacter)) {
                 throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
             }
-            if (!Shows(modules, name)) {
+            if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
                 throw definitions.Error(std::format("{} is defined but no _modules list shows it", definitions.KeyPath(name)));
             }
         }
-    }
-
-    bool ListsModule(const Sections<ModuleInstance>& modules, ModuleKind kind) {
-        return AnyInSections(modules, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
     }
 
     // A command is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
@@ -552,37 +587,47 @@ Config LoadConfig(const std::filesystem::path& path) {
     }
 
     const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
-    root.RejectUnknownKeys({"bar", "window_manager", "modules_left", "modules_center", "modules_right", "modules"});
+    root.RejectUnknownKeys({"bar", "window_manager", "modules_left", "modules_center", "modules_right", "layouts", "modules"});
 
-    const std::filesystem::path    stylePath   = StylePath(path);
-    const StyleSheet               sheet       = ParseStyleSheet(ReadFile(stylePath, "style"), ToUtf8(stylePath.wstring()));
-    StyleConfig                    style       = ResolveBarStyle(sheet);
-    const TableReader              definitions = root.Table("modules");
-    const Sections<ModuleInstance> modules{.left   = ReadModuleList(root, definitions, "modules_left", sheet, style),
-                                           .center = ReadModuleList(root, definitions, "modules_center", sheet, style),
-                                           .right  = ReadModuleList(root, definitions, "modules_right", sheet, style)};
-    RejectUnshownModules(definitions, modules);
-    RequireKnownIds(sheet, definitions.Keys());
+    const std::filesystem::path stylePath   = StylePath(path);
+    const StyleSheet            sheet       = ParseStyleSheet(ReadFile(stylePath, "style"), ToUtf8(stylePath.wstring()));
+    StyleConfig                 style       = ResolveBarStyle(sheet);
+    const TableReader           definitions = root.Table("modules");
+    Sections<ModuleInstance>    modules     = ReadSections(root, definitions, sheet, style);
+    std::vector<LayoutConfig>   layouts     = ReadLayouts(root, definitions, sheet, style);
 
-    const TableReader bar = root.Table("bar");
+    const TableReader           bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "layer", "thickness"});
-    const BarConfig         barConfig{.edge = ParseEdge(bar, "edge"), .layer = ParseLayer(bar, "layer"), .thicknessDips = PositiveNumber(bar, "thickness")};
+    const BarConfig barConfig{.edge = ParseEdge(bar, "edge"), .layer = ParseLayer(bar, "layer"), .thicknessDips = PositiveNumber(bar, "thickness")};
 
-    const WindowManagerKind windowManager = ParseWindowManager(root, "window_manager");
+    Config          config{
+                 .bar = barConfig, .style = std::move(style), .windowManager = ParseWindowManager(root, "window_manager"), .modules = std::move(modules), .layouts = std::move(layouts)};
+    RejectUnshownModules(definitions, config);
+    RequireKnownIds(sheet, definitions.Keys());
 
     for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"}, std::pair{ModuleKind::BindingMode, "binding_mode"},
                                     std::pair{ModuleKind::TilingDirection, "tiling_direction"}}) {
-        if (windowManager == WindowManagerKind::Windows && ListsModule(modules, kind)) {
+        if (config.windowManager == WindowManagerKind::Windows && AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; })) {
             throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", name));
         }
     }
-    const bool sendsCommands = AnyInSections(modules, [](const ModuleInstance& instance) {
+    const bool sendsCommands = AnyModuleInConfig(config, [](const ModuleInstance& instance) {
         const ModuleActions* actions = ActionsOf(instance.settings);
         return actions != nullptr && SendsWindowManagerCommands(*actions);
     });
-    if (windowManager == WindowManagerKind::Windows && sendsCommands) {
+    if (config.windowManager == WindowManagerKind::Windows && sendsCommands) {
         throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
     }
 
-    return Config{.bar = barConfig, .style = std::move(style), .windowManager = windowManager, .modules = modules};
+    return config;
+}
+
+const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float edgeLengthDips) {
+    const Sections<ModuleInstance>* chosen = &config.modules;
+    for (const LayoutConfig& layout : config.layouts) {
+        if (layout.minLengthDips <= edgeLengthDips) {
+            chosen = &layout.modules;
+        }
+    }
+    return *chosen;
 }

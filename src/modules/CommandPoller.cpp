@@ -166,7 +166,7 @@ void CommandPoller::Publish(CommandResult result) {
 }
 
 CommandPollers::CommandPollers(const Config& config, ChangeSignal& changes) {
-    ForEachInSections(config.modules, [&](const ModuleInstance& instance) {
+    ForEachModuleInConfig(config, [&](const ModuleInstance& instance) {
         if (instance.kind == ModuleKind::Custom && !_pollers.contains(instance.name)) {
             _pollers.emplace(instance.name, std::make_unique<CommandPoller>(instance.name, std::get<CustomConfig>(instance.settings), changes));
         }

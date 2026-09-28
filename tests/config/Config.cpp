@@ -23,6 +23,7 @@ return {
     modules_left = { "title" },
     modules_center = { "time" },
     modules_right = {},
+    layouts = {},
     modules = {
         time = { type = "clock", format = "{time:%H:%M}", icon = "x", interval = 60 },
         title = { type = "window", max_length = 80 },
@@ -75,6 +76,10 @@ return {
     std::string WithRightModules(std::string_view names, std::string_view definitions) {
         return Replace(Replace(kValidConfig, "modules_right = {},", std::string("modules_right = ") + std::string(names) + ","), "    modules = {\n",
                        "    modules = {\n" + std::string(definitions) + "\n");
+    }
+
+    std::string WithLayouts(std::string_view layouts) {
+        return Replace(kValidConfig, "layouts = {},", "layouts = " + std::string(layouts) + ",");
     }
 
     Config LoadStyled(std::string_view config, std::string_view style) {
@@ -214,6 +219,59 @@ TEST(Config, ListsMayOnlyShowDefinedModules) {
 
 TEST(Config, EveryDefinedModuleMustBeShown) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no _modules list shows it"));
+}
+
+TEST(Config, TheLastLayoutAnEdgeReachesReplacesTheLists) {
+    const Config config = LoadText(WithLayouts(R"({
+        { min_length = 1921, modules_left = {}, modules_center = { "time" }, modules_right = { "title" } },
+        { min_length = 3000, modules_left = { "time" }, modules_center = {}, modules_right = {} },
+    })"));
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 1920.0f).left), std::vector<ModuleKind>{ModuleKind::Window});
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 1921.0f).right), std::vector<ModuleKind>{ModuleKind::Window});
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 2999.5f).center), std::vector<ModuleKind>{ModuleKind::Clock});
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 3000.0f).left), std::vector<ModuleKind>{ModuleKind::Clock});
+    EXPECT_TRUE(ModulesForEdgeLength(config, 3000.0f).right.empty());
+}
+
+TEST(Config, AModuleOnlyALayoutShowsCountsAsShown) {
+    const Config config = LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = { "time" }, modules_right = {} } })"),
+                                           R"(modules_center = { "time" })", "modules_center = {}"));
+    EXPECT_TRUE(config.modules.center.empty());
+    EXPECT_EQ(config.layouts.at(0).modules.center.at(0).name, "time");
+}
+
+TEST(Config, LayoutsAreRequiredAndNamedByTheirPlaceInErrors) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "layouts = {},", "")); }, ConfigErrorWith("layouts is missing"));
+    EXPECT_THAT([] { return LoadText(WithLayouts("{ 7 }")); }, ConfigErrorWith("layouts[1] must be a table, got number"));
+    EXPECT_THAT([] { return LoadText(WithLayouts("{ x = {} }")); }, ConfigErrorWith("layouts must be a plain list"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {} } })")); },
+                ConfigErrorWith("layouts[1].modules_right is missing"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {}, edge = "top" } })")); },
+                ConfigErrorWith("layouts[1].edge is not a known key"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 0, modules_left = {}, modules_center = {}, modules_right = {} } })")); },
+                ConfigErrorWith("layouts[1].min_length must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = { "clock" }, modules_center = {}, modules_right = {} } })")); },
+                ConfigErrorWith("layouts[1].modules_left shows 'clock', which is not defined in modules"));
+}
+
+TEST(Config, EachLayoutMustStartPastTheOneBefore) {
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithLayouts(R"({
+            { min_length = 2560, modules_left = {}, modules_center = {}, modules_right = {} },
+            { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {} },
+        })"));
+        },
+        ConfigErrorWith("layouts[2].min_length is 1921, it must be greater than the layout before it (2560)"));
+}
+
+TEST(Config, ALayoutsModulesMustSuitTheWindowManager) {
+    EXPECT_THAT(
+        [] {
+            return LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = { "spaces" }, modules_center = {}, modules_right = {} } })"), "    modules = {\n",
+                                    "    modules = {\n        spaces = { type = \"workspaces\" },\n"));
+        },
+        ConfigErrorWith("workspaces needs a tiling window manager"));
 }
 
 TEST(Config, ModuleNamesUseASafeAlphabet) {

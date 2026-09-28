@@ -104,6 +104,13 @@ namespace {
         throw std::invalid_argument(std::format("unknown layer {}", static_cast<std::int32_t>(layer)));
     }
 
+    // The whole monitor's length along the bar's edge, which picks the config's layout.
+    float EdgeLengthDips(const BarPlacement& placement, Edge edge) {
+        const RECT& rect   = placement.monitorRect;
+        const float pixels = static_cast<float>(IsHorizontal(edge) ? rect.right - rect.left : rect.bottom - rect.top);
+        return pixels * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(placement.dpi);
+    }
+
     HWND CreateBarWindow(HINSTANCE instance, void* owner) {
         // No activation so clicking the bar never steals focus from the tiled window.
         HWND window =
@@ -135,8 +142,9 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
          const BarPlacement& placement, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _frames(frames), _windowManager(sources.windowManager), _state(state), _control(control),
-    _deviceLostMessage(deviceLostMessage), _placement(placement), _modules(CreateModules(config, sources)),
-    _styles(MapSections(config.modules, [](const ModuleInstance& instance) { return instance.style; })), _window(CreateBarWindow(instance, this)) {
+    _deviceLostMessage(deviceLostMessage), _placement(placement), _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
+    _styles(MapSections(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), [](const ModuleInstance& instance) { return instance.style; })),
+    _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {

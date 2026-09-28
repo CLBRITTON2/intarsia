@@ -297,7 +297,7 @@ void App::ReloadConfig() {
 // The tray takes every app's icons from the taskbar, so it exists only while the config shows it, and stays across
 // reloads that keep it so the icons stay too.
 void App::MatchTrayToConfig() {
-    const bool shown = AnyInSections(_config->modules, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Tray; });
+    const bool shown = AnyModuleInConfig(*_config, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Tray; });
     if (!shown) {
         _tray.reset();
         return;

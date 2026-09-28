@@ -7,6 +7,7 @@
 #include <d2d1.h>
 #include <dwrite.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -281,12 +282,35 @@ struct ModuleInstance {
     ModuleStyle    style;
 };
 
-struct Config {
-    BarConfig                bar;
-    StyleConfig              style;
-    WindowManagerKind        windowManager;
+// The sections a bar shows in place of the config's own lists once its edge is at least minLengthDips long.
+struct LayoutConfig {
+    float                    minLengthDips;
     Sections<ModuleInstance> modules;
 };
+
+struct Config {
+    BarConfig                 bar;
+    StyleConfig               style;
+    WindowManagerKind         windowManager;
+    Sections<ModuleInstance>  modules; // for a bar whose edge no layout's minimum reaches
+    std::vector<LayoutConfig> layouts; // ascending by minLengthDips
+};
+
+// Whether any module of the config's own lists or of any layout matches.
+template <typename Predicate>
+bool AnyModuleInConfig(const Config& config, Predicate predicate) {
+    return AnyInSections(config.modules, predicate) ||
+        std::ranges::any_of(config.layouts, [&predicate](const LayoutConfig& layout) { return AnyInSections(layout.modules, predicate); });
+}
+
+// Every module of the config's own lists, then of each layout. A module several lists show is visited once per list.
+template <typename Visit>
+void ForEachModuleInConfig(const Config& config, Visit visit) {
+    ForEachInSections(config.modules, visit);
+    for (const LayoutConfig& layout : config.layouts) {
+        ForEachInSections(layout.modules, visit);
+    }
+}
 
 class ConfigError : public std::runtime_error {
   public:
@@ -302,3 +326,6 @@ std::filesystem::path StylePath(const std::filesystem::path& configPath);
 // Runs the file as Lua and reads the table it returns, then styles its modules from StylePath. Every config key is
 // required, and unknown keys, selectors and properties are rejected.
 Config LoadConfig(const std::filesystem::path& path);
+
+// The sections of the last layout whose minimum edgeLengthDips reaches, or the config's own lists when none does.
+const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float edgeLengthDips);

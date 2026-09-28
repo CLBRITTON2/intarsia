@@ -174,6 +174,7 @@ return {
     modules_left = { "workspaces", "divider", "mode", "apps", "title" },
     modules_center = { "clock" },
     modules_right = { $rightList },
+    layouts = {},
     modules = {
         workspaces = { type = "workspaces" },
         divider = { type = "divider" },
