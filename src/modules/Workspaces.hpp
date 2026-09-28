@@ -26,12 +26,14 @@ class Workspaces final : public IModule {
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
     void                         Scroll(ScrollDirection direction) override;
+    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
     // None: the module has no config table, and a left click focuses the workspace under it.
     const ModuleActions& Actions() const override;
     // While disconnected, why: the window manager's status detail. Nothing while connected.
     std::optional<std::wstring> TooltipText() override;
 
   private:
+    std::optional<size_t> _hovered; // the item under the cursor
     IWindowManager& _windowManager;
     std::intptr_t   _monitor;
     ModuleStyle     _style;

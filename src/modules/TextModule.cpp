@@ -31,6 +31,10 @@ std::optional<std::uint32_t> TextModule::MillisecondsUntilChange() const {
     return static_cast<std::uint32_t>(TimeUntilNextTick(std::chrono::system_clock::now(), _config.interval).count());
 }
 
+bool TextModule::Hover(std::optional<D2D1_POINT_2F>) {
+    return false;
+}
+
 void TextModule::Scroll(ScrollDirection) {}
 
 void                 TextModule::Click(D2D1_POINT_2F) {}

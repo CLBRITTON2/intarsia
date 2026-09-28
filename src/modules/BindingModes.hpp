@@ -23,11 +23,13 @@ class BindingModes final : public IModule {
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
     void                         Scroll(ScrollDirection direction) override;
+    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
     // None: the module takes no actions.
     const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;
 
   private:
+    std::optional<size_t> _hovered; // the item under the cursor
     const IWindowManager&     _windowManager;
     ModuleStyle               _style;
     std::vector<std::wstring> _shown;

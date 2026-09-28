@@ -110,7 +110,7 @@ return {
 TEST(Config, ShippedExampleLoads) {
     const Config config = LoadConfig(INTARSIA_EXAMPLE_CONFIG);
     EXPECT_EQ(config.bar.edge, Edge::Top);
-    EXPECT_EQ(Kinds(config.modules.center), std::vector<ModuleKind>{ModuleKind::Clock});
+    EXPECT_EQ(Kinds(config.modules.left).back(), ModuleKind::Clock);
     EXPECT_EQ(config.style.font, L"JetBrainsMono Nerd Font");
 }
 
@@ -216,7 +216,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, custom"));
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, network, custom"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -265,13 +265,13 @@ TEST(Config, WindowsNeedAWindowManagerWithWorkspaces) {
 
 // Audio needs no window manager, so it loads with window_manager "windows".
 TEST(Config, AudioParsesItsFormatsIconsAndStep) {
-    const std::string audio = R"(        volume = { type = "audio", format = "{}%", format_muted = "muted", icon = "v", icon_muted = "m", step = 5, tooltip = "{1}" },)";
+    const std::string audio = R"(        volume = { type = "audio", format = "{volume}%", format_muted = "muted", icon = "v", icon_muted = "m", step = 5, tooltip = "{device}" },)";
     const Config      config = LoadText(WithRightModules(R"({ "volume" })", audio));
     const AudioConfig& settings = SettingsOf<AudioConfig>(config.modules.right, 0);
     EXPECT_EQ(settings.formatMuted, "muted");
     EXPECT_EQ(settings.iconMuted, L"m");
     EXPECT_EQ(settings.stepPercent, 5);
-    EXPECT_EQ(settings.tooltip, "{1}");
+    EXPECT_EQ(settings.tooltip, "{device}");
     EXPECT_THAT([&audio] { return LoadText(WithRightModules(R"({ "volume" })", Replace(audio, "step = 5", "step = 101"))); },
                 ConfigErrorWith("modules.volume.step is a percent of full volume, from 1 to 100, got 101"));
     EXPECT_THAT([&audio] { return LoadText(WithRightModules(R"({ "volume" })", Replace(audio, R"(icon_muted = "m", )", ""))); },

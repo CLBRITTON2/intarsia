@@ -12,9 +12,9 @@
 namespace {
 
     AudioConfig TestConfig() {
-        return AudioConfig{.format      = "{}%",
+        return AudioConfig{.format      = "{volume}%",
                            .formatMuted = "muted",
-                           .tooltip     = "{1} at {0}%",
+                           .tooltip     = "{device} at {volume}%",
                            .icon        = L"V",
                            .iconMuted   = L"M",
                            .stepPercent = 5,
@@ -33,10 +33,10 @@ TEST(Audio, FormatsTheVolumeOrTheMutedTextWithTheirIcons) {
     EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt), (AudioText{.icon = L"", .text = L""}));
 }
 
-TEST(Audio, FormatsReachTheDeviceNameAsTheSecondValue) {
+TEST(Audio, FormatsNameTheDeviceAndTakeASpec) {
     AudioConfig config = TestConfig();
-    config.format      = "{1}: {0}%";
-    EXPECT_EQ(FormatAudio(config, Speakers(0.5f, false)).text, L"Speakers: 50%");
+    config.format      = "{device}: {volume:>3}%";
+    EXPECT_EQ(FormatAudio(config, Speakers(0.5f, false)).text, L"Speakers:  50%");
 }
 
 TEST(Audio, AStepLandsOnAWholePercentWithinTheRange) {
@@ -99,6 +99,6 @@ TEST(Audio, TooltipNamesTheDevice) {
 TEST(Audio, ABadFormatIsAConfigError) {
     FakeAudio   audio;
     AudioConfig config = TestConfig();
-    config.formatMuted = "{2}";
-    EXPECT_THAT([&] { return Audio(config, audio); }, testing::ThrowsMessage<ConfigError>(testing::HasSubstr("audio format_muted '{2}' is not a valid std::format spec")));
+    config.formatMuted = "{level}";
+    EXPECT_THAT([&] { return Audio(config, audio); }, testing::ThrowsMessage<ConfigError>(testing::HasSubstr("audio format_muted '{level}' is not a valid format: {level} is not a value this format has. It can use {volume}, {device}")));
 }

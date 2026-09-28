@@ -137,6 +137,24 @@ TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
     EXPECT_THAT([] { return Parse("cpu:hover { color: #fff; }"); }, ConfigErrorWith("color does not apply to cpu:hover, which takes: background"));
 }
 
+TEST(Style, ItemHoverChangesColorsAndLosesToAMoreSpecificStateRule) {
+    const std::string rules = R"css(
+        .item { background: #111111; }
+        .item:hover { background: #222222; color: #ffffff; }
+        #ws .item.focused { background: #9ccfd8; }
+    )css";
+    const ModuleStyle style = StyleOf(rules, ModuleKind::Workspaces, "ws");
+    EXPECT_EQ(Rgba(style.occupied.hoverBackground), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
+    EXPECT_EQ(Rgba(style.occupied.hoverColor), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
+    EXPECT_EQ(Rgba(style.occupied.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
+    EXPECT_EQ(Rgba(style.focused.hoverBackground), (std::array<std::int32_t, 4>{0x9c, 0xcf, 0xd8, 255}));
+    // With no :hover rule an item keeps its colors under the cursor.
+    const ModuleStyle plain = StyleOf(".item { color: #ff0000; }", ModuleKind::Windows, "apps");
+    EXPECT_EQ(Rgba(plain.item.hoverColor), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_THAT([] { return Parse(".item:hover { padding: 2px; }"); }, ConfigErrorWith("padding does not apply to .item:hover, which takes: color, background"));
+    EXPECT_THAT([] { return Parse(".icon:hover { color: #fff; }"); }, ConfigErrorWith("matches nothing intarsia draws"));
+}
+
 TEST(Style, BorderShorthandSetsWidthAndColor) {
     const StyleSheet  sheet = Parse(std::string(kBar) + "section { border: 1px solid rgba(110, 106, 134, 0.25); border-radius: 14px; margin: 5px; padding: 4px; }");
     const StyleConfig bar   = ResolveBarStyle(sheet);

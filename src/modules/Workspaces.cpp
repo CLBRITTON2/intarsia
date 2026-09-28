@@ -48,14 +48,22 @@ void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
         return;
     }
     for (size_t index = 0; index < _labels.size(); ++index) {
-        const ItemStyle& state = _states[index];
-        DrawItemBackground(render, _row.boxes[index], state, origin);
-        DrawIconText(render, ItemContentOrigin(_row.boxes[index], state, origin), _labels[index], render.brushes->Get(state.color));
+        const ItemStyle& state   = _states[index];
+        const bool       hovered = _hovered == index;
+        DrawItemBackground(render, _row.boxes[index], state, hovered ? state.hoverBackground : state.background, origin);
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], state, origin), _labels[index], render.brushes->Get(hovered ? state.hoverColor : state.color));
     }
 }
 
 std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
     return std::nullopt;
+}
+
+bool Workspaces::Hover(std::optional<D2D1_POINT_2F> point) {
+    const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
+    const bool                  changed = hovered != _hovered;
+    _hovered                            = hovered;
+    return changed;
 }
 
 void Workspaces::Scroll(ScrollDirection) {}

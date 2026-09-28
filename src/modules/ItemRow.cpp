@@ -42,11 +42,11 @@ D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, 
     return D2D1::Point2F(origin.x + box.left + style.padding.xDips, origin.y + box.top + style.padding.yDips);
 }
 
-void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, D2D1_POINT_2F origin) {
-    if (style.background.a <= 0.0f) {
+void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, D2D1_POINT_2F origin) {
+    if (fill.a <= 0.0f) {
         return;
     }
     const D2D1_RECT_F placed = D2D1::RectF(origin.x + box.left, origin.y + box.top, origin.x + box.right, origin.y + box.bottom);
     const float       radius = std::min(style.radiusDips, (box.bottom - box.top) / 2.0f);
-    render.context->FillRoundedRectangle(D2D1::RoundedRect(placed, radius, radius), render.brushes->Get(style.background));
+    render.context->FillRoundedRectangle(D2D1::RoundedRect(placed, radius, radius), render.brushes->Get(fill));
 }

@@ -229,6 +229,7 @@ namespace {
     WindowConfig     ReadWindowConfig(const TableReader& window);
     CustomConfig     ReadCustomConfig(const TableReader& module);
     AudioConfig      ReadAudioConfig(const TableReader& module);
+    NetworkConfig    ReadNetworkConfig(const TableReader& module);
 
     ModuleSettings   ReadModuleSettings(const TableReader& module, ModuleKind kind) {
         switch (kind) {
@@ -238,6 +239,7 @@ namespace {
             case ModuleKind::Window: return ReadWindowConfig(module);
             case ModuleKind::Custom: return ReadCustomConfig(module);
             case ModuleKind::Audio: return ReadAudioConfig(module);
+            case ModuleKind::Network: return ReadNetworkConfig(module);
             case ModuleKind::Workspaces:
             case ModuleKind::Windows:
             case ModuleKind::BindingMode:
@@ -349,6 +351,9 @@ namespace {
         if (const auto* audio = std::get_if<AudioConfig>(&settings)) {
             return &audio->actions;
         }
+        if (const auto* network = std::get_if<NetworkConfig>(&settings)) {
+            return &network->actions;
+        }
         if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
             return &custom->text.actions;
         }
@@ -416,6 +421,26 @@ namespace {
                            .iconMuted   = ToWide(module.String("icon_muted")),
                            .stepPercent = static_cast<std::int32_t>(step),
                            .actions     = ReadActions(module)};
+    }
+
+    NetworkConfig ReadNetworkConfig(const TableReader& module) {
+        module.RejectUnknownKeys(
+            WithOptionalKeys({"type", "format_wifi", "format_ethernet", "format_disconnected", "icons_wifi", "icon_ethernet", "icon_disconnected"}));
+        std::vector<std::wstring> iconsWifi;
+        for (const std::string& icon : module.StringList("icons_wifi")) {
+            iconsWifi.push_back(ToWide(icon));
+        }
+        if (iconsWifi.empty()) {
+            throw module.Error(std::format("{} must hold at least one icon, weakest signal first", module.KeyPath("icons_wifi")));
+        }
+        return NetworkConfig{.formatWifi         = module.String("format_wifi"),
+                             .formatEthernet     = module.String("format_ethernet"),
+                             .formatDisconnected = module.String("format_disconnected"),
+                             .tooltip            = ReadTooltip(module),
+                             .iconsWifi          = std::move(iconsWifi),
+                             .iconEthernet       = ToWide(module.String("icon_ethernet")),
+                             .iconDisconnected   = ToWide(module.String("icon_disconnected")),
+                             .actions            = ReadActions(module)};
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {

@@ -28,11 +28,13 @@ class WindowList final : public IModule {
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
     void                         Scroll(ScrollDirection direction) override;
+    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
     // None: the module has no config table, and a left click focuses the window under it.
     const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;
 
   private:
+    std::optional<size_t> _hovered; // the item under the cursor
     // One shown window. The bitmap is made from pixels on this bar's device, and is null while the icon is unknown.
     struct Slot {
         ManagedWindow                       window;

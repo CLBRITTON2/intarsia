@@ -6,6 +6,7 @@
 #include "modules/CommandPoller.hpp"
 #include "modules/IModule.hpp"
 #include "modules/WindowIcons.hpp"
+#include "network/INetwork.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -18,6 +19,7 @@ struct ModuleSources {
     const CommandPollers& commandPollers;
     WindowIcons&          windowIcons;
     IAudio&               audio;
+    const INetwork&       network;
     HMONITOR              monitor;
 };
 

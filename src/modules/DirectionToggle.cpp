@@ -32,6 +32,10 @@ std::optional<std::uint32_t> DirectionToggle::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+bool DirectionToggle::Hover(std::optional<D2D1_POINT_2F>) {
+    return false;
+}
+
 void DirectionToggle::Scroll(ScrollDirection) {}
 
 void DirectionToggle::Click(D2D1_POINT_2F) {

@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 // Where the bar sits among other windows, as Waybar's layer option.
 enum class Layer : std::uint8_t {
@@ -80,6 +81,9 @@ struct ItemStyle {
     Spacing            padding;
     Spacing            margin; // x on each side of the box, so two items side by side are 2x apart
     float              radiusDips;
+    // The item under the cursor, from .item:hover rules.
+    D2D1_COLOR_F hoverColor;
+    D2D1_COLOR_F hoverBackground;
 };
 
 // One module's style, cascaded from every style.css rule that matches it.
@@ -111,6 +115,7 @@ enum class ModuleKind : std::uint8_t {
     Cpu,
     Memory,
     Audio,
+    Network,
     Custom
 };
 
@@ -120,7 +125,7 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 11> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 12> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
@@ -131,6 +136,7 @@ inline constexpr std::array<ModuleTypeName, 11> kModuleTypes{{
     {.name = "cpu", .kind = ModuleKind::Cpu},
     {.name = "memory", .kind = ModuleKind::Memory},
     {.name = "audio", .kind = ModuleKind::Audio},
+    {.name = "network", .kind = ModuleKind::Network},
     {.name = "custom", .kind = ModuleKind::Custom},
 }};
 
@@ -193,8 +199,8 @@ struct CustomConfig {
     TextModuleConfig     text;
 };
 
-// The default output device's volume. Both formats get two values: the volume as a whole percent, then the device's
-// name, so "{}%" shows the volume and "{1}" the name.
+// The default output device's volume. The formats and tooltip can use {volume} (a whole percent) and {device} (its
+// name).
 struct AudioConfig {
     std::string                format;
     std::string                formatMuted;
@@ -205,8 +211,21 @@ struct AudioConfig {
     ModuleActions              actions;     // on_click replaces toggling mute, on_scroll_up and on_scroll_down the volume change
 };
 
+// The interface the default route leaves through. The formats and tooltip can use {ssid}, {signal} (a percent),
+// {ip}, {interface}, {down} and {up} (rates such as "1.2 MB/s"). An empty format shows the icon alone.
+struct NetworkConfig {
+    std::string                formatWifi;
+    std::string                formatEthernet; // every link that is not Wi-Fi
+    std::string                formatDisconnected;
+    std::optional<std::string> tooltip;
+    std::vector<std::wstring>  iconsWifi; // weakest signal to strongest, the range split evenly between them
+    std::wstring               iconEthernet;
+    std::wstring               iconDisconnected;
+    ModuleActions              actions;
+};
+
 // The settings from a module's table: workspaces, windows, binding_mode and divider have none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig>;
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {

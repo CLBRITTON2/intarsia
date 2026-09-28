@@ -27,15 +27,23 @@ D2D1_SIZE_F BindingModes::Size() const {
 }
 
 void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    ID2D1SolidColorBrush* text = render.brushes->Get(_style.item.color);
+    const ItemStyle& item = _style.item;
     for (size_t index = 0; index < _labels.size(); ++index) {
-        DrawItemBackground(render, _row.boxes[index], _style.item, origin);
-        DrawIconText(render, ItemContentOrigin(_row.boxes[index], _style.item, origin), _labels[index], text);
+        const bool hovered = _hovered == index;
+        DrawItemBackground(render, _row.boxes[index], item, hovered ? item.hoverBackground : item.background, origin);
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], item, origin), _labels[index], render.brushes->Get(hovered ? item.hoverColor : item.color));
     }
 }
 
 std::optional<std::uint32_t> BindingModes::MillisecondsUntilChange() const {
     return std::nullopt;
+}
+
+bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
+    const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
+    const bool                  changed = hovered != _hovered;
+    _hovered                            = hovered;
+    return changed;
 }
 
 void BindingModes::Scroll(ScrollDirection) {}

@@ -9,7 +9,9 @@ inline ItemStyle TestItemStyle(std::uint32_t color, std::uint32_t background) {
                      .weight     = DWRITE_FONT_WEIGHT_NORMAL,
                      .padding    = {.yDips = 2.0f, .xDips = 4.0f},
                      .margin     = {.yDips = 0.0f, .xDips = 5.0f},
-                     .radiusDips = 6.0f};
+                     .radiusDips      = 6.0f,
+                     .hoverColor      = D2D1::ColorF(0xFFFFFF),
+                     .hoverBackground = D2D1::ColorF(0x404040)};
 }
 
 // A distinct color per state, so a test can tell which one applies.

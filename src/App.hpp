@@ -6,6 +6,7 @@
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
 #include "modules/WindowIcons.hpp"
+#include "network/INetwork.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/FileWatcher.hpp"
 #include "platform/Process.hpp"
@@ -72,6 +73,8 @@ class App {
     std::unique_ptr<WindowIcons> _windowIcons;
     // Kept across reloads: the output device belongs to the system, not to a config.
     std::unique_ptr<IAudio> _audio;
+    // Kept across reloads, like the audio device, and sampled whether or not a module shows it.
+    std::unique_ptr<INetwork> _network;
     // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;
     std::vector<std::unique_ptr<Bar>> _bars;

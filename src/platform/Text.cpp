@@ -4,6 +4,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <format>
 
@@ -60,6 +61,25 @@ std::wstring ReplaceLoneSurrogates(std::wstring_view text) {
         }
     }
     return valid;
+}
+
+bool IsUnsafeCharacter(wchar_t unit) {
+    return unit < 0x20 || (unit >= 0x7F && unit <= 0x9F) || (unit >= 0x202A && unit <= 0x202E) || (unit >= 0x2066 && unit <= 0x2069);
+}
+
+std::wstring DrawableText(std::string_view bytes) {
+    if (bytes.empty()) {
+        return {};
+    }
+    // Without MB_ERR_INVALID_CHARS each invalid sequence decodes to U+FFFD instead of failing.
+    const std::int32_t length = MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<std::int32_t>(bytes.size()), nullptr, 0);
+    if (length == 0) {
+        ThrowLastError("MultiByteToWideChar(drawable)");
+    }
+    std::wstring wide(static_cast<size_t>(length), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<std::int32_t>(bytes.size()), wide.data(), length);
+    std::ranges::replace_if(wide, IsUnsafeCharacter, kReplacementCharacter);
+    return ReplaceLoneSurrogates(wide);
 }
 
 std::string LogExcerpt(std::string_view text, size_t maxBytes) {

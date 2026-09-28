@@ -210,6 +210,9 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         case WM_MOUSEMOVE: PointAt(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}); return 0;
         case WM_MOUSEHOVER: ShowTooltip(); return 0;
         case WM_MOUSELEAVE:
+            if (_pointed != nullptr) {
+                _pointed->Hover(std::nullopt);
+            }
             _pointed = nullptr;
             _tooltip->Hide();
             // Draws the box that was under the cursor without its hover.
@@ -422,8 +425,7 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
     } else if (const auto* windowManagerCommand = action.has_value() ? std::get_if<WindowManagerCommand>(&*action) : nullptr) {
         _windowManager.RunCommand(windowManagerCommand->text);
     } else if (input == ModuleInput::LeftClick) {
-        const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
-        box->module->Click(D2D1::Point2F((static_cast<float>(client.x) * scale) - box->contentOrigin.x, (static_cast<float>(client.y) * scale) - box->contentOrigin.y));
+        box->module->Click(ContentPoint(client, *box));
     } else if (input == ModuleInput::ScrollUp || input == ModuleInput::ScrollDown) {
         box->module->Scroll(input == ModuleInput::ScrollUp ? ScrollDirection::Up : ScrollDirection::Down);
     }
@@ -440,13 +442,28 @@ void Bar::ScheduleNextChange() {
     }
 }
 
+D2D1_POINT_2F Bar::ContentPoint(POINT client, const HitBox& box) const {
+    const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
+    return D2D1::Point2F((static_cast<float>(client.x) * scale) - box.contentOrigin.x, (static_cast<float>(client.y) * scale) - box.contentOrigin.y);
+}
+
 void Bar::PointAt(POINT client) {
     const HitBox* box    = BoxAt(client);
     IModule*      module = box == nullptr ? nullptr : box->module;
     if (module == _pointed) {
+        // Within one module the cursor can still move to another of its items.
+        if (module != nullptr && module->Hover(ContentPoint(client, *box))) {
+            Render();
+        }
         return;
     }
+    if (_pointed != nullptr) {
+        _pointed->Hover(std::nullopt);
+    }
     _pointed = module;
+    if (module != nullptr) {
+        module->Hover(ContentPoint(client, *box));
+    }
     _tooltip->Hide();
     TRACKMOUSEEVENT track{.cbSize = sizeof(TRACKMOUSEEVENT), .dwFlags = TME_HOVER | TME_LEAVE, .hwndTrack = _window, .dwHoverTime = HOVER_DEFAULT};
     if (!TrackMouseEvent(&track)) {

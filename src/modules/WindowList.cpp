@@ -60,7 +60,7 @@ void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     for (size_t index = 0; index < _slots.size(); ++index) {
         const Slot&      slot  = _slots[index];
         const ItemStyle& style = StyleOf(slot);
-        DrawItemBackground(render, _row.boxes[index], style, origin);
+        DrawItemBackground(render, _row.boxes[index], style, _hovered == index ? style.hoverBackground : style.background, origin);
         if (slot.bitmap != nullptr) {
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
@@ -74,6 +74,13 @@ const ItemStyle& WindowList::StyleOf(const Slot& slot) const {
 
 std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
     return std::nullopt;
+}
+
+bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {
+    const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
+    const bool                  changed = hovered != _hovered;
+    _hovered                            = hovered;
+    return changed;
 }
 
 void WindowList::Scroll(ScrollDirection) {}

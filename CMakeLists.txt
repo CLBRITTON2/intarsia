@@ -46,6 +46,9 @@ add_library(intarsia_core STATIC
   src/modules/Cpu.cpp
   src/modules/IconText.cpp
   src/modules/Memory.cpp
+  src/modules/Network.cpp
+  src/modules/Placeholders.cpp
+  src/network/IpHelper.cpp
   src/modules/CommandPoller.cpp
   src/modules/Custom.cpp
   src/modules/DirectionToggle.cpp
@@ -79,7 +82,7 @@ add_library(intarsia_core STATIC
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs)
+target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32)
 
 # Parsing these headers is most of every file's compile time, so each target parses them once. Off for the lint, since
 # clang-tidy cannot read MSVC's precompiled headers.
@@ -129,6 +132,9 @@ if(BUILD_TESTING)
     tests/modules/DirectionToggle.cpp
     tests/modules/ItemRow.cpp
     tests/modules/Memory.cpp
+    tests/modules/Network.cpp
+    tests/modules/Placeholders.cpp
+    tests/network/IpHelper.cpp
     tests/modules/Ticks.cpp
     tests/modules/Window.cpp
     tests/modules/WindowIcons.cpp

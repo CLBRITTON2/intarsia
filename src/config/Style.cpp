@@ -378,12 +378,12 @@ namespace {
         return onlyModuleClasses && typed && (!compound.type.empty() || !compound.id.empty() || !compound.classes.empty());
     }
 
-    // .icon, or .item with at most one of .focused, .occupied and .empty.
+    // .icon, or .item with at most one of .focused, .occupied and .empty, and optionally :hover.
     std::optional<StyleTarget> PartTarget(const Compound& compound) {
-        if (!compound.type.empty() || !compound.id.empty() || compound.hover) {
+        if (!compound.type.empty() || !compound.id.empty()) {
             return std::nullopt;
         }
-        if (compound.classes == std::vector<std::string>{"icon"}) {
+        if (compound.classes == std::vector<std::string>{"icon"} && !compound.hover) {
             return StyleTarget::Icon;
         }
         const auto states = std::ranges::count_if(compound.classes, [](const std::string& name) { return name == "focused" || name == "occupied" || name == "empty"; });
@@ -464,7 +464,12 @@ namespace {
                 allowed.emplace_back("color");
                 return allowed;
             case StyleTarget::Icon: return {"font-family", "font-size", "color", "margin-right"};
-            case StyleTarget::Item: return {"color", "background", "font-weight", "padding", "margin", "border-radius"};
+            case StyleTarget::Item:
+                // An item under the cursor changes color only: a change of size would move every item after it.
+                if (selector.compounds.back().hover) {
+                    return {"color", "background"};
+                }
+                return {"color", "background", "font-weight", "padding", "margin", "border-radius"};
             case StyleTarget::Module: {
                 const Compound& compound = selector.compounds.front();
                 if (compound.hover) {
@@ -701,14 +706,21 @@ namespace {
     }
 
     ItemStyle ReadItem(const StyleSheet& sheet, const Element& module, std::string_view state, const D2D1_COLOR_F& color) {
-        const Element  item{.type = {}, .id = {}, .classes = state.empty() ? std::vector<std::string_view>{"item"} : std::vector<std::string_view>{"item", state}, .hover = false};
-        const Cascaded cascaded(sheet, StyleTarget::Item, &module, &item);
-        return ItemStyle{.color      = cascaded.Color("color", color),
-                         .background = cascaded.Color("background", kTransparent),
-                         .weight     = cascaded.Read("font-weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
-                         .padding    = cascaded.Space("padding", kNoSpace),
-                         .margin     = cascaded.Space("margin", kNoSpace),
-                         .radiusDips = cascaded.Length("border-radius", 0.0f)};
+        const std::vector<std::string_view> classes = state.empty() ? std::vector<std::string_view>{"item"} : std::vector<std::string_view>{"item", state};
+        const Element                       item{.type = {}, .id = {}, .classes = classes, .hover = false};
+        const Element                       hovered{.type = {}, .id = {}, .classes = classes, .hover = true};
+        const Cascaded                      cascaded(sheet, StyleTarget::Item, &module, &item);
+        const Cascaded                      hover(sheet, StyleTarget::Item, &module, &hovered);
+        const D2D1_COLOR_F                  itemColor  = cascaded.Color("color", color);
+        const D2D1_COLOR_F                  background = cascaded.Color("background", kTransparent);
+        return ItemStyle{.color           = itemColor,
+                         .background      = background,
+                         .weight          = cascaded.Read("font-weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
+                         .padding         = cascaded.Space("padding", kNoSpace),
+                         .margin          = cascaded.Space("margin", kNoSpace),
+                         .radiusDips      = cascaded.Length("border-radius", 0.0f),
+                         .hoverColor      = hover.Color("color", itemColor),
+                         .hoverBackground = hover.Color("background", background)};
     }
 
     std::string_view TypeName(ModuleKind kind) {

@@ -1,14 +1,28 @@
 #include "modules/Audio.hpp"
 
+#include "modules/Placeholders.hpp"
 #include "platform/Text.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <utility>
+#include <vector>
+
+namespace {
+
+    std::vector<Placeholder> AudioPlaceholders(const AudioOutput& output) {
+        return {{.name = "volume", .value = std::int64_t{VolumePercent(output.volume)}}, {.name = "device", .value = ToUtf8(output.device)}};
+    }
+
+} // namespace
 
 Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _audio(audio), _shown{.icon = {}, .text = {}}, _text(EmptyIconText()) {
-    RequireFormats("audio", _config.format, _config.tooltip, std::int32_t{50}, std::string("Speakers"));
-    RequireFormat("audio format_muted", _config.formatMuted, std::int32_t{50}, std::string("Speakers"));
+    const std::vector<Placeholder> samples = AudioPlaceholders(AudioOutput{.device = L"Speakers", .volume = 0.5f, .muted = false});
+    RequirePlaceholders("audio format", _config.format, samples);
+    RequirePlaceholders("audio format_muted", _config.formatMuted, samples);
+    if (_config.tooltip.has_value()) {
+        RequirePlaceholders("audio tooltip", *_config.tooltip, samples);
+    }
 }
 
 bool Audio::Layout(const RenderContext& render) {
@@ -41,6 +55,10 @@ void Audio::Click(D2D1_POINT_2F) {
     }
 }
 
+bool Audio::Hover(std::optional<D2D1_POINT_2F>) {
+    return false;
+}
+
 void Audio::Scroll(ScrollDirection direction) {
     const std::optional<AudioOutput> output = _audio.Output();
     if (output.has_value()) {
@@ -57,7 +75,7 @@ std::optional<std::wstring> Audio::TooltipText() {
     if (!_config.tooltip.has_value() || !output.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatValue(*_config.tooltip, VolumePercent(output->volume), ToUtf8(output->device)));
+    return ToWide(FormatPlaceholders(*_config.tooltip, AudioPlaceholders(*output)));
 }
 
 std::int32_t VolumePercent(float volume) {
@@ -69,7 +87,7 @@ AudioText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput
         return AudioText{.icon = {}, .text = {}};
     }
     const std::string& format = output->muted ? config.formatMuted : config.format;
-    return AudioText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatValue(format, VolumePercent(output->volume), ToUtf8(output->device)))};
+    return AudioText{.icon = output->muted ? config.iconMuted : config.icon, .text = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output)))};
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {

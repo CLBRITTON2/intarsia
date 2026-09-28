@@ -1,0 +1,94 @@
+#include "modules/Network.hpp"
+
+#include "../network/FakeNetwork.hpp"
+#include "TextOnlyRender.hpp"
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <string>
+#include <vector>
+
+namespace {
+
+    NetworkConfig TestConfig() {
+        return NetworkConfig{.formatWifi         = "{ssid} {signal}%",
+                             .formatEthernet     = "{interface}",
+                             .formatDisconnected = "offline",
+                             .tooltip            = "{ip} down {down} up {up}",
+                             .iconsWifi          = {L"0", L"1", L"2", L"3", L"4"},
+                             .iconEthernet       = L"E",
+                             .iconDisconnected   = L"X",
+                             .actions            = {.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+    }
+
+    NetworkState Wifi(std::optional<std::int32_t> signal) {
+        return NetworkState{.link                   = NetworkLink::Wifi,
+                            .interfaceName          = L"Wi-Fi",
+                            .ssid                   = L"home",
+                            .signalPercent          = signal,
+                            .ipv4                   = L"192.0.2.7",
+                            .receivedBytesPerSecond = 1'250'000.0,
+                            .sentBytesPerSecond     = 800.0};
+    }
+
+} // namespace
+
+TEST(Network, EachLinkHasItsFormatAndIcon) {
+    EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)), (NetworkText{.icon = L"3", .text = L"home 72%"}));
+    NetworkState wired = Wifi(std::nullopt);
+    wired.link         = NetworkLink::Ethernet;
+    wired.interfaceName = L"Ethernet 2";
+    EXPECT_EQ(FormatNetwork(TestConfig(), wired), (NetworkText{.icon = L"E", .text = L"Ethernet 2"}));
+    FakeNetwork none;
+    EXPECT_EQ(FormatNetwork(TestConfig(), none.state), (NetworkText{.icon = L"X", .text = L"offline"}));
+}
+
+TEST(Network, WifiIconsSplitTheSignalRangeEvenly) {
+    const std::vector<std::wstring> icons{L"0", L"1", L"2", L"3", L"4"};
+    EXPECT_EQ(WifiIcon(icons, 0), L"0");
+    EXPECT_EQ(WifiIcon(icons, 20), L"0");
+    EXPECT_EQ(WifiIcon(icons, 21), L"1");
+    EXPECT_EQ(WifiIcon(icons, 100), L"4");
+    EXPECT_EQ(WifiIcon(icons, 150), L"4");
+    EXPECT_EQ(WifiIcon(icons, -5), L"0");
+    // Windows can withhold the signal: the icon still says the link is Wi-Fi.
+    EXPECT_EQ(WifiIcon(icons, std::nullopt), L"4");
+    EXPECT_EQ(WifiIcon({L"only"}, 3), L"only");
+}
+
+TEST(Network, RatesUseSiUnits) {
+    EXPECT_EQ(FormatRate(0.0), "0 B/s");
+    EXPECT_EQ(FormatRate(999.0), "999 B/s");
+    EXPECT_EQ(FormatRate(1250.0), "1.2 kB/s");
+    EXPECT_EQ(FormatRate(3'400'000.0), "3.4 MB/s");
+    EXPECT_EQ(FormatRate(5e12), "5000.0 GB/s");
+}
+
+TEST(Network, TooltipCarriesTheAddressAndRates) {
+    FakeNetwork network;
+    network.state = Wifi(50);
+    Network module(TestConfig(), network);
+    EXPECT_EQ(module.TooltipText(), L"192.0.2.7 down 1.2 MB/s up 800 B/s");
+}
+
+TEST(Network, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
+    FakeNetwork          network;
+    const TextOnlyRender render;
+    Network              module(TestConfig(), network);
+    EXPECT_TRUE(module.Layout(render.Context()));
+    EXPECT_FALSE(module.Layout(render.Context()));
+    network.state = Wifi(72);
+    EXPECT_TRUE(module.Layout(render.Context()));
+    // Rates only reach the tooltip here, so they change nothing drawn.
+    network.state.receivedBytesPerSecond = 9.0;
+    EXPECT_FALSE(module.Layout(render.Context()));
+    EXPECT_GT(module.Size().width, 0.0f);
+}
+
+TEST(Network, AFormatNamingAnUnknownValueIsAConfigError) {
+    FakeNetwork   network;
+    NetworkConfig config = TestConfig();
+    config.formatWifi    = "{essid}";
+    EXPECT_THAT([&] { return Network(config, network); }, testing::ThrowsMessage<ConfigError>(testing::HasSubstr("network format_wifi '{essid}' is not a valid format")));
+}

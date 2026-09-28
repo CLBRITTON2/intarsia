@@ -20,6 +20,7 @@ class Window final : public IModule {
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
     void                         Scroll(ScrollDirection direction) override;
+    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
     const ModuleActions&         Actions() const override;
     std::optional<std::wstring>  TooltipText() override;
 

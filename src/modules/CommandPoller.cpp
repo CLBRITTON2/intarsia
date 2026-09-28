@@ -26,12 +26,6 @@ namespace {
         using std::runtime_error::runtime_error;
     };
 
-    // Controls (C0, DEL, C1) and the bidirectional embeddings, overrides and isolates, which can make drawn text read
-    // as something other than what it holds (Trojan Source, CVE-2021-42574). All are single UTF-16 units.
-    bool IsUnsafeCharacter(wchar_t unit) {
-        return unit < 0x20 || (unit >= 0x7F && unit <= 0x9F) || (unit >= 0x202A && unit <= 0x202E) || (unit >= 0x2066 && unit <= 0x2069);
-    }
-
     // Throws OutputError naming field when text is not UTF-8 or holds an unsafe character other than those in allowed.
     void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed) {
         std::wstring wide;

@@ -8,6 +8,7 @@
 #include "modules/DirectionToggle.hpp"
 #include "modules/Divider.hpp"
 #include "modules/Memory.hpp"
+#include "modules/Network.hpp"
 #include "modules/Window.hpp"
 #include "modules/WindowList.hpp"
 #include "modules/Workspaces.hpp"
@@ -42,6 +43,7 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Audio: return std::make_unique<Audio>(RequireSettings<AudioConfig>(instance), sources.audio);
+        case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), sources.network);
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));

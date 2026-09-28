@@ -94,6 +94,8 @@ class Bar {
     void ReportDeviceLost(const DeviceLostError& error);
     // The box under a point in client pixels, or null between modules.
     const HitBox* BoxAt(POINT client) const;
+    // A point in client pixels as DIPs from the box's content origin, as modules take input.
+    D2D1_POINT_2F ContentPoint(POINT client, const HitBox& box) const;
     // Runs the module's action for the input, or for a left click or scroll without one, lets the module handle it.
     void HandleInput(POINT client, ModuleInput input);
     // Restarts hover tracking whenever the cursor moves onto a different module, hiding any tooltip.

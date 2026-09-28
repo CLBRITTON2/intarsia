@@ -35,6 +35,11 @@ class IModule {
     // A wheel notch over the module. Only called when no on_scroll_up or on_scroll_down action is configured for it.
     virtual void Scroll(ScrollDirection direction) = 0;
 
+    // Where the cursor is, in DIPs from the module's content origin as last drawn, or nullopt once it leaves the
+    // module. Returns whether what the module draws changed, such as the item under the cursor, so the bar redraws only
+    // then.
+    virtual bool Hover(std::optional<D2D1_POINT_2F> point) = 0;
+
     // The commands the config binds to this module's inputs.
     virtual const ModuleActions& Actions() const = 0;
 

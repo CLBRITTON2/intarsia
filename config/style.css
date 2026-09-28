@@ -7,7 +7,7 @@
  *   tooltip           the box shown while the cursor rests on a module
  *   .module           every module's box, or one type (clock, cpu, workspaces...) or one module by its name (#date)
  *   .alert            a module's text while it needs attention, such as a failed command
- *   :hover            a module's box under the cursor
+ *   :hover            a module's box or an .item under the cursor, which changes only color and background
  *   .icon             a module's icon, as in #cpu .icon
  *   .item             one workspace, window or binding mode inside its module, with .focused, .occupied or .empty
  *
@@ -66,7 +66,7 @@ tooltip {
     color: var(--red);
 }
 
-clock:hover, cpu:hover, memory:hover, audio:hover, tiling_direction:hover {
+clock:hover, cpu:hover, memory:hover, audio:hover, network:hover, tiling_direction:hover {
     background: var(--hover);
 }
 
@@ -80,6 +80,12 @@ clock:hover, cpu:hover, memory:hover, audio:hover, tiling_direction:hover {
     border-radius: 10px;
 }
 
+/* The workspace or window under the cursor. The focused workspace's own rule is more specific, so it keeps its colors. */
+.item:hover {
+    color: var(--foreground);
+    background: var(--hover);
+}
+
 #workspaces .item.focused {
     color: var(--black);
     background: var(--cyan);
@@ -90,7 +96,8 @@ clock:hover, cpu:hover, memory:hover, audio:hover, tiling_direction:hover {
     color: var(--muted);
 }
 
-#divider {
+/* Every divider. A type alone ranks below .module, so .module is added to win its padding. */
+divider.module {
     width: 1px;
     height: 60%;
     padding: 0 4px;

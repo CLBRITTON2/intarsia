@@ -25,5 +25,5 @@ std::optional<size_t> ItemAt(const ItemRow& row, D2D1_POINT_2F point);
 // Where a box's content starts once the row is drawn at origin.
 D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, D2D1_POINT_2F origin);
 
-// The box's background at origin, if it has one, rounded by its radius up to half its height.
-void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, D2D1_POINT_2F origin);
+// The box filled with fill at origin, unless fill is transparent, rounded by the style's radius up to half its height.
+void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, D2D1_POINT_2F origin);

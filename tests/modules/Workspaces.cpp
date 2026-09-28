@@ -47,6 +47,22 @@ TEST(Workspaces, LayoutReportsAChangeOnlyWhenThisMonitorsWorkspacesChange) {
     EXPECT_TRUE(module.Layout(render.Context()));
 }
 
+TEST(Workspaces, HoverReportsAChangeOnlyWhenTheCursorMovesToAnotherItem) {
+    FakeWindowManager    windowManager;
+    const TextOnlyRender render;
+    Workspaces           module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
+    windowManager.workspaces = {kWorkspaces[0], kWorkspaces[1]};
+    module.Layout(render.Context());
+    const float middle = module.Size().height / 2.0f;
+
+    EXPECT_TRUE(module.Hover(D2D1::Point2F(6.0f, middle)));
+    EXPECT_FALSE(module.Hover(D2D1::Point2F(7.0f, middle)));
+    EXPECT_TRUE(module.Hover(D2D1::Point2F(module.Size().width - 6.0f, middle)));
+    // Into the margin between items, then off the module.
+    EXPECT_TRUE(module.Hover(D2D1::Point2F(module.Size().width - 2.0f, middle)));
+    EXPECT_FALSE(module.Hover(std::nullopt));
+}
+
 TEST(Workspaces, ClickFocusesTheWorkspaceUnderItByNameAndNothingInTheGaps) {
     FakeWindowManager    windowManager;
     const TextOnlyRender render;
