@@ -34,24 +34,6 @@ void Network::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     _line.Draw(render, origin);
 }
 
-std::optional<std::uint32_t> Network::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
-bool Network::Hover(std::optional<D2D1_POINT_2F>) {
-    return false;
-}
-
-void                       Network::Scroll(ScrollDirection) {}
-
-void                       Network::Click(D2D1_POINT_2F) {}
-
-void                       Network::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> Network::TooltipItem() const {
-    return std::nullopt;
-}
-
 const ModuleActions& Network::Actions() const {
     return _config.actions;
 }

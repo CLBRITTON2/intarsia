@@ -35,25 +35,11 @@ void Audio::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     _line.Draw(render, origin);
 }
 
-std::optional<std::uint32_t> Audio::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
-void                       Audio::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> Audio::TooltipItem() const {
-    return std::nullopt;
-}
-
 void Audio::Click(D2D1_POINT_2F) {
     const std::optional<AudioOutput> output = _audio.Output();
     if (output.has_value()) {
         _audio.SetMuted(!output->muted);
     }
-}
-
-bool Audio::Hover(std::optional<D2D1_POINT_2F>) {
-    return false;
 }
 
 void Audio::Scroll(ScrollDirection direction) {

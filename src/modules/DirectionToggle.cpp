@@ -20,33 +20,12 @@ void DirectionToggle::Draw(const RenderContext& render, D2D1_POINT_2F origin) co
     _glyph.Draw(render, origin);
 }
 
-std::optional<std::uint32_t> DirectionToggle::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
-bool DirectionToggle::Hover(std::optional<D2D1_POINT_2F>) {
-    return false;
-}
-
-void                       DirectionToggle::Scroll(ScrollDirection) {}
-
-void                       DirectionToggle::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> DirectionToggle::TooltipItem() const {
-    return std::nullopt;
-}
-
 void DirectionToggle::Click(D2D1_POINT_2F) {
     _windowManager.ToggleTilingDirection();
 }
 
 const ModuleActions& DirectionToggle::Actions() const {
-    static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
-    return kNone;
-}
-
-std::optional<std::wstring> DirectionToggle::TooltipText() {
-    return std::nullopt;
+    return kNoActions;
 }
 
 std::wstring DirectionText(const TilingDirectionConfig& config, std::optional<TilingDirection> direction) {

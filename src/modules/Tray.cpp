@@ -102,8 +102,6 @@ void Tray::RightClick(D2D1_POINT_2F point) {
     }
 }
 
-void Tray::Scroll(ScrollDirection) {}
-
 bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
     const std::optional<size_t> hovered = point.has_value() ? ItemUnder(*point) : std::nullopt;
     const bool                  changed = hovered != _hovered;
@@ -112,8 +110,7 @@ bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
 }
 
 const ModuleActions& Tray::Actions() const {
-    static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
-    return kNone;
+    return kNoActions;
 }
 
 std::optional<std::wstring> Tray::TooltipText() {

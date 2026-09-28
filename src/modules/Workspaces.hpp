@@ -20,19 +20,15 @@ class Workspaces final : public IModule {
   public:
     Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleStyle style);
 
-    bool                         Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                  Size() const override;
-    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    void                         Click(D2D1_POINT_2F point) override;
-    void                         RightClick(D2D1_POINT_2F point) override;
-    void                         Scroll(ScrollDirection direction) override;
-    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
+    bool        Layout(const RenderContext& render) override;
+    D2D1_SIZE_F Size() const override;
+    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    void        Click(D2D1_POINT_2F point) override;
+    bool        Hover(std::optional<D2D1_POINT_2F> point) override;
     // None: the module has no config table, and a left click focuses the workspace under it.
     const ModuleActions& Actions() const override;
     // While disconnected, why: the window manager's status detail. Nothing while connected.
     std::optional<std::wstring> TooltipText() override;
-    std::optional<D2D1_RECT_F>  TooltipItem() const override;
 
   private:
     std::optional<size_t> _hovered; // the item under the cursor

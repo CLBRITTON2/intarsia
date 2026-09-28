@@ -58,23 +58,11 @@ const ItemStyle& WindowList::StyleOf(const Slot& slot) const {
     return slot.window.focused ? _style.focused : _style.item;
 }
 
-std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
 bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {
     const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
     const bool                  changed = hovered != _hovered;
     _hovered                            = hovered;
     return changed;
-}
-
-void                       WindowList::Scroll(ScrollDirection) {}
-
-void                       WindowList::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> WindowList::TooltipItem() const {
-    return std::nullopt;
 }
 
 void WindowList::Click(D2D1_POINT_2F point) {
@@ -85,12 +73,7 @@ void WindowList::Click(D2D1_POINT_2F point) {
 }
 
 const ModuleActions& WindowList::Actions() const {
-    static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
-    return kNone;
-}
-
-std::optional<std::wstring> WindowList::TooltipText() {
-    return std::nullopt;
+    return kNoActions;
 }
 
 std::vector<ManagedWindow> WindowsOnMonitor(const std::vector<ManagedWindow>& windows, std::intptr_t monitor) {

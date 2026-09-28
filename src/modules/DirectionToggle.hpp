@@ -15,18 +15,12 @@ class DirectionToggle final : public IModule {
   public:
     DirectionToggle(TilingDirectionConfig config, IWindowManager& windowManager);
 
-    bool                         Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                  Size() const override;
-    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    void                         Click(D2D1_POINT_2F point) override;
-    void                         RightClick(D2D1_POINT_2F point) override;
-    void                         Scroll(ScrollDirection direction) override;
-    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
+    bool        Layout(const RenderContext& render) override;
+    D2D1_SIZE_F Size() const override;
+    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    void        Click(D2D1_POINT_2F point) override;
     // None: a left click toggles the direction.
-    const ModuleActions&        Actions() const override;
-    std::optional<std::wstring> TooltipText() override;
-    std::optional<D2D1_RECT_F>  TooltipItem() const override;
+    const ModuleActions& Actions() const override;
 
   private:
     TilingDirectionConfig _config;

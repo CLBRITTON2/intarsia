@@ -18,17 +18,11 @@ class Network final : public IModule {
     // Throws ConfigError when a format uses a name it has no value for.
     Network(NetworkConfig config, const INetwork& network);
 
-    bool                         Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                  Size() const override;
-    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    void                         Click(D2D1_POINT_2F point) override;
-    void                         RightClick(D2D1_POINT_2F point) override;
-    void                         Scroll(ScrollDirection direction) override;
-    bool                         Hover(std::optional<D2D1_POINT_2F> point) override;
-    const ModuleActions&         Actions() const override;
-    std::optional<std::wstring>  TooltipText() override;
-    std::optional<D2D1_RECT_F>   TooltipItem() const override;
+    bool                        Layout(const RenderContext& render) override;
+    D2D1_SIZE_F                 Size() const override;
+    void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    const ModuleActions&        Actions() const override;
+    std::optional<std::wstring> TooltipText() override;
 
   private:
     NetworkConfig   _config;

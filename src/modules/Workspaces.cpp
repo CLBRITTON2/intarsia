@@ -55,23 +55,11 @@ void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     }
 }
 
-std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
 bool Workspaces::Hover(std::optional<D2D1_POINT_2F> point) {
     const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
     const bool                  changed = hovered != _hovered;
     _hovered                            = hovered;
     return changed;
-}
-
-void                       Workspaces::Scroll(ScrollDirection) {}
-
-void                       Workspaces::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> Workspaces::TooltipItem() const {
-    return std::nullopt;
 }
 
 void Workspaces::Click(D2D1_POINT_2F point) {
@@ -82,8 +70,7 @@ void Workspaces::Click(D2D1_POINT_2F point) {
 }
 
 const ModuleActions& Workspaces::Actions() const {
-    static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
-    return kNone;
+    return kNoActions;
 }
 
 std::optional<std::wstring> Workspaces::TooltipText() {

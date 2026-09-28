@@ -35,10 +35,6 @@ void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const
     }
 }
 
-std::optional<std::uint32_t> BindingModes::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
 bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
     const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
     const bool                  changed = hovered != _hovered;
@@ -46,21 +42,6 @@ bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
     return changed;
 }
 
-void                       BindingModes::Scroll(ScrollDirection) {}
-
-void                       BindingModes::Click(D2D1_POINT_2F) {}
-
-void                       BindingModes::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> BindingModes::TooltipItem() const {
-    return std::nullopt;
-}
-
 const ModuleActions& BindingModes::Actions() const {
-    static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
-    return kNone;
-}
-
-std::optional<std::wstring> BindingModes::TooltipText() {
-    return std::nullopt;
+    return kNoActions;
 }

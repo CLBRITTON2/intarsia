@@ -26,24 +26,6 @@ void Battery::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     _line.Draw(render, origin);
 }
 
-std::optional<std::uint32_t> Battery::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
-bool Battery::Hover(std::optional<D2D1_POINT_2F>) {
-    return false;
-}
-
-void                       Battery::Scroll(ScrollDirection) {}
-
-void                       Battery::Click(D2D1_POINT_2F) {}
-
-void                       Battery::RightClick(D2D1_POINT_2F) {}
-
-std::optional<D2D1_RECT_F> Battery::TooltipItem() const {
-    return std::nullopt;
-}
-
 const ModuleActions& Battery::Actions() const {
     return _config.actions;
 }
