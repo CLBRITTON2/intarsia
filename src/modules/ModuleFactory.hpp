@@ -2,6 +2,7 @@
 
 #include "audio/IAudio.hpp"
 #include "bar/Sections.hpp"
+#include "battery/IBattery.hpp"
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
 #include "modules/IModule.hpp"
@@ -20,6 +21,7 @@ struct ModuleSources {
     WindowIcons&          windowIcons;
     IAudio&               audio;
     const INetwork&       network;
+    const IBattery&       battery;
     HMONITOR              monitor;
 };
 

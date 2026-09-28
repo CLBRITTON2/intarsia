@@ -2,7 +2,6 @@
 
 #include "platform/Text.hpp"
 
-#include <algorithm>
 #include <array>
 #include <format>
 #include <stdexcept>
@@ -90,9 +89,7 @@ const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::option
     if (!signalPercent.has_value()) {
         return icons.back();
     }
-    const auto count = static_cast<std::int32_t>(icons.size());
-    const auto index = std::clamp(std::clamp(*signalPercent, 0, 100) * count / 101, 0, count - 1);
-    return icons[static_cast<size_t>(index)];
+    return LevelIcon(icons, *signalPercent);
 }
 
 std::string FormatRate(double bytesPerSecond) {

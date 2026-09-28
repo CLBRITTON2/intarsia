@@ -17,13 +17,13 @@ return {
     -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #date.
     modules_left = { "workspaces", "divider", "apps", "divider_date", "date" },
     modules_center = {},
-    modules_right = { "mode", "tiling", "net", "cpu", "memory", "volume" },
+    modules_right = { "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
 
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
-    -- tiling_direction, divider, cpu, memory, audio, network or custom. One type can appear under several names with different
+    -- tiling_direction, divider, cpu, memory, audio, network, battery or custom. One type can appear under several names with different
     -- settings, such as a second clock with its own format.
     --
-    -- clock, window, cpu, memory, audio, network and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
+    -- clock, window, cpu, memory, audio, network, battery and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
     -- actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
     -- config loads), and it starts without a shell, so arguments reach it exactly as written.
     -- { window_manager = "focus --next-workspace" } sends the window manager a command in its own syntax instead,
@@ -92,6 +92,25 @@ return {
             icon_muted = "\u{F0581}",
             step = 5,
             tooltip = "{device}",
+        },
+        -- The batteries taken together, sampled when Windows reports a change of charge or power source. The formats and
+        -- tooltip can use {capacity} (a whole percent), {time} (hours and minutes left on battery, as "1:05", empty
+        -- until Windows has an estimate) and {health} (full charge capacity against design capacity, a whole percent,
+        -- empty when the battery does not report it). format_plugged is on external power and not charging: full, or
+        -- held by a charge limit. Shows nothing on a machine with no battery.
+        battery = {
+            type = "battery",
+            format_discharging = "{capacity}%",
+            format_charging = "{capacity}%",
+            format_plugged = "{capacity}%",
+            -- Emptiest to fullest while discharging, the range split evenly between them.
+            icons = { "\u{F008E}", "\u{F007C}", "\u{F007E}", "\u{F0081}", "\u{F0079}" },
+            icon_charging = "\u{F0084}",
+            icon_plugged = "\u{F06A5}",
+            -- Discharging at or under this percent draws the text in the .alert color.
+            alert_at = 20,
+            tooltip = "{capacity}% {time}\nHealth {health}%",
+            on_click = { "C:\\Windows\\explorer.exe", "ms-settings:batterysaver" },
         },
         -- A window module shows the focused window's title. Add "title" to a list to show it.
         -- title = {

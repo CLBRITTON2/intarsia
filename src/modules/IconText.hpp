@@ -5,10 +5,12 @@
 
 #include <wrl/client.h>
 
+#include <cstdint>
 #include <format>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // An icon and a line of text beside it, each laid out on its own so the gap between them is a set distance.
 struct IconText {
@@ -32,6 +34,10 @@ void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconT
 
 // Nothing laid out yet.
 IconText EmptyIconText();
+
+// The icon for a level from 0 to 100 (a signal, a charge): icons split the range evenly, lowest first. A level outside
+// the range takes the nearest end.
+const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32_t percent);
 
 // One line of text in render.foreground, laid out again only when the text changes.
 class TextLine {

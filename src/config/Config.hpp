@@ -116,6 +116,7 @@ enum class ModuleKind : std::uint8_t {
     Memory,
     Audio,
     Network,
+    Battery,
     Custom
 };
 
@@ -125,7 +126,7 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 12> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 13> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
@@ -137,6 +138,7 @@ inline constexpr std::array<ModuleTypeName, 12> kModuleTypes{{
     {.name = "memory", .kind = ModuleKind::Memory},
     {.name = "audio", .kind = ModuleKind::Audio},
     {.name = "network", .kind = ModuleKind::Network},
+    {.name = "battery", .kind = ModuleKind::Battery},
     {.name = "custom", .kind = ModuleKind::Custom},
 }};
 
@@ -224,8 +226,23 @@ struct NetworkConfig {
     ModuleActions              actions;
 };
 
+// The system's batteries taken together. The formats and tooltip can use {capacity} (the charge as a whole percent),
+// {time} (hours and minutes left on battery, as "1:05", empty until Windows has an estimate) and {health} (full
+// charge capacity against design capacity as a whole percent, empty when the batteries do not report it).
+struct BatteryConfig {
+    std::string                formatDischarging;
+    std::string                formatCharging;
+    std::string                formatPlugged; // on external power and not charging: full, or held by a charge limit
+    std::optional<std::string> tooltip;
+    std::vector<std::wstring>  icons; // emptiest to fullest while discharging, the range split evenly between them
+    std::wstring               iconCharging;
+    std::wstring               iconPlugged;
+    std::int32_t               alertAtPercent; // discharging at or under this charge draws the text in .alert
+    ModuleActions              actions;
+};
+
 // The settings from a module's table: workspaces, windows, binding_mode and divider have none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig>;
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {

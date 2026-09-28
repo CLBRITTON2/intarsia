@@ -36,11 +36,13 @@ add_library(intarsia_core STATIC
   src/LaunchOptions.cpp
   src/audio/CoreAudio.cpp
   src/bar/Bar.cpp
+  src/battery/PowerStatus.cpp
   src/bar/Layout.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
   src/config/Style.cpp
   src/modules/Audio.cpp
+  src/modules/Battery.cpp
   src/modules/BindingModes.cpp
   src/modules/Clock.cpp
   src/modules/Cpu.cpp
@@ -82,7 +84,7 @@ add_library(intarsia_core STATIC
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32)
+target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi)
 
 # Parsing these headers is most of every file's compile time, so each target parses them once. Off for the lint, since
 # clang-tidy cannot read MSVC's precompiled headers.
@@ -124,7 +126,9 @@ if(BUILD_TESTING)
     tests/config/Config.cpp
     tests/config/Style.cpp
     tests/audio/CoreAudio.cpp
+    tests/battery/PowerStatus.cpp
     tests/modules/Audio.cpp
+    tests/modules/Battery.cpp
     tests/modules/BindingModes.cpp
     tests/modules/Clock.cpp
     tests/modules/CommandPoller.cpp

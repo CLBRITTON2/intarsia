@@ -57,12 +57,6 @@ namespace {
         return std::nullopt;
     }
 
-    void ThrowIfWin32Failed(DWORD result, std::string_view call) {
-        if (result != NO_ERROR) {
-            throw Win32Error(call, HRESULT_FROM_WIN32(result));
-        }
-    }
-
     // The interface's first usable IPv4 address, or empty when it has none.
     std::wstring FirstIpv4(NET_IFINDEX index) {
         PMIB_UNICASTIPADDRESS_TABLE raw = nullptr;
@@ -113,23 +107,6 @@ namespace {
         HANDLE _handle = nullptr;
     };
 
-    // Logs a failure once, until a later sample succeeds.
-    class FailureLog {
-      public:
-        void Failed(std::string_view event, const Win32Error& error) {
-            if (!_failing) {
-                Log(LogLevel::Warning, "network", event, {{.key = "reason", .value = error.what()}});
-            }
-            _failing = true;
-        }
-        void Succeeded() {
-            _failing = false;
-        }
-
-      private:
-        bool _failing = false;
-    };
-
 } // namespace
 
 IpHelper::IpHelper(ChangeSignal& changes) :
@@ -151,8 +128,8 @@ NetworkState IpHelper::State() const {
 void IpHelper::Run() {
     std::optional<Counters>     last;
     std::unique_ptr<WlanClient> wlan;
-    FailureLog                  sampleLog;
-    FailureLog                  wlanLog;
+    FailureLog                  sampleLog("network");
+    FailureLog                  wlanLog("network");
     do {
         NetworkState state{
             .link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};

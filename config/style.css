@@ -66,7 +66,7 @@ tooltip {
     color: var(--red);
 }
 
-clock:hover, cpu:hover, memory:hover, audio:hover, network:hover, tiling_direction:hover {
+clock:hover, cpu:hover, memory:hover, audio:hover, network:hover, battery:hover, tiling_direction:hover {
     background: var(--hover);
 }
 
@@ -144,6 +144,6 @@ divider.module {
     color: var(--magenta);
 }
 
-#cpu .icon, #volume .icon {
+#cpu .icon, #volume .icon, #battery .icon {
     color: var(--cyan);
 }

@@ -215,10 +215,9 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 }
 
 TEST(Config, TypeMustBeAKnownModuleType) {
-    EXPECT_THAT(
-        [] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-        ConfigErrorWith(
-            "modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, network, custom"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, "
+                                "network, battery, custom"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -278,6 +277,21 @@ TEST(Config, AudioParsesItsFormatsIconsAndStep) {
                 ConfigErrorWith("modules.volume.step is a percent of full volume, from 1 to 100, got 101"));
     EXPECT_THAT([&audio] { return LoadText(WithRightModules(R"({ "volume" })", Replace(audio, R"(icon_muted = "m", )", ""))); },
                 ConfigErrorWith("modules.volume.icon_muted is missing"));
+}
+
+TEST(Config, BatteryParsesItsFormatsIconsAndAlertThreshold) {
+    const std::string battery =
+        R"(        power = { type = "battery", format_discharging = "{capacity}%", format_charging = "", format_plugged = "", icons = { "e", "f" }, icon_charging = "c", icon_plugged = "p", alert_at = 15 },)";
+    const Config         config   = LoadText(WithRightModules(R"({ "power" })", battery));
+    const BatteryConfig& settings = SettingsOf<BatteryConfig>(config.modules.right, 0);
+    EXPECT_EQ(settings.formatDischarging, "{capacity}%");
+    EXPECT_EQ(settings.icons, (std::vector<std::wstring>{L"e", L"f"}));
+    EXPECT_EQ(settings.iconPlugged, L"p");
+    EXPECT_EQ(settings.alertAtPercent, 15);
+    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "alert_at = 15", "alert_at = 101"))); },
+                ConfigErrorWith("modules.power.alert_at is a percent of full charge, from 1 to 100, got 101"));
+    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, R"({ "e", "f" })", "{}"))); },
+                ConfigErrorWith("modules.power.icons must hold at least one icon, emptiest first"));
 }
 
 TEST(Config, BindingModeAndTilingDirectionParseOnATilingWindowManager) {

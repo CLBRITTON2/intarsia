@@ -3,6 +3,7 @@
 #include "LaunchOptions.hpp"
 #include "audio/IAudio.hpp"
 #include "bar/Bar.hpp"
+#include "battery/IBattery.hpp"
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
 #include "modules/WindowIcons.hpp"
@@ -75,6 +76,8 @@ class App {
     std::unique_ptr<IAudio> _audio;
     // Kept across reloads, like the audio device, and sampled whether or not a module shows it.
     std::unique_ptr<INetwork> _network;
+    // Kept across reloads, like the network.
+    std::unique_ptr<IBattery> _battery;
     // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;
     std::vector<std::unique_ptr<Bar>> _bars;

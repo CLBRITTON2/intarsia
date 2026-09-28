@@ -28,3 +28,16 @@ void Log(LogLevel level, std::string_view component, std::string_view event, std
     line += '\n';
     std::fputs(line.c_str(), stderr);
 }
+
+FailureLog::FailureLog(std::string_view component) : _component(component) {}
+
+void FailureLog::Failed(std::string_view event, const std::exception& error) {
+    if (!_failing) {
+        Log(LogLevel::Warning, _component, event, {{.key = "reason", .value = error.what()}});
+    }
+    _failing = true;
+}
+
+void FailureLog::Succeeded() {
+    _failing = false;
+}

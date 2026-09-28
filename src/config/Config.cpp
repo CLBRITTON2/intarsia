@@ -230,6 +230,7 @@ namespace {
     CustomConfig     ReadCustomConfig(const TableReader& module);
     AudioConfig      ReadAudioConfig(const TableReader& module);
     NetworkConfig    ReadNetworkConfig(const TableReader& module);
+    BatteryConfig    ReadBatteryConfig(const TableReader& module);
 
     ModuleSettings   ReadModuleSettings(const TableReader& module, ModuleKind kind) {
         switch (kind) {
@@ -240,6 +241,7 @@ namespace {
             case ModuleKind::Custom: return ReadCustomConfig(module);
             case ModuleKind::Audio: return ReadAudioConfig(module);
             case ModuleKind::Network: return ReadNetworkConfig(module);
+            case ModuleKind::Battery: return ReadBatteryConfig(module);
             case ModuleKind::Workspaces:
             case ModuleKind::Windows:
             case ModuleKind::BindingMode:
@@ -354,6 +356,9 @@ namespace {
         if (const auto* network = std::get_if<NetworkConfig>(&settings)) {
             return &network->actions;
         }
+        if (const auto* battery = std::get_if<BatteryConfig>(&settings)) {
+            return &battery->actions;
+        }
         if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
             return &custom->text.actions;
         }
@@ -423,23 +428,45 @@ namespace {
                            .actions     = ReadActions(module)};
     }
 
+    // A list of icons for a level from 0 to 100, lowest first. order says what the first one stands for.
+    std::vector<std::wstring> ReadLevelIcons(const TableReader& module, std::string_view key, std::string_view order) {
+        std::vector<std::wstring> icons;
+        for (const std::string& icon : module.StringList(key)) {
+            icons.push_back(ToWide(icon));
+        }
+        if (icons.empty()) {
+            throw module.Error(std::format("{} must hold at least one icon, {} first", module.KeyPath(key), order));
+        }
+        return icons;
+    }
+
     NetworkConfig ReadNetworkConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "format_wifi", "format_ethernet", "format_disconnected", "icons_wifi", "icon_ethernet", "icon_disconnected"}));
-        std::vector<std::wstring> iconsWifi;
-        for (const std::string& icon : module.StringList("icons_wifi")) {
-            iconsWifi.push_back(ToWide(icon));
-        }
-        if (iconsWifi.empty()) {
-            throw module.Error(std::format("{} must hold at least one icon, weakest signal first", module.KeyPath("icons_wifi")));
-        }
         return NetworkConfig{.formatWifi         = module.String("format_wifi"),
                              .formatEthernet     = module.String("format_ethernet"),
                              .formatDisconnected = module.String("format_disconnected"),
                              .tooltip            = ReadTooltip(module),
-                             .iconsWifi          = std::move(iconsWifi),
+                             .iconsWifi          = ReadLevelIcons(module, "icons_wifi", "weakest signal"),
                              .iconEthernet       = ToWide(module.String("icon_ethernet")),
                              .iconDisconnected   = ToWide(module.String("icon_disconnected")),
                              .actions            = ReadActions(module)};
+    }
+
+    BatteryConfig ReadBatteryConfig(const TableReader& module) {
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "format_discharging", "format_charging", "format_plugged", "icons", "icon_charging", "icon_plugged", "alert_at"}));
+        const std::int64_t alertAt = PositiveWholeNumber(module, "alert_at");
+        if (alertAt > 100) {
+            throw module.Error(std::format("{} is a percent of full charge, from 1 to 100, got {}", module.KeyPath("alert_at"), alertAt));
+        }
+        return BatteryConfig{.formatDischarging = module.String("format_discharging"),
+                             .formatCharging    = module.String("format_charging"),
+                             .formatPlugged     = module.String("format_plugged"),
+                             .tooltip           = ReadTooltip(module),
+                             .icons             = ReadLevelIcons(module, "icons", "emptiest"),
+                             .iconCharging      = ToWide(module.String("icon_charging")),
+                             .iconPlugged       = ToWide(module.String("icon_plugged")),
+                             .alertAtPercent    = static_cast<std::int32_t>(alertAt),
+                             .actions           = ReadActions(module)};
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {

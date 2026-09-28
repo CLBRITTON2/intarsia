@@ -13,3 +13,6 @@ class Win32Error : public std::runtime_error {
 
 void              ThrowIfFailed(HRESULT result, std::string_view call);
 [[noreturn]] void ThrowLastError(std::string_view call);
+
+// For the calls that return a Win32 error code rather than set the last error.
+void ThrowIfWin32Failed(DWORD result, std::string_view call);

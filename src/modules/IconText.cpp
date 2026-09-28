@@ -81,6 +81,12 @@ IconText EmptyIconText() {
                     .size     = {.width = 0.0f, .height = 0.0f}};
 }
 
+const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32_t percent) {
+    const auto count = static_cast<std::int32_t>(icons.size());
+    const auto index = std::clamp(std::clamp(percent, 0, 100) * count / 101, 0, count - 1);
+    return icons[static_cast<size_t>(index)];
+}
+
 bool TextLine::Update(const RenderContext& render, std::wstring text) {
     if (_laidOut && text == _shown) {
         return false;
