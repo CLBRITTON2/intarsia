@@ -8,15 +8,21 @@ Each scenario runs build\debug\intarsia.exe with a generated config against buil
 objects, threads, CPU, and whether its windows still answer messages. A scenario fails when the bar exits, stops
 answering, logs a fatal error, grows past the thresholds after warming up, or does not exit cleanly on WM_CLOSE.
 
+The bar's tray always runs under a class of its own (--tray-class), so no scenario takes the desktop's tray icons. The
+tray scenario floods it from build\debug\tray_sender.exe (tests/stress/TraySender.cpp), restarted every 10 s so all
+its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons.
+
 Run it from an interactive desktop session: the bar needs a desktop to draw on.
 #>
 param(
-    [ValidateSet('idle', 'normal', 'flood', 'malformed', 'stall', 'flap', 'reject', 'reload')]
-    [string[]] $Scenario = @('idle', 'normal', 'flood', 'malformed', 'stall', 'flap', 'reject', 'reload'),
+    [ValidateSet('idle', 'normal', 'flood', 'malformed', 'stall', 'flap', 'reject', 'reload', 'tray')]
+    [string[]] $Scenario = @('idle', 'normal', 'flood', 'malformed', 'stall', 'flap', 'reject', 'reload', 'tray'),
     [int] $Seconds = 60,
     # The bar build under test. The test server only builds with the debug preset's tests.
     [ValidateSet('debug', 'release')]
     [string] $Preset = 'debug',
+    # Each scenario's config, style and logs go in a directory of its own under this one.
+    [string] $LogRoot = [System.IO.Path]::GetTempPath(),
     [switch] $NoBuild
 )
 Set-StrictMode -Version Latest
@@ -25,6 +31,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot  = Split-Path -Parent $PSScriptRoot
 $barExe    = Join-Path $repoRoot "build\$Preset\intarsia.exe"
 $serverExe = Join-Path $repoRoot 'build\debug\glazewm.exe'
+$senderExe = Join-Path $repoRoot 'build\debug\tray_sender.exe'
+$trayClass = 'IntarsiaStressTray'
+# The tray sender is restarted this often, and the tray's toggle clicked this often.
+$senderRestartSeconds = 10
+$toggleEverySeconds   = 2
 
 # Growth allowed between the warmed-up baseline and the end of a scenario.
 $maxPrivateGrowthMB = 16
@@ -40,6 +51,10 @@ Add-Type -Namespace Stress -Name Native -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string className, string title);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeoutW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeoutMs, out IntPtr result);
+[DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+[DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out RECT rect);
+[DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 '@
 
 function Get-FreePort {
@@ -86,6 +101,37 @@ function Get-Responsiveness([int] $processId) {
     return 'answering'
 }
 
+# Posts what the bar takes as a click or cursor move at a client point in pixels.
+function Send-BarMouse([IntPtr] $window, [uint32] $message, [int] $x, [int] $y) {
+    $point = [IntPtr](($y -shl 16) -bor ($x -band 0xFFFF))
+    [void][Stress.Native]::PostMessageW($window, $message, [IntPtr]::Zero, $point)
+}
+
+# The tray is the last module, so its toggle sits at the bar's right end, 26 DIPs in from the edge with the stress
+# style (section margin and padding, the module's padding, the toggle's margin and its padding). Every few seconds the
+# toggle is clicked to fold or unfold the tray, and every second the cursor moves over and right clicks a spot across the
+# icons it unfolds, which reach the sender's owner windows.
+function Send-TrayInput([int] $processId, [int] $second) {
+    $WM_MOUSEMOVE = 0x0200
+    $WM_LBUTTONUP = 0x0202
+    $WM_RBUTTONUP = 0x0205
+    foreach ($window in @(Get-BarWindows $processId)) {
+        $rect = [Stress.Native+RECT]::new()
+        if (-not [Stress.Native]::GetClientRect($window, [ref] $rect)) {
+            continue
+        }
+        $scale  = [Stress.Native]::GetDpiForWindow($window) / 96.0
+        $y      = [int] (($rect.Bottom - $rect.Top) / 2)
+        $toggle = $rect.Right - [int] (26 * $scale)
+        if ($second % $toggleEverySeconds -eq 0) {
+            Send-BarMouse $window $WM_LBUTTONUP $toggle $y
+        }
+        $icon = $toggle - [int] ((30 + ($second * 37) % 300) * $scale)
+        Send-BarMouse $window $WM_MOUSEMOVE $icon $y
+        Send-BarMouse $window $WM_RBUTTONUP $icon $y
+    }
+}
+
 function Get-Sample([System.Diagnostics.Process] $process) {
     $process.Refresh()
     return [pscustomobject]@{
@@ -98,13 +144,14 @@ function Get-Sample([System.Diagnostics.Process] $process) {
     }
 }
 
-# A config with every GlazeWM module and a clock, cpu and memory ticking each second, plus the named custom modules:
-# endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json.
-function New-StressConfig([string] $path, [int] $revision, [string[]] $commands) {
+# A config with every GlazeWM module and a clock, cpu and memory ticking each second, plus the named optional modules:
+# the custom endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json, and the
+# tray, last so its toggle sits at the bar's right end whatever it unfolds.
+function New-StressConfig([string] $path, [int] $revision, [string[]] $optional) {
     $cmd  = 'C:\\Windows\\System32\\cmd.exe'
     $ping = 'C:\\Windows\\System32\\PING.EXE'
     $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-    $commandModules = [ordered]@{
+    $optionalModules = [ordered]@{
         # Prints until the output cap kills it, every second.
         endless = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`" }, timeout = 5, output = `"text`", format = `"{text}`", icon = `"`", interval = 1 }"
         # Outlives its timeout, with a child of its own, every second.
@@ -112,10 +159,13 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $commands)
         fail    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"exit 3`" }, timeout = 5, output = `"text`", format = `"{text}`", icon = `"`", interval = 1 }"
         # A process slow to start, printing JSON. cmd.exe would keep the backslashes of escaped quotes.
         json    = "{ type = `"custom`", command = { `"$powershell`", `"-NoProfile`", `"-Command`", `"'{\`"text\`":\`"ok\`",\`"tooltip\`":\`"line\`",\`"alert\`":true}'`" }, timeout = 5, output = `"json`", format = `"{text}`", icon = `"`", interval = 1 }"
+        tray    = '{ type = "tray", icon = ">" }'
     }
-    $shown       = @($commandModules.Keys | Where-Object { $_ -in $commands })
-    $rightList   = (@('"tiling"') + ($shown | ForEach-Object { "`"$_`"" }) + @('"cpu"', '"memory"')) -join ', '
-    $definitions = ($shown | ForEach-Object { "        $_ = $($commandModules[$_])," }) -join "`n"
+    $shown       = @($optionalModules.Keys | Where-Object { $_ -in $optional })
+    $custom      = @($shown | Where-Object { $_ -ne 'tray' })
+    $trayList    = @($shown | Where-Object { $_ -eq 'tray' })
+    $rightList   = (@('"tiling"') + ($custom | ForEach-Object { "`"$_`"" }) + @('"cpu"', '"memory"') + ($trayList | ForEach-Object { "`"$_`"" })) -join ', '
+    $definitions = ($shown | ForEach-Object { "        $_ = $($optionalModules[$_])," }) -join "`n"
     $config = @"
 -- stress revision $revision
 return {
@@ -143,8 +193,9 @@ $definitions
     [System.IO.File]::WriteAllText($path, $config)
 }
 
-# A style that draws every box the bar has: sections, module boxes with hover, items in every state, a divider.
-function New-StressStyle([string] $path) {
+# A style that draws every box the bar has: sections, module boxes with hover, items in every state, a divider, and
+# a tray that animates as it unfolds when the config shows one (an #id naming no module stops the bar).
+function New-StressStyle([string] $path, [string[]] $optional) {
     $style = @'
 :root { --foreground: #e0def4; --border: rgba(110, 106, 134, 0.25); }
 * { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
@@ -159,24 +210,37 @@ tooltip { padding: 6px; background: #1f1d2e; border: 1px solid var(--border); bo
 .item.empty { color: #908caa; }
 #divider { width: 1px; height: 60%; color: var(--border); }
 '@
+    if ('tray' -in $optional) {
+        $style += "`n" + @'
+#tray { transition: width 300ms ease-out; }
+#tray .icon { transition: transform 200ms ease; }
+#tray.expanded .icon { transform: rotate(180deg); }
+#tray .item.toggle { padding: 2px 10px; }
+'@
+    }
     [System.IO.File]::WriteAllText($path, $style)
 }
 
 function Invoke-Scenario([string] $name) {
-    $work = Join-Path ([System.IO.Path]::GetTempPath()) "intarsia-stress-$name-$PID"
+    $work = Join-Path $LogRoot "intarsia-stress-$name-$PID"
     New-Item -ItemType Directory -Force $work | Out-Null
     $configPath = Join-Path $work 'config.lua'
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
-    $commands   = if ($name -eq 'idle') { @() } else { @('endless', 'hang', 'fail', 'json') }
-    New-StressConfig $configPath 0 $commands
-    New-StressStyle (Join-Path $work 'style.css')
+    $optional   = if ($name -eq 'idle') { @() } else { @('endless', 'hang', 'fail', 'json') }
+    if ($name -eq 'tray') {
+        $optional += 'tray'
+    }
+    New-StressConfig $configPath 0 $optional
+    New-StressStyle (Join-Path $work 'style.css') $optional
     $port       = Get-FreePort
-    $serverName = if ($name -in @('reload', 'idle')) { 'normal' } else { $name }
+    $serverName = if ($name -in @('reload', 'idle', 'tray')) { 'normal' } else { $name }
     $barLog     = Join-Path $work 'intarsia.log'
 
     $server = Start-Process $serverExe -ArgumentList '--port', $port, '--scenario', $serverName -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $work 'server.out') -RedirectStandardError (Join-Path $work 'server.err')
-    $bar = Start-Process $barExe -ArgumentList '--config', "`"$configPath`"", '--glazewm-port', $port -PassThru -RedirectStandardError $barLog
+    $bar = Start-Process $barExe -ArgumentList '--config', "`"$configPath`"", '--glazewm-port', $port, '--tray-class', $trayClass -PassThru -RedirectStandardError $barLog
+    $sender = $null
+    $senderStarts = 0
 
     $failures   = [System.Collections.Generic.List[string]]::new()
     $samples    = [System.Collections.Generic.List[object]]::new()
@@ -188,8 +252,10 @@ function Invoke-Scenario([string] $name) {
                 $failures.Add("exited early with code $($bar.ExitCode)")
                 break
             }
-            if (Select-String -Path $barLog -Pattern 'event=fatal' -Quiet) {
-                $failures.Add('logged a fatal error')
+            # Quoted in the result, since a CI runner's log directory is gone once the job ends.
+            $fatal = Select-String -Path $barLog -Pattern 'event=fatal' | Select-Object -First 1
+            if ($fatal) {
+                $failures.Add("logged a fatal error: $($fatal.Line)")
                 break
             }
             $responsiveness = Get-Responsiveness $bar.Id
@@ -205,9 +271,26 @@ function Invoke-Scenario([string] $name) {
             if ($name -eq 'reload') {
                 # Twenty saves a second: every settled save rebuilds every bar.
                 for ($save = 0; $save -lt 20; $save++) {
-                    New-StressConfig $configPath ($second * 20 + $save) $commands
+                    New-StressConfig $configPath ($second * 20 + $save) $optional
                     Start-Sleep -Milliseconds 50
                 }
+            }
+            if ($name -eq 'tray') {
+                if ($null -ne $sender -and $sender.HasExited) {
+                    $failures.Add("tray sender exited on its own with code $($sender.ExitCode) at ${second}s (2: the tray stopped answering, 3: its window went away)")
+                    break
+                }
+                # Every owner window of the last sender dies with it, without deleting its icons.
+                if ($null -eq $sender -or $second % $senderRestartSeconds -eq 0) {
+                    if ($null -ne $sender) {
+                        Stop-Process -Id $sender.Id -Force
+                        $sender.WaitForExit()
+                    }
+                    $senderStarts++
+                    $sender = Start-Process $senderExe -ArgumentList '--class', $trayClass -PassThru -WindowStyle Hidden `
+                        -RedirectStandardOutput (Join-Path $work "sender-$senderStarts.out") -RedirectStandardError (Join-Path $work "sender-$senderStarts.err")
+                }
+                Send-TrayInput $bar.Id $second
             }
             $samples.Add((Get-Sample $bar))
         }
@@ -224,6 +307,9 @@ function Invoke-Scenario([string] $name) {
             if ($name -eq 'idle' -and $cpuPercent -gt $maxIdleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU while nearly idle") }
         }
     } finally {
+        if ($null -ne $sender -and -not $sender.HasExited) {
+            Stop-Process -Id $sender.Id -Force
+        }
         if (-not $bar.HasExited) {
             # WM_CLOSE through taskkill without /F, as a user would stop it: every bar must release its strip and exit.
             taskkill /PID $bar.Id | Out-Null
@@ -255,7 +341,7 @@ if (-not $NoBuild) {
         & (Join-Path $PSScriptRoot 'build.ps1') -Preset release
     }
 }
-foreach ($exe in @($barExe, $serverExe)) {
+foreach ($exe in @($barExe, $serverExe, $senderExe)) {
     if (-not (Test-Path $exe)) {
         throw "$exe not found, build the debug preset first"
     }

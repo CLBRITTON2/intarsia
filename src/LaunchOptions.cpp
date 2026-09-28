@@ -10,8 +10,16 @@
 #include <format>
 #include <memory>
 
-LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, std::uint16_t defaultGlazeWmPort) {
-    LaunchOptions options{.configPath = defaultConfigPath, .glazeWmPort = defaultGlazeWmPort};
+namespace {
+
+    // RegisterClassExW takes a class name of up to 256 characters with its null.
+    constexpr size_t kMaxClassNameLength = 255;
+
+} // namespace
+
+LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, std::uint16_t defaultGlazeWmPort,
+                                 const std::wstring& defaultTrayClass) {
+    LaunchOptions options{.configPath = defaultConfigPath, .glazeWmPort = defaultGlazeWmPort, .trayClass = defaultTrayClass};
     for (size_t index = 0; index < arguments.size(); index += 2) {
         const std::wstring& name = arguments[index];
         if (index + 1 >= arguments.size()) {
@@ -27,8 +35,14 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, con
                 throw LaunchOptionsError(std::format("--glazewm-port must be a port from 1 to 65535, got '{}'", value));
             }
             options.glazeWmPort = static_cast<std::uint16_t>(port);
+        } else if (name == L"--tray-class") {
+            const std::wstring& trayClass = arguments[index + 1];
+            if (trayClass.empty() || trayClass.size() > kMaxClassNameLength) {
+                throw LaunchOptionsError(std::format("--tray-class must be a window class name of 1 to {} characters, got {}", kMaxClassNameLength, trayClass.size()));
+            }
+            options.trayClass = trayClass;
         } else {
-            throw LaunchOptionsError(std::format("unknown option '{}', intarsia takes --config <path> and --glazewm-port <port>", ToUtf8(name)));
+            throw LaunchOptionsError(std::format("unknown option '{}', intarsia takes --config <path>, --glazewm-port <port> and --tray-class <name>", ToUtf8(name)));
         }
     }
     return options;

@@ -182,4 +182,9 @@ if(BUILD_TESTING)
   target_compile_definitions(stress_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_compile_options(stress_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
   target_link_libraries(stress_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
+
+  # The stress tests' tray flood, sending the tray the payloads apps do. It takes their layout from the core.
+  add_executable(stress_tray_sender tests/stress/TraySender.cpp)
+  set_target_properties(stress_tray_sender PROPERTIES OUTPUT_NAME tray_sender)
+  target_link_libraries(stress_tray_sender PRIVATE intarsia_core)
 endif()

@@ -112,9 +112,9 @@ namespace {
 } // namespace
 
 App::App(HINSTANCE instance, LaunchOptions options) :
-    _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _config(std::make_unique<Config>(LoadConfig(_configPath))),
-    _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged),
-    _frames(_control, kAnimationFrame, kFrameClockFailed),
+    _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),
+    _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry),
+    _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged), _frames(_control, kAnimationFrame, kFrameClockFailed),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
@@ -301,8 +301,11 @@ void App::MatchTrayToConfig() {
         return;
     }
     if (_tray == nullptr) {
-        _tray = std::make_unique<ShellNotifyIcon>(_changes, kTaskbarClass, _control, kTrayFailed);
-        AnnounceTray();
+        _tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control, kTrayFailed);
+        // Apps add their icons again for the taskbar's class only, so a tray of another class has no one to tell.
+        if (_trayClass == kTaskbarClass) {
+            AnnounceTray();
+        }
     }
 }
 

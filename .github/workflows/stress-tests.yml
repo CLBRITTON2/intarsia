@@ -25,4 +25,13 @@ jobs:
         env:
           STRESS_PRESET: ${{ inputs.preset }}
           STRESS_SECONDS: ${{ inputs.seconds }}
-        run: ./scripts/stress.ps1 -Preset $env:STRESS_PRESET -Seconds ([int] $env:STRESS_SECONDS)
+          STRESS_LOGS: ${{ runner.temp }}\stress
+        run: ./scripts/stress.ps1 -Preset $env:STRESS_PRESET -Seconds ([int] $env:STRESS_SECONDS) -LogRoot $env:STRESS_LOGS
+      - name: upload stress logs
+        # Most useful when the stress tests failed.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-logs
+          path: ${{ runner.temp }}\stress
+          if-no-files-found: error

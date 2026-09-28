@@ -10,7 +10,7 @@ namespace {
     const std::filesystem::path kDefaultConfig = L"C:\\default\\config.lua";
 
     LaunchOptions               Parse(const std::vector<std::wstring>& arguments) {
-        return ParseLaunchOptions(arguments, kDefaultConfig, 6123);
+        return ParseLaunchOptions(arguments, kDefaultConfig, 6123, L"DefaultTray");
     }
 
 } // namespace
@@ -19,12 +19,14 @@ TEST(LaunchOptions, NoArgumentsKeepTheDefaults) {
     const LaunchOptions options = Parse({});
     EXPECT_EQ(options.configPath, kDefaultConfig);
     EXPECT_EQ(options.glazeWmPort, 6123);
+    EXPECT_EQ(options.trayClass, L"DefaultTray");
 }
 
-TEST(LaunchOptions, ReadsTheConfigPathAndPort) {
-    const LaunchOptions options = Parse({L"--config", L"D:\\stress\\config.lua", L"--glazewm-port", L"50123"});
+TEST(LaunchOptions, ReadsTheConfigPathPortAndTrayClass) {
+    const LaunchOptions options = Parse({L"--config", L"D:\\stress\\config.lua", L"--glazewm-port", L"50123", L"--tray-class", L"StressTray"});
     EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\stress\\config.lua"));
     EXPECT_EQ(options.glazeWmPort, 50123);
+    EXPECT_EQ(options.trayClass, L"StressTray");
 }
 
 TEST(LaunchOptions, RejectsBadArguments) {
@@ -33,4 +35,6 @@ TEST(LaunchOptions, RejectsBadArguments) {
     EXPECT_THROW(Parse({L"--glazewm-port", L"70000"}), LaunchOptionsError);
     EXPECT_THROW(Parse({L"--glazewm-port", L"12ab"}), LaunchOptionsError);
     EXPECT_THROW(Parse({L"--verbose", L"yes"}), LaunchOptionsError);
+    EXPECT_THROW(Parse({L"--tray-class", L""}), LaunchOptionsError);
+    EXPECT_THROW(Parse({L"--tray-class", std::wstring(256, L'x')}), LaunchOptionsError);
 }

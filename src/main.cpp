@@ -3,6 +3,7 @@
 #include "config/Config.hpp"
 #include "platform/Log.hpp"
 #include "platform/Process.hpp"
+#include "tray/ShellNotifyIcon.hpp"
 
 #include <windows.h>
 
@@ -18,7 +19,7 @@ namespace {
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     try {
         RestrictDllSearchToSystem32();
-        App app(instance, ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), kGlazeWmPort));
+        App app(instance, ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), kGlazeWmPort, kTaskbarClass));
         return app.Run();
     } catch (const std::exception& error) {
         // stderr reaches a launching shell that redirected it, the message box covers a plain double-click.

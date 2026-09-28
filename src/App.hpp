@@ -23,6 +23,7 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <vector>
 
 // Owns the config, the graphics devices and one bar per monitor, and rebuilds the bars when the config file changes.
@@ -55,6 +56,7 @@ class App {
     HINSTANCE             _instance;
     std::filesystem::path _configPath;
     std::uint16_t         _glazeWmPort;
+    std::wstring          _trayClass;
     // Bars hold a reference to the config, so it is replaced only after they are destroyed.
     std::unique_ptr<Config> _config;
     // Replaced when the device is lost, after the bars that draw with it are destroyed.
