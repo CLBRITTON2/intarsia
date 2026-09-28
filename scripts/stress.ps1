@@ -169,7 +169,7 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $optional)
     $config = @"
 -- stress revision $revision
 return {
-    bar = { edge = "top", layer = "top", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = 40 },
     window_manager = "glazewm",
     modules_left = { "workspaces", "divider", "mode", "apps", "title" },
     modules_center = { "clock" },

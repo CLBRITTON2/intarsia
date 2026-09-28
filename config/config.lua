@@ -4,7 +4,10 @@ return {
     bar = {
         edge = "top", -- top, bottom, left or right
         -- top: above other windows, lowered while a fullscreen app runs. bottom: other windows can cover it.
-        layer = "top",
+        layer = "bottom",
+        -- reserve: the monitor's work area leaves the bar out, so maximized windows stop at it. share: the work area
+        -- keeps the bar's strip, as for a plain window, so the window manager's gap has to make room for it.
+        space = "share",
         thickness = 54, -- DIPs, scaled by each monitor's DPI
     },
 

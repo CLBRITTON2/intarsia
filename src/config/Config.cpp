@@ -225,6 +225,15 @@ namespace {
         throw table.Error(std::format("{} must be one of top, bottom, got '{}'", table.KeyPath(key), value));
     }
 
+    Space ParseSpace(const TableReader& table, std::string_view key) {
+        const std::string value = table.String(key);
+        if (value == "reserve")
+            return Space::Reserve;
+        if (value == "share")
+            return Space::Share;
+        throw table.Error(std::format("{} must be one of reserve, share, got '{}'", table.KeyPath(key), value));
+    }
+
     std::string KnownModuleNames() {
         std::string names;
         for (const ModuleTypeName& module : kModuleTypes) {
@@ -598,11 +607,12 @@ Config LoadConfig(const std::filesystem::path& path) {
     std::vector<LayoutConfig>   layouts     = ReadLayouts(root, definitions, sheet, style);
 
     const TableReader           bar = root.Table("bar");
-    bar.RejectUnknownKeys({"edge", "layer", "thickness"});
-    const BarConfig barConfig{.edge = ParseEdge(bar, "edge"), .layer = ParseLayer(bar, "layer"), .thicknessDips = PositiveNumber(bar, "thickness")};
+    bar.RejectUnknownKeys({"edge", "layer", "space", "thickness"});
+    const BarConfig barConfig{
+        .edge = ParseEdge(bar, "edge"), .layer = ParseLayer(bar, "layer"), .space = ParseSpace(bar, "space"), .thicknessDips = PositiveNumber(bar, "thickness")};
 
-    Config          config{
-                 .bar = barConfig, .style = std::move(style), .windowManager = ParseWindowManager(root, "window_manager"), .modules = std::move(modules), .layouts = std::move(layouts)};
+    Config config{
+        .bar = barConfig, .style = std::move(style), .windowManager = ParseWindowManager(root, "window_manager"), .modules = std::move(modules), .layouts = std::move(layouts)};
     RejectUnshownModules(definitions, config);
     RequireKnownIds(sheet, definitions.Keys());
 

@@ -17,9 +17,10 @@
 #include <string_view>
 #include <vector>
 
-// COPYDATASTRUCT::dwData of a Shell_NotifyIcon call to the taskbar window (Shell_TrayWnd). SHAppBarMessage sends 0,
-// Shell_NotifyIconGetRect 3.
+// COPYDATASTRUCT::dwData of a Shell_NotifyIcon call to the taskbar window (Shell_TrayWnd), and of an SHAppBarMessage
+// call. Shell_NotifyIconGetRect sends 3.
 inline constexpr ULONG_PTR kNotifyIconCopyData = 1;
+inline constexpr ULONG_PTR kAppBarCopyData     = 0;
 
 // NOTIFYICONDATAW as shell32 sends it, whatever size the app passed: every handle is 32 bits wide, so 32-bit and
 // 64-bit apps send the same layout.
@@ -50,7 +51,29 @@ struct TrayNotifyData {
 
 inline constexpr std::uint32_t kTrayNotifySignature = 0x34753423;
 
-// A payload that is not a whole TrayNotifyData.
+// APPBARDATA as shell32 sends it, with the window 32 bits wide, and as the taskbar writes a result back.
+struct AppBarData32 {
+    std::uint32_t size; // sizeof(AppBarData32)
+    std::uint32_t window;
+    std::uint32_t callbackMessage;
+    std::uint32_t edge;
+    RECT          rect;
+    std::int64_t  lParam;
+};
+
+// The WM_COPYDATA payload of an SHAppBarMessage call, as shell32 sends it on 64-bit Windows (no public layout).
+struct AppBarCommand {
+    AppBarData32  data;
+    std::uint32_t message; // ABM_*
+    std::uint32_t reserved;
+    // Where the taskbar writes the AppBarData32 of ABM_QUERYPOS and ABM_SETPOS, zero for the other messages: a
+    // SHAllocShared handle that resultProcess holds.
+    std::uint64_t result;
+    std::uint32_t resultProcess;
+    std::uint32_t reserved2;
+};
+
+// A payload that is not a whole message of its kind.
 class TrayMessageError : public std::runtime_error {
   public:
     using std::runtime_error::runtime_error;
@@ -73,6 +96,13 @@ struct NotifyIconMessage {
 
 // Throws TrayMessageError when payload is too short or does not start with the signature.
 NotifyIconMessage ParseNotifyIconMessage(std::span<const std::byte> payload);
+
+// Throws TrayMessageError when payload is shorter than an AppBarCommand.
+AppBarCommand ParseAppBarCommand(std::span<const std::byte> payload);
+
+// payload with its result handle and the process that holds it replaced, and any bytes past the command kept. Throws
+// TrayMessageError when payload is shorter than an AppBarCommand.
+std::vector<std::byte> WithAppBarResult(std::span<const std::byte> payload, std::uint64_t result, std::uint32_t resultProcess);
 
 // At most this many icons: any process can add them, and each holds its pixels.
 inline constexpr size_t kMaxTrayIcons = 128;

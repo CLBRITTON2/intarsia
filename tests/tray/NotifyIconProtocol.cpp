@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -62,6 +63,15 @@ namespace {
             .owner = owner, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = {}, .standardTooltip = false, .pixels = nullptr, .hidden = false};
     }
 
+    // An ABM_SETPOS for a 3440x54 strip at the top, as shell32 sent it with the taskbar window in the caller's own
+    // process: the result field then holds a pointer rather than a handle.
+    std::vector<std::byte> SetPosPayload() {
+        constexpr std::array<std::uint32_t, 16> kWords{0x28, 0x002b0848, 0, ABE_TOP, 0, 0, 3440, 54, 0, 0, ABM_SETPOS, 0, 0x669b7a70, 0x19f, 0x8dbc, 0};
+        std::vector<std::byte>                  bytes(sizeof(kWords));
+        std::memcpy(bytes.data(), kWords.data(), sizeof(kWords));
+        return bytes;
+    }
+
 } // namespace
 
 TEST(NotifyIconProtocol, ParseReadsTheFieldsShell32Sends) {
@@ -106,6 +116,39 @@ TEST(NotifyIconProtocol, ParseRefusesShortPayloadsAndWrongSignatures) {
     TrayNotifyData wrong = data;
     wrong.signature      = 0x12345678;
     EXPECT_THROW(ParseNotifyIconMessage(Bytes(wrong, kSentBytes)), TrayMessageError);
+}
+
+TEST(NotifyIconProtocol, ParseAppBarCommandReadsTheFieldsShell32Sends) {
+    const AppBarCommand command = ParseAppBarCommand(SetPosPayload());
+    EXPECT_EQ(command.data.size, sizeof(AppBarData32));
+    EXPECT_EQ(command.data.window, 0x002b0848u);
+    EXPECT_EQ(command.data.edge, static_cast<std::uint32_t>(ABE_TOP));
+    EXPECT_EQ(command.data.rect.right, 3440);
+    EXPECT_EQ(command.data.rect.bottom, 54);
+    EXPECT_EQ(command.message, static_cast<std::uint32_t>(ABM_SETPOS));
+    EXPECT_EQ(command.result, 0x19f669b7a70u);
+    EXPECT_EQ(command.resultProcess, 0x8dbcu);
+}
+
+TEST(NotifyIconProtocol, WithAppBarResultReplacesOnlyTheResultAndKeepsTrailingBytes) {
+    std::vector<std::byte> payload = SetPosPayload();
+    payload.push_back(std::byte{0x5A});
+    const std::vector<std::byte> replaced = WithAppBarResult(payload, 0xC0C3, 0x1234);
+    ASSERT_EQ(replaced.size(), payload.size());
+    EXPECT_EQ(replaced.back(), std::byte{0x5A});
+    const AppBarCommand original = ParseAppBarCommand(payload);
+    const AppBarCommand command  = ParseAppBarCommand(replaced);
+    EXPECT_EQ(command.result, 0xC0C3u);
+    EXPECT_EQ(command.resultProcess, 0x1234u);
+    EXPECT_EQ(command.message, original.message);
+    EXPECT_EQ(std::memcmp(&command.data, &original.data, sizeof(AppBarData32)), 0);
+}
+
+TEST(NotifyIconProtocol, AppBarParsingRefusesShortPayloads) {
+    std::vector<std::byte> payload = SetPosPayload();
+    payload.pop_back();
+    EXPECT_THROW(ParseAppBarCommand(payload), TrayMessageError);
+    EXPECT_THROW(WithAppBarResult(payload, 1, 1), TrayMessageError);
 }
 
 TEST(NotifyIconProtocol, AddThenModifyThenDelete) {

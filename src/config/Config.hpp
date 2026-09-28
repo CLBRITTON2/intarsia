@@ -25,9 +25,16 @@ enum class Layer : std::uint8_t {
     Bottom // below other windows, which can cover it
 };
 
+// Whether the bar takes its strip out of the monitor's work area.
+enum class Space : std::uint8_t {
+    Reserve, // maximized windows and the work area stop at the bar
+    Share    // the work area keeps the strip, as for a plain window, so a window manager's gap has to make room
+};
+
 struct BarConfig {
     Edge  edge;
     Layer layer;
+    Space space;
     float thicknessDips;
 };
 

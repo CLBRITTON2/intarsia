@@ -56,6 +56,8 @@ class ShellNotifyIcon final : public ITray {
     // Whether the icons took the message, which is what Shell_NotifyIcon returns to the app.
     bool    ApplyMessage(const COPYDATASTRUCT& data);
     LRESULT Forward(HWND sender, const COPYDATASTRUCT& data);
+    // Forwards an SHAppBarMessage call of this process's own bars.
+    LRESULT ForwardOwnAppBar(HWND sender, const COPYDATASTRUCT& data);
     // Explorer's taskbar window, found again once it is gone, or null while Explorer is not running.
     HWND ExplorerTray();
     // Moves the window back to the top when another topmost window rose above it, as windows do when they activate.
@@ -82,6 +84,7 @@ class ShellNotifyIcon final : public ITray {
     FailureLog _messageLog{"tray"};
     FailureLog _iconLog{"tray"};
     FailureLog _forwardLog{"tray"};
+    FailureLog _appBarLog{"tray"};
     // Guards _icons and _error.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;

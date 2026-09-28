@@ -9,18 +9,22 @@
 
 #include <objbase.h>
 #include <shellapi.h>
+#include <shlwapi.h>
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <format>
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -53,6 +57,20 @@ namespace {
             throw Win32Error("CreateWindowExW(tray)", HRESULT_FROM_WIN32(error));
         }
         return window;
+    }
+
+    // Frees a SHAllocShared handle that process holds.
+    struct FreeShared {
+        DWORD process;
+
+        void  operator()(HANDLE handle) const {
+            SHFreeShared(handle, process);
+        }
+    };
+
+    bool IsOwnWindow(HWND window) {
+        DWORD processId = 0;
+        return GetWindowThreadProcessId(window, &processId) != 0 && processId == GetCurrentProcessId();
     }
 
     // Another intarsia, or any other tray that forwards, would send the message straight back.
@@ -218,6 +236,9 @@ LRESULT ShellNotifyIcon::HandleMessage(HWND window, UINT message, WPARAM wParam,
 
 // Shell_NotifyIcon gets the tray's answer, and every other message (appbars, icon positions) Explorer's.
 LRESULT ShellNotifyIcon::HandleCopyData(HWND sender, const COPYDATASTRUCT& data) {
+    if (data.dwData == kAppBarCopyData && IsOwnWindow(sender)) {
+        return ForwardOwnAppBar(sender, data);
+    }
     if (data.dwData != kNotifyIconCopyData) {
         return Forward(sender, data);
     }
@@ -266,6 +287,66 @@ LRESULT ShellNotifyIcon::Forward(HWND sender, const COPYDATASTRUCT& data) {
     }
     _forwardLog.Succeeded();
     return static_cast<LRESULT>(result);
+}
+
+// shell32 sees that the first taskbar window is this process's own, so the bars' SHAppBarMessage calls put a pointer to
+// their result in place of a SHAllocShared handle. Explorer cannot open it and drops ABM_QUERYPOS and ABM_SETPOS
+// without an error, which leaves every work area full size. The result goes through a block Explorer can open, and is
+// copied back through the pointer, which stays valid while the bar's thread waits on this message.
+LRESULT ShellNotifyIcon::ForwardOwnAppBar(HWND sender, const COPYDATASTRUCT& data) {
+    const std::span<const std::byte> payload(static_cast<const std::byte*>(data.lpData), data.cbData);
+    AppBarCommand                    command{};
+    try {
+        command = ParseAppBarCommand(payload);
+        _messageLog.Succeeded();
+    } catch (const TrayMessageError& error) {
+        _messageLog.Failed("malformed_appbar_message", error);
+        return FALSE;
+    }
+    if (command.result == 0) {
+        return Forward(sender, data);
+    }
+    void*        target = IntToPointer<void>(static_cast<LONG_PTR>(command.result));
+    AppBarData32 result{};
+    SIZE_T       copied = 0;
+    if (!ReadProcessMemory(GetCurrentProcess(), target, &result, sizeof(result), &copied) || copied != sizeof(result)) {
+        _appBarLog.Failed("appbar_result_unreadable", Win32Error("ReadProcessMemory(appbar result)", HRESULT_FROM_WIN32(GetLastError())));
+        return FALSE;
+    }
+    // shell32 sets only the size of the result it waits on, so the request fills the rest.
+    if (result.size != sizeof(AppBarData32)) {
+        _appBarLog.Failed("appbar_result_unexpected",
+                          std::runtime_error(std::format("the appbar result at 0x{:x} holds size {}, expected {}", command.result, result.size, sizeof(AppBarData32))));
+        return FALSE;
+    }
+    DWORD explorerProcess = 0;
+    HWND  explorer        = ExplorerTray();
+    if (explorer == nullptr || GetWindowThreadProcessId(explorer, &explorerProcess) == 0) {
+        return FALSE;
+    }
+    // Made for Explorer and named as Explorer's: SHAllocShared for this process's own id also returns a value that only
+    // this process can open.
+    result = command.data;
+    const std::unique_ptr<void, FreeShared> inExplorer(SHAllocShared(&result, sizeof(result), explorerProcess), FreeShared{.process = explorerProcess});
+    if (inExplorer == nullptr) {
+        ThrowLastError("SHAllocShared(appbar result)");
+    }
+    std::vector<std::byte> translated = WithAppBarResult(payload, reinterpret_cast<std::uint64_t>(inExplorer.get()), explorerProcess);
+    COPYDATASTRUCT         copy       = data;
+    copy.lpData                       = translated.data();
+    const LRESULT answer              = Forward(sender, copy);
+    void*         view                = SHLockShared(inExplorer.get(), explorerProcess);
+    if (view == nullptr) {
+        ThrowLastError("SHLockShared(appbar result)");
+    }
+    std::memcpy(&result, view, sizeof(result));
+    SHUnlockShared(view);
+    if (!WriteProcessMemory(GetCurrentProcess(), target, &result, sizeof(result), &copied) || copied != sizeof(result)) {
+        _appBarLog.Failed("appbar_result_unwritable", Win32Error("WriteProcessMemory(appbar result)", HRESULT_FROM_WIN32(GetLastError())));
+        return FALSE;
+    }
+    _appBarLog.Succeeded();
+    return answer;
 }
 
 HWND ShellNotifyIcon::ExplorerTray() {

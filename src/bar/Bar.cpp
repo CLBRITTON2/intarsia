@@ -116,6 +116,15 @@ namespace {
         return pixels * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(placement.dpi);
     }
 
+    // A shared bar stays a registered appbar, so the shell still tells it of fullscreen apps and of other appbars moving.
+    RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness) {
+        switch (bar.space) {
+            case Space::Reserve: return ReserveAppBarRect(window, monitorRect, bar.edge, thickness);
+            case Space::Share: return DockedRect(monitorRect, bar.edge, thickness);
+        }
+        throw std::invalid_argument(std::format("unknown space {}", static_cast<std::int32_t>(bar.space)));
+    }
+
     HWND CreateBarWindow(HINSTANCE instance, void* owner) {
         // No activation so clicking the bar never steals focus from the tiled window.
         HWND window =
@@ -269,7 +278,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
 
 void Bar::Dock() {
     const std::int32_t thickness = DipsToPixels(_config.bar.thicknessDips, _placement.dpi);
-    const RECT         rect      = ReserveAppBarRect(_window, _placement.monitorRect, _config.bar.edge, thickness);
+    const RECT         rect      = BarRect(_window, _placement.monitorRect, _config.bar, thickness);
     if (!MoveWindow(_window, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }

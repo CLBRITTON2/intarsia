@@ -18,7 +18,7 @@ namespace {
 
     constexpr std::string_view kValidConfig = R"lua(
 return {
-    bar = { edge = "top", layer = "top", thickness = 54 },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = 54 },
     window_manager = "windows",
     modules_left = { "title" },
     modules_center = { "time" },
@@ -501,12 +501,20 @@ TEST(Config, LayerIsTopOrBottom) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(layer = "top")", R"(layer = "overlay")")); }, ConfigErrorWith("bar.layer must be one of top, bottom, got 'overlay'"));
 }
 
+TEST(Config, SpaceIsReserveOrShare) {
+    EXPECT_EQ(LoadText(kValidConfig).bar.space, Space::Reserve);
+    EXPECT_EQ(LoadText(Replace(kValidConfig, R"(space = "reserve")", R"(space = "share")")).bar.space, Space::Share);
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(space = "reserve")", R"(space = "float")")); },
+                ConfigErrorWith("bar.space must be one of reserve, share, got 'float'"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(space = "reserve", )", "")); }, ConfigErrorWith("bar.space"));
+}
+
 TEST(Config, AnEndlessConfigIsStoppedWithAnError) {
     EXPECT_THAT([] { return LoadText("while true do end"); }, ConfigErrorWith("without finishing, is there an endless loop?"));
 }
 
 TEST(Config, ErroringIndexMetamethodIsNotRun) {
-    const std::string config =
-        Replace(kValidConfig, R"(bar = { edge = "top", layer = "top", thickness = 54 },)", R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
+    const std::string config = Replace(kValidConfig, R"(bar = { edge = "top", layer = "top", space = "reserve", thickness = 54 },)",
+                                       R"(bar = setmetatable({}, { __index = function() error("metamethod ran") end }),)");
     EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("bar.edge is missing"));
 }
