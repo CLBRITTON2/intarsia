@@ -3,6 +3,7 @@
 #include "config/Config.hpp"
 #include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
+#include "platform/Log.hpp"
 #include "platform/PerformanceCounter.hpp"
 
 #include <chrono>
@@ -60,4 +61,5 @@ class Cpu final : public TextModule {
     std::unique_ptr<PerformanceCounter> _performance;
     std::unique_ptr<PerformanceCounter> _cores;
     CpuSample                           _sample{.usagePercent = 0, .gigahertz = 0.0, .maxCorePercent = 0, .cores = {}};
+    FailureLog                          _counterLog{"cpu"};
 };

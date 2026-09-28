@@ -91,18 +91,27 @@ void Cpu::Sample() {
     const CpuTimes current = ReadCpuTimes();
     _sample.usagePercent   = CpuUsagePercent(_previous, current);
     _previous              = current;
-    if (_baseFrequency != nullptr && _performance != nullptr) {
-        _baseFrequency->Collect();
-        _performance->Collect();
-        _sample.gigahertz = CpuGigahertz(SingleValue(*_baseFrequency), SingleValue(*_performance));
-    }
-    if (_cores != nullptr) {
-        _cores->Collect();
-        // _Total is among the instances and never passes the busiest core.
-        const std::vector<CounterInstance> cores = _cores->Instances();
-        const auto                         max   = std::ranges::max_element(cores, {}, &CounterInstance::value);
-        _sample.maxCorePercent                   = max == cores.end() ? 0 : static_cast<std::int32_t>(std::lround(max->value));
-        _sample.cores                            = FormatCoreUsage(cores);
+    // A failed sample blanks the counters' values until one succeeds, rather than ending the bar over a tooltip.
+    try {
+        if (_baseFrequency != nullptr && _performance != nullptr) {
+            _baseFrequency->Collect();
+            _performance->Collect();
+            _sample.gigahertz = CpuGigahertz(SingleValue(*_baseFrequency), SingleValue(*_performance));
+        }
+        if (_cores != nullptr) {
+            _cores->Collect();
+            // _Total is among the instances and never passes the busiest core.
+            const std::vector<CounterInstance> cores = _cores->Instances();
+            const auto                         max   = std::ranges::max_element(cores, {}, &CounterInstance::value);
+            _sample.maxCorePercent                   = max == cores.end() ? 0 : static_cast<std::int32_t>(std::lround(max->value));
+            _sample.cores                            = FormatCoreUsage(cores);
+        }
+        _counterLog.Succeeded();
+    } catch (const PdhError& error) {
+        _counterLog.Failed("counter_failed", error);
+        _sample.gigahertz      = 0.0;
+        _sample.maxCorePercent = 0;
+        _sample.cores.clear();
     }
 }
 

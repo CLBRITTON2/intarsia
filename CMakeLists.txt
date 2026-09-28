@@ -173,6 +173,7 @@ if(BUILD_TESTING)
     tests/platform/ChangeSignal.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/FrameClock.cpp
+    tests/platform/Log.cpp
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
     tests/platform/PerformanceCounter.cpp
