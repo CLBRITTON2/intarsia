@@ -171,6 +171,8 @@ TEST(Style, DividersTakeAWidthAndAShareOfTheHeight) {
     const ModuleStyle divider = StyleOf("divider { width: 1px; height: 60%; color: #ffffff; }", ModuleKind::Divider, "line");
     EXPECT_FLOAT_EQ(divider.lineWidthDips, 1.0f);
     EXPECT_FLOAT_EQ(divider.lineHeight, 0.6f);
+    // Nothing is built in: a divider no rule sizes draws no line, as a property left out takes CSS's initial value.
+    EXPECT_FLOAT_EQ(StyleOf("", ModuleKind::Divider, "line").lineWidthDips, 0.0f);
     EXPECT_THAT([] { return StyleOf(".module { width: 3px; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith("width sizes a divider's line, and cpu is a cpu module"));
     EXPECT_THAT([] { return Parse("divider { height: 120%; }"); }, ConfigErrorWith("at most 100%"));
 }

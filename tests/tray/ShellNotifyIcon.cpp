@@ -20,10 +20,11 @@
 namespace {
 
     // A class no app sends to, so the test tray never takes the desktop's icons.
-    constexpr wchar_t       kTestClass[] = L"IntarsiaTestTray";
-    constexpr std::uint32_t kChanged     = WM_APP + 1;
-    constexpr std::uint32_t kFailed      = WM_APP + 2;
-    constexpr std::uint32_t kCallback    = WM_APP + 9;
+    constexpr wchar_t       kTestClass[]    = L"IntarsiaTestTray";
+    constexpr std::uint32_t kChanged        = WM_APP + 1;
+    constexpr std::uint32_t kFailed         = WM_APP + 2;
+    constexpr std::uint32_t kCallback       = WM_APP + 9;
+    constexpr ULONG_PTR     kAppBarCopyData = 0; // what SHAppBarMessage sends
 
     HWND                    MessageWindow() {
         return CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);

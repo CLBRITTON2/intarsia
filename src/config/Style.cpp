@@ -913,7 +913,7 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
                        .focused                     = ReadItem(sheet, normal, "focused", color),
                        .occupied                    = ReadItem(sheet, normal, "occupied", color),
                        .empty                       = ReadItem(sheet, normal, "empty", color),
-                       .lineWidthDips               = box.Read("width", ReadPositiveLength, 1.0f),
+                       .lineWidthDips               = box.Read("width", ReadPositiveLength, 0.0f),
                        .lineHeight                  = box.Read("height", ReadShare, 1.0f),
                        .transition                  = box.Read("transition", ReadTransition, kNoTransition),
                        .expandedIconRotationDegrees = expandedIconRules.Read("transform", ReadRotation, rotation)};

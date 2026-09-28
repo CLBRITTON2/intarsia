@@ -16,9 +16,9 @@
 #include <string_view>
 #include <vector>
 
-// COPYDATASTRUCT::dwData of what apps send the taskbar window (Shell_TrayWnd) through WM_COPYDATA.
-inline constexpr ULONG_PTR kAppBarCopyData     = 0; // SHAppBarMessage
-inline constexpr ULONG_PTR kNotifyIconCopyData = 1; // Shell_NotifyIcon
+// COPYDATASTRUCT::dwData of a Shell_NotifyIcon call to the taskbar window (Shell_TrayWnd). SHAppBarMessage sends 0,
+// Shell_NotifyIconGetRect 3.
+inline constexpr ULONG_PTR kNotifyIconCopyData = 1;
 
 // NOTIFYICONDATAW as shell32 sends it, whatever size the app passed: every handle is 32 bits wide, so 32-bit and
 // 64-bit apps send the same layout.
