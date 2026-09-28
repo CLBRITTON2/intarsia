@@ -24,6 +24,7 @@ class TextModule : public IModule {
     void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const final;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) final;
+    void                         Scroll(ScrollDirection direction) final;
     const ModuleActions&         Actions() const final;
     std::optional<std::wstring>  TooltipText() override;
 

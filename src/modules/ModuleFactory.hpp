@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/IAudio.hpp"
 #include "bar/Sections.hpp"
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
@@ -16,6 +17,7 @@ struct ModuleSources {
     IWindowManager&       windowManager;
     const CommandPollers& commandPollers;
     WindowIcons&          windowIcons;
+    IAudio&               audio;
     HMONITOR              monitor;
 };
 

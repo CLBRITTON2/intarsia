@@ -27,6 +27,8 @@ std::optional<std::uint32_t> Divider::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+void Divider::Scroll(ScrollDirection) {}
+
 void                 Divider::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& Divider::Actions() const {

@@ -1,5 +1,6 @@
 #include "App.hpp"
 
+#include "audio/CoreAudio.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
@@ -110,7 +111,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
-    _windowIcons(std::make_unique<WindowIcons>(_changes)) {
+    _windowIcons(std::make_unique<WindowIcons>(_changes)), _audio(std::make_unique<CoreAudio>(_changes)) {
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
@@ -118,6 +119,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
 
 App::~App() {
     _bars.clear();
+    _audio.reset();
     _windowIcons.reset();
     _commandPollers.reset();
     _windowManager.reset();
@@ -197,7 +199,7 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
         for (const BarPlacement& placement : _placements) {
             _bars.push_back(std::make_unique<Bar>(
                 _instance, _graphics, *_config,
-                ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .windowIcons = *_windowIcons, .monitor = placement.monitor}, _launcher,
+                ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .windowIcons = *_windowIcons, .audio = *_audio, .monitor = placement.monitor}, _launcher,
                 placement, _state, _control, kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);

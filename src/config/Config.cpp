@@ -228,6 +228,7 @@ namespace {
     TextModuleConfig ReadTextModuleConfig(const TableReader& module);
     WindowConfig     ReadWindowConfig(const TableReader& window);
     CustomConfig     ReadCustomConfig(const TableReader& module);
+    AudioConfig      ReadAudioConfig(const TableReader& module);
 
     ModuleSettings   ReadModuleSettings(const TableReader& module, ModuleKind kind) {
         switch (kind) {
@@ -236,6 +237,7 @@ namespace {
             case ModuleKind::Memory: return ReadTextModuleConfig(module);
             case ModuleKind::Window: return ReadWindowConfig(module);
             case ModuleKind::Custom: return ReadCustomConfig(module);
+            case ModuleKind::Audio: return ReadAudioConfig(module);
             case ModuleKind::Workspaces:
             case ModuleKind::Windows:
             case ModuleKind::BindingMode:
@@ -344,6 +346,9 @@ namespace {
         if (const auto* window = std::get_if<WindowConfig>(&settings)) {
             return &window->actions;
         }
+        if (const auto* audio = std::get_if<AudioConfig>(&settings)) {
+            return &audio->actions;
+        }
         if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
             return &custom->text.actions;
         }
@@ -396,6 +401,21 @@ namespace {
                             .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")),
                             .output  = ParseCustomOutput(module, "output"),
                             .text    = ReadTextFields(module)};
+    }
+
+    AudioConfig ReadAudioConfig(const TableReader& module) {
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "format", "format_muted", "icon", "icon_muted", "step"}));
+        const std::int64_t step = PositiveWholeNumber(module, "step");
+        if (step > 100) {
+            throw module.Error(std::format("{} is a percent of full volume, from 1 to 100, got {}", module.KeyPath("step"), step));
+        }
+        return AudioConfig{.format      = module.String("format"),
+                           .formatMuted = module.String("format_muted"),
+                           .tooltip     = ReadTooltip(module),
+                           .icon        = ToWide(module.String("icon")),
+                           .iconMuted   = ToWide(module.String("icon_muted")),
+                           .stepPercent = static_cast<std::int32_t>(step),
+                           .actions     = ReadActions(module)};
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {

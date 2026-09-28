@@ -38,6 +38,8 @@ std::optional<std::uint32_t> BindingModes::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+void BindingModes::Scroll(ScrollDirection) {}
+
 void                 BindingModes::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& BindingModes::Actions() const {

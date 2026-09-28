@@ -38,6 +38,8 @@ std::optional<std::uint32_t> Window::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+void Window::Scroll(ScrollDirection) {}
+
 void                 Window::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& Window::Actions() const {

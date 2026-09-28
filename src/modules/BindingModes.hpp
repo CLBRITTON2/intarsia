@@ -22,6 +22,7 @@ class BindingModes final : public IModule {
     void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
+    void                         Scroll(ScrollDirection direction) override;
     // None: the module takes no actions.
     const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;

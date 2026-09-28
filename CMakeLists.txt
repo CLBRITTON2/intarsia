@@ -34,11 +34,13 @@ target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
 add_library(intarsia_core STATIC
   src/App.cpp
   src/LaunchOptions.cpp
+  src/audio/CoreAudio.cpp
   src/bar/Bar.cpp
   src/bar/Layout.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
   src/config/Style.cpp
+  src/modules/Audio.cpp
   src/modules/BindingModes.cpp
   src/modules/Clock.cpp
   src/modules/Cpu.cpp
@@ -118,6 +120,8 @@ if(BUILD_TESTING)
     tests/bar/Tooltip.cpp
     tests/config/Config.cpp
     tests/config/Style.cpp
+    tests/audio/CoreAudio.cpp
+    tests/modules/Audio.cpp
     tests/modules/BindingModes.cpp
     tests/modules/Clock.cpp
     tests/modules/CommandPoller.cpp

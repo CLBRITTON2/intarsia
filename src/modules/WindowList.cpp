@@ -76,6 +76,8 @@ std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+void WindowList::Scroll(ScrollDirection) {}
+
 void WindowList::Click(D2D1_POINT_2F point) {
     const std::optional<size_t> index = ItemAt(_row, point);
     if (index.has_value()) {

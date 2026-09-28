@@ -1,5 +1,6 @@
 #include "modules/ModuleFactory.hpp"
 
+#include "modules/Audio.hpp"
 #include "modules/BindingModes.hpp"
 #include "modules/Clock.hpp"
 #include "modules/Cpu.hpp"
@@ -40,6 +41,7 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Divider: return std::make_unique<Divider>(instance.style);
         case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
+        case ModuleKind::Audio: return std::make_unique<Audio>(RequireSettings<AudioConfig>(instance), sources.audio);
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));

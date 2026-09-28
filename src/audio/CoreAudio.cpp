@@ -1,0 +1,292 @@
+#include "audio/CoreAudio.hpp"
+
+// Defines PKEY_Device_FriendlyName here instead of declaring it, since no import library carries it. propkeydef.h
+// declares the macro the key header needs, so it comes between them.
+#include <initguid.h>
+
+#include <propkeydef.h>
+
+#include <functiondiscoverykeys_devpkey.h>
+
+#include "platform/Errors.hpp"
+#include "platform/Log.hpp"
+#include "platform/Text.hpp"
+
+#include <endpointvolume.h>
+#include <mmdeviceapi.h>
+#include <wrl/client.h>
+#include <wrl/implements.h>
+
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <string>
+#include <utility>
+
+using Microsoft::WRL::ClassicCom;
+using Microsoft::WRL::ComPtr;
+using Microsoft::WRL::Make;
+using Microsoft::WRL::RuntimeClass;
+using Microsoft::WRL::RuntimeClassFlags;
+
+namespace {
+
+    constexpr DWORD kRetryMs = 2000;
+
+    // Tells the worker when the default output device changes. The notification threads must not call back into Core
+    // Audio, so this only wakes the worker.
+    class DeviceNotifications final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IMMNotificationClient> {
+      public:
+        explicit DeviceNotifications(CoreAudio& audio) : _audio(audio) {}
+
+        HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR) override {
+            if (flow == eRender && role == eConsole) {
+                _audio.OnDefaultDeviceChanged();
+            }
+            return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE OnDeviceAdded(LPCWSTR) override {
+            return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE OnDeviceRemoved(LPCWSTR) override {
+            return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE OnDeviceStateChanged(LPCWSTR, DWORD) override {
+            return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE OnPropertyValueChanged(LPCWSTR, const PROPERTYKEY) override {
+            return S_OK;
+        }
+
+      private:
+        CoreAudio& _audio;
+    };
+
+    // Carries every volume or mute change on the device, whoever made it, into the snapshot.
+    class VolumeNotifications final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IAudioEndpointVolumeCallback> {
+      public:
+        explicit VolumeNotifications(CoreAudio& audio) : _audio(audio) {}
+
+        HRESULT STDMETHODCALLTYPE OnNotify(PAUDIO_VOLUME_NOTIFICATION_DATA data) override {
+            _audio.OnVolumeNotified(data->fMasterVolume, data->bMuted != FALSE);
+            return S_OK;
+        }
+
+      private:
+        CoreAudio& _audio;
+    };
+
+    std::wstring FriendlyName(IMMDevice* device) {
+        ComPtr<IPropertyStore> store;
+        ThrowIfFailed(device->OpenPropertyStore(STGM_READ, &store), "IMMDevice::OpenPropertyStore");
+        PROPVARIANT value;
+        PropVariantInit(&value);
+        ThrowIfFailed(store->GetValue(PKEY_Device_FriendlyName, &value), "IPropertyStore::GetValue(PKEY_Device_FriendlyName)");
+        std::wstring name = value.vt == VT_LPWSTR && value.pwszVal != nullptr ? std::wstring(value.pwszVal) : std::wstring();
+        PropVariantClear(&value);
+        return name;
+    }
+
+    // One output device's volume control, with its change notifications registered for as long as it lives.
+    class Endpoint {
+      public:
+        Endpoint(IMMDevice* device, CoreAudio& audio) : _name(FriendlyName(device)), _callback(Make<VolumeNotifications>(audio)) {
+            ThrowIfFailed(device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, nullptr, &_volume), "IMMDevice::Activate(IAudioEndpointVolume)");
+            ThrowIfFailed(_volume->RegisterControlChangeNotify(_callback.Get()), "IAudioEndpointVolume::RegisterControlChangeNotify");
+        }
+        ~Endpoint() {
+            _volume->UnregisterControlChangeNotify(_callback.Get());
+        }
+        Endpoint(const Endpoint&)            = delete;
+        Endpoint& operator=(const Endpoint&) = delete;
+
+        AudioOutput Read() const {
+            float volume = 0.0f;
+            ThrowIfFailed(_volume->GetMasterVolumeLevelScalar(&volume), "IAudioEndpointVolume::GetMasterVolumeLevelScalar");
+            BOOL muted = FALSE;
+            ThrowIfFailed(_volume->GetMute(&muted), "IAudioEndpointVolume::GetMute");
+            return AudioOutput{.device = _name, .volume = volume, .muted = muted != FALSE};
+        }
+
+        void SetVolume(float volume) const {
+            ThrowIfFailed(_volume->SetMasterVolumeLevelScalar(volume, nullptr), "IAudioEndpointVolume::SetMasterVolumeLevelScalar");
+        }
+
+        void SetMuted(bool muted) const {
+            ThrowIfFailed(_volume->SetMute(muted ? TRUE : FALSE, nullptr), "IAudioEndpointVolume::SetMute");
+        }
+
+      private:
+        std::wstring                         _name;
+        ComPtr<IAudioEndpointVolumeCallback> _callback;
+        ComPtr<IAudioEndpointVolume>         _volume;
+    };
+
+    // The device enumerator, with the default device notifications registered for as long as it lives.
+    class Devices {
+      public:
+        explicit Devices(CoreAudio& audio) : _client(Make<DeviceNotifications>(audio)) {
+            ThrowIfFailed(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&_enumerator)), "CoCreateInstance(MMDeviceEnumerator)");
+            ThrowIfFailed(_enumerator->RegisterEndpointNotificationCallback(_client.Get()), "IMMDeviceEnumerator::RegisterEndpointNotificationCallback");
+        }
+        ~Devices() {
+            _enumerator->UnregisterEndpointNotificationCallback(_client.Get());
+        }
+        Devices(const Devices&)            = delete;
+        Devices& operator=(const Devices&) = delete;
+
+        // The default output device's control, or null when the system has no output device.
+        std::unique_ptr<Endpoint> DefaultOutput(CoreAudio& audio) const {
+            ComPtr<IMMDevice> device;
+            const HRESULT     found = _enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
+            if (found == E_NOTFOUND) {
+                return nullptr;
+            }
+            ThrowIfFailed(found, "IMMDeviceEnumerator::GetDefaultAudioEndpoint");
+            return std::make_unique<Endpoint>(device.Get(), audio);
+        }
+
+      private:
+        ComPtr<IMMNotificationClient> _client;
+        ComPtr<IMMDeviceEnumerator>   _enumerator;
+    };
+
+} // namespace
+
+CoreAudio::CoreAudio(ChangeSignal& changes) :
+    _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(audio stop)")),
+    _deviceEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio device)")),
+    _requestEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio request)")), _thread([this] { Run(); }) {}
+
+CoreAudio::~CoreAudio() {
+    SetEvent(_stopEvent.get());
+    _thread.join();
+}
+
+std::optional<AudioOutput> CoreAudio::Output() const {
+    const std::scoped_lock lock(_mutex);
+    return _output;
+}
+
+void CoreAudio::SetVolume(float volume) {
+    {
+        const std::scoped_lock lock(_mutex);
+        _pendingVolume = std::clamp(volume, 0.0f, 1.0f);
+    }
+    SetEvent(_requestEvent.get());
+}
+
+void CoreAudio::SetMuted(bool muted) {
+    {
+        const std::scoped_lock lock(_mutex);
+        _pendingMuted = muted;
+    }
+    SetEvent(_requestEvent.get());
+}
+
+void CoreAudio::OnDefaultDeviceChanged() {
+    SetEvent(_deviceEvent.get());
+}
+
+void CoreAudio::OnVolumeNotified(float volume, bool muted) {
+    {
+        const std::scoped_lock lock(_mutex);
+        if (!_output.has_value() || (_output->volume == volume && _output->muted == muted)) {
+            return;
+        }
+        _output->volume = volume;
+        _output->muted  = muted;
+    }
+    _changes.Notify("audio");
+}
+
+void CoreAudio::Publish(std::optional<AudioOutput> output) {
+    {
+        const std::scoped_lock lock(_mutex);
+        if (output == _output) {
+            return;
+        }
+        _output = std::move(output);
+    }
+    _changes.Notify("audio");
+}
+
+// Nothing here may throw out of the thread, so every Core Audio failure is logged and retried.
+void CoreAudio::Run() {
+    // Core Audio calls back on its own threads, which a multithreaded apartment allows without marshalling.
+    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(initialized)) {
+        Log(LogLevel::Error, "audio", "com_init_failed", {{.key = "reason", .value = Win32Error("CoInitializeEx", initialized).what()}});
+        return;
+    }
+    {
+        std::unique_ptr<Devices>    devices;
+        std::unique_ptr<Endpoint>   endpoint;
+        bool                        attach  = true;
+        bool                        failing = false;
+        const std::array<HANDLE, 3> waits{_stopEvent.get(), _deviceEvent.get(), _requestEvent.get()};
+        while (true) {
+            if (attach) {
+                attach = false;
+                endpoint.reset();
+                try {
+                    if (devices == nullptr) {
+                        devices = std::make_unique<Devices>(*this);
+                    }
+                    endpoint = devices->DefaultOutput(*this);
+                    Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioOutput>(endpoint->Read()));
+                    if (failing) {
+                        Log(LogLevel::Info, "audio", "recovered", {});
+                    }
+                    failing = false;
+                } catch (const Win32Error& error) {
+                    endpoint.reset();
+                    devices.reset();
+                    Publish(std::nullopt);
+                    if (!failing) {
+                        Log(LogLevel::Warning, "audio", "unavailable", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(kRetryMs)}});
+                    }
+                    failing = true;
+                }
+            }
+            const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, failing ? kRetryMs : INFINITE);
+            if (woke == WAIT_FAILED) {
+                Log(LogLevel::Error, "audio", "wait_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
+                Publish(std::nullopt);
+                break;
+            }
+            if (woke == WAIT_OBJECT_0) {
+                break;
+            }
+            if (woke == WAIT_OBJECT_0 + 2) {
+                std::optional<float> volume;
+                std::optional<bool>  muted;
+                {
+                    const std::scoped_lock lock(_mutex);
+                    volume = std::exchange(_pendingVolume, std::nullopt);
+                    muted  = std::exchange(_pendingMuted, std::nullopt);
+                }
+                // A request while there is no device has nothing to change.
+                if (endpoint == nullptr) {
+                    continue;
+                }
+                try {
+                    if (volume.has_value()) {
+                        endpoint->SetVolume(*volume);
+                    }
+                    if (muted.has_value()) {
+                        endpoint->SetMuted(*muted);
+                    }
+                } catch (const Win32Error& error) {
+                    // The device most likely went away mid-change, so the request is dropped and the device read again.
+                    Log(LogLevel::Warning, "audio", "change_failed", {{.key = "reason", .value = error.what()}});
+                    attach = true;
+                }
+                continue;
+            }
+            // The default device changed or the retry wait ran out.
+            attach = true;
+        }
+    }
+    CoUninitialize();
+}

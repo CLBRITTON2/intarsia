@@ -17,13 +17,13 @@ return {
     -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #date.
     modules_left = { "workspaces", "divider", "apps" },
     modules_center = { "date" },
-    modules_right = { "mode", "tiling", "cpu", "memory" },
+    modules_right = { "mode", "tiling", "cpu", "memory", "volume" },
 
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
-    -- tiling_direction, divider, cpu, memory or custom. One type can appear under several names with different
+    -- tiling_direction, divider, cpu, memory, audio or custom. One type can appear under several names with different
     -- settings, such as a second clock with its own format.
     --
-    -- clock, window, cpu, memory and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
+    -- clock, window, cpu, memory, audio and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
     -- actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
     -- config loads), and it starts without a shell, so arguments reach it exactly as written.
     -- { window_manager = "focus --next-workspace" } sends the window manager a command in its own syntax instead,
@@ -62,6 +62,19 @@ return {
             icon = "\u{EFC5}",
             interval = 1,
             on_click = { "C:\\Windows\\System32\\resmon.exe" },
+        },
+        -- The default output device's volume, following device switches. Click toggles mute, scroll changes the volume
+        -- by step percent, unless on_click or on_scroll_up and on_scroll_down replace them. Both formats get the volume
+        -- as a whole percent, then the device's name: "{}%" shows the volume, "{1}" the name. Shows nothing while there
+        -- is no output device.
+        volume = {
+            type = "audio",
+            format = "{}%",
+            format_muted = "muted",
+            icon = "\u{F057E}",
+            icon_muted = "\u{F0581}",
+            step = 5,
+            tooltip = "{1}",
         },
         -- A window module shows the focused window's title. Add "title" to a list to show it.
         -- title = {

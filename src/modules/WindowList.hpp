@@ -27,6 +27,7 @@ class WindowList final : public IModule {
     void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
+    void                         Scroll(ScrollDirection direction) override;
     // None: the module has no config table, and a left click focuses the window under it.
     const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;

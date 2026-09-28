@@ -10,6 +10,11 @@
 #include <optional>
 #include <string>
 
+enum class ScrollDirection : std::uint8_t {
+    Up,
+    Down
+};
+
 // One piece of a bar, such as the clock. The bar calls Layout, then Size, then Draw for each frame it draws.
 class IModule {
   public:
@@ -26,6 +31,9 @@ class IModule {
 
     // A left click, in DIPs from the module's origin as last drawn. Only called when no on_click command is configured.
     virtual void Click(D2D1_POINT_2F point) = 0;
+
+    // A wheel notch over the module. Only called when no on_scroll_up or on_scroll_down action is configured for it.
+    virtual void Scroll(ScrollDirection direction) = 0;
 
     // The commands the config binds to this module's inputs.
     virtual const ModuleActions& Actions() const = 0;

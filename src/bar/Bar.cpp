@@ -424,6 +424,8 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
     } else if (input == ModuleInput::LeftClick) {
         const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
         box->module->Click(D2D1::Point2F((static_cast<float>(client.x) * scale) - box->contentOrigin.x, (static_cast<float>(client.y) * scale) - box->contentOrigin.y));
+    } else if (input == ModuleInput::ScrollUp || input == ModuleInput::ScrollDown) {
+        box->module->Scroll(input == ModuleInput::ScrollUp ? ScrollDirection::Up : ScrollDirection::Down);
     }
 }
 

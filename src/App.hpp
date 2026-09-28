@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LaunchOptions.hpp"
+#include "audio/IAudio.hpp"
 #include "bar/Bar.hpp"
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
@@ -69,6 +70,8 @@ class App {
     std::unique_ptr<CommandPollers> _commandPollers;
     // Kept across reloads: icons belong to windows, not to a config. Trimmed to the listed windows on every change.
     std::unique_ptr<WindowIcons> _windowIcons;
+    // Kept across reloads: the output device belongs to the system, not to a config.
+    std::unique_ptr<IAudio> _audio;
     // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;
     std::vector<std::unique_ptr<Bar>> _bars;

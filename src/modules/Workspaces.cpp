@@ -58,6 +58,8 @@ std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
     return std::nullopt;
 }
 
+void Workspaces::Scroll(ScrollDirection) {}
+
 void Workspaces::Click(D2D1_POINT_2F point) {
     const std::optional<size_t> item = ItemAt(_row, point);
     if (item.has_value()) {

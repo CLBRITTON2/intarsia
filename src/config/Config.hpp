@@ -110,6 +110,7 @@ enum class ModuleKind : std::uint8_t {
     Divider,
     Cpu,
     Memory,
+    Audio,
     Custom
 };
 
@@ -119,7 +120,7 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 10> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 11> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
@@ -129,6 +130,7 @@ inline constexpr std::array<ModuleTypeName, 10> kModuleTypes{{
     {.name = "divider", .kind = ModuleKind::Divider},
     {.name = "cpu", .kind = ModuleKind::Cpu},
     {.name = "memory", .kind = ModuleKind::Memory},
+    {.name = "audio", .kind = ModuleKind::Audio},
     {.name = "custom", .kind = ModuleKind::Custom},
 }};
 
@@ -191,8 +193,20 @@ struct CustomConfig {
     TextModuleConfig     text;
 };
 
+// The default output device's volume. Both formats get two values: the volume as a whole percent, then the device's
+// name, so "{}%" shows the volume and "{1}" the name.
+struct AudioConfig {
+    std::string                format;
+    std::string                formatMuted;
+    std::optional<std::string> tooltip;
+    std::wstring               icon;
+    std::wstring               iconMuted;
+    std::int32_t               stepPercent; // the volume change per scroll notch
+    ModuleActions              actions;     // on_click replaces toggling mute, on_scroll_up and on_scroll_down the volume change
+};
+
 // The settings from a module's table: workspaces, windows, binding_mode and divider have none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig>;
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {
