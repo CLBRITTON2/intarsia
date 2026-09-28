@@ -7,6 +7,7 @@
 #include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
 #include "platform/WindowProc.hpp"
+#include "tray/ShellNotifyIcon.hpp"
 #include "wm/WindowManagerFactory.hpp"
 
 #include <shellscalingapi.h>
@@ -39,6 +40,9 @@ namespace {
     constexpr UINT_PTR      kDisplaysTimer    = 2;
     constexpr std::uint32_t kDisplaysSettleMs = 500;
     constexpr std::uint32_t kDeviceLost       = WM_APP + 5;
+    constexpr std::uint32_t kTrayFailed       = WM_APP + 6;
+    constexpr std::uint32_t kAnimationFrame   = WM_APP + 7;
+    constexpr std::uint32_t kFrameClockFailed = WM_APP + 8;
     // Windows is often still switching adapters when a device is lost, so the new device waits a moment, backing off
     // while each new device is lost before it draws a frame.
     constexpr UINT_PTR                  kDeviceTimer = 3;
@@ -110,11 +114,13 @@ namespace {
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _config(std::make_unique<Config>(LoadConfig(_configPath))),
     _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged),
+    _frames(_control, kAnimationFrame, kFrameClockFailed),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
     _windowIcons(std::make_unique<WindowIcons>(_changes)), _audio(std::make_unique<CoreAudio>(_changes)), _network(std::make_unique<IpHelper>(_changes)),
     _battery(std::make_unique<PowerStatus>(_changes)) {
+    MatchTrayToConfig();
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
@@ -122,6 +128,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
 
 App::~App() {
     _bars.clear();
+    _tray.reset();
     _battery.reset();
     _network.reset();
     _audio.reset();
@@ -191,6 +198,32 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             std::rethrow_exception(error);
         }
+        case kAnimationFrame:
+            _frames.Acknowledge();
+            for (const std::unique_ptr<Bar>& bar : _bars) {
+                bar->Refresh();
+            }
+            if (std::ranges::none_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->Animating(); })) {
+                _frames.Stop();
+            }
+            return 0;
+        case kFrameClockFailed: {
+            const std::exception_ptr error = _frames.TakeError();
+            if (!error) {
+                Log(LogLevel::Warning, "app", "spurious_frame_clock_failure", {});
+                return 0;
+            }
+            std::rethrow_exception(error);
+        }
+        case kTrayFailed: {
+            const std::exception_ptr error = _tray != nullptr ? _tray->TakeError() : nullptr;
+            // Like the watcher's, any process can post this message.
+            if (!error) {
+                Log(LogLevel::Warning, "app", "spurious_tray_failure", {});
+                return 0;
+            }
+            std::rethrow_exception(error);
+        }
         // taskkill sends WM_CLOSE to every top-level window, this hidden one included, and DefWindowProcW would destroy
         // it. The bars' own WM_CLOSE can be lost when a reload replaces them first, so this one quits too.
         case WM_CLOSE: PostQuitMessage(0); return 0;
@@ -209,8 +242,9 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
                                                                 .audio          = *_audio,
                                                                 .network        = *_network,
                                                                 .battery        = *_battery,
+                                                                .tray           = _tray.get(),
                                                                 .monitor        = placement.monitor},
-                                                  _launcher, placement, _state, _control, kDeviceLost));
+                                                  _launcher, _frames, placement, _state, _control, kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }
@@ -251,9 +285,24 @@ void App::ReloadConfig() {
     _config         = std::move(config);
     _windowManager  = CreateWindowManager(_config->windowManager, _changes, _glazeWmPort);
     _commandPollers = std::make_unique<CommandPollers>(*_config, _changes);
+    MatchTrayToConfig();
     // A pending device recovery builds the bars from this config once it has a device.
     if (!_recovering) {
         CreateBars(PlacementsForAllMonitors());
+    }
+}
+
+// The tray takes every app's icons from the taskbar, so it exists only while the config shows it, and stays across
+// reloads that keep it so the icons stay too.
+void App::MatchTrayToConfig() {
+    const bool shown = AnyInSections(_config->modules, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Tray; });
+    if (!shown) {
+        _tray.reset();
+        return;
+    }
+    if (_tray == nullptr) {
+        _tray = std::make_unique<ShellNotifyIcon>(_changes, kTaskbarClass, _control, kTrayFailed);
+        AnnounceTray();
     }
 }
 

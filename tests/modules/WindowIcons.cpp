@@ -1,7 +1,5 @@
 #include "modules/WindowIcons.hpp"
 
-#include <objbase.h>
-
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -60,15 +58,6 @@ TEST(WindowIcons, AWindowThatIsGoneHasNoIcon) {
     HWND window = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
     DestroyWindow(window);
     EXPECT_EQ(WindowIcon(window, 100), nullptr);
-}
-
-TEST(WindowIcons, IconToPixelsGivesPremultipliedPixelsAtTheIconSize) {
-    ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
-    const IconPixels pixels = IconToPixels(LoadIconW(nullptr, IDI_APPLICATION));
-    CoUninitialize();
-    EXPECT_GT(pixels.width, 0u);
-    EXPECT_GT(pixels.height, 0u);
-    EXPECT_EQ(pixels.pbgra.size(), static_cast<size_t>(pixels.width) * pixels.height * 4);
 }
 
 TEST(WindowIcons, ReadsOnItsThreadAndForgetsWindowsRetainDrops) {

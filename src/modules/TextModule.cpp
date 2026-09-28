@@ -35,9 +35,15 @@ bool TextModule::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void                 TextModule::Scroll(ScrollDirection) {}
+void                       TextModule::Scroll(ScrollDirection) {}
 
-void                 TextModule::Click(D2D1_POINT_2F) {}
+void                       TextModule::Click(D2D1_POINT_2F) {}
+
+void                       TextModule::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> TextModule::TooltipItem() const {
+    return std::nullopt;
+}
 
 const ModuleActions& TextModule::Actions() const {
     return _config.actions;

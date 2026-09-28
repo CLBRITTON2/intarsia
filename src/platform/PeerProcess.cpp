@@ -81,15 +81,18 @@ std::uint32_t LoopbackPeerProcess(std::uint16_t clientPort, std::uint16_t server
     throw PeerVerificationError(std::format("no connection from 127.0.0.1:{} to 127.0.0.1:{} is open", clientPort, serverPort));
 }
 
-void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName) {
-    const UniqueHandle         process = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(listener)");
-
+std::filesystem::path ProcessImage(HANDLE process) {
     std::array<wchar_t, 32768> path{};
     DWORD                      length = static_cast<DWORD>(path.size());
-    if (!QueryFullProcessImageNameW(process.get(), 0, path.data(), &length)) {
-        ThrowLastError("QueryFullProcessImageNameW(listener)");
+    if (!QueryFullProcessImageNameW(process, 0, path.data(), &length)) {
+        ThrowLastError("QueryFullProcessImageNameW");
     }
-    const std::filesystem::path image(std::wstring(path.data(), length));
+    return {std::wstring(path.data(), length)};
+}
+
+void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName) {
+    const UniqueHandle          process  = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(listener)");
+    const std::filesystem::path image    = ProcessImage(process.get());
     const std::wstring          fileName = image.filename().wstring();
     if (CompareStringOrdinal(fileName.c_str(), static_cast<std::int32_t>(fileName.size()), imageName.data(), static_cast<std::int32_t>(imageName.size()), TRUE) != CSTR_EQUAL) {
         throw PeerVerificationError(std::format("the listener is {} (pid {}), not {}", ToUtf8(image.wstring()), processId, ToUtf8(imageName)));

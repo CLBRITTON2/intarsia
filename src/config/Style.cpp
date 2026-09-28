@@ -114,7 +114,9 @@ namespace {
         Spacing,
         Share,
         Family,
-        Weight
+        Weight,
+        Transition,
+        Rotation
     };
 
     struct PropertyKind {
@@ -122,7 +124,7 @@ namespace {
         ValueKind        kind;
     };
 
-    constexpr std::array<PropertyKind, 15> kProperties{{
+    constexpr std::array<PropertyKind, 17> kProperties{{
         {.property = "color", .kind = ValueKind::Color},
         {.property = "background", .kind = ValueKind::Color},
         {.property = "border-color", .kind = ValueKind::Color},
@@ -136,6 +138,8 @@ namespace {
         {.property = "font-weight", .kind = ValueKind::Weight},
         {.property = "width", .kind = ValueKind::PositiveLength},
         {.property = "height", .kind = ValueKind::Share},
+        {.property = "transition", .kind = ValueKind::Transition},
+        {.property = "transform", .kind = ValueKind::Rotation},
         // Shorthands, expanded into the longhands above as they are read.
         {.property = "border", .kind = ValueKind::Color},
         {.property = "background-color", .kind = ValueKind::Color},
@@ -264,6 +268,74 @@ namespace {
         return static_cast<DWRITE_FONT_WEIGHT>(static_cast<std::int32_t>(*value));
     }
 
+    // A transition as written: the property it animates, then the transition. none animates nothing.
+    struct TransitionValue {
+        std::string_view property;
+        Transition       transition;
+    };
+
+    constexpr Transition kNoTransition{.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease};
+
+    struct TimingName {
+        std::string_view name;
+        TimingFunction   timing;
+    };
+
+    constexpr std::array<TimingName, 5> kTimings{{
+        {.name = "linear", .timing = TimingFunction::Linear},
+        {.name = "ease", .timing = TimingFunction::Ease},
+        {.name = "ease-in", .timing = TimingFunction::EaseIn},
+        {.name = "ease-out", .timing = TimingFunction::EaseOut},
+        {.name = "ease-in-out", .timing = TimingFunction::EaseInOut},
+    }};
+
+    std::chrono::milliseconds           ReadDuration(std::string_view text) {
+        const bool                 milliseconds = text.ends_with("ms");
+        const std::optional<float> value        = milliseconds ? ParseNumber(text.substr(0, text.size() - 2)) :
+                             text.ends_with('s')                         ? ParseNumber(text.substr(0, text.size() - 1)) :
+                                                                           std::nullopt;
+        if (!value.has_value() || *value < 0.0f || *value > 60000.0f) {
+            throw std::invalid_argument("takes a duration in ms or s from 0 to 60s, as 400ms or 0.4s");
+        }
+        return std::chrono::milliseconds(static_cast<std::int64_t>(milliseconds ? *value : *value * 1000.0f));
+    }
+
+    // none, or a property, a duration and an optional timing function (ease when left out, as in CSS).
+    TransitionValue ReadTransitionValue(std::string_view text) {
+        if (text == "none") {
+            return TransitionValue{.property = {}, .transition = kNoTransition};
+        }
+        const std::vector<std::string_view> parts = SplitOutside(text, kSpace);
+        if (parts.size() != 2 && parts.size() != 3) {
+            throw std::invalid_argument("must be none, or a property, a duration and a timing function, as width 400ms ease-out");
+        }
+        TimingFunction timing = TimingFunction::Ease;
+        if (parts.size() == 3) {
+            const auto entry = std::ranges::find(kTimings, parts[2], &TimingName::name);
+            if (entry == kTimings.end()) {
+                throw std::invalid_argument(std::format("has the timing function '{}': use linear, ease, ease-in, ease-out or ease-in-out", parts[2]));
+            }
+            timing = entry->timing;
+        }
+        return TransitionValue{.property = parts[0], .transition = Transition{.duration = ReadDuration(parts[1]), .timing = timing}};
+    }
+
+    Transition ReadTransition(std::string_view text) {
+        return ReadTransitionValue(text).transition;
+    }
+
+    // none, or rotate(<degrees>deg).
+    float ReadRotation(std::string_view text) {
+        if (text == "none") {
+            return 0.0f;
+        }
+        const std::optional<float> degrees = text.starts_with("rotate(") && text.ends_with("deg)") ? ParseNumber(Trim(text.substr(7, text.size() - 11))) : std::nullopt;
+        if (!degrees.has_value()) {
+            throw std::invalid_argument("must be none or a rotation in degrees, as rotate(180deg)");
+        }
+        return *degrees;
+    }
+
     void CheckValue(ValueKind kind, std::string_view value) {
         switch (kind) {
             case ValueKind::Color: ReadColor(value); return;
@@ -273,6 +345,8 @@ namespace {
             case ValueKind::Share: ReadShare(value); return;
             case ValueKind::Family: ReadFamily(value); return;
             case ValueKind::Weight: ReadWeight(value); return;
+            case ValueKind::Transition: ReadTransitionValue(value); return;
+            case ValueKind::Rotation: ReadRotation(value); return;
         }
         throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(kind)));
     }
@@ -300,7 +374,7 @@ namespace {
         return {Declaration{.property = "border-width", .value = *width, .line = border.line}, Declaration{.property = "border-color", .value = *color, .line = border.line}};
     }
 
-    constexpr std::array<std::string_view, 7> kClasses{"module", "alert", "icon", "item", "focused", "occupied", "empty"};
+    constexpr std::array<std::string_view, 8> kClasses{"module", "alert", "expanded", "icon", "item", "focused", "occupied", "empty"};
 
     bool                                      IsModuleType(std::string_view type) {
         return std::ranges::find(kModuleTypes, type, &ModuleTypeName::name) != kModuleTypes.end();
@@ -355,7 +429,7 @@ namespace {
             } else if (marker == '.') {
                 if (std::ranges::find(kClasses, name) == kClasses.end()) {
                     throw std::invalid_argument(
-                        std::format("'.{}' is not a class intarsia styles, known classes are: .module, .alert, .icon, .item, .focused, .occupied, .empty", name));
+                        std::format("'.{}' is not a class intarsia styles, known classes are: .module, .alert, .expanded, .icon, .item, .focused, .occupied, .empty", name));
                 }
                 compound.classes.emplace_back(name);
             } else if (name == "hover") {
@@ -371,9 +445,9 @@ namespace {
         return std::ranges::find(compound.classes, name) != compound.classes.end();
     }
 
-    // A module's box: a module type, an id, .module or .alert, and :hover.
+    // A module's box: a module type, an id, .module, .alert or .expanded, and :hover.
     bool IsModuleCompound(const Compound& compound) {
-        const bool onlyModuleClasses = std::ranges::all_of(compound.classes, [](const std::string& name) { return name == "module" || name == "alert"; });
+        const bool onlyModuleClasses = std::ranges::all_of(compound.classes, [](const std::string& name) { return name == "module" || name == "alert" || name == "expanded"; });
         const bool typed             = compound.type.empty() || IsModuleType(compound.type);
         return onlyModuleClasses && typed && (!compound.type.empty() || !compound.id.empty() || !compound.classes.empty());
     }
@@ -411,7 +485,13 @@ namespace {
             if (compounds.size() == 2 && (!IsModuleCompound(compounds[0]) || compounds[0].hover || HasClass(compounds[0], "alert"))) {
                 throw std::invalid_argument(std::format("'{}' must start with a module, as #cpu .icon, without .alert or :hover", text));
             }
+            if (compounds.size() == 2 && HasClass(compounds[0], "expanded") && *part != StyleTarget::Icon) {
+                throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
+            }
             return *part;
+        }
+        if (compounds.size() == 1 && IsModuleCompound(last) && HasClass(last, "expanded")) {
+            throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
         }
         if (compounds.size() == 1 && IsModuleCompound(last)) {
             if (last.hover && HasClass(last, "alert")) {
@@ -463,7 +543,12 @@ namespace {
                 allowed.assign(kBox.begin(), kBox.end());
                 allowed.emplace_back("color");
                 return allowed;
-            case StyleTarget::Icon: return {"font-family", "font-size", "color", "margin-right"};
+            case StyleTarget::Icon:
+                // An unfolded tray's icon turns and nothing else, so its size never changes as it unfolds.
+                if (selector.compounds.size() == 2 && HasClass(selector.compounds.front(), "expanded")) {
+                    return {"transform"};
+                }
+                return {"font-family", "font-size", "color", "margin-right", "transform", "transition"};
             case StyleTarget::Item:
                 // An item under the cursor changes color only: a change of size would move every item after it.
                 if (selector.compounds.back().hover) {
@@ -479,7 +564,7 @@ namespace {
                     return {"color"};
                 }
                 allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"color", "width", "height"});
+                allowed.insert(allowed.end(), {"color", "width", "height", "transition"});
                 return allowed;
             }
         }
@@ -601,6 +686,15 @@ namespace {
         return variables;
     }
 
+    // Each target animates one property: a tray's box its width as it unfolds, an icon its rotation.
+    void RequireTransitionedProperty(StyleTarget target, std::string_view value) {
+        const std::string_view animated = ReadTransitionValue(value).property;
+        const std::string_view expected = target == StyleTarget::Icon ? "transform" : "width";
+        if (!animated.empty() && animated != expected) {
+            throw std::invalid_argument(std::format("animates {} here, not {}, as transition: {} 300ms ease", expected, animated, expected));
+        }
+    }
+
     // Declarations with var() replaced, shorthands expanded and every value checked against what the selector takes.
     std::vector<Declaration> CheckDeclarations(const Selector& selector, std::string_view selectorText, const std::vector<Declaration>& declarations, const Variables& variables,
                                                std::string_view source) {
@@ -620,6 +714,9 @@ namespace {
                         throw std::invalid_argument(std::format("does not apply to {}, which takes: {}", selectorText, Joined(allowed)));
                     }
                     CheckValue(*KindOf(longhand.property), longhand.value);
+                    if (longhand.property == "transition") {
+                        RequireTransitionedProperty(selector.target, longhand.value);
+                    }
                     checked.push_back(longhand);
                 }
             } catch (const std::invalid_argument& error) { throw StyleError(source, declaration.line, std::format("{}: {} {}", selectorText, declaration.property, error.what())); }
@@ -790,21 +887,36 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
     const BoxStyle     boxStyle = ReadBox(box);
     const D2D1_COLOR_F color    = box.Color("color", bar.color);
     const Element      icon{.type = {}, .id = {}, .classes = {"icon"}, .hover = false};
+    const Element      expanded{.type = type, .id = name, .classes = {"module", "expanded"}, .hover = false};
     const Cascaded     iconRules(sheet, StyleTarget::Icon, &normal, &icon);
-    return ModuleStyle{.box           = boxStyle,
-                       .hover         = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
-                       .color         = color,
-                       .alertColor    = Cascaded(sheet, StyleTarget::Module, &alerted, nullptr).Color("color", color),
-                       .icon          = {.font     = iconRules.Read("font-family", ReadFamily, bar.font),
-                                         .sizeDips = iconRules.Read("font-size", ReadPositiveLength, bar.fontSizeDips),
-                                         .color    = iconRules.Color("color", color),
-                                         .gapDips  = iconRules.Length("margin-right", 0.0f)},
-                       .item          = ReadItem(sheet, normal, "", color),
-                       .focused       = ReadItem(sheet, normal, "focused", color),
-                       .occupied      = ReadItem(sheet, normal, "occupied", color),
-                       .empty         = ReadItem(sheet, normal, "empty", color),
-                       .lineWidthDips = box.Read("width", ReadPositiveLength, 1.0f),
-                       .lineHeight    = box.Read("height", ReadShare, 1.0f)};
+    const Cascaded     expandedIconRules(sheet, StyleTarget::Icon, &expanded, &icon);
+    if (kind != ModuleKind::Tray) {
+        for (const auto& [rules, property] :
+             {std::pair{&box, "transition"}, std::pair{&iconRules, "transform"}, std::pair{&iconRules, "transition"}, std::pair{&expandedIconRules, "transform"}}) {
+            if (const Declaration* declaration = rules->Find(property)) {
+                throw StyleError(sheet.source, declaration->line, std::format("{} animates a tray as it unfolds, and {} is a {} module", property, name, type));
+            }
+        }
+    }
+    const float rotation = iconRules.Read("transform", ReadRotation, 0.0f);
+    return ModuleStyle{.box                         = boxStyle,
+                       .hover                       = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
+                       .color                       = color,
+                       .alertColor                  = Cascaded(sheet, StyleTarget::Module, &alerted, nullptr).Color("color", color),
+                       .icon                        = {.font            = iconRules.Read("font-family", ReadFamily, bar.font),
+                                                       .sizeDips        = iconRules.Read("font-size", ReadPositiveLength, bar.fontSizeDips),
+                                                       .color           = iconRules.Color("color", color),
+                                                       .gapDips         = iconRules.Length("margin-right", 0.0f),
+                                                       .rotationDegrees = rotation,
+                                                       .transition      = iconRules.Read("transition", ReadTransition, kNoTransition)},
+                       .item                        = ReadItem(sheet, normal, "", color),
+                       .focused                     = ReadItem(sheet, normal, "focused", color),
+                       .occupied                    = ReadItem(sheet, normal, "occupied", color),
+                       .empty                       = ReadItem(sheet, normal, "empty", color),
+                       .lineWidthDips               = box.Read("width", ReadPositiveLength, 1.0f),
+                       .lineHeight                  = box.Read("height", ReadShare, 1.0f),
+                       .transition                  = box.Read("transition", ReadTransition, kNoTransition),
+                       .expandedIconRotationDegrees = expandedIconRules.Read("transform", ReadRotation, rotation)};
 }
 
 void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& names) {

@@ -10,6 +10,7 @@
 #include "modules/Divider.hpp"
 #include "modules/Memory.hpp"
 #include "modules/Network.hpp"
+#include "modules/Tray.hpp"
 #include "modules/Window.hpp"
 #include "modules/WindowList.hpp"
 #include "modules/Workspaces.hpp"
@@ -46,6 +47,11 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Audio: return std::make_unique<Audio>(RequireSettings<AudioConfig>(instance), sources.audio);
         case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), sources.network);
         case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), sources.battery);
+        case ModuleKind::Tray:
+            if (sources.tray == nullptr) {
+                throw std::logic_error(std::format("module {} is a tray, and App created no tray for it", instance.name));
+            }
+            return std::make_unique<Tray>(RequireSettings<TrayConfig>(instance), *sources.tray, instance.style);
         case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
     }
     throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));

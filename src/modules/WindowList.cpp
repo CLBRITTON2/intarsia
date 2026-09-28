@@ -1,25 +1,11 @@
 #include "modules/WindowList.hpp"
 
-#include "render/Graphics.hpp"
+#include "render/Icon.hpp"
 
 #include <cstdint>
 #include <algorithm>
 #include <iterator>
 #include <utility>
-
-using Microsoft::WRL::ComPtr;
-
-namespace {
-
-    ComPtr<ID2D1Bitmap> CreateIconBitmap(ID2D1DeviceContext* context, const IconPixels& pixels) {
-        ComPtr<ID2D1Bitmap> bitmap;
-        ThrowIfDeviceFailed(context->CreateBitmap(D2D1::SizeU(pixels.width, pixels.height), pixels.pbgra.data(), pixels.width * 4,
-                                                  D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap),
-                            "ID2D1DeviceContext::CreateBitmap(window icon)");
-        return bitmap;
-    }
-
-} // namespace
 
 WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONITOR monitor, ModuleStyle style) :
     _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
@@ -83,7 +69,13 @@ bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {
     return changed;
 }
 
-void WindowList::Scroll(ScrollDirection) {}
+void                       WindowList::Scroll(ScrollDirection) {}
+
+void                       WindowList::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> WindowList::TooltipItem() const {
+    return std::nullopt;
+}
 
 void WindowList::Click(D2D1_POINT_2F point) {
     const std::optional<size_t> index = ItemAt(_row, point);

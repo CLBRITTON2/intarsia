@@ -24,10 +24,12 @@ class TextModule : public IModule {
     void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const final;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) final;
+    void                         RightClick(D2D1_POINT_2F point) final;
     void                         Scroll(ScrollDirection direction) final;
     bool                         Hover(std::optional<D2D1_POINT_2F> point) final;
     const ModuleActions&         Actions() const final;
     std::optional<std::wstring>  TooltipText() override;
+    std::optional<D2D1_RECT_F>   TooltipItem() const final;
 
   protected:
     explicit TextModule(TextModuleConfig config);

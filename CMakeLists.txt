@@ -41,6 +41,7 @@ add_library(intarsia_core STATIC
   src/bar/Tooltip.cpp
   src/config/Config.cpp
   src/config/Style.cpp
+  src/modules/AnimatedValue.cpp
   src/modules/Audio.cpp
   src/modules/Battery.cpp
   src/modules/BindingModes.cpp
@@ -59,6 +60,7 @@ add_library(intarsia_core STATIC
   src/modules/ModuleFactory.cpp
   src/modules/TextModule.cpp
   src/modules/Ticks.cpp
+  src/modules/Tray.cpp
   src/modules/Window.cpp
   src/modules/WindowIcons.cpp
   src/modules/WindowList.cpp
@@ -67,6 +69,7 @@ add_library(intarsia_core STATIC
   src/platform/ChangeSignal.cpp
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
+  src/platform/FrameClock.cpp
   src/platform/Handle.cpp
   src/platform/Log.cpp
   src/platform/PeerProcess.cpp
@@ -75,7 +78,10 @@ add_library(intarsia_core STATIC
   src/platform/WebSocket.cpp
   src/render/BrushCache.cpp
   src/render/Graphics.cpp
+  src/render/Icon.cpp
   src/render/Surface.cpp
+  src/tray/NotifyIconProtocol.cpp
+  src/tray/ShellNotifyIcon.cpp
   src/wm/GlazeWm.cpp
   src/wm/GlazeWmProtocol.cpp
   src/wm/Native.cpp
@@ -84,7 +90,7 @@ add_library(intarsia_core STATIC
 target_include_directories(intarsia_core PUBLIC src)
 target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi)
+target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dcomp shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi dwmapi)
 
 # Parsing these headers is most of every file's compile time, so each target parses them once. Off for the lint, since
 # clang-tidy cannot read MSVC's precompiled headers.
@@ -127,6 +133,7 @@ if(BUILD_TESTING)
     tests/config/Style.cpp
     tests/audio/CoreAudio.cpp
     tests/battery/PowerStatus.cpp
+    tests/modules/AnimatedValue.cpp
     tests/modules/Audio.cpp
     tests/modules/Battery.cpp
     tests/modules/BindingModes.cpp
@@ -140,6 +147,7 @@ if(BUILD_TESTING)
     tests/modules/Placeholders.cpp
     tests/network/IpHelper.cpp
     tests/modules/Ticks.cpp
+    tests/modules/Tray.cpp
     tests/modules/Window.cpp
     tests/modules/WindowIcons.cpp
     tests/modules/WindowList.cpp
@@ -148,12 +156,16 @@ if(BUILD_TESTING)
     tests/platform/AppBar.cpp
     tests/platform/ChangeSignal.cpp
     tests/platform/FileWatcher.cpp
+    tests/platform/FrameClock.cpp
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
     tests/platform/Text.cpp
     tests/platform/WebSocket.cpp
     tests/platform/WorkQueue.cpp
+    tests/render/Icon.cpp
     tests/render/Surface.cpp
+    tests/tray/NotifyIconProtocol.cpp
+    tests/tray/ShellNotifyIcon.cpp
     tests/wm/Native.cpp
   )
   # Winsock, BCrypt and CryptoAPI play the far end of a loopback connection in the WebSocket and peer tests.

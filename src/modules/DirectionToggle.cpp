@@ -36,7 +36,13 @@ bool DirectionToggle::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void DirectionToggle::Scroll(ScrollDirection) {}
+void                       DirectionToggle::Scroll(ScrollDirection) {}
+
+void                       DirectionToggle::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> DirectionToggle::TooltipItem() const {
+    return std::nullopt;
+}
 
 void DirectionToggle::Click(D2D1_POINT_2F) {
     _windowManager.ToggleTilingDirection();

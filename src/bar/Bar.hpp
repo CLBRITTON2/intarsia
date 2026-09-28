@@ -6,6 +6,7 @@
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
+#include "platform/FrameClock.hpp"
 #include "platform/Process.hpp"
 #include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
@@ -43,8 +44,8 @@ struct AppState {
 // lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.
 class Bar {
   public:
-    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
-        HWND control, std::uint32_t deviceLostMessage);
+    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
+        const BarPlacement& placement, AppState& state, HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -62,6 +63,9 @@ class Bar {
 
     // True once a frame reached the screen, which shows the device worked.
     bool HasPresented() const;
+
+    // True while a module animates, so the bar wants every display frame from the frame clock.
+    bool Animating() const;
 
   private:
     template <typename Owner>
@@ -96,15 +100,19 @@ class Bar {
     const HitBox* BoxAt(POINT client) const;
     // A point in client pixels as DIPs from the box's content origin, as modules take input.
     D2D1_POINT_2F ContentPoint(POINT client, const HitBox& box) const;
-    // Runs the module's action for the input, or for a left click or scroll without one, lets the module handle it.
+    // Runs the module's action for the input, or for a click or scroll without one, lets the module handle it.
     void HandleInput(POINT client, ModuleInput input);
     // Restarts hover tracking whenever the cursor moves onto a different module, hiding any tooltip.
-    void                               PointAt(POINT client);
+    void PointAt(POINT client);
+    // Hides the tooltip and waits for the cursor to rest again before showing the next one.
+    void                               RestartHover();
     void                               ShowTooltip();
 
     const GraphicsDevice&              _graphics;
     const Config&                      _config;
     Launcher&                          _launcher;
+    FrameClock&                        _frames;
+    bool                               _animating = false;
     IWindowManager&                    _windowManager; // takes the window_manager actions
     AppState&                          _state;
     HWND                               _control;

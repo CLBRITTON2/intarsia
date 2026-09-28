@@ -66,7 +66,13 @@ bool Workspaces::Hover(std::optional<D2D1_POINT_2F> point) {
     return changed;
 }
 
-void Workspaces::Scroll(ScrollDirection) {}
+void                       Workspaces::Scroll(ScrollDirection) {}
+
+void                       Workspaces::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> Workspaces::TooltipItem() const {
+    return std::nullopt;
+}
 
 void Workspaces::Click(D2D1_POINT_2F point) {
     const std::optional<size_t> item = ItemAt(_row, point);

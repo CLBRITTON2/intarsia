@@ -8,6 +8,7 @@
 #include "modules/IModule.hpp"
 #include "modules/WindowIcons.hpp"
 #include "network/INetwork.hpp"
+#include "tray/ITray.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -22,7 +23,9 @@ struct ModuleSources {
     IAudio&               audio;
     const INetwork&       network;
     const IBattery&       battery;
-    HMONITOR              monitor;
+    // Null unless the config shows a tray module: the tray takes over every app's icons while it exists.
+    ITray*   tray;
+    HMONITOR monitor;
 };
 
 std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources);

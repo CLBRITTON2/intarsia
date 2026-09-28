@@ -132,11 +132,11 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
     }
 }
 
-Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement, AppState& state,
-         HWND control, std::uint32_t deviceLostMessage) :
-    _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
-    _placement(placement), _modules(CreateModules(config, sources)), _styles(MapSections(config.modules, [](const ModuleInstance& instance) { return instance.style; })),
-    _window(CreateBarWindow(instance, this)) {
+Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
+         const BarPlacement& placement, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
+    _graphics(graphics), _config(config), _launcher(launcher), _frames(frames), _windowManager(sources.windowManager), _state(state), _control(control),
+    _deviceLostMessage(deviceLostMessage), _placement(placement), _modules(CreateModules(config, sources)),
+    _styles(MapSections(config.modules, [](const ModuleInstance& instance) { return instance.style; })), _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
@@ -296,6 +296,10 @@ bool Bar::HasPresented() const {
     return _presented;
 }
 
+bool Bar::Animating() const {
+    return _animating && !_deviceLost;
+}
+
 // Catches a lost device itself because App calls it outside the window procedure.
 void Bar::Render() {
     if (_surface == nullptr || _deviceLost) {
@@ -426,6 +430,11 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
         _windowManager.RunCommand(windowManagerCommand->text);
     } else if (input == ModuleInput::LeftClick) {
         box->module->Click(ContentPoint(client, *box));
+        // A click can change what the module itself shows, such as the tray folding away its icons.
+        Refresh();
+    } else if (input == ModuleInput::RightClick) {
+        box->module->RightClick(ContentPoint(client, *box));
+        Refresh();
     } else if (input == ModuleInput::ScrollUp || input == ModuleInput::ScrollDown) {
         box->module->Scroll(input == ModuleInput::ScrollUp ? ScrollDirection::Up : ScrollDirection::Down);
     }
@@ -433,8 +442,13 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
 
 void Bar::ScheduleNextChange() {
     const std::optional<std::uint32_t> wait = EarliestChange(_modules);
-    if (!wait.has_value()) {
+    _animating                              = wait == 0u;
+    if (!wait.has_value() || _animating) {
         KillTimer(_window, kChangeTimer);
+        // A timer ticks at the system's 15.6 ms, off the display's refresh, so an animation follows the frame clock.
+        if (_animating) {
+            _frames.Start();
+        }
         return;
     }
     if (SetTimer(_window, kChangeTimer, *wait, nullptr) == 0) {
@@ -451,8 +465,9 @@ void Bar::PointAt(POINT client) {
     const HitBox* box    = BoxAt(client);
     IModule*      module = box == nullptr ? nullptr : box->module;
     if (module == _pointed) {
-        // Within one module the cursor can still move to another of its items.
+        // Within one module the cursor can still move to another of its items, which can have its own tooltip.
         if (module != nullptr && module->Hover(ContentPoint(client, *box))) {
+            RestartHover();
             Render();
         }
         return;
@@ -464,13 +479,17 @@ void Bar::PointAt(POINT client) {
     if (module != nullptr) {
         module->Hover(ContentPoint(client, *box));
     }
+    RestartHover();
+    // Moves the hover to the box now under the cursor.
+    Render();
+}
+
+void Bar::RestartHover() {
     _tooltip->Hide();
     TRACKMOUSEEVENT track{.cbSize = sizeof(TRACKMOUSEEVENT), .dwFlags = TME_HOVER | TME_LEAVE, .hwndTrack = _window, .dwHoverTime = HOVER_DEFAULT};
     if (!TrackMouseEvent(&track)) {
         ThrowLastError("TrackMouseEvent");
     }
-    // Moves the hover to the box now under the cursor.
-    Render();
 }
 
 void Bar::ShowTooltip() {
@@ -486,10 +505,14 @@ void Bar::ShowTooltip() {
     if (!GetWindowRect(_window, &bar)) {
         ThrowLastError("GetWindowRect");
     }
-    const std::uint32_t dpi = _placement.dpi;
-    const RECT          module{.left   = bar.left + DipsToPixels(box->bounds.left, dpi),
-                               .top    = bar.top + DipsToPixels(box->bounds.top, dpi),
-                               .right  = bar.left + DipsToPixels(box->bounds.right, dpi),
-                               .bottom = bar.top + DipsToPixels(box->bounds.bottom, dpi)};
+    // Against the item the text describes, such as one tray icon, or else the whole module.
+    const std::optional<D2D1_RECT_F> item   = _pointed->TooltipItem();
+    const D2D1_POINT_2F              origin = box->contentOrigin;
+    const D2D1_RECT_F   anchor = item.has_value() ? D2D1::RectF(origin.x + item->left, origin.y + item->top, origin.x + item->right, origin.y + item->bottom) : box->bounds;
+    const std::uint32_t dpi    = _placement.dpi;
+    const RECT          module{.left   = bar.left + DipsToPixels(anchor.left, dpi),
+                               .top    = bar.top + DipsToPixels(anchor.top, dpi),
+                               .right  = bar.left + DipsToPixels(anchor.right, dpi),
+                               .bottom = bar.top + DipsToPixels(anchor.bottom, dpi)};
     _tooltip->Show(*text, TooltipAnchor{.module = module, .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi});
 }

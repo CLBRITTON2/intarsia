@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -172,6 +173,46 @@ TEST(Style, DividersTakeAWidthAndAShareOfTheHeight) {
     EXPECT_FLOAT_EQ(divider.lineHeight, 0.6f);
     EXPECT_THAT([] { return StyleOf(".module { width: 3px; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith("width sizes a divider's line, and cpu is a cpu module"));
     EXPECT_THAT([] { return Parse("divider { height: 120%; }"); }, ConfigErrorWith("at most 100%"));
+}
+
+TEST(Style, ATrayTakesItsTransitionsAndItsUnfoldedIconsRotation) {
+    const ModuleStyle tray = StyleOf("tray { transition: width 0.4s ease-out; } tray .icon { transform: rotate(-90deg); transition: transform 300ms; } "
+                                     "tray.expanded .icon { transform: rotate(90deg); }",
+                                     ModuleKind::Tray, "icons");
+    EXPECT_EQ(tray.transition.duration, std::chrono::milliseconds(400));
+    EXPECT_EQ(tray.transition.timing, TimingFunction::EaseOut);
+    EXPECT_FLOAT_EQ(tray.icon.rotationDegrees, -90.0f);
+    EXPECT_EQ(tray.icon.transition.duration, std::chrono::milliseconds(300));
+    // CSS's default timing function.
+    EXPECT_EQ(tray.icon.transition.timing, TimingFunction::Ease);
+    EXPECT_FLOAT_EQ(tray.expandedIconRotationDegrees, 90.0f);
+}
+
+TEST(Style, ATrayWithoutTransitionsChangesAtOnce) {
+    const ModuleStyle tray = StyleOf("tray .icon { transform: rotate(30deg); transition: none; }", ModuleKind::Tray, "icons");
+    EXPECT_EQ(tray.transition.duration, std::chrono::milliseconds(0));
+    EXPECT_EQ(tray.icon.transition.duration, std::chrono::milliseconds(0));
+    // With no .expanded rule the icon keeps its rotation unfolded.
+    EXPECT_FLOAT_EQ(tray.expandedIconRotationDegrees, 30.0f);
+}
+
+TEST(Style, TransitionsAndRotationsAreATraysOnly) {
+    EXPECT_THAT([] { return StyleOf("cpu { transition: width 1s; }", ModuleKind::Cpu, "cpu"); },
+                ConfigErrorWith("transition animates a tray as it unfolds, and cpu is a cpu module"));
+    EXPECT_THAT([] { return StyleOf(".icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray"));
+    EXPECT_THAT([] { return StyleOf(".expanded .icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray"));
+}
+
+TEST(Style, TransitionsAndRotationsAreCheckedAsTheyParse) {
+    EXPECT_THAT([] { return Parse("tray { transition: color 1s; }"); }, ConfigErrorWith("animates width here, not color"));
+    EXPECT_THAT([] { return Parse("tray .icon { transition: width 1s; }"); }, ConfigErrorWith("animates transform here, not width"));
+    EXPECT_THAT([] { return Parse("tray { transition: width fast; }"); }, ConfigErrorWith("duration in ms or s"));
+    EXPECT_THAT([] { return Parse("tray { transition: width 1s bouncy; }"); }, ConfigErrorWith("timing function 'bouncy'"));
+    EXPECT_THAT([] { return Parse("tray { transition: width; }"); }, ConfigErrorWith("must be none, or a property"));
+    EXPECT_THAT([] { return Parse("tray .icon { transform: scale(2); }"); }, ConfigErrorWith("rotate(180deg)"));
+    EXPECT_THAT([] { return Parse("tray.expanded { background: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's .icon only"));
+    EXPECT_THAT([] { return Parse("tray.expanded .item { color: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's .icon only"));
+    EXPECT_THAT([] { return Parse("tray.expanded .icon { color: #fff; }"); }, ConfigErrorWith("which takes: transform"));
 }
 
 TEST(Style, CommentsAreIgnoredAndLinesStillCount) {

@@ -163,6 +163,13 @@ TEST(Config, DividerTakesOnlyItsType) {
                 ConfigErrorWith("modules.line.width is not a known key"));
 }
 
+TEST(Config, TrayTakesItsToggleIcon) {
+    const Config config = LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray", icon = ">" },)"));
+    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Tray});
+    EXPECT_EQ(SettingsOf<TrayConfig>(config.modules.right, 0).icon, L">");
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray" },)")); }, ConfigErrorWith("modules.icons.icon is missing"));
+}
+
 TEST(Config, LuaSyntaxAndRuntimeErrorsAreReported) {
     EXPECT_THAT([] { return LoadText("return {"); }, ConfigErrorWith("expected"));
     EXPECT_THAT([] { return LoadText("error('boom')"); }, ConfigErrorWith("boom"));
@@ -217,7 +224,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
                 ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, "
-                                "network, battery, custom"));
+                                "network, battery, tray, custom"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 

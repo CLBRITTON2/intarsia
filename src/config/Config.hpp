@@ -65,12 +65,29 @@ struct StyleConfig {
     TooltipStyle tooltip;
 };
 
+// CSS's timing functions, each a cubic Bézier from (0, 0) to (1, 1).
+enum class TimingFunction : std::uint8_t {
+    Linear,
+    Ease,
+    EaseIn,
+    EaseOut,
+    EaseInOut
+};
+
+// How a change of one property plays out, as CSS's transition. A zero duration (transition: none) changes at once.
+struct Transition {
+    std::chrono::milliseconds duration;
+    TimingFunction            timing;
+};
+
 // A module's icon, drawn before its text in its own font, such as a Nerd Font's proportional variant.
 struct IconStyle {
     std::wstring font;
     float        sizeDips; // also the size of a window's icon in the windows module
     D2D1_COLOR_F color;
-    float        gapDips; // between the icon and the text after it
+    float        gapDips;         // between the icon and the text after it
+    float        rotationDegrees; // transform: rotate(), clockwise about the icon's center, a tray's only
+    Transition   transition;      // of the rotation
 };
 
 // One item's box inside a module: a workspace, a window's icon, a binding mode.
@@ -102,6 +119,10 @@ struct ModuleStyle {
     // A divider's line, in its color.
     float lineWidthDips;
     float lineHeight; // a share of the box's height, 0 to 1
+    // A tray's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
+    // (.expanded).
+    Transition transition;
+    float      expandedIconRotationDegrees;
 };
 
 enum class ModuleKind : std::uint8_t {
@@ -117,6 +138,7 @@ enum class ModuleKind : std::uint8_t {
     Audio,
     Network,
     Battery,
+    Tray,
     Custom
 };
 
@@ -126,7 +148,7 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 13> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 14> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
@@ -139,6 +161,7 @@ inline constexpr std::array<ModuleTypeName, 13> kModuleTypes{{
     {.name = "audio", .kind = ModuleKind::Audio},
     {.name = "network", .kind = ModuleKind::Network},
     {.name = "battery", .kind = ModuleKind::Battery},
+    {.name = "tray", .kind = ModuleKind::Tray},
     {.name = "custom", .kind = ModuleKind::Custom},
 }};
 
@@ -241,8 +264,13 @@ struct BatteryConfig {
     ModuleActions              actions;
 };
 
+// What the tray's toggle shows, such as a Nerd Font chevron. How it turns as the tray unfolds is the style's.
+struct TrayConfig {
+    std::wstring icon;
+};
+
 // The settings from a module's table: workspaces, windows, binding_mode and divider have none.
-using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig>;
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig, TrayConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {

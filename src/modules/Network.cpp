@@ -51,9 +51,15 @@ bool Network::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void                 Network::Scroll(ScrollDirection) {}
+void                       Network::Scroll(ScrollDirection) {}
 
-void                 Network::Click(D2D1_POINT_2F) {}
+void                       Network::Click(D2D1_POINT_2F) {}
+
+void                       Network::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> Network::TooltipItem() const {
+    return std::nullopt;
+}
 
 const ModuleActions& Network::Actions() const {
     return _config.actions;

@@ -4,16 +4,11 @@
 #include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
 
-#include <wincodec.h>
-#include <wrl/client.h>
-
 #include <cstdint>
 #include <algorithm>
 #include <array>
 #include <string>
 #include <type_traits>
-
-using Microsoft::WRL::ComPtr;
 
 namespace {
 
@@ -38,24 +33,6 @@ HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
         }
     }
     return nullptr;
-}
-
-IconPixels IconToPixels(HICON icon) {
-    ComPtr<IWICImagingFactory> factory;
-    ThrowIfFailed(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)), "CoCreateInstance(CLSID_WICImagingFactory)");
-    ComPtr<IWICBitmap> bitmap;
-    ThrowIfFailed(factory->CreateBitmapFromHICON(icon, &bitmap), "IWICImagingFactory::CreateBitmapFromHICON");
-    ComPtr<IWICFormatConverter> converter;
-    ThrowIfFailed(factory->CreateFormatConverter(&converter), "IWICImagingFactory::CreateFormatConverter");
-    ThrowIfFailed(converter->Initialize(bitmap.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom),
-                  "IWICFormatConverter::Initialize");
-
-    IconPixels pixels{.width = 0, .height = 0, .pbgra = {}};
-    ThrowIfFailed(converter->GetSize(&pixels.width, &pixels.height), "IWICFormatConverter::GetSize");
-    const std::uint32_t stride = pixels.width * 4;
-    pixels.pbgra.resize(static_cast<size_t>(stride) * pixels.height);
-    ThrowIfFailed(converter->CopyPixels(nullptr, stride, static_cast<std::uint32_t>(pixels.pbgra.size()), pixels.pbgra.data()), "IWICFormatConverter::CopyPixels");
-    return pixels;
 }
 
 WindowIcons::WindowIcons(ChangeSignal& changes) : _changes(changes), _reader(kMaxQueuedReads, [this](const std::intptr_t& window) { Read(window); }) {}

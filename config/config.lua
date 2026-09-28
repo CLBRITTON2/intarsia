@@ -17,10 +17,10 @@ return {
     -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #date.
     modules_left = { "workspaces", "divider", "apps", "divider_date", "date" },
     modules_center = {},
-    modules_right = { "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
+    modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
 
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
-    -- tiling_direction, divider, cpu, memory, audio, network, battery or custom. One type can appear under several names with different
+    -- tiling_direction, divider, cpu, memory, audio, network, battery, tray or custom. One type can appear under several names with different
     -- settings, such as a second clock with its own format.
     --
     -- clock, window, cpu, memory, audio, network, battery and custom take optional on_click, on_right_click, on_scroll_up and on_scroll_down
@@ -112,6 +112,11 @@ return {
             tooltip = "{capacity}% {time}\nHealth {health}%",
             on_click = { "C:\\Windows\\explorer.exe", "ms-settings:batterysaver" },
         },
+        -- The notification area: every app's tray icons in the order the apps added them, folded away behind a
+        -- toggle showing icon until it is clicked. Click an icon for its app's window, right click it for its menu.
+        -- How it unfolds and how the toggle turns is style.css's. While a tray module shows, the bar receives the
+        -- icons in the taskbar's place and passes each on to it, so the taskbar still has them all once the bar exits.
+        tray = { type = "tray", icon = "\u{F054}" },
         -- A window module shows the focused window's title. Add "title" to a list to show it.
         -- title = {
         --     type = "window",

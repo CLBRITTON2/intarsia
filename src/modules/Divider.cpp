@@ -31,9 +31,15 @@ bool Divider::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void                 Divider::Scroll(ScrollDirection) {}
+void                       Divider::Scroll(ScrollDirection) {}
 
-void                 Divider::Click(D2D1_POINT_2F) {}
+void                       Divider::Click(D2D1_POINT_2F) {}
+
+void                       Divider::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> Divider::TooltipItem() const {
+    return std::nullopt;
+}
 
 const ModuleActions& Divider::Actions() const {
     static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};

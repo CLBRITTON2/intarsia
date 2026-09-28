@@ -1,0 +1,259 @@
+#include "tray/NotifyIconProtocol.hpp"
+
+#include <shellapi.h>
+
+#include <gtest/gtest.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace {
+
+    // Windows 11 sends this many bytes for every call, the layout followed by bytes nothing reads.
+    constexpr size_t kSentBytes = 1484;
+    // {6B29FC40-CA47-1067-B31D-00DD010662DA}
+    constexpr GUID kGuid{0x6B29FC40, 0xCA47, 0x1067, {0xB3, 0x1D, 0x00, 0xDD, 0x01, 0x06, 0x62, 0xDA}};
+
+    TrayNotifyData Data(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags) {
+        TrayNotifyData data{};
+        data.signature   = kTrayNotifySignature;
+        data.command     = command;
+        data.data.size   = sizeof(NotifyIconData32);
+        data.data.window = owner;
+        data.data.id     = id;
+        data.data.flags  = flags;
+        return data;
+    }
+
+    std::vector<std::byte> Bytes(const TrayNotifyData& data, size_t size) {
+        std::vector<std::byte> bytes(size);
+        std::memcpy(bytes.data(), &data, std::min(size, sizeof(data)));
+        return bytes;
+    }
+
+    NotifyIconMessage Message(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags) {
+        return ParseNotifyIconMessage(Bytes(Data(command, owner, id, flags), kSentBytes));
+    }
+
+    std::shared_ptr<const IconPixels> Pixels(std::uint8_t value) {
+        return std::make_shared<const IconPixels>(IconPixels{.width = 1, .height = 1, .pbgra = {value, value, value, 255}});
+    }
+
+    // The icons after a message the tray must take. A refusal fails the test and leaves no icons.
+    std::vector<TrayIcon> Applied(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {
+        std::optional<std::vector<TrayIcon>> applied = ApplyNotifyIcon(icons, message, std::move(pixels));
+        if (!applied.has_value()) {
+            ADD_FAILURE() << "the tray refused command " << message.command;
+            return {};
+        }
+        return *applied;
+    }
+
+    TrayIcon Icon(std::intptr_t owner, std::uint32_t id) {
+        return TrayIcon{.owner = owner, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = {}, .pixels = nullptr, .hidden = false};
+    }
+
+} // namespace
+
+TEST(NotifyIconProtocol, ParseReadsTheFieldsShell32Sends) {
+    TrayNotifyData data       = Data(NIM_MODIFY, 0x0003A0D9, 7, NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_STATE);
+    data.data.callbackMessage = WM_APP + 9;
+    data.data.icon            = 0x00010033;
+    data.data.state           = NIS_HIDDEN;
+    data.data.stateMask       = NIS_HIDDEN;
+    data.data.version         = NOTIFYICON_VERSION_4;
+    std::memcpy(data.data.tip.data(), L"hello", sizeof(L"hello"));
+
+    const NotifyIconMessage message = ParseNotifyIconMessage(Bytes(data, kSentBytes));
+    EXPECT_EQ(message.command, static_cast<std::uint32_t>(NIM_MODIFY));
+    EXPECT_EQ(message.owner, 0x0003A0D9);
+    EXPECT_EQ(message.id, 7u);
+    EXPECT_EQ(message.callbackMessage, static_cast<std::uint32_t>(WM_APP + 9));
+    EXPECT_EQ(message.icon, 0x00010033);
+    EXPECT_EQ(message.tip, L"hello");
+    EXPECT_EQ(message.state, static_cast<std::uint32_t>(NIS_HIDDEN));
+    EXPECT_EQ(message.version, static_cast<std::uint32_t>(NOTIFYICON_VERSION_4));
+}
+
+TEST(NotifyIconProtocol, ParseSignExtendsHandlesAsWindowsDoes) {
+    TrayNotifyData data             = Data(NIM_ADD, 0xFFFF1234, 1, 0);
+    data.data.icon                  = 0x80000001;
+    const NotifyIconMessage message = ParseNotifyIconMessage(Bytes(data, sizeof(data)));
+    EXPECT_EQ(message.owner, static_cast<std::intptr_t>(static_cast<std::int32_t>(0xFFFF1234)));
+    EXPECT_EQ(message.icon, static_cast<std::intptr_t>(static_cast<std::int32_t>(0x80000001)));
+}
+
+TEST(NotifyIconProtocol, ATipWithNoNullStopsAtItsBuffer) {
+    TrayNotifyData data = Data(NIM_ADD, 1, 1, NIF_TIP);
+    data.data.tip.fill(L'x');
+    data.data.state = 0xFFFFFFFF;
+    EXPECT_EQ(ParseNotifyIconMessage(Bytes(data, kSentBytes)).tip, std::wstring(128, L'x'));
+}
+
+TEST(NotifyIconProtocol, ParseRefusesShortPayloadsAndWrongSignatures) {
+    const TrayNotifyData data = Data(NIM_ADD, 1, 1, 0);
+    EXPECT_THROW(ParseNotifyIconMessage(Bytes(data, sizeof(data) - 1)), TrayMessageError);
+    EXPECT_THROW(ParseNotifyIconMessage({}), TrayMessageError);
+    TrayNotifyData wrong = data;
+    wrong.signature      = 0x12345678;
+    EXPECT_THROW(ParseNotifyIconMessage(Bytes(wrong, kSentBytes)), TrayMessageError);
+}
+
+TEST(NotifyIconProtocol, AddThenModifyThenDelete) {
+    NotifyIconMessage add             = Message(NIM_ADD, 5, 1, NIF_MESSAGE | NIF_TIP | NIF_ICON);
+    add.callbackMessage               = WM_APP + 1;
+    add.tip                           = L"first";
+    const std::vector<TrayIcon> added = Applied({}, add, Pixels(1));
+    ASSERT_EQ(added.size(), 1u);
+    EXPECT_EQ(added[0].callbackMessage, static_cast<std::uint32_t>(WM_APP + 1));
+    EXPECT_EQ(added[0].tooltip, L"first");
+    ASSERT_NE(added[0].pixels, nullptr);
+
+    // Only the tip is set, so the callback and pixels stay.
+    NotifyIconMessage modify             = Message(NIM_MODIFY, 5, 1, NIF_TIP);
+    modify.tip                           = L"second";
+    const std::vector<TrayIcon> modified = Applied(added, modify, nullptr);
+    ASSERT_EQ(modified.size(), 1u);
+    EXPECT_EQ(modified[0].tooltip, L"second");
+    EXPECT_EQ(modified[0].callbackMessage, static_cast<std::uint32_t>(WM_APP + 1));
+    EXPECT_EQ(modified[0].pixels, added[0].pixels);
+
+    const std::optional<std::vector<TrayIcon>> deleted = ApplyNotifyIcon(modified, Message(NIM_DELETE, 5, 1, 0), nullptr);
+    EXPECT_EQ(deleted, std::vector<TrayIcon>{});
+}
+
+TEST(NotifyIconProtocol, AnIconTheTrayDoesNotHaveIsRefused) {
+    const std::vector<TrayIcon> icons{Icon(5, 1)};
+    for (const std::uint32_t command : {NIM_MODIFY, NIM_DELETE, NIM_SETVERSION, NIM_SETFOCUS}) {
+        EXPECT_FALSE(ApplyNotifyIcon(icons, Message(command, 5, 2, 0), nullptr).has_value()) << command;
+        EXPECT_FALSE(ApplyNotifyIcon(icons, Message(command, 6, 1, 0), nullptr).has_value()) << command;
+    }
+    EXPECT_FALSE(ApplyNotifyIcon(icons, Message(99, 5, 1, 0), nullptr).has_value());
+}
+
+TEST(NotifyIconProtocol, AddingAnIconAgainUpdatesIt) {
+    NotifyIconMessage add             = Message(NIM_ADD, 5, 1, NIF_TIP);
+    add.tip                           = L"again";
+    const std::vector<TrayIcon> icons = Applied({Icon(5, 1)}, add, nullptr);
+    ASSERT_EQ(icons.size(), 1u);
+    EXPECT_EQ(icons[0].tooltip, L"again");
+}
+
+TEST(NotifyIconProtocol, AFullTrayRefusesNewIconsButNotChanges) {
+    std::vector<TrayIcon> icons;
+    icons.reserve(kMaxTrayIcons);
+    for (std::uint32_t id = 0; id < kMaxTrayIcons; ++id) {
+        icons.push_back(Icon(5, id));
+    }
+    EXPECT_FALSE(ApplyNotifyIcon(icons, Message(NIM_ADD, 5, 1000, 0), nullptr).has_value());
+    EXPECT_TRUE(ApplyNotifyIcon(icons, Message(NIM_ADD, 5, 0, 0), nullptr).has_value());
+    EXPECT_TRUE(ApplyNotifyIcon(icons, Message(NIM_MODIFY, 5, 3, 0), nullptr).has_value());
+}
+
+TEST(NotifyIconProtocol, AGuidIdentifiesAnIconWhateverItsOwner) {
+    NotifyIconMessage add             = Message(NIM_ADD, 5, 1, NIF_GUID);
+    add.guid                          = kGuid;
+    const std::vector<TrayIcon> added = Applied({}, add, nullptr);
+
+    // The app's window was recreated: the GUID still finds the icon, which follows the new window.
+    NotifyIconMessage modify             = Message(NIM_MODIFY, 9, 4, NIF_GUID | NIF_TIP);
+    modify.guid                          = kGuid;
+    modify.tip                           = L"moved";
+    const std::vector<TrayIcon> modified = Applied(added, modify, nullptr);
+    ASSERT_EQ(modified.size(), 1u);
+    EXPECT_EQ(modified[0].owner, 9);
+    EXPECT_EQ(modified[0].tooltip, L"moved");
+}
+
+TEST(NotifyIconProtocol, StateChangesOnlyTheBitsItsMaskNames) {
+    NotifyIconMessage hide             = Message(NIM_MODIFY, 5, 1, NIF_STATE);
+    hide.state                         = NIS_HIDDEN;
+    hide.stateMask                     = NIS_HIDDEN;
+    const std::vector<TrayIcon> hidden = Applied({Icon(5, 1)}, hide, nullptr);
+    ASSERT_EQ(hidden.size(), 1u);
+    EXPECT_TRUE(hidden[0].hidden);
+
+    NotifyIconMessage unmasked        = Message(NIM_MODIFY, 5, 1, NIF_STATE);
+    unmasked.state                    = 0;
+    unmasked.stateMask                = NIS_SHAREDICON;
+    const std::vector<TrayIcon> still = Applied(hidden, unmasked, nullptr);
+    ASSERT_EQ(still.size(), 1u);
+    EXPECT_TRUE(still[0].hidden);
+}
+
+TEST(NotifyIconProtocol, SetVersionIsKeptPerIcon) {
+    NotifyIconMessage version         = Message(NIM_SETVERSION, 5, 1, 0);
+    version.version                   = NOTIFYICON_VERSION_4;
+    const std::vector<TrayIcon> icons = Applied({Icon(5, 1), Icon(5, 2)}, version, nullptr);
+    ASSERT_EQ(icons.size(), 2u);
+    EXPECT_EQ(icons[0].version, static_cast<std::uint32_t>(NOTIFYICON_VERSION_4));
+    EXPECT_EQ(icons[1].version, 0u);
+}
+
+TEST(NotifyIconProtocol, TheSamePixelsKeepTheirPointer) {
+    TrayIcon icon                    = Icon(5, 1);
+    icon.pixels                      = Pixels(7);
+    const std::vector<TrayIcon> same = Applied({icon}, Message(NIM_MODIFY, 5, 1, NIF_ICON), Pixels(7));
+    ASSERT_EQ(same.size(), 1u);
+    EXPECT_EQ(same[0].pixels, icon.pixels);
+    const std::vector<TrayIcon> other = Applied({icon}, Message(NIM_MODIFY, 5, 1, NIF_ICON), Pixels(8));
+    ASSERT_EQ(other.size(), 1u);
+    EXPECT_NE(other[0].pixels, icon.pixels);
+    // An icon that did not read clears the old one.
+    const std::vector<TrayIcon> cleared = Applied({icon}, Message(NIM_MODIFY, 5, 1, NIF_ICON), nullptr);
+    ASSERT_EQ(cleared.size(), 1u);
+    EXPECT_EQ(cleared[0].pixels, nullptr);
+}
+
+TEST(NotifyIconProtocol, DrawableTooltipKeepsLineBreaksAndReplacesTheUnsafe) {
+    EXPECT_EQ(DrawableTooltip(L"a\r\nb"), L"a\nb");
+    // The override is spelled as a number: MSVC refuses an unterminated one in a literal (C5255).
+    EXPECT_EQ(DrawableTooltip(std::wstring{L'a', L'\t', L'b', static_cast<wchar_t>(0x202E), L'c'}), L"a�b�c");
+    EXPECT_EQ(DrawableTooltip(std::wstring{L'x', static_cast<wchar_t>(0xD800), L'y'}), L"x�y");
+    EXPECT_EQ(DrawableTooltip(L""), L"");
+}
+
+TEST(NotifyIconProtocol, VersionZeroPostsTheIdAndTheMouseMessage) {
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(Icon(5, 7), TrayButton::Left, POINT{.x = 10, .y = 20});
+    EXPECT_EQ(messages, (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = 7, .lParam = WM_LBUTTONDOWN}, {.message = WM_APP, .wParam = 7, .lParam = WM_LBUTTONUP}}));
+}
+
+TEST(NotifyIconProtocol, VersionThreeAddsSelectAndContextMenu) {
+    TrayIcon icon = Icon(5, 7);
+    icon.version  = NOTIFYICON_VERSION;
+    EXPECT_EQ(TrayInputMessages(icon, TrayButton::Left, POINT{.x = 0, .y = 0}).back().lParam, NIN_SELECT);
+    const std::vector<TrayInputMessage> right = TrayInputMessages(icon, TrayButton::Right, POINT{.x = 0, .y = 0});
+    ASSERT_EQ(right.size(), 3u);
+    EXPECT_EQ(right[0].lParam, WM_RBUTTONDOWN);
+    EXPECT_EQ(right[1].lParam, WM_RBUTTONUP);
+    EXPECT_EQ(right[2].lParam, WM_CONTEXTMENU);
+}
+
+TEST(NotifyIconProtocol, VersionFourPostsTheCursorAndPacksTheIdWithTheEvent) {
+    TrayIcon icon = Icon(5, 7);
+    icon.version  = NOTIFYICON_VERSION_4;
+    // A monitor left of the primary has negative coordinates, which travel as 16-bit two's complement.
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, TrayButton::Right, POINT{.x = -100, .y = 40});
+    ASSERT_EQ(messages.size(), 3u);
+    for (const TrayInputMessage& message : messages) {
+        EXPECT_EQ(static_cast<std::int16_t>(LOWORD(message.wParam)), -100);
+        EXPECT_EQ(HIWORD(message.wParam), 40);
+        EXPECT_EQ(HIWORD(message.lParam), 7);
+    }
+    EXPECT_EQ(LOWORD(messages[2].lParam), WM_CONTEXTMENU);
+}
+
+TEST(NotifyIconProtocol, ACallbackBelowWmUserPostsNothing) {
+    TrayIcon icon        = Icon(5, 7);
+    icon.callbackMessage = WM_CLOSE;
+    EXPECT_TRUE(TrayInputMessages(icon, TrayButton::Left, POINT{.x = 0, .y = 0}).empty());
+    icon.callbackMessage = 0;
+    EXPECT_TRUE(TrayInputMessages(icon, TrayButton::Right, POINT{.x = 0, .y = 0}).empty());
+}

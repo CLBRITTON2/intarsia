@@ -10,8 +10,10 @@
 #include "network/INetwork.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/FileWatcher.hpp"
+#include "platform/FrameClock.hpp"
 #include "platform/Process.hpp"
 #include "render/Graphics.hpp"
+#include "tray/ShellNotifyIcon.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -42,7 +44,9 @@ class App {
     void                    CreateBars(std::vector<BarPlacement> placements);
     void                    HandleConfigChanged();
     void                    ReloadConfig();
-    void                    RebuildBarsIfMonitorsChanged();
+    // Creates the tray when the config shows one and there is none yet, or destroys it when the config shows none.
+    void MatchTrayToConfig();
+    void RebuildBarsIfMonitorsChanged();
     // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
     void                  HandleDeviceLost();
     void                  ScheduleDeviceRetry();
@@ -62,7 +66,9 @@ class App {
     std::exception_ptr        _configError; // the last reload's failure, fatal unless another save follows soon
     HWND                      _control;
     // Shared by every source of module data, which outlive none of it: declared before them all.
-    ChangeSignal                 _changes;
+    ChangeSignal _changes;
+    // Paces animations for every bar, which outlive none of it.
+    FrameClock                   _frames;
     std::unique_ptr<FileWatcher> _watcher;
     // Starts the commands bound to module inputs, off the UI thread.
     Launcher _launcher;
@@ -78,6 +84,8 @@ class App {
     std::unique_ptr<INetwork> _network;
     // Kept across reloads, like the network.
     std::unique_ptr<IBattery> _battery;
+    // Null while the config shows no tray module, and kept across reloads that show one.
+    std::unique_ptr<ShellNotifyIcon> _tray;
     // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;
     std::vector<std::unique_ptr<Bar>> _bars;

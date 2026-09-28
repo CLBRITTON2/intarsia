@@ -18,14 +18,21 @@ inline ItemStyle TestItemStyle(std::uint32_t color, std::uint32_t background) {
 inline ModuleStyle TestModuleStyle() {
     return ModuleStyle{
         .box = {.background = D2D1::ColorF(0, 0.0f), .borderColor = D2D1::ColorF(0, 0.0f), .borderWidthDips = 0.0f, .radiusDips = 0.0f, .padding = {.yDips = 0.0f, .xDips = 0.0f}},
-        .hover         = D2D1::ColorF(0, 0.0f),
-        .color         = D2D1::ColorF(0xFFFFFF),
-        .alertColor    = D2D1::ColorF(0xFF0000),
-        .icon          = {.font = L"Segoe UI", .sizeDips = 20.0f, .color = D2D1::ColorF(0xFFFFFF), .gapDips = 4.0f},
-        .item          = TestItemStyle(0x000001, 0x000011),
-        .focused       = TestItemStyle(0x000002, 0x000022),
-        .occupied      = TestItemStyle(0x000003, 0x000033),
-        .empty         = TestItemStyle(0x000004, 0x000044),
-        .lineWidthDips = 1.0f,
-        .lineHeight    = 0.5f};
+        .hover                       = D2D1::ColorF(0, 0.0f),
+        .color                       = D2D1::ColorF(0xFFFFFF),
+        .alertColor                  = D2D1::ColorF(0xFF0000),
+        .icon                        = {.font            = L"Segoe UI",
+                                        .sizeDips        = 20.0f,
+                                        .color           = D2D1::ColorF(0xFFFFFF),
+                                        .gapDips         = 4.0f,
+                                        .rotationDegrees = 0.0f,
+                                        .transition      = {.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease}},
+        .item                        = TestItemStyle(0x000001, 0x000011),
+        .focused                     = TestItemStyle(0x000002, 0x000022),
+        .occupied                    = TestItemStyle(0x000003, 0x000033),
+        .empty                       = TestItemStyle(0x000004, 0x000044),
+        .lineWidthDips               = 1.0f,
+        .lineHeight                  = 0.5f,
+        .transition                  = {.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease},
+        .expandedIconRotationDegrees = 180.0f};
 }

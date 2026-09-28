@@ -44,9 +44,15 @@ bool Battery::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void                 Battery::Scroll(ScrollDirection) {}
+void                       Battery::Scroll(ScrollDirection) {}
 
-void                 Battery::Click(D2D1_POINT_2F) {}
+void                       Battery::Click(D2D1_POINT_2F) {}
+
+void                       Battery::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> Battery::TooltipItem() const {
+    return std::nullopt;
+}
 
 const ModuleActions& Battery::Actions() const {
     return _config.actions;

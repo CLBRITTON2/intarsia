@@ -32,6 +32,9 @@ class IModule {
     // A left click, in DIPs from the module's origin as last drawn. Only called when no on_click command is configured.
     virtual void Click(D2D1_POINT_2F point) = 0;
 
+    // A right click, as Click. Only called when no on_right_click action is configured.
+    virtual void RightClick(D2D1_POINT_2F point) = 0;
+
     // A wheel notch over the module. Only called when no on_scroll_up or on_scroll_down action is configured for it.
     virtual void Scroll(ScrollDirection direction) = 0;
 
@@ -45,4 +48,8 @@ class IModule {
 
     // The text to show while the cursor rests on the module, from its current data, or nullopt for no tooltip.
     virtual std::optional<std::wstring> TooltipText() = 0;
+
+    // The item TooltipText describes, as its box in DIPs from the module's content origin as last drawn, so the tooltip
+    // sits against that item. Nullopt when it describes the whole module.
+    virtual std::optional<D2D1_RECT_F> TooltipItem() const = 0;
 };

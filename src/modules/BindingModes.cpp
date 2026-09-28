@@ -46,9 +46,15 @@ bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
     return changed;
 }
 
-void                 BindingModes::Scroll(ScrollDirection) {}
+void                       BindingModes::Scroll(ScrollDirection) {}
 
-void                 BindingModes::Click(D2D1_POINT_2F) {}
+void                       BindingModes::Click(D2D1_POINT_2F) {}
+
+void                       BindingModes::RightClick(D2D1_POINT_2F) {}
+
+std::optional<D2D1_RECT_F> BindingModes::TooltipItem() const {
+    return std::nullopt;
+}
 
 const ModuleActions& BindingModes::Actions() const {
     static const ModuleActions kNone{.click = std::nullopt, .rightClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};

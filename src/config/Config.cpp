@@ -249,6 +249,7 @@ namespace {
             case ModuleKind::TilingDirection:
                 module.RejectUnknownKeys({"type", "horizontal", "vertical"});
                 return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
+            case ModuleKind::Tray: module.RejectUnknownKeys({"type", "icon"}); return TrayConfig{.icon = ToWide(module.String("icon"))};
         }
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
     }

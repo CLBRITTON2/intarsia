@@ -1,0 +1,344 @@
+#include "tray/ShellNotifyIcon.hpp"
+
+#include "platform/Errors.hpp"
+#include "platform/FileWatcher.hpp"
+#include "platform/PeerProcess.hpp"
+#include "platform/Win32Cast.hpp"
+#include "render/Icon.hpp"
+#include "tray/NotifyIconProtocol.hpp"
+
+#include <objbase.h>
+#include <shellapi.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <type_traits>
+#include <utility>
+
+namespace {
+
+    // Often enough that an app's message rarely goes to Explorer alone after another topmost window rose above ours.
+    constexpr UINT_PTR      kFirstTimer   = 1;
+    constexpr std::uint32_t kFirstEveryMs = 100;
+    constexpr UINT_PTR      kSweepTimer   = 2;
+    constexpr std::uint32_t kSweepEveryMs = 5000;
+    // The sender waits on the forward, so a hung Explorer must not hold it for long.
+    constexpr std::uint32_t kForwardTimeoutMs = 2000;
+
+    HWND                    ToWindow(std::intptr_t handle) {
+        return IntToPointer<std::remove_pointer_t<HWND>>(handle);
+    }
+
+    HWND CreateTrayWindow(const std::wstring& windowClass, WNDPROC procedure, void* owner) {
+        HINSTANCE   instance = GetModuleHandleW(nullptr);
+        WNDCLASSEXW registration{};
+        registration.cbSize        = sizeof(registration);
+        registration.lpfnWndProc   = procedure;
+        registration.hInstance     = instance;
+        registration.lpszClassName = windowClass.c_str();
+        if (RegisterClassExW(&registration) == 0) {
+            ThrowLastError("RegisterClassExW(tray)");
+        }
+        HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, windowClass.c_str(), L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, owner);
+        if (window == nullptr) {
+            const DWORD error = GetLastError();
+            UnregisterClassW(windowClass.c_str(), instance);
+            throw Win32Error("CreateWindowExW(tray)", HRESULT_FROM_WIN32(error));
+        }
+        return window;
+    }
+
+    // Another intarsia, or any other tray that forwards, would send the message straight back.
+    bool IsExplorer(HWND window) {
+        DWORD processId = 0;
+        if (GetWindowThreadProcessId(window, &processId) == 0 || processId == GetCurrentProcessId()) {
+            return false;
+        }
+        // Null for a process of another user, whose taskbar is not this desktop's anyway.
+        HANDLE raw = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        if (raw == nullptr) {
+            return false;
+        }
+        const UniqueHandle process(raw);
+        try {
+            return SameFileName(ProcessImage(process.get()).filename().wstring(), L"explorer.exe");
+        } catch (const Win32Error& error) {
+            Log(LogLevel::Warning, "tray", "taskbar_unreadable", {{.key = "process", .value = std::to_string(processId)}, {.key = "reason", .value = error.what()}});
+            return false;
+        }
+    }
+
+} // namespace
+
+ShellNotifyIcon::ShellNotifyIcon(ChangeSignal& changes, std::wstring windowClass, HWND target, std::uint32_t failedMessage) :
+    _changes(changes), _windowClass(std::move(windowClass)), _target(target), _failedMessage(failedMessage),
+    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(tray stop)")) {
+    std::promise<void> ready;
+    std::future<void>  created = ready.get_future();
+    _thread                    = std::thread([this, &ready] { Run(ready); });
+    try {
+        created.get();
+    } catch (...) {
+        _thread.join();
+        throw;
+    }
+}
+
+ShellNotifyIcon::~ShellNotifyIcon() {
+    SetEvent(_stopEvent.get());
+    _thread.join();
+}
+
+std::vector<TrayIcon> ShellNotifyIcon::Icons() const {
+    const std::scoped_lock lock(_mutex);
+    return _icons;
+}
+
+void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        ThrowLastError("GetCursorPos");
+    }
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, button, cursor);
+    if (messages.empty()) {
+        Log(LogLevel::Warning, "tray", "input_refused",
+            {{.key = "owner", .value = std::to_string(icon.owner)}, {.key = "callback_message", .value = std::to_string(icon.callbackMessage)}});
+        return;
+    }
+    HWND  owner     = ToWindow(icon.owner);
+    DWORD processId = 0;
+    if (GetWindowThreadProcessId(owner, &processId) == 0) {
+        Log(LogLevel::Warning, "tray", "owner_gone", {{.key = "owner", .value = std::to_string(icon.owner)}});
+        return;
+    }
+    // The app brings its menu or window to the foreground, which only the process that took the click may allow.
+    if (!AllowSetForegroundWindow(processId)) {
+        Log(LogLevel::Warning, "tray", "foreground_refused", {{.key = "process", .value = std::to_string(processId)}, {.key = "error", .value = std::to_string(GetLastError())}});
+    }
+    for (const TrayInputMessage& message : messages) {
+        if (!PostMessageW(owner, message.message, message.wParam, message.lParam)) {
+            Log(LogLevel::Warning, "tray", "input_failed", {{.key = "owner", .value = std::to_string(icon.owner)}, {.key = "error", .value = std::to_string(GetLastError())}});
+            return;
+        }
+    }
+}
+
+std::exception_ptr ShellNotifyIcon::TakeError() {
+    const std::scoped_lock lock(_mutex);
+    return std::exchange(_error, nullptr);
+}
+
+LRESULT CALLBACK ShellNotifyIcon::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (message == WM_NCCREATE) {
+        SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(IntToPointer<CREATESTRUCTW>(lParam)->lpCreateParams));
+    }
+    auto* owner = IntToPointer<ShellNotifyIcon>(GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (owner == nullptr) {
+        return DefWindowProcW(window, message, wParam, lParam);
+    }
+    // An exception cannot unwind through user32.
+    try {
+        return owner->HandleMessage(window, message, wParam, lParam);
+    } catch (...) {
+        owner->Fail(std::current_exception());
+        return 0;
+    }
+}
+
+LRESULT ShellNotifyIcon::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+        case WM_COPYDATA:
+            if (lParam == 0) {
+                return FALSE;
+            }
+            return HandleCopyData(ToWindow(static_cast<std::intptr_t>(wParam)), *IntToPointer<const COPYDATASTRUCT>(lParam));
+        case WM_TIMER:
+            if (wParam == kFirstTimer) {
+                KeepFirst();
+            } else if (wParam == kSweepTimer) {
+                DropIconsOfClosedWindows();
+            }
+            return 0;
+        // taskkill sends WM_CLOSE to every top-level window, and the tray goes with App, not on its own.
+        case WM_CLOSE: return 0;
+        default: return DefWindowProcW(window, message, wParam, lParam);
+    }
+}
+
+// Shell_NotifyIcon gets the tray's answer, and every other message (appbars, icon positions) Explorer's.
+LRESULT ShellNotifyIcon::HandleCopyData(HWND sender, const COPYDATASTRUCT& data) {
+    if (data.dwData != kNotifyIconCopyData) {
+        return Forward(sender, data);
+    }
+    const bool applied = ApplyMessage(data);
+    Forward(sender, data);
+    return applied ? TRUE : FALSE;
+}
+
+bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
+    NotifyIconMessage message{};
+    try {
+        message = ParseNotifyIconMessage(std::span(static_cast<const std::byte*>(data.lpData), data.cbData));
+        _messageLog.Succeeded();
+    } catch (const TrayMessageError& error) {
+        _messageLog.Failed("malformed_message", error);
+        return false;
+    }
+    std::shared_ptr<const IconPixels> pixels;
+    if ((message.flags & NIF_ICON) != 0 && message.icon != 0) {
+        try {
+            pixels = std::make_shared<const IconPixels>(IconToPixels(IntToPointer<std::remove_pointer_t<HICON>>(message.icon)));
+            _iconLog.Succeeded();
+        } catch (const Win32Error& error) {
+            // The icon stays without pixels, and so hidden, until the app sets one that reads.
+            _iconLog.Failed("icon_unreadable", error);
+        }
+    }
+    std::optional<std::vector<TrayIcon>> icons = ApplyNotifyIcon(Icons(), message, std::move(pixels));
+    if (!icons.has_value()) {
+        return false;
+    }
+    Publish(std::move(*icons));
+    return true;
+}
+
+LRESULT ShellNotifyIcon::Forward(HWND sender, const COPYDATASTRUCT& data) {
+    HWND explorer = ExplorerTray();
+    if (explorer == nullptr) {
+        return FALSE;
+    }
+    COPYDATASTRUCT copy   = data;
+    DWORD_PTR      result = 0;
+    if (SendMessageTimeoutW(explorer, WM_COPYDATA, reinterpret_cast<WPARAM>(sender), reinterpret_cast<LPARAM>(&copy), SMTO_ABORTIFHUNG, kForwardTimeoutMs, &result) == 0) {
+        _forwardLog.Failed("forward_failed", Win32Error("SendMessageTimeoutW(WM_COPYDATA to the taskbar)", HRESULT_FROM_WIN32(GetLastError())));
+        return FALSE;
+    }
+    _forwardLog.Succeeded();
+    return static_cast<LRESULT>(result);
+}
+
+HWND ShellNotifyIcon::ExplorerTray() {
+    if (_explorer != nullptr && IsWindow(_explorer)) {
+        return _explorer;
+    }
+    _explorer = nullptr;
+    for (HWND candidate = FindWindowExW(nullptr, nullptr, _windowClass.c_str(), nullptr); candidate != nullptr;
+         candidate      = FindWindowExW(nullptr, candidate, _windowClass.c_str(), nullptr)) {
+        if (candidate != _window && IsExplorer(candidate)) {
+            _explorer = candidate;
+            break;
+        }
+    }
+    return _explorer;
+}
+
+void ShellNotifyIcon::KeepFirst() {
+    if (FindWindowW(_windowClass.c_str(), nullptr) == _window) {
+        return;
+    }
+    if (!SetWindowPos(_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) {
+        ThrowLastError("SetWindowPos(tray)");
+    }
+}
+
+void ShellNotifyIcon::DropIconsOfClosedWindows() {
+    std::vector<TrayIcon> icons = Icons();
+    std::erase_if(icons, [](const TrayIcon& icon) { return !IsWindow(ToWindow(icon.owner)); });
+    Publish(std::move(icons));
+}
+
+void ShellNotifyIcon::Publish(std::vector<TrayIcon> icons) {
+    {
+        const std::scoped_lock lock(_mutex);
+        if (icons == _icons) {
+            return;
+        }
+        _icons = std::move(icons);
+    }
+    _changes.Notify("tray");
+}
+
+void ShellNotifyIcon::Run(std::promise<void>& ready) {
+    // WIC reads the icons on this thread.
+    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+    try {
+        ThrowIfFailed(initialized, "CoInitializeEx(tray)");
+        _window = CreateTrayWindow(_windowClass, WindowProc, this);
+    } catch (...) {
+        if (SUCCEEDED(initialized)) {
+            CoUninitialize();
+        }
+        ready.set_exception(std::current_exception());
+        return;
+    }
+    try {
+        KeepFirst();
+        if (SetTimer(_window, kFirstTimer, kFirstEveryMs, nullptr) == 0) {
+            ThrowLastError("SetTimer(tray first)");
+        }
+        if (SetTimer(_window, kSweepTimer, kSweepEveryMs, nullptr) == 0) {
+            ThrowLastError("SetTimer(tray sweep)");
+        }
+        ready.set_value();
+    } catch (...) {
+        DestroyWindow(_window);
+        UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
+        CoUninitialize();
+        ready.set_exception(std::current_exception());
+        return;
+    }
+    try {
+        RunLoop();
+    } catch (...) { Fail(std::current_exception()); }
+    DestroyWindow(_window);
+    UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
+    CoUninitialize();
+}
+
+// Sent messages, which is how every app's WM_COPYDATA arrives, are delivered inside PeekMessageW.
+void ShellNotifyIcon::RunLoop() {
+    HANDLE stop = _stopEvent.get();
+    for (;;) {
+        const DWORD woke = MsgWaitForMultipleObjectsEx(1, &stop, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        if (woke == WAIT_OBJECT_0) {
+            return;
+        }
+        if (woke != WAIT_OBJECT_0 + 1) {
+            ThrowLastError("MsgWaitForMultipleObjectsEx(tray)");
+        }
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+            DispatchMessageW(&message);
+        }
+    }
+}
+
+// Stops the thread and leaves the error for App, which ends the process with it.
+void ShellNotifyIcon::Fail(std::exception_ptr error) {
+    {
+        const std::scoped_lock lock(_mutex);
+        if (_error) {
+            return;
+        }
+        _error = error;
+    }
+    SetEvent(_stopEvent.get());
+    if (!PostMessageW(_target, _failedMessage, 0, 0)) {
+        Log(LogLevel::Error, "tray", "failure_unreported", {{.key = "error", .value = std::to_string(GetLastError())}});
+    }
+}
+
+void AnnounceTray() {
+    const UINT created = RegisterWindowMessageW(L"TaskbarCreated");
+    if (created == 0) {
+        ThrowLastError("RegisterWindowMessageW(TaskbarCreated)");
+    }
+    if (!SendNotifyMessageW(HWND_BROADCAST, created, 0, 0)) {
+        ThrowLastError("SendNotifyMessageW(TaskbarCreated)");
+    }
+}

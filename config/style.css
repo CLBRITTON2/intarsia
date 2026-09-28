@@ -7,9 +7,14 @@
  *   tooltip           the box shown while the cursor rests on a module
  *   .module           every module's box, or one type (clock, cpu, workspaces...) or one module by its name (#date)
  *   .alert            a module's text while it needs attention, such as a failed command
+ *   .expanded         a tray while unfolded, as #tray.expanded .icon, which takes transform only
  *   :hover            a module's box or an .item under the cursor, which changes only color and background
  *   .icon             a module's icon, as in #cpu .icon
- *   .item             one workspace, window or binding mode inside its module, with .focused, .occupied or .empty
+ *   .item             one workspace, window, binding mode or tray icon inside its module, with .focused, .occupied or
+ *                     .empty
+ *
+ * transition is none, or a property, a duration in ms or s and a timing function (linear, ease, ease-in, ease-out,
+ * ease-in-out), and transform is none or rotate(<n>deg). Only a tray takes them.
  *
  * Lengths are px. padding and margin take one length, or two: above and below, then left and right. A more specific
  * selector wins, and a later rule wins a tie, as in any CSS.
@@ -27,6 +32,7 @@
     --cyan: #9ccfd8;
     --magenta: #c4a7e7;
     --red: #eb6f92;
+    --rose: #ebbcba;
 }
 
 * {
@@ -117,6 +123,31 @@ divider.module {
 
 #apps .item.focused {
     background: var(--faint);
+}
+
+/*
+ * Tray icons, and the toggle's chevron after them, draw at the icon's font-size. A tray takes two transitions: its
+ * width as it unfolds, and its icon's transform, turning to the .expanded rotation while unfolded.
+ */
+#tray {
+    padding: 0 2px;
+    transition: width 400ms ease-out;
+}
+
+#tray .icon {
+    font-size: 16px;
+    color: var(--rose);
+    transition: transform 300ms ease;
+}
+
+#tray.expanded .icon {
+    transform: rotate(180deg);
+}
+
+#tray .item {
+    padding: 4px;
+    margin: 0 2px;
+    border-radius: 6px;
 }
 
 #mode {
