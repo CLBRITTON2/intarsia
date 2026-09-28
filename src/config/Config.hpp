@@ -116,6 +116,7 @@ struct ModuleStyle {
     ItemStyle focused;
     ItemStyle occupied;
     ItemStyle empty;
+    ItemStyle toggle; // a tray's toggle, from .item.toggle rules over its .item rules
     // A divider's line, in its color.
     float lineWidthDips;
     float lineHeight; // a share of the box's height, 0 to 1

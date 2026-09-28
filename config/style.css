@@ -10,8 +10,8 @@
  *   .expanded         a tray while unfolded, as #tray.expanded .icon, which takes transform only
  *   :hover            a module's box or an .item under the cursor, which changes only color and background
  *   .icon             a module's icon, as in #cpu .icon
- *   .item             one workspace, window, binding mode or tray icon inside its module, with .focused, .occupied or
- *                     .empty
+ *   .item             one workspace, window, binding mode, tray icon or tray toggle inside its module, with .focused,
+ *                     .occupied, .empty or .toggle
  *
  * transition is none, or a property, a duration in ms or s and a timing function (linear, ease, ease-in, ease-out,
  * ease-in-out), and transform is none or rotate(<n>deg). Only a tray takes them.
@@ -148,6 +148,11 @@ divider.module {
     padding: 4px;
     margin: 0 2px;
     border-radius: 6px;
+}
+
+#tray .item.toggle {
+    padding: 7px 9px;
+    border-radius: 10px;
 }
 
 #mode {

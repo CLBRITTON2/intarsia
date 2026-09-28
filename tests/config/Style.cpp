@@ -127,6 +127,24 @@ TEST(Style, ItemRulesApplyToEveryStateAndStateRulesToOne) {
     EXPECT_EQ(Rgba(StyleOf(rules, ModuleKind::Workspaces, "other").empty.color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
 }
 
+TEST(Style, TheTraysToggleTakesItsItemRulesAndThenItsOwn) {
+    const std::string rules = R"css(
+        #tray .item { padding: 4px; margin: 0 2px; border-radius: 6px; }
+        #tray .item.toggle { padding: 0 9px; border-radius: 10px; }
+        #tray .item.toggle:hover { background: #222222; }
+    )css";
+    const ModuleStyle style = StyleOf(rules, ModuleKind::Tray, "tray");
+    EXPECT_FLOAT_EQ(style.toggle.padding.yDips, 0.0f);
+    EXPECT_FLOAT_EQ(style.toggle.padding.xDips, 9.0f);
+    EXPECT_FLOAT_EQ(style.toggle.radiusDips, 10.0f);
+    EXPECT_FLOAT_EQ(style.toggle.margin.xDips, 2.0f);
+    EXPECT_EQ(Rgba(style.toggle.hoverBackground), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
+    EXPECT_FLOAT_EQ(style.item.padding.xDips, 4.0f);
+    EXPECT_FLOAT_EQ(style.item.radiusDips, 6.0f);
+    EXPECT_EQ(Rgba(style.item.hoverBackground), (std::array<std::int32_t, 4>{0, 0, 0, 0}));
+    EXPECT_THAT([] { return Parse(".item.toggle.focused { color: #fff; }"); }, ConfigErrorWith("matches nothing intarsia draws"));
+}
+
 TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
     const ModuleStyle style = StyleOf(".module { background: #111111; } cpu:hover { background: #222222; } .alert { color: #ff0000; }", ModuleKind::Cpu, "cpu");
     EXPECT_EQ(Rgba(style.box.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));

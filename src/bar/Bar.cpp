@@ -214,6 +214,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
                 _pointed->Hover(std::nullopt);
             }
             _pointed = nullptr;
+            _cursor  = std::nullopt;
             _tooltip->Hide();
             // Draws the box that was under the cursor without its hover.
             Render();
@@ -355,16 +356,24 @@ void Bar::Draw() {
     ID2D1DeviceContext*   context = _surface->Context();
     const Sections<float> lengths{
         .left = BoxLengths(_modules.left, _styles.left), .center = BoxLengths(_modules.center, _styles.center), .right = BoxLengths(_modules.right, _styles.right)};
-    const Edge          edge    = _config.bar.edge;
-    const SectionStyle& section = _config.style.section;
-    const BarLayout     layout  = ArrangeBar(lengths, MainLength(context->GetSize(), edge), MainOf(section.margin, edge), MainOf(section.box.padding, edge));
+    const Edge             edge    = _config.bar.edge;
+    const SectionStyle&    section = _config.style.section;
+    const BarLayout        layout  = ArrangeBar(lengths, MainLength(context->GetSize(), edge), MainOf(section.margin, edge), MainOf(section.box.padding, edge));
+    const Sections<HitBox> boxes{.left   = PlaceSection(_modules.left, _styles.left, lengths.left, layout.left),
+                                 .center = PlaceSection(_modules.center, _styles.center, lengths.center, layout.center),
+                                 .right  = PlaceSection(_modules.right, _styles.right, lengths.right, layout.right)};
+    _hitBoxes.clear();
+    ForEachInSections(boxes, [this](const HitBox& box) { _hitBoxes.push_back(box); });
+    // Items move under a cursor that stays still, as a tray unfolds, and no WM_MOUSEMOVE says so.
+    if (_cursor.has_value()) {
+        Point(*_cursor);
+    }
 
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    _hitBoxes.clear();
-    DrawSection(_modules.left, _styles.left, lengths.left, layout.left);
-    DrawSection(_modules.center, _styles.center, lengths.center, layout.center);
-    DrawSection(_modules.right, _styles.right, lengths.right, layout.right);
+    DrawSection(boxes.left, _styles.left, layout.left);
+    DrawSection(boxes.center, _styles.center, layout.center);
+    DrawSection(boxes.right, _styles.right, layout.right);
     _surface->EndDrawAndPresent();
     _presented = true;
 }
@@ -382,9 +391,26 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
     }
 }
 
+std::vector<Bar::HitBox> Bar::PlaceSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths,
+                                           const SectionLayout& layout) const {
+    std::vector<HitBox> boxes;
+    if (layout.length <= 0.0f) {
+        return boxes;
+    }
+    const Edge          edge     = _config.bar.edge;
+    const SectionStyle& style    = _config.style.section;
+    const float         boxStart = CrossOf(style.margin, edge) + CrossOf(style.box.padding, edge);
+    boxes.reserve(modules.size());
+    for (size_t index = 0; index < modules.size(); ++index) {
+        const D2D1_RECT_F box = MainCrossRect(edge, layout.offsets[index], lengths[index], boxStart, BoxCrossLength());
+        boxes.push_back(
+            HitBox{.module = modules[index].get(), .bounds = box, .contentOrigin = ContentOrigin(edge, box, MainOf(styles[index].box.padding, edge), modules[index]->Size())});
+    }
+    return boxes;
+}
+
 // The section's box, then each module's box (its background, and its hover while under the cursor), then the module.
-void Bar::DrawSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths,
-                      const SectionLayout& layout) {
+void Bar::DrawSection(const std::vector<HitBox>& boxes, const std::vector<ModuleStyle>& styles, const SectionLayout& layout) {
     if (layout.length <= 0.0f) {
         return;
     }
@@ -396,14 +422,10 @@ void Bar::DrawSection(const std::vector<std::unique_ptr<IModule>>& modules, cons
     const D2D1_RECT_F   section   = MainCrossRect(edge, layout.start, layout.length, margin, thickness - (2.0f * margin));
     DrawBox(context, *_brushes, section, style.box, style.box.background);
 
-    const float boxStart = margin + CrossOf(style.box.padding, edge);
-    for (size_t index = 0; index < modules.size(); ++index) {
+    for (size_t index = 0; index < boxes.size(); ++index) {
         const ModuleStyle& moduleStyle = styles[index];
-        const D2D1_RECT_F  box         = MainCrossRect(edge, layout.offsets[index], lengths[index], boxStart, BoxCrossLength());
-        DrawBox(context, *_brushes, box, moduleStyle.box, modules[index].get() == _pointed ? moduleStyle.hover : moduleStyle.box.background);
-        const D2D1_POINT_2F origin = ContentOrigin(edge, box, MainOf(moduleStyle.box.padding, edge), modules[index]->Size());
-        modules[index]->Draw(ModuleContext(moduleStyle), origin);
-        _hitBoxes.push_back(HitBox{.module = modules[index].get(), .bounds = box, .contentOrigin = origin});
+        DrawBox(context, *_brushes, boxes[index].bounds, moduleStyle.box, boxes[index].module == _pointed ? moduleStyle.hover : moduleStyle.box.background);
+        boxes[index].module->Draw(ModuleContext(moduleStyle), boxes[index].contentOrigin);
     }
 }
 
@@ -461,16 +483,16 @@ D2D1_POINT_2F Bar::ContentPoint(POINT client, const HitBox& box) const {
     return D2D1::Point2F((static_cast<float>(client.x) * scale) - box.contentOrigin.x, (static_cast<float>(client.y) * scale) - box.contentOrigin.y);
 }
 
-void Bar::PointAt(POINT client) {
+bool Bar::Point(POINT client) {
     const HitBox* box    = BoxAt(client);
     IModule*      module = box == nullptr ? nullptr : box->module;
     if (module == _pointed) {
         // Within one module the cursor can still move to another of its items, which can have its own tooltip.
         if (module != nullptr && module->Hover(ContentPoint(client, *box))) {
             RestartHover();
-            Render();
+            return true;
         }
-        return;
+        return false;
     }
     if (_pointed != nullptr) {
         _pointed->Hover(std::nullopt);
@@ -480,8 +502,14 @@ void Bar::PointAt(POINT client) {
         module->Hover(ContentPoint(client, *box));
     }
     RestartHover();
-    // Moves the hover to the box now under the cursor.
-    Render();
+    return true;
+}
+
+void Bar::PointAt(POINT client) {
+    _cursor = client;
+    if (Point(client)) {
+        Render();
+    }
 }
 
 void Bar::RestartHover() {

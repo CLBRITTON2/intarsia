@@ -91,6 +91,31 @@ TEST_F(TrayModule, StartsFoldedAndTheToggleShowsTheIcons) {
     EXPECT_FLOAT_EQ(module.Size().width, folded);
 }
 
+TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
+    ModuleStyle style = TestModuleStyle();
+    Tray        plain(kConfig, _tray, style);
+    plain.Layout(_render);
+    style.toggle.padding.xDips = 10.0f;
+    style.toggle.margin.xDips  = 1.0f;
+    Tray padded(kConfig, _tray, style);
+    padded.Layout(_render);
+    // 6 more padding and 4 less margin on either side.
+    const float folded = padded.Size().width;
+    EXPECT_FLOAT_EQ(folded, plain.Size().width + 4.0f);
+
+    padded.Click(At(padded, folded / 2.0f));
+    padded.Layout(_render);
+    EXPECT_NEAR(padded.Size().width, folded + (2.0f * 38.0f), 1.0f);
+    _context->BeginDraw();
+    padded.Draw(_render, D2D1::Point2F(0.0f, 0.0f));
+    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+
+    // The toggle's own margin is where the icons end, so a click just inside its box still folds the tray.
+    padded.Click(At(padded, padded.Size().width - 2.0f));
+    padded.Layout(_render);
+    EXPECT_FLOAT_EQ(padded.Size().width, folded);
+}
+
 TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
     ModuleStyle style     = TestModuleStyle();
     style.transition      = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};

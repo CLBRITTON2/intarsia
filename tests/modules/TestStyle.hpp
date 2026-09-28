@@ -31,6 +31,7 @@ inline ModuleStyle TestModuleStyle() {
         .focused                     = TestItemStyle(0x000002, 0x000022),
         .occupied                    = TestItemStyle(0x000003, 0x000033),
         .empty                       = TestItemStyle(0x000004, 0x000044),
+        .toggle                      = TestItemStyle(0x000005, 0x000055),
         .lineWidthDips               = 1.0f,
         .lineHeight                  = 0.5f,
         .transition                  = {.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease},

@@ -41,7 +41,9 @@ bool Tray::Layout(const RenderContext& render) {
     const float              icon = _style.icon.sizeDips;
     std::vector<D2D1_SIZE_F> contents(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon});
     contents.push_back(_toggle.size);
-    _row = ArrangeItems(contents, std::vector<const ItemStyle*>(contents.size(), &_style.item));
+    std::vector<const ItemStyle*> styles(_slots.size(), &_style.item);
+    styles.push_back(&_style.toggle);
+    _row = ArrangeItems(contents, styles);
     return changed;
 }
 
@@ -63,10 +65,11 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
         render.context->PopAxisAlignedClip();
     }
 
-    const size_t        toggle  = _slots.size();
-    const D2D1_POINT_2F shifted = D2D1::Point2F(origin.x - ToggleShift(), origin.y);
-    DrawItemBackground(render, _row.boxes[toggle], style, _hovered == toggle ? style.hoverBackground : style.background, shifted);
-    const D2D1_POINT_2F start  = ItemContentOrigin(_row.boxes[toggle], style, shifted);
+    const ItemStyle&    toggleStyle = _style.toggle;
+    const size_t        toggle      = _slots.size();
+    const D2D1_POINT_2F shifted     = D2D1::Point2F(origin.x - ToggleShift(), origin.y);
+    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _hovered == toggle ? toggleStyle.hoverBackground : toggleStyle.background, shifted);
+    const D2D1_POINT_2F start  = ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted);
     const D2D1_POINT_2F center = D2D1::Point2F(start.x + (_toggle.size.width / 2.0f), start.y + (_toggle.size.height / 2.0f));
     D2D1_MATRIX_3X2_F   transform{};
     render.context->GetTransform(&transform);
@@ -89,8 +92,6 @@ void Tray::Click(D2D1_POINT_2F point) {
         _expanded      = !_expanded;
         _reveal.Retarget(_expanded ? 1.0f : 0.0f, _style.transition, now);
         _turn.Retarget(_expanded ? 1.0f : 0.0f, _style.icon.transition, now);
-        // The items move, so what was under the cursor no longer is until it moves again.
-        _hovered = std::nullopt;
     } else if (const Slot* slot = SlotAt(point)) {
         _tray.Press(slot->icon, TrayButton::Left);
     }
@@ -129,7 +130,7 @@ std::optional<D2D1_RECT_F> Tray::TooltipItem() const {
 
 // The icons end where the toggle's margin begins.
 float Tray::IconsWidth() const {
-    return _row.boxes.empty() ? 0.0f : _row.boxes.back().left - _style.item.margin.xDips;
+    return _row.boxes.empty() ? 0.0f : _row.boxes.back().left - _style.toggle.margin.xDips;
 }
 
 float Tray::RevealedWidth() const {

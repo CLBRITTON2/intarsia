@@ -15,7 +15,7 @@ enum class StyleTarget : std::uint8_t {
     Tooltip, // tooltip
     Module,  // a module's box: by type (clock), id (its name in the config, #time) or .module, with .alert or :hover
     Icon,    // .icon, alone or inside a module selector
-    Item     // .item with an optional .focused, .occupied or .empty and :hover, alone or inside a module selector
+    Item     // .item with an optional .focused, .occupied, .empty or .toggle and :hover, alone or inside a module selector
 };
 
 // One part of a selector, as workspaces, #cpu.alert or .item.focused.

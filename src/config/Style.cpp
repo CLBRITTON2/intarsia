@@ -374,7 +374,7 @@ namespace {
         return {Declaration{.property = "border-width", .value = *width, .line = border.line}, Declaration{.property = "border-color", .value = *color, .line = border.line}};
     }
 
-    constexpr std::array<std::string_view, 8> kClasses{"module", "alert", "expanded", "icon", "item", "focused", "occupied", "empty"};
+    constexpr std::array<std::string_view, 9> kClasses{"module", "alert", "expanded", "icon", "item", "focused", "occupied", "empty", "toggle"};
 
     bool                                      IsModuleType(std::string_view type) {
         return std::ranges::find(kModuleTypes, type, &ModuleTypeName::name) != kModuleTypes.end();
@@ -428,8 +428,8 @@ namespace {
                 compound.id = std::string(name);
             } else if (marker == '.') {
                 if (std::ranges::find(kClasses, name) == kClasses.end()) {
-                    throw std::invalid_argument(
-                        std::format("'.{}' is not a class intarsia styles, known classes are: .module, .alert, .expanded, .icon, .item, .focused, .occupied, .empty", name));
+                    throw std::invalid_argument(std::format(
+                        "'.{}' is not a class intarsia styles, known classes are: .module, .alert, .expanded, .icon, .item, .focused, .occupied, .empty, .toggle", name));
                 }
                 compound.classes.emplace_back(name);
             } else if (name == "hover") {
@@ -452,7 +452,7 @@ namespace {
         return onlyModuleClasses && typed && (!compound.type.empty() || !compound.id.empty() || !compound.classes.empty());
     }
 
-    // .icon, or .item with at most one of .focused, .occupied and .empty, and optionally :hover.
+    // .icon, or .item with at most one of .focused, .occupied, .empty and .toggle, and optionally :hover.
     std::optional<StyleTarget> PartTarget(const Compound& compound) {
         if (!compound.type.empty() || !compound.id.empty()) {
             return std::nullopt;
@@ -460,7 +460,8 @@ namespace {
         if (compound.classes == std::vector<std::string>{"icon"} && !compound.hover) {
             return StyleTarget::Icon;
         }
-        const auto states = std::ranges::count_if(compound.classes, [](const std::string& name) { return name == "focused" || name == "occupied" || name == "empty"; });
+        const auto states =
+            std::ranges::count_if(compound.classes, [](const std::string& name) { return name == "focused" || name == "occupied" || name == "empty" || name == "toggle"; });
         if (HasClass(compound, "item") && states <= 1 && static_cast<size_t>(states) + 1 == compound.classes.size()) {
             return StyleTarget::Item;
         }
@@ -913,6 +914,7 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
                        .focused                     = ReadItem(sheet, normal, "focused", color),
                        .occupied                    = ReadItem(sheet, normal, "occupied", color),
                        .empty                       = ReadItem(sheet, normal, "empty", color),
+                       .toggle                      = ReadItem(sheet, normal, "toggle", color),
                        .lineWidthDips               = box.Read("width", ReadPositiveLength, 0.0f),
                        .lineHeight                  = box.Read("height", ReadShare, 1.0f),
                        .transition                  = box.Read("transition", ReadTransition, kNoTransition),

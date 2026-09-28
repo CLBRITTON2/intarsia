@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <vector>
 
 enum class ModuleInput : std::uint8_t {
@@ -92,8 +93,10 @@ class Bar {
         D2D1_POINT_2F contentOrigin;
     };
 
-    void DrawSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths, const SectionLayout& layout);
-    void ScheduleNextChange();
+    std::vector<HitBox> PlaceSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths,
+                                     const SectionLayout& layout) const;
+    void                DrawSection(const std::vector<HitBox>& boxes, const std::vector<ModuleStyle>& styles, const SectionLayout& layout);
+    void                ScheduleNextChange();
     // Stops drawing and posts to control, once.
     void ReportDeviceLost(const DeviceLostError& error);
     // The box under a point in client pixels, or null between modules.
@@ -102,7 +105,10 @@ class Bar {
     D2D1_POINT_2F ContentPoint(POINT client, const HitBox& box) const;
     // Runs the module's action for the input, or for a click or scroll without one, lets the module handle it.
     void HandleInput(POINT client, ModuleInput input);
-    // Restarts hover tracking whenever the cursor moves onto a different module, hiding any tooltip.
+    // Hovers the module and item under the cursor, restarting hover tracking and hiding any tooltip whenever either
+    // changes. Returns whether one did, and the bar needs drawing.
+    bool Point(POINT client);
+    // A cursor move: hovers what it is over and draws the bar if that changed.
     void PointAt(POINT client);
     // Hides the tooltip and waits for the cursor to rest again before showing the next one.
     void                               RestartHover();
@@ -124,6 +130,7 @@ class Bar {
     Sections<ModuleStyle>              _styles; // each module's, in the same places as _modules
     std::vector<HitBox>                _hitBoxes;
     IModule*                           _pointed = nullptr; // the module under the cursor, null when there is none
+    std::optional<POINT>               _cursor;            // client pixels where the cursor last moved, null once it left
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                  _surface;
