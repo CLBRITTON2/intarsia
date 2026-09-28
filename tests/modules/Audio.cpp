@@ -100,5 +100,7 @@ TEST(Audio, ABadFormatIsAConfigError) {
     FakeAudio   audio;
     AudioConfig config = TestConfig();
     config.formatMuted = "{level}";
-    EXPECT_THAT([&] { return Audio(config, audio); }, testing::ThrowsMessage<ConfigError>(testing::HasSubstr("audio format_muted '{level}' is not a valid format: {level} is not a value this format has. It can use {volume}, {device}")));
+    EXPECT_THAT([&] { return Audio(config, audio); },
+                testing::ThrowsMessage<ConfigError>(
+                    testing::HasSubstr("audio format_muted '{level}' is not a valid format: {level} is not a value this format has. It can use {volume}, {device}")));
 }

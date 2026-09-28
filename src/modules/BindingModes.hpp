@@ -29,7 +29,7 @@ class BindingModes final : public IModule {
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    std::optional<size_t> _hovered; // the item under the cursor
+    std::optional<size_t>     _hovered; // the item under the cursor
     const IWindowManager&     _windowManager;
     ModuleStyle               _style;
     std::vector<std::wstring> _shown;

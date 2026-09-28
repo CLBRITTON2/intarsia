@@ -112,8 +112,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
-    _windowIcons(std::make_unique<WindowIcons>(_changes)), _audio(std::make_unique<CoreAudio>(_changes)),
-    _network(std::make_unique<IpHelper>(_changes)) {
+    _windowIcons(std::make_unique<WindowIcons>(_changes)), _audio(std::make_unique<CoreAudio>(_changes)), _network(std::make_unique<IpHelper>(_changes)) {
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
@@ -200,10 +199,14 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
     _placements = std::move(placements);
     try {
         for (const BarPlacement& placement : _placements) {
-            _bars.push_back(std::make_unique<Bar>(
-                _instance, _graphics, *_config,
-                ModuleSources{.windowManager = *_windowManager, .commandPollers = *_commandPollers, .windowIcons = *_windowIcons, .audio = *_audio, .network = *_network, .monitor = placement.monitor}, _launcher,
-                placement, _state, _control, kDeviceLost));
+            _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
+                                                  ModuleSources{.windowManager  = *_windowManager,
+                                                                .commandPollers = *_commandPollers,
+                                                                .windowIcons    = *_windowIcons,
+                                                                .audio          = *_audio,
+                                                                .network        = *_network,
+                                                                .monitor        = placement.monitor},
+                                                  _launcher, placement, _state, _control, kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }

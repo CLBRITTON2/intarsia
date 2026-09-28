@@ -42,7 +42,7 @@ bool Window::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void Window::Scroll(ScrollDirection) {}
+void                 Window::Scroll(ScrollDirection) {}
 
 void                 Window::Click(D2D1_POINT_2F) {}
 

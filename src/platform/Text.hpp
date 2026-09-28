@@ -11,7 +11,7 @@ std::wstring ReplaceLoneSurrogates(std::wstring_view text);
 
 // Controls (C0, DEL, C1) and the bidirectional embeddings, overrides and isolates, which can make drawn text read as
 // something other than what it holds (Trojan Source, CVE-2021-42574). All are single UTF-16 units.
-bool         IsUnsafeCharacter(wchar_t unit);
+bool IsUnsafeCharacter(wchar_t unit);
 
 // Untrusted bytes that should be UTF-8, such as a Wi-Fi network's name, made safe to draw: each invalid sequence and
 // each unsafe character becomes U+FFFD, so nothing can throw or reorder the drawn line.

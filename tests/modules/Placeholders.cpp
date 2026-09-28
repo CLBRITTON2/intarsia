@@ -39,5 +39,6 @@ TEST(Placeholders, UnknownNamesBadSpecsAndStrayBracesThrow) {
 
 TEST(Placeholders, ConfigErrorsListTheNamesAFormatCanUse) {
     EXPECT_THAT([] { RequirePlaceholders("network format_wifi", "{essid}", kValues); },
-                testing::ThrowsMessage<ConfigError>(testing::HasSubstr("network format_wifi '{essid}' is not a valid format: {essid} is not a value this format has. It can use {ssid}, {signal}, {rate}")));
+                testing::ThrowsMessage<ConfigError>(
+                    testing::HasSubstr("network format_wifi '{essid}' is not a valid format: {essid} is not a value this format has. It can use {ssid}, {signal}, {rate}")));
 }

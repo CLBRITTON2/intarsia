@@ -35,7 +35,7 @@ bool TextModule::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void TextModule::Scroll(ScrollDirection) {}
+void                 TextModule::Scroll(ScrollDirection) {}
 
 void                 TextModule::Click(D2D1_POINT_2F) {}
 

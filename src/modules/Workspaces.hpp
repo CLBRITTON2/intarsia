@@ -34,9 +34,9 @@ class Workspaces final : public IModule {
 
   private:
     std::optional<size_t> _hovered; // the item under the cursor
-    IWindowManager& _windowManager;
-    std::intptr_t   _monitor;
-    ModuleStyle     _style;
+    IWindowManager&       _windowManager;
+    std::intptr_t         _monitor;
+    ModuleStyle           _style;
     // What the items show, once laid out, so an unchanged list lays out nothing.
     std::vector<Workspace> _shown;
     std::wstring           _disconnectedText;

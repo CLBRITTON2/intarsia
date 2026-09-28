@@ -424,8 +424,7 @@ namespace {
     }
 
     NetworkConfig ReadNetworkConfig(const TableReader& module) {
-        module.RejectUnknownKeys(
-            WithOptionalKeys({"type", "format_wifi", "format_ethernet", "format_disconnected", "icons_wifi", "icon_ethernet", "icon_disconnected"}));
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "format_wifi", "format_ethernet", "format_disconnected", "icons_wifi", "icon_ethernet", "icon_disconnected"}));
         std::vector<std::wstring> iconsWifi;
         for (const std::string& icon : module.StringList("icons_wifi")) {
             iconsWifi.push_back(ToWide(icon));

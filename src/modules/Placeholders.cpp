@@ -68,7 +68,5 @@ std::string FormatPlaceholders(std::string_view format, const std::vector<Placeh
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples) {
     try {
         FormatPlaceholders(format, samples);
-    } catch (const std::format_error& error) {
-        throw ConfigError(std::format("{} '{}' is not a valid format: {}. It can use {}", key, format, error.what(), Names(samples)));
-    }
+    } catch (const std::format_error& error) { throw ConfigError(std::format("{} '{}' is not a valid format: {}. It can use {}", key, format, error.what(), Names(samples))); }
 }

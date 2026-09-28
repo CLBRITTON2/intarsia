@@ -50,7 +50,7 @@ namespace {
         v6.sin6_family = AF_INET6;
         // 2606:4700:4700::1111
         constexpr std::array<std::uint8_t, 16> kAddress{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11};
-        std::copy(kAddress.begin(), kAddress.end(), std::begin(v6.sin6_addr.u.Byte));
+        std::ranges::copy(kAddress, std::begin(v6.sin6_addr.u.Byte));
         if (GetBestInterfaceEx(reinterpret_cast<sockaddr*>(&v6), &index) == NO_ERROR) {
             return index;
         }
@@ -103,7 +103,7 @@ namespace {
             ThrowIfWin32Failed(WlanQueryInterface(_handle, &interfaceGuid, wlan_intf_opcode_current_connection, nullptr, &size, reinterpret_cast<void**>(&attributes), nullptr),
                                "WlanQueryInterface(current_connection)");
             const std::unique_ptr<WLAN_CONNECTION_ATTRIBUTES, decltype(&WlanFreeMemory)> owned(attributes, &WlanFreeMemory);
-            const DOT11_SSID&                                                           ssid = owned->wlanAssociationAttributes.dot11Ssid;
+            const DOT11_SSID&                                                            ssid = owned->wlanAssociationAttributes.dot11Ssid;
             // Anyone nearby can name a network, so its name is drawn only once it is safe to.
             std::wstring name = DrawableText(std::string_view(reinterpret_cast<const char*>(ssid.ucSSID), std::min<ULONG>(ssid.uSSIDLength, DOT11_SSID_MAX_LENGTH)));
             return {std::move(name), static_cast<std::int32_t>(owned->wlanAssociationAttributes.wlanSignalQuality)};
@@ -154,7 +154,8 @@ void IpHelper::Run() {
     FailureLog                  sampleLog;
     FailureLog                  wlanLog;
     do {
-        NetworkState state{.link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};
+        NetworkState state{
+            .link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};
         try {
             const std::optional<NET_IFINDEX> index = DefaultRouteInterface();
             if (index.has_value()) {

@@ -31,7 +31,7 @@ bool Divider::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void Divider::Scroll(ScrollDirection) {}
+void                 Divider::Scroll(ScrollDirection) {}
 
 void                 Divider::Click(D2D1_POINT_2F) {}
 

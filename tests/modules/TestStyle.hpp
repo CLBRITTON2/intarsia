@@ -4,11 +4,11 @@
 
 // An item in a test style: padded 4 across and 2 down, 5 of margin across on each side, so two items are 10 apart.
 inline ItemStyle TestItemStyle(std::uint32_t color, std::uint32_t background) {
-    return ItemStyle{.color      = D2D1::ColorF(color),
-                     .background = D2D1::ColorF(background),
-                     .weight     = DWRITE_FONT_WEIGHT_NORMAL,
-                     .padding    = {.yDips = 2.0f, .xDips = 4.0f},
-                     .margin     = {.yDips = 0.0f, .xDips = 5.0f},
+    return ItemStyle{.color           = D2D1::ColorF(color),
+                     .background      = D2D1::ColorF(background),
+                     .weight          = DWRITE_FONT_WEIGHT_NORMAL,
+                     .padding         = {.yDips = 2.0f, .xDips = 4.0f},
+                     .margin          = {.yDips = 0.0f, .xDips = 5.0f},
                      .radiusDips      = 6.0f,
                      .hoverColor      = D2D1::ColorF(0xFFFFFF),
                      .hoverBackground = D2D1::ColorF(0x404040)};

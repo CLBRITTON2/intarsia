@@ -215,8 +215,10 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 }
 
 TEST(Config, TypeMustBeAKnownModuleType) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, network, custom"));
+    EXPECT_THAT(
+        [] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
+        ConfigErrorWith(
+            "modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, network, custom"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 
@@ -266,7 +268,7 @@ TEST(Config, WindowsNeedAWindowManagerWithWorkspaces) {
 // Audio needs no window manager, so it loads with window_manager "windows".
 TEST(Config, AudioParsesItsFormatsIconsAndStep) {
     const std::string audio = R"(        volume = { type = "audio", format = "{volume}%", format_muted = "muted", icon = "v", icon_muted = "m", step = 5, tooltip = "{device}" },)";
-    const Config      config = LoadText(WithRightModules(R"({ "volume" })", audio));
+    const Config      config    = LoadText(WithRightModules(R"({ "volume" })", audio));
     const AudioConfig& settings = SettingsOf<AudioConfig>(config.modules.right, 0);
     EXPECT_EQ(settings.formatMuted, "muted");
     EXPECT_EQ(settings.iconMuted, L"m");

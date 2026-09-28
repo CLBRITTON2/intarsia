@@ -50,7 +50,7 @@ std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state);
 NetworkText              FormatNetwork(const NetworkConfig& config, const NetworkState& state);
 
 // The Wi-Fi icon for a signal: icons split 0 to 100 evenly, weakest first. The strongest while the signal is unknown.
-const std::wstring&      WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent);
+const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent);
 
 // A rate in SI units with one decimal, as "850 B/s", "1.2 kB/s" or "3.4 MB/s".
-std::string              FormatRate(double bytesPerSecond);
+std::string FormatRate(double bytesPerSecond);

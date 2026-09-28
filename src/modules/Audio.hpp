@@ -47,7 +47,7 @@ class Audio final : public IModule {
 std::int32_t VolumePercent(float volume);
 
 // The icon and text for output, empty while there is none.
-AudioText    FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output);
+AudioText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output);
 
 // The volume one scroll notch away: stepPercent up or down, landing on a whole percent within 0 to 1.
-float        SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction);
+float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction);

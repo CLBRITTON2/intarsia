@@ -16,8 +16,8 @@ class CoreAudio final : public IAudio {
   public:
     explicit CoreAudio(ChangeSignal& changes);
     ~CoreAudio() override;
-    CoreAudio(const CoreAudio&)            = delete;
-    CoreAudio& operator=(const CoreAudio&) = delete;
+    CoreAudio(const CoreAudio&)                            = delete;
+    CoreAudio&                 operator=(const CoreAudio&) = delete;
 
     std::optional<AudioOutput> Output() const override;
     void                       SetVolume(float volume) override;

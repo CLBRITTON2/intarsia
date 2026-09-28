@@ -8,7 +8,7 @@
 
 // One value a format can name, as {signal} or {down}.
 struct Placeholder {
-    std::string_view                                  name;
+    std::string_view                                name;
     std::variant<std::int64_t, double, std::string> value;
 };
 

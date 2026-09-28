@@ -14,11 +14,11 @@ namespace {
 
     // Whether the system has a default output device, asked of Core Audio directly.
     bool HasDefaultOutput() {
-        const HRESULT                                initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        Microsoft::WRL::ComPtr<IMMDeviceEnumerator>  enumerator;
-        Microsoft::WRL::ComPtr<IMMDevice>            device;
-        const bool found = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&enumerator))) &&
-                           SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device));
+        const HRESULT                               initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        Microsoft::WRL::ComPtr<IMMDeviceEnumerator> enumerator;
+        Microsoft::WRL::ComPtr<IMMDevice>           device;
+        const bool                                  found = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&enumerator))) &&
+            SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device));
         device.Reset();
         enumerator.Reset();
         if (SUCCEEDED(initialized)) {
@@ -43,7 +43,9 @@ TEST(CoreAudio, ReadsTheDefaultOutputDevice) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         const std::optional<AudioOutput> output = audio.Output();
-        ASSERT_TRUE(output.has_value());
+        if (!output.has_value()) {
+            FAIL() << "no output device read within 5 s";
+        }
         EXPECT_FALSE(output->device.empty());
         EXPECT_GE(output->volume, 0.0f);
         EXPECT_LE(output->volume, 1.0f);

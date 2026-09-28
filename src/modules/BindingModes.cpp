@@ -46,7 +46,7 @@ bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
     return changed;
 }
 
-void BindingModes::Scroll(ScrollDirection) {}
+void                 BindingModes::Scroll(ScrollDirection) {}
 
 void                 BindingModes::Click(D2D1_POINT_2F) {}
 

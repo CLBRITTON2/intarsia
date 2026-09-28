@@ -14,8 +14,8 @@ class IpHelper final : public INetwork {
   public:
     explicit IpHelper(ChangeSignal& changes);
     ~IpHelper() override;
-    IpHelper(const IpHelper&)            = delete;
-    IpHelper& operator=(const IpHelper&) = delete;
+    IpHelper(const IpHelper&)               = delete;
+    IpHelper&    operator=(const IpHelper&) = delete;
 
     NetworkState State() const override;
 

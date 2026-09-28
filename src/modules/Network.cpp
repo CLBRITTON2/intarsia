@@ -52,9 +52,9 @@ bool Network::Hover(std::optional<D2D1_POINT_2F>) {
     return false;
 }
 
-void Network::Scroll(ScrollDirection) {}
+void                 Network::Scroll(ScrollDirection) {}
 
-void Network::Click(D2D1_POINT_2F) {}
+void                 Network::Click(D2D1_POINT_2F) {}
 
 const ModuleActions& Network::Actions() const {
     return _config.actions;

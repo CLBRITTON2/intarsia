@@ -1,7 +1,10 @@
 #include "audio/CoreAudio.hpp"
 
-// Defines PKEY_Device_FriendlyName here instead of declaring it, since no import library carries it. propkeydef.h
-// declares the macro the key header needs, so it comes between them.
+// Defines PKEY_Device_FriendlyName here instead of declaring it, since no import library carries it. objbase.h
+// declares PROPERTYKEY and GUID_NULL, which WIN32_LEAN_AND_MEAN leaves out of windows.h, and must come before
+// endpointvolume.h pulls in ks.h, which turns GUID_NULL into a macro. propkeydef.h declares the key header's macro.
+#include <objbase.h>
+
 #include <initguid.h>
 
 #include <propkeydef.h>
@@ -97,8 +100,8 @@ namespace {
         ~Endpoint() {
             _volume->UnregisterControlChangeNotify(_callback.Get());
         }
-        Endpoint(const Endpoint&)            = delete;
-        Endpoint& operator=(const Endpoint&) = delete;
+        Endpoint(const Endpoint&)              = delete;
+        Endpoint&   operator=(const Endpoint&) = delete;
 
         AudioOutput Read() const {
             float volume = 0.0f;

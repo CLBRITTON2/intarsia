@@ -36,8 +36,8 @@ namespace {
 
 TEST(Network, EachLinkHasItsFormatAndIcon) {
     EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)), (NetworkText{.icon = L"3", .text = L"home 72%"}));
-    NetworkState wired = Wifi(std::nullopt);
-    wired.link         = NetworkLink::Ethernet;
+    NetworkState wired  = Wifi(std::nullopt);
+    wired.link          = NetworkLink::Ethernet;
     wired.interfaceName = L"Ethernet 2";
     EXPECT_EQ(FormatNetwork(TestConfig(), wired), (NetworkText{.icon = L"E", .text = L"Ethernet 2"}));
     FakeNetwork none;
