@@ -8,6 +8,7 @@
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <utility>
 
@@ -46,15 +47,24 @@ class WorkQueue {
     void Run() {
         const std::array<HANDLE, 2> waits{_stopEvent.get(), _queuedEvent.get()};
         while (WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE) == WAIT_OBJECT_0 + 1) {
-            std::deque<Item> items;
-            {
-                const std::scoped_lock lock(_mutex);
-                items.swap(_queue);
-            }
-            for (const Item& item : items) {
-                _process(item);
+            while (WaitForSingleObject(_stopEvent.get(), 0) == WAIT_TIMEOUT) {
+                std::optional<Item> item = Pop();
+                if (!item.has_value()) {
+                    break;
+                }
+                _process(*item);
             }
         }
+    }
+
+    std::optional<Item> Pop() {
+        const std::scoped_lock lock(_mutex);
+        if (_queue.empty()) {
+            return std::nullopt;
+        }
+        Item item = std::move(_queue.front());
+        _queue.pop_front();
+        return item;
     }
 
     size_t                           _capacity;
