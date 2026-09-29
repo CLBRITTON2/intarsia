@@ -134,5 +134,5 @@ std::wstring WindowTitle(HWND window) {
     std::wstring       title(static_cast<size_t>(length) + 1, L'\0');
     const std::int32_t copied = GetWindowTextW(window, title.data(), length + 1);
     title.resize(static_cast<size_t>(copied > 0 ? copied : 0));
-    return ReplaceLoneSurrogates(title);
+    return DrawableText(std::wstring_view(title));
 }

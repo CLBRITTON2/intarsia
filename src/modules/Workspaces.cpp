@@ -78,7 +78,7 @@ std::optional<std::wstring> Workspaces::TooltipText() {
     if (status.connection != Connection::Disconnected) {
         return std::nullopt;
     }
-    return ToWide(status.detail);
+    return DrawableText(status.detail);
 }
 
 std::vector<Workspace> WorkspacesOnMonitor(const std::vector<Workspace>& workspaces, std::intptr_t monitor) {

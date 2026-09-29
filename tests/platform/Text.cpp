@@ -111,6 +111,14 @@ TEST(Text, DrawableTextReplacesUnsafeCharactersAndInvalidBytes) {
     EXPECT_TRUE(std::ranges::all_of(invalid, [](wchar_t unit) { return unit == kReplacement; }));
 }
 
+TEST(Text, DrawableWideTextReplacesUnsafeCharactersAndLoneSurrogates) {
+    constexpr auto     kReplacement = static_cast<wchar_t>(0xFFFD);
+    const std::wstring text{static_cast<wchar_t>(0x202E), L'a', static_cast<wchar_t>(0x200F), static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00),
+                            static_cast<wchar_t>(0xDC00), L'\t'};
+    EXPECT_EQ(DrawableText(std::wstring_view(text)),
+              (std::wstring{kReplacement, L'a', kReplacement, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacement, kReplacement}));
+}
+
 TEST(Text, UnsafeCharactersAreControlsSeparatorsAndBidiMarks) {
     EXPECT_TRUE(IsUnsafeCharacter(L'\n'));
     EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x7F)));
@@ -118,6 +126,10 @@ TEST(Text, UnsafeCharactersAreControlsSeparatorsAndBidiMarks) {
     EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x2028)));
     EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x202E)));
     EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x2069)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x061C)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x200E)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0x200F)));
+    EXPECT_TRUE(IsUnsafeCharacter(static_cast<wchar_t>(0xFEFF)));
     EXPECT_FALSE(IsUnsafeCharacter(L' '));
     EXPECT_FALSE(IsUnsafeCharacter(static_cast<wchar_t>(0x200D))); // a zero width joiner, which emoji sequences need
     EXPECT_FALSE(IsUnsafeCharacter(static_cast<wchar_t>(0x2027)));

@@ -101,6 +101,13 @@ TEST(GlazeWmProtocol, BindingModesPreferTheDisplayName) {
     EXPECT_EQ(glazewm::BindingModesFromResponse(message.data), (std::vector<std::wstring>{L"resize", L"Paused"}));
 }
 
+TEST(GlazeWmProtocol, LabelsReplaceBidiControlsAndNewlines) {
+    const glazewm::ServerMessage message =
+        glazewm::ParseServerMessage(R"({"messageType":"client_response","clientMessage":"query binding-modes","success":true,"error":null,"data":{"bindingModes":[)"
+                                    "{\"name\":\"x\",\"displayName\":\"a\\u202eb\\nc\",\"keybindings\":[]}]}}");
+    EXPECT_EQ(glazewm::BindingModesFromResponse(message.data), (std::vector<std::wstring>{{L'a', static_cast<wchar_t>(0xFFFD), L'b', static_cast<wchar_t>(0xFFFD), L'c'}}));
+}
+
 TEST(GlazeWmProtocol, TilingDirectionIsHorizontalOrVertical) {
     const auto direction = [](std::string_view value) {
         return glazewm::TilingDirectionFromResponse(nlohmann::json{{"tilingDirection", value}, {"directionContainer", nlohmann::json::object()}});

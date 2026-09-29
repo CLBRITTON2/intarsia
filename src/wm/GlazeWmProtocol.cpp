@@ -79,7 +79,7 @@ namespace glazewm {
         // The display name when there is a non-empty one, else the name: workspaces and binding modes both have both.
         std::wstring DisplayLabel(const nlohmann::json& object, std::string_view context) {
             const nlohmann::json& displayName = Field(object, "displayName", context);
-            return ToWide(displayName.is_string() && !displayName.get<std::string>().empty() ? displayName.get<std::string>() : StringField(object, "name", context));
+            return DrawableText(displayName.is_string() && !displayName.get<std::string>().empty() ? displayName.get<std::string>() : StringField(object, "name", context));
         }
 
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {

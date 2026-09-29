@@ -74,7 +74,8 @@ std::wstring ReplaceLoneSurrogates(std::wstring_view text) {
 }
 
 bool IsUnsafeCodePoint(char32_t code) {
-    return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x2028 || code == 0x2029 || (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069);
+    return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x061C || code == 0x200E || code == 0x200F || code == 0x2028 || code == 0x2029 ||
+        (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
 }
 
 bool IsUnsafeCharacter(wchar_t unit) {
@@ -96,8 +97,13 @@ std::wstring DrawableText(std::string_view bytes) {
     }
     std::wstring wide(static_cast<size_t>(length), L'\0');
     MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<std::int32_t>(bytes.size()), wide.data(), length);
-    std::ranges::replace_if(wide, IsUnsafeCharacter, kReplacementCharacter);
-    return ReplaceLoneSurrogates(wide);
+    return DrawableText(std::wstring_view(wide));
+}
+
+std::wstring DrawableText(std::wstring_view text) {
+    std::wstring drawable(text);
+    std::ranges::replace_if(drawable, IsUnsafeCharacter, kReplacementCharacter);
+    return ReplaceLoneSurrogates(drawable);
 }
 
 std::string LogExcerpt(std::string_view text, size_t maxBytes) {
