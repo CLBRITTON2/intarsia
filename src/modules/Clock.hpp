@@ -15,7 +15,11 @@ class Clock final : public TextModule {
     explicit Clock(TextModuleConfig config);
 
   private:
-    ModuleText Format(const std::string& spec) override;
+    ModuleText               Format(const std::string& spec) override;
+
+    std::chrono::sys_seconds _formattedSecond;
+    std::string              _formattedSpec;
+    std::wstring             _formatted;
 };
 
 // The values a clock format can name at now: {time}, the local time to the second.

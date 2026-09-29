@@ -6,9 +6,16 @@
 
 Clock::Clock(TextModuleConfig config) : TextModule(std::move(config), "clock", ClockPlaceholders(std::chrono::system_clock::now())) {}
 
+// Formats at most once per second per spec: the bar also lays the clock out for other modules' changes and every
+// animation frame, and each format looks up the time zone. Hovering swaps the spec, so the tooltip costs a reformat.
 ModuleText Clock::Format(const std::string& spec) {
-    return ModuleText{
-        .icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, ClockPlaceholders(std::chrono::system_clock::now()))), .state = TextState::Normal, .classIndex = 0};
+    const std::chrono::sys_seconds second = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+    if (second != _formattedSecond || spec != _formattedSpec) {
+        _formatted       = ToWide(FormatPlaceholders(spec, ClockPlaceholders(second)));
+        _formattedSecond = second;
+        _formattedSpec   = spec;
+    }
+    return ModuleText{.icon = Settings().icon, .text = _formatted, .state = TextState::Normal, .classIndex = 0};
 }
 
 std::vector<Placeholder> ClockPlaceholders(std::chrono::system_clock::time_point now) {
