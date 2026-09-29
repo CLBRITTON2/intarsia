@@ -696,6 +696,14 @@ TEST(Config, AnEndlessConfigCannotCatchOrHideFromItsAbort) {
     EXPECT_THAT([] { return LoadText("setmetatable({}, { __gc = function() while true do end end })"); }, ConfigErrorWith("attempt to call a nil value (global 'setmetatable')"));
 }
 
+// A short pattern backtracks for longer than the bar lives, inside C calls the instruction count never sees.
+TEST(Config, AConfigCannotRunAPatternMatch) {
+    EXPECT_THAT([] { return LoadText("return (('a'):rep(1000)):find(('.-'):rep(10) .. 'b')"); }, ConfigErrorWith("attempt to call a nil value (method 'find')"));
+    EXPECT_THAT([] { return LoadText("return string.match('a', 'a')"); }, ConfigErrorWith("attempt to call a nil value (field 'match')"));
+    EXPECT_THAT([] { return LoadText("return string.gmatch('a', 'a')"); }, ConfigErrorWith("attempt to call a nil value (field 'gmatch')"));
+    EXPECT_THAT([] { return LoadText("return string.gsub('a', 'a', 'b')"); }, ConfigErrorWith("attempt to call a nil value (field 'gsub')"));
+}
+
 // One C call can allocate any amount while running no instructions the count hook sees.
 TEST(Config, AConfigThatAllocatesTooMuchIsStoppedWithAnError) {
     EXPECT_THAT([] { return LoadText("return { x = ('x'):rep(2^25) }"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));

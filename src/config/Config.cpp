@@ -805,6 +805,14 @@ Config LoadConfig(const std::filesystem::path& path) {
         lua_pushnil(lua.get());
         lua_setglobal(lua.get(), removed);
     }
+    // Pattern matching backtracks in C, out of the count hook's reach, and a short pattern can take exponential time.
+    // The string metatable's __index is this same table, so the method form goes too.
+    lua_getglobal(lua.get(), LUA_STRLIBNAME);
+    for (const char* removed : {"find", "match", "gmatch", "gsub"}) {
+        lua_pushnil(lua.get());
+        lua_setfield(lua.get(), -2, removed);
+    }
+    lua_pop(lua.get(), 1);
     // Reload runs on the UI thread, so a config that never finishes would freeze the bar: stop it instead.
     lua_sethook(lua.get(), AbortRunawayConfig, LUA_MASKCOUNT, kMaxConfigInstructions);
 
