@@ -20,7 +20,7 @@ return {
     -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #date.
     modules_left = { "workspaces", "divider", "apps", "divider_date", "date" },
     modules_center = {},
-    modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
+    modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "mic", "battery" },
 
     -- A layout replaces the three lists above on a bar whose monitor is at least min_length DIPs long along the bar's
     -- edge (its width for a top or bottom bar, pixels divided by the scale). The last layout a monitor reaches wins, so
@@ -31,7 +31,7 @@ return {
             min_length = 1921,
             modules_left = { "workspaces", "divider", "apps" },
             modules_center = { "date" },
-            modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "battery" },
+            modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "mic", "battery" },
         },
     },
 
@@ -113,6 +113,16 @@ return {
             format_muted = "muted",
             icon = "\u{F057E}",
             icon_muted = "\u{F0581}",
+            step = 5,
+            tooltip = "{device}",
+        },
+        mic = {
+            type = "audio",
+            flow = "input",
+            format = "{volume}%",
+            format_muted = "muted",
+            icon = "\u{F036C}",
+            icon_muted = "\u{F036D}",
             step = 5,
             tooltip = "{device}",
         },

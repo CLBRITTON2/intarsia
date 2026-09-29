@@ -176,16 +176,16 @@ divider.module {
     padding: 0 3px;
 }
 
-/* Icons cycle rose, magenta, cyan from left to right: date, tray, tiling, net, cpu, memory, volume, battery. */
+/* Icons cycle rose, magenta, cyan from left to right: date, tray, tiling, net, cpu, memory, volume, mic, battery. */
 #date .icon, #net .icon, #volume .icon {
     color: var(--rose);
 }
 
-#tray .icon, #cpu .icon, #battery .icon {
+#tray .icon, #cpu .icon, #mic .icon {
     color: var(--magenta);
 }
 
-#tiling .icon, #memory .icon {
+#tiling .icon, #memory .icon, #battery .icon {
     color: var(--cyan);
 }
 
