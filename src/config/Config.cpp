@@ -19,6 +19,7 @@
 #include <format>
 #include <fstream>
 #include <initializer_list>
+#include <limits>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -714,7 +715,7 @@ namespace {
         auto* limits = static_cast<LuaLimits*>(userData);
         // oldSize is the block's size only for a live block, else a tag of what is being allocated.
         const size_t held = block == nullptr ? 0 : oldSize;
-        if (newSize > held && limits->usedBytes + (newSize - held) > limits->limitBytes) {
+        if (newSize > held && newSize - held > limits->limitBytes - limits->usedBytes) {
             return nullptr;
         }
         void* resized = limits->allocate(limits->allocateData, block, oldSize, newSize);
@@ -822,6 +823,9 @@ Config LoadConfig(const std::filesystem::path& path) {
         throw LuaError(lua.get(), loaded, source);
     }
     const std::int32_t ran = lua_pcall(lua.get(), 0, 1, 0);
+    // What follows pushes strings outside any protected call, where a refused allocation reaches Lua's panic handler and
+    // aborts the bar. Only the reader allocates from here on, so the config's ceiling has done its job.
+    limits.limitBytes = std::numeric_limits<size_t>::max();
     if (ran != LUA_OK) {
         throw LuaError(lua.get(), ran, source);
     }

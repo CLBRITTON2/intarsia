@@ -710,6 +710,46 @@ TEST(Config, AConfigThatAllocatesTooMuchIsStoppedWithAnError) {
     EXPECT_THAT([] { return LoadText("local t = {} for i = 1, 1e7 do t[i] = i end return t"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));
 }
 
+// Fills memory to the byte, measuring string headers as it goes, then returns. The reader pushes each optional key it
+// looks for outside any protected call, where a refused allocation would abort the process. The config's body stays
+// reachable so Lua's emergency collection frees too little to make room.
+TEST(Config, AConfigThatEndsAtTheMemoryLimitStillLoads) {
+    EXPECT_NO_THROW(LoadText(R"lua(
+KEEP = { pad = table.create(20000) }
+local function load()
+    local limit = 16 * 1024 * 1024
+    local function used() return collectgarbage("count") * 1024 end
+    local config = {
+        bar = { edge = "top", layer = "top", space = "reserve", thickness = 54 },
+        window_manager = "windows",
+        modules_left = { "title" },
+        modules_center = { "time" },
+        modules_right = {},
+        layouts = {},
+        modules = {
+            time = { type = "clock", format = "{time:%H:%M}", icon = "x", interval = 60 },
+            title = { type = "window", max_length = 80 },
+        },
+    }
+    local pad = KEEP.pad
+    local count = 0
+    local function add(text) count = count + 1 pad[count] = text end
+    KEEP.config, KEEP.used, KEEP.add = config, used, add
+    collectgarbage()
+    local before = used() add(("h"):rep(100)) local longHeader = used() - before - 101
+    before = used() add(("s"):rep(20)) local shortHeader = used() - before - 21
+    while limit - used() - longHeader - 1 >= 41 do
+        add(("x"):rep(math.min(1000, limit - used() - longHeader - 1)))
+    end
+    local last = limit - used() - shortHeader - 1
+    if last >= 1 then add(("w"):rep(last)) end
+    return config
+end
+KEEP.load = load
+return load()
+)lua"));
+}
+
 // Each module's table stays on the Lua stack while the config is read, far past the slots Lua guarantees.
 TEST(Config, ManyModulesFitOnTheLuaStack) {
     std::string names = "{ ";
