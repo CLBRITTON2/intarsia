@@ -1,5 +1,6 @@
 #include "tray/ShellNotifyIcon.hpp"
 
+#include "platform/AppBar.hpp"
 #include "platform/Errors.hpp"
 #include "platform/FileWatcher.hpp"
 #include "platform/PeerProcess.hpp"
@@ -434,11 +435,7 @@ HWND ExplorerTaskbar(const std::wstring& windowClass) {
 }
 
 void AnnounceTray() {
-    const UINT created = RegisterWindowMessageW(L"TaskbarCreated");
-    if (created == 0) {
-        ThrowLastError("RegisterWindowMessageW(TaskbarCreated)");
-    }
-    if (!SendNotifyMessageW(HWND_BROADCAST, created, 0, 0)) {
+    if (!SendNotifyMessageW(HWND_BROADCAST, TaskbarCreatedMessage(), 0, 0)) {
         ThrowLastError("SendNotifyMessageW(TaskbarCreated)");
     }
 }

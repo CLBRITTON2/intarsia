@@ -150,6 +150,7 @@ class Bar {
     std::vector<HitBox>         _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
     IModule*                    _pointed = nullptr; // the module under the cursor, null when there is none
     std::optional<POINT>        _cursor;            // client pixels where the cursor last moved, null once it left
+    std::uint32_t               _taskbarCreated;
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                  _surface;

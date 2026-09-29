@@ -211,7 +211,7 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
          AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
     _placement(placement), _route(route), _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
-    _window(CreateBarWindow(instance, this)) {
+    _taskbarCreated(TaskbarCreatedMessage()), _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
@@ -271,6 +271,14 @@ LRESULT Bar::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 // Uses the handle it is given: messages sent during CreateWindowExW arrive before _window is assigned.
 LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+    // Removed first: any app can broadcast it (the bar's own tray does) while Explorer still holds the registration, and
+    // ABM_NEW refuses a window it holds.
+    if (message == _taskbarCreated) {
+        UnregisterAppBar(window);
+        RegisterAppBar(window, kAppBarCallback);
+        Dock();
+        return 0;
+    }
     switch (message) {
         case WM_SIZE:
             // CreateWindowExW and Dock send sizes before the constructor has built the surface.

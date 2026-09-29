@@ -129,6 +129,14 @@ std::string RectText(const RECT& rect) {
     return std::format("{},{},{},{}", rect.left, rect.top, rect.right, rect.bottom);
 }
 
+std::uint32_t TaskbarCreatedMessage() {
+    const UINT created = RegisterWindowMessageW(L"TaskbarCreated");
+    if (created == 0) {
+        ThrowLastError("RegisterWindowMessageW(TaskbarCreated)");
+    }
+    return created;
+}
+
 void RegisterAppBar(HWND window, std::uint32_t callbackMessage) {
     APPBARDATA data       = AppBarData(window);
     data.uCallbackMessage = callbackMessage;

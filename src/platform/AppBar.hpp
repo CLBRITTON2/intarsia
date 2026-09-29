@@ -59,8 +59,11 @@ RECT DockedRect(const RECT& area, Edge edge, std::int32_t thickness);
 // left,top,right,bottom, as log values write a rect.
 std::string RectText(const RECT& rect);
 
-void        RegisterAppBar(HWND window, std::uint32_t callbackMessage);
-void        UnregisterAppBar(HWND window);
+// The message a taskbar broadcasts once it starts. Explorer sends it after a restart, having forgotten every appbar.
+std::uint32_t TaskbarCreatedMessage();
+
+void          RegisterAppBar(HWND window, std::uint32_t callbackMessage);
+void          UnregisterAppBar(HWND window);
 
 // Asks the shell for space on the monitor and reserves it. The shell may shrink the request around other appbars. Logs
 // each answer and the monitor's work area after it, since the shell never reports a request it ignored.
