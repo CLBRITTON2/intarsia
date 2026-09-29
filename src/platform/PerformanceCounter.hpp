@@ -4,6 +4,7 @@
 
 #include <pdh.h>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -36,12 +37,13 @@ class PerformanceCounter {
     // second on.
     void Collect();
 
-    // Every instance's value at the last sample, leaving out those without one yet (a rate's first sample, an
-    // instance that just appeared). Throws PdhError when PDH cannot format them.
-    std::vector<double> Values() const;
+    // Every instance's value at the last sample, leaving out instances that just appeared. None when the sample has no
+    // value (a rate's first sample, or one PDH could not calculate), which the next sample can have, and empty when a
+    // wildcard matches no instance. Throws PdhError when PDH cannot format them.
+    std::optional<std::vector<double>> Values() const;
 
     // Values, with the instance each belongs to, in PDH's order.
-    std::vector<CounterInstance> Instances() const;
+    std::optional<std::vector<CounterInstance>> Instances() const;
 
   private:
     PDH_HQUERY   _query   = nullptr;

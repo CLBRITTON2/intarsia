@@ -8,9 +8,12 @@
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 double CombineCounterValues(const std::vector<double>& values, CounterCombine combine) {
     if (values.empty()) {
@@ -39,7 +42,8 @@ CounterReading CounterSampler::Reading() const {
     return _reading;
 }
 
-// A freshly added counter's first sample only starts its rates, so it publishes nothing unless it fails.
+// A freshly added counter's first sample only starts its rates, and a sample without a value keeps the last reading,
+// so neither publishes anything unless it fails.
 void CounterSampler::Run() {
     std::unique_ptr<PerformanceCounter> counter;
     while (true) {
@@ -50,7 +54,10 @@ void CounterSampler::Run() {
                 counter->Collect();
             } else {
                 counter->Collect();
-                Publish(CounterReading{.outcome = CounterOutcome::Sampled, .value = CombineCounterValues(counter->Values(), _combine), .detail = {}});
+                const std::optional<std::vector<double>> values = counter->Values();
+                if (values.has_value()) {
+                    Publish(CounterReading{.outcome = CounterOutcome::Sampled, .value = CombineCounterValues(*values, _combine), .detail = {}});
+                }
             }
         } catch (const PdhError& error) {
             counter.reset();

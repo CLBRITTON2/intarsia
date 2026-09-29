@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <optional>
 #include <string>
 
 namespace {
@@ -32,9 +33,11 @@ namespace {
         return static_cast<DWORD>(status) == code;
     }
 
-    // A rate before its second sample, or a counter whose instances all just appeared.
-    bool HasNoValueYet(PDH_STATUS status) {
-        return IsStatus(status, PDH_INVALID_DATA) || IsStatus(status, PDH_CSTATUS_INVALID_DATA);
+    // A rate before its second sample, a counter whose instances all just appeared, or a rate whose raw values ran
+    // backwards between two samples (a processor's idle time outrunning the timebase), which the next sample recovers.
+    bool SampleHasNoValue(PDH_STATUS status) {
+        return IsStatus(status, PDH_INVALID_DATA) || IsStatus(status, PDH_CSTATUS_INVALID_DATA) || IsStatus(status, PDH_CALC_NEGATIVE_DENOMINATOR) ||
+            IsStatus(status, PDH_CALC_NEGATIVE_TIMEBASE) || IsStatus(status, PDH_CALC_NEGATIVE_VALUE);
     }
 
 } // namespace
@@ -66,15 +69,20 @@ void PerformanceCounter::Collect() {
     }
 }
 
-std::vector<double> PerformanceCounter::Values() const {
+std::optional<std::vector<double>> PerformanceCounter::Values() const {
+    const std::optional<std::vector<CounterInstance>> instances = Instances();
+    if (!instances.has_value()) {
+        return std::nullopt;
+    }
     std::vector<double> values;
-    for (const CounterInstance& instance : Instances()) {
+    values.reserve(instances->size());
+    for (const CounterInstance& instance : *instances) {
         values.push_back(instance.value);
     }
     return values;
 }
 
-std::vector<CounterInstance> PerformanceCounter::Instances() const {
+std::optional<std::vector<CounterInstance>> PerformanceCounter::Instances() const {
     constexpr DWORD           kFormat = PDH_FMT_DOUBLE | PDH_FMT_NOCAP100; // a sum over GPU engines passes 100
     std::vector<std::uint8_t> buffer;
     DWORD                     bytes  = 0;
@@ -85,8 +93,8 @@ std::vector<CounterInstance> PerformanceCounter::Instances() const {
         buffer.resize(bytes);
         status = PdhGetFormattedCounterArrayW(_counter, kFormat, &bytes, &count, reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM_W*>(buffer.data()));
     }
-    if (HasNoValueYet(status)) {
-        return {};
+    if (SampleHasNoValue(status)) {
+        return std::nullopt;
     }
     if (status != ERROR_SUCCESS) {
         throw PdhError("PdhGetFormattedCounterArrayW", status);

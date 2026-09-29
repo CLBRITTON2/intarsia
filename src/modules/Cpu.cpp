@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <format>
 #include <initializer_list>
+#include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -46,10 +48,13 @@ namespace {
         return counter;
     }
 
-    // The counter's one value, or 0 before it has one.
-    double SingleValue(const PerformanceCounter& counter) {
-        const std::vector<double> values = counter.Values();
-        return values.empty() ? 0.0 : values.front();
+    // The counter's one value at the last sample, none when that sample has none.
+    std::optional<double> SingleValue(const PerformanceCounter& counter) {
+        const std::optional<std::vector<double>> values = counter.Values();
+        if (!values.has_value() || values->empty()) {
+            return std::nullopt;
+        }
+        return values->front();
     }
 
 } // namespace
@@ -91,20 +96,27 @@ void Cpu::Sample() {
     const CpuTimes current = ReadCpuTimes();
     _sample.usagePercent   = CpuUsagePercent(_previous, current);
     _previous              = current;
-    // A failed sample blanks the counters' values until one succeeds, rather than ending the bar over a tooltip.
+    // A failed sample blanks the counters' values until one succeeds, rather than ending the bar over a tooltip. A
+    // sample without a value keeps the last one.
     try {
         if (_baseFrequency != nullptr && _performance != nullptr) {
             _baseFrequency->Collect();
             _performance->Collect();
-            _sample.gigahertz = CpuGigahertz(SingleValue(*_baseFrequency), SingleValue(*_performance));
+            const std::optional<double> baseMegahertz      = SingleValue(*_baseFrequency);
+            const std::optional<double> performancePercent = SingleValue(*_performance);
+            if (baseMegahertz.has_value() && performancePercent.has_value()) {
+                _sample.gigahertz = CpuGigahertz(*baseMegahertz, *performancePercent);
+            }
         }
         if (_cores != nullptr) {
             _cores->Collect();
-            // _Total is among the instances and never passes the busiest core.
-            const std::vector<CounterInstance> cores = _cores->Instances();
-            const auto                         max   = std::ranges::max_element(cores, {}, &CounterInstance::value);
-            _sample.maxCorePercent                   = max == cores.end() ? 0 : static_cast<std::int32_t>(std::lround(max->value));
-            _sample.cores                            = FormatCoreUsage(cores);
+            const std::optional<std::vector<CounterInstance>> cores = _cores->Instances();
+            if (cores.has_value()) {
+                // _Total is among the instances and never passes the busiest core.
+                const auto max         = std::ranges::max_element(*cores, {}, &CounterInstance::value);
+                _sample.maxCorePercent = max == cores->end() ? 0 : static_cast<std::int32_t>(std::lround(max->value));
+                _sample.cores          = FormatCoreUsage(*cores);
+            }
         }
         _counterLog.Succeeded();
     } catch (const PdhError& error) {
