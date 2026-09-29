@@ -115,9 +115,11 @@ LRESULT IconRectAnswer(IconRectPart part, const RECT& rect);
 inline constexpr size_t kMaxTrayIcons = 128;
 
 // The icons after message, or nullopt when the taskbar would refuse it: an icon it does not have, a full tray, an
-// unknown command. pixels is the message's icon read on arrival, null when it has none or it did not read. Adding an
+// unknown command, a GUID another executable gave. ownerImage is the executable of the message's owner, read only for a
+// message with a GUID. pixels is the message's icon read on arrival, null when it has none or it did not read. Adding an
 // icon that exists updates it, since apps add their icons again whenever a taskbar announces itself.
-std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels);
+std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::wstring_view ownerImage,
+                                                     std::shared_ptr<const IconPixels> pixels);
 
 // A tooltip as an app wrote it, made safe to draw: line breaks stay, a carriage return goes, and every other unsafe
 // character or lone surrogate becomes U+FFFD.

@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,9 +22,11 @@ namespace {
     // Windows 11 sends this many bytes for every call, the layout followed by bytes nothing reads.
     constexpr size_t kSentBytes = 1484;
     // {6B29FC40-CA47-1067-B31D-00DD010662DA}
-    constexpr GUID kGuid{0x6B29FC40, 0xCA47, 0x1067, {0xB3, 0x1D, 0x00, 0xDD, 0x01, 0x06, 0x62, 0xDA}};
+    constexpr GUID              kGuid{0x6B29FC40, 0xCA47, 0x1067, {0xB3, 0x1D, 0x00, 0xDD, 0x01, 0x06, 0x62, 0xDA}};
+    constexpr std::wstring_view kAppImage   = L"C:\\Program Files\\App\\app.exe";
+    constexpr std::wstring_view kOtherImage = L"C:\\Users\\someone\\other.exe";
 
-    TrayNotifyData Data(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags) {
+    TrayNotifyData              Data(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags) {
         TrayNotifyData data{};
         data.signature   = kTrayNotifySignature;
         data.command     = command;
@@ -48,9 +51,9 @@ namespace {
         return std::make_shared<const IconPixels>(IconPixels{.width = 1, .height = 1, .pbgra = {value, value, value, 255}});
     }
 
-    // The icons after a message the tray must take. A refusal fails the test and leaves no icons.
+    // The icons after a message from kAppImage the tray must take. A refusal fails the test and leaves no icons.
     std::vector<TrayIcon> Applied(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {
-        std::optional<std::vector<TrayIcon>> applied = ApplyNotifyIcon(icons, message, std::move(pixels));
+        std::optional<std::vector<TrayIcon>> applied = ApplyNotifyIcon(icons, message, kAppImage, std::move(pixels));
         if (!applied.has_value()) {
             ADD_FAILURE() << "the tray refused command " << message.command;
             return {};
@@ -59,8 +62,16 @@ namespace {
     }
 
     TrayIcon Icon(std::intptr_t owner, std::uint32_t id) {
-        return TrayIcon{
-            .owner = owner, .id = id, .guid = std::nullopt, .callbackMessage = WM_APP, .version = 0, .tooltip = {}, .standardTooltip = false, .pixels = nullptr, .hidden = false};
+        return TrayIcon{.owner           = owner,
+                        .id              = id,
+                        .guid            = std::nullopt,
+                        .ownerImage      = {},
+                        .callbackMessage = WM_APP,
+                        .version         = 0,
+                        .tooltip         = {},
+                        .standardTooltip = false,
+                        .pixels          = nullptr,
+                        .hidden          = false};
     }
 
     std::vector<std::byte> QueryBytes(std::uint32_t part, std::uint32_t owner, std::uint32_t id, const GUID& guid) {
@@ -147,17 +158,17 @@ TEST(NotifyIconProtocol, AddThenModifyThenDelete) {
     EXPECT_EQ(modified[0].callbackMessage, static_cast<std::uint32_t>(WM_APP + 1));
     EXPECT_EQ(modified[0].pixels, added[0].pixels);
 
-    const std::optional<std::vector<TrayIcon>> deleted = ApplyNotifyIcon(modified, Message(NIM_DELETE, 5, 1, 0), nullptr);
+    const std::optional<std::vector<TrayIcon>> deleted = ApplyNotifyIcon(modified, Message(NIM_DELETE, 5, 1, 0), kAppImage, nullptr);
     EXPECT_EQ(deleted, std::vector<TrayIcon>{});
 }
 
 TEST(NotifyIconProtocol, AnIconTheTrayDoesNotHaveIsRefused) {
     const std::vector<TrayIcon> icons{Icon(5, 1)};
     for (const std::uint32_t command : {NIM_MODIFY, NIM_DELETE, NIM_SETVERSION, NIM_SETFOCUS}) {
-        EXPECT_FALSE(ApplyNotifyIcon(icons, Message(command, 5, 2, 0), nullptr).has_value()) << command;
-        EXPECT_FALSE(ApplyNotifyIcon(icons, Message(command, 6, 1, 0), nullptr).has_value()) << command;
+        EXPECT_FALSE(ApplyNotifyIcon(icons, Message(command, 5, 2, 0), kAppImage, nullptr).has_value()) << command;
+        EXPECT_FALSE(ApplyNotifyIcon(icons, Message(command, 6, 1, 0), kAppImage, nullptr).has_value()) << command;
     }
-    EXPECT_FALSE(ApplyNotifyIcon(icons, Message(99, 5, 1, 0), nullptr).has_value());
+    EXPECT_FALSE(ApplyNotifyIcon(icons, Message(99, 5, 1, 0), kAppImage, nullptr).has_value());
 }
 
 TEST(NotifyIconProtocol, AddingAnIconAgainUpdatesIt) {
@@ -174,9 +185,9 @@ TEST(NotifyIconProtocol, AFullTrayRefusesNewIconsButNotChanges) {
     for (std::uint32_t id = 0; id < kMaxTrayIcons; ++id) {
         icons.push_back(Icon(5, id));
     }
-    EXPECT_FALSE(ApplyNotifyIcon(icons, Message(NIM_ADD, 5, 1000, 0), nullptr).has_value());
-    EXPECT_TRUE(ApplyNotifyIcon(icons, Message(NIM_ADD, 5, 0, 0), nullptr).has_value());
-    EXPECT_TRUE(ApplyNotifyIcon(icons, Message(NIM_MODIFY, 5, 3, 0), nullptr).has_value());
+    EXPECT_FALSE(ApplyNotifyIcon(icons, Message(NIM_ADD, 5, 1000, 0), kAppImage, nullptr).has_value());
+    EXPECT_TRUE(ApplyNotifyIcon(icons, Message(NIM_ADD, 5, 0, 0), kAppImage, nullptr).has_value());
+    EXPECT_TRUE(ApplyNotifyIcon(icons, Message(NIM_MODIFY, 5, 3, 0), kAppImage, nullptr).has_value());
 }
 
 TEST(NotifyIconProtocol, AGuidIdentifiesAnIconWhateverItsOwner) {
@@ -192,6 +203,24 @@ TEST(NotifyIconProtocol, AGuidIdentifiesAnIconWhateverItsOwner) {
     ASSERT_EQ(modified.size(), 1u);
     EXPECT_EQ(modified[0].owner, 9);
     EXPECT_EQ(modified[0].tooltip, L"moved");
+}
+
+TEST(NotifyIconProtocol, AGuidStaysWithTheExecutableThatGaveIt) {
+    NotifyIconMessage add             = Message(NIM_ADD, 5, 1, NIF_GUID | NIF_MESSAGE);
+    add.guid                          = kGuid;
+    const std::vector<TrayIcon> added = Applied({}, add, nullptr);
+
+    // Another app naming the GUID from its own window would get the icon's clicks, or remove it.
+    for (const std::uint32_t command : {NIM_ADD, NIM_MODIFY, NIM_DELETE, NIM_SETVERSION}) {
+        NotifyIconMessage takeover = Message(command, 9, 1, NIF_GUID | NIF_MESSAGE);
+        takeover.guid              = kGuid;
+        EXPECT_FALSE(ApplyNotifyIcon(added, takeover, kOtherImage, nullptr).has_value()) << command;
+    }
+
+    // Paths compare as Windows compares them, ignoring case.
+    NotifyIconMessage modify = Message(NIM_MODIFY, 9, 1, NIF_GUID);
+    modify.guid              = kGuid;
+    EXPECT_TRUE(ApplyNotifyIcon(added, modify, L"c:\\program files\\app\\APP.EXE", nullptr).has_value());
 }
 
 TEST(NotifyIconProtocol, StateChangesOnlyTheBitsItsMaskNames) {

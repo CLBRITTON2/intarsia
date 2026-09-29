@@ -22,6 +22,7 @@ namespace {
         return TrayIcon{.owner           = 1,
                                 .id              = id,
                                 .guid            = std::nullopt,
+                                .ownerImage      = {},
                                 .callbackMessage = WM_APP,
                                 .version         = 0,
                                 .tooltip         = L"icon",

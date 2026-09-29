@@ -1,5 +1,6 @@
 #include "tray/NotifyIconProtocol.hpp"
 
+#include "platform/FileWatcher.hpp"
 #include "platform/Text.hpp"
 
 #include <shellapi.h>
@@ -38,11 +39,12 @@ namespace {
 
     // The fields the message's flags say it sets. The same pixels as before keep their pointer, so an app that sets its
     // icon again unchanged costs no upload or redraw.
-    TrayIcon Updated(TrayIcon icon, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {
+    TrayIcon Updated(TrayIcon icon, const NotifyIconMessage& message, std::wstring_view ownerImage, std::shared_ptr<const IconPixels> pixels) {
         icon.owner = message.owner;
         icon.id    = message.id;
         if ((message.flags & NIF_GUID) != 0) {
-            icon.guid = message.guid;
+            icon.guid       = message.guid;
+            icon.ownerImage = ownerImage;
         }
         if ((message.flags & NIF_MESSAGE) != 0) {
             icon.callbackMessage = message.callbackMessage;
@@ -143,14 +145,19 @@ LRESULT IconRectAnswer(IconRectPart part, const RECT& rect) {
     throw std::invalid_argument(std::format("unknown icon rect part {}", static_cast<std::uint32_t>(part)));
 }
 
-std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {
+std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::wstring_view ownerImage,
+                                                     std::shared_ptr<const IconPixels> pixels) {
     std::vector<TrayIcon> updated = icons;
     const auto            icon    = FindIcon(updated, message);
     const bool            found   = icon != updated.end();
+    // Any process can name any GUID, so without this one could take another app's icon and the clicks on it.
+    if (found && (message.flags & NIF_GUID) != 0 && !SameFileName(icon->ownerImage, ownerImage)) {
+        return std::nullopt;
+    }
     switch (message.command) {
         case NIM_ADD:
             if (found) {
-                *icon = Updated(*icon, message, std::move(pixels));
+                *icon = Updated(*icon, message, ownerImage, std::move(pixels));
                 return updated;
             }
             if (updated.size() >= kMaxTrayIcons) {
@@ -159,19 +166,20 @@ std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>
             updated.push_back(Updated(TrayIcon{.owner           = message.owner,
                                                .id              = message.id,
                                                .guid            = std::nullopt,
+                                               .ownerImage      = {},
                                                .callbackMessage = 0,
                                                .version         = 0,
                                                .tooltip         = {},
                                                .standardTooltip = false,
                                                .pixels          = nullptr,
                                                .hidden          = false},
-                                      message, std::move(pixels)));
+                                      message, ownerImage, std::move(pixels)));
             return updated;
         case NIM_MODIFY:
             if (!found) {
                 return std::nullopt;
             }
-            *icon = Updated(*icon, message, std::move(pixels));
+            *icon = Updated(*icon, message, ownerImage, std::move(pixels));
             return updated;
         case NIM_DELETE:
             if (!found) {

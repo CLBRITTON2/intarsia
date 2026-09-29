@@ -3,6 +3,7 @@
 #include "platform/AppBar.hpp"
 #include "platform/Errors.hpp"
 #include "platform/FileWatcher.hpp"
+#include "platform/Handle.hpp"
 #include "platform/PeerProcess.hpp"
 #include "platform/Win32Cast.hpp"
 #include "render/Icon.hpp"
@@ -75,6 +76,16 @@ namespace {
             Log(LogLevel::Warning, "tray", "taskbar_unreadable", {{.key = "process", .value = std::to_string(processId)}, {.key = "reason", .value = error.what()}});
             return false;
         }
+    }
+
+    // Throws Win32Error, as for a window already gone or a process of another user.
+    std::wstring WindowImage(HWND window) {
+        DWORD processId = 0;
+        if (GetWindowThreadProcessId(window, &processId) == 0) {
+            ThrowLastError("GetWindowThreadProcessId(tray icon owner)");
+        }
+        const UniqueHandle process = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(tray icon owner)");
+        return ProcessImage(process.get()).wstring();
     }
 
 } // namespace
@@ -263,6 +274,16 @@ bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
         _messageLog.Failed("malformed_message", error);
         return false;
     }
+    std::wstring ownerImage;
+    if ((message.flags & NIF_GUID) != 0) {
+        try {
+            ownerImage = WindowImage(ToWindow(message.owner));
+            _ownerLog.Succeeded();
+        } catch (const Win32Error& error) {
+            _ownerLog.Failed("owner_unreadable", error);
+            return false;
+        }
+    }
     std::shared_ptr<const IconPixels> pixels;
     if ((message.flags & NIF_ICON) != 0 && message.icon != 0) {
         try {
@@ -273,7 +294,7 @@ bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
             _iconLog.Failed("icon_unreadable", error);
         }
     }
-    std::optional<std::vector<TrayIcon>> icons = ApplyNotifyIcon(Icons(), message, std::move(pixels));
+    std::optional<std::vector<TrayIcon>> icons = ApplyNotifyIcon(Icons(), message, ownerImage, std::move(pixels));
     if (!icons.has_value()) {
         return false;
     }

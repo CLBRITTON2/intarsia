@@ -87,6 +87,7 @@ class ShellNotifyIcon final : public ITray {
     HWND       _explorer = nullptr;
     FailureLog _messageLog{"tray"};
     FailureLog _iconLog{"tray"};
+    FailureLog _ownerLog{"tray"};
     FailureLog _forwardLog{"tray"};
     FailureLog _rectLog{"tray"};
     // Guards _icons, _views and _error.
