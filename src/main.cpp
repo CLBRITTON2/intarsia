@@ -16,6 +16,7 @@
 #include <exception>
 #include <filesystem>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -42,10 +43,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
             Log(LogLevel::Info, "app", "relaunched_through_shell", {{.key = "process", .value = std::to_string(GetCurrentProcessId())}});
             return 0;
         }
-        const std::filesystem::path log = DefaultLogPath();
-        LogToFile(log);
-        Log(LogLevel::Info, "app", "started", {{.key = "process", .value = std::to_string(GetCurrentProcessId())}, {.key = "log", .value = ToUtf8(log.wstring())}});
-        App app(instance, ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), kGlazeWmPort, kTaskbarClass));
+        LaunchOptions options = ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), DefaultLogPath(), kGlazeWmPort, kTaskbarClass);
+        LogToFile(options.logPath);
+        Log(LogLevel::Info, "app", "started", {{.key = "process", .value = std::to_string(GetCurrentProcessId())}, {.key = "log", .value = ToUtf8(options.logPath.wstring())}});
+        App app(instance, std::move(options));
         return app.Run();
     } catch (const std::exception& error) {
         // The log file keeps it, stderr reaches a launching shell that redirected it, the message box covers a plain

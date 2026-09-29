@@ -17,9 +17,9 @@ namespace {
 
 } // namespace
 
-LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, std::uint16_t defaultGlazeWmPort,
-                                 const std::wstring& defaultTrayClass) {
-    LaunchOptions options{.configPath = defaultConfigPath, .glazeWmPort = defaultGlazeWmPort, .trayClass = defaultTrayClass};
+LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, const std::filesystem::path& defaultLogPath,
+                                 std::uint16_t defaultGlazeWmPort, const std::wstring& defaultTrayClass) {
+    LaunchOptions options{.configPath = defaultConfigPath, .logPath = defaultLogPath, .glazeWmPort = defaultGlazeWmPort, .trayClass = defaultTrayClass};
     for (size_t index = 0; index < arguments.size(); index += 2) {
         const std::wstring& name = arguments[index];
         if (index + 1 >= arguments.size()) {
@@ -28,6 +28,8 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, con
         const std::string value = ToUtf8(arguments[index + 1]);
         if (name == L"--config") {
             options.configPath = arguments[index + 1];
+        } else if (name == L"--log") {
+            options.logPath = arguments[index + 1];
         } else if (name == L"--glazewm-port") {
             std::uint32_t port      = 0;
             const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), port);
@@ -42,7 +44,7 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, con
             }
             options.trayClass = trayClass;
         } else {
-            throw LaunchOptionsError(std::format("unknown option '{}', intarsia takes --config <path>, --glazewm-port <port> and --tray-class <name>", ToUtf8(name)));
+            throw LaunchOptionsError(std::format("unknown option '{}', intarsia takes --config <path>, --log <path>, --glazewm-port <port> and --tray-class <name>", ToUtf8(name)));
         }
     }
     return options;
