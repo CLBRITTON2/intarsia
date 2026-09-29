@@ -73,6 +73,16 @@ WebSocket::WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_vi
     if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET, nullptr, 0)) {
         ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_UPGRADE_TO_WEB_SOCKET)");
     }
+    // The peer is checked only after the upgrade, so until then its answers must not send the bar elsewhere or draw the
+    // user's logon out of it.
+    DWORD disabled = WINHTTP_DISABLE_REDIRECTS | WINHTTP_DISABLE_AUTHENTICATION | WINHTTP_DISABLE_COOKIES;
+    if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled))) {
+        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_DISABLE_FEATURE)");
+    }
+    DWORD autologon = WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH;
+    if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_AUTOLOGON_POLICY, &autologon, sizeof(autologon))) {
+        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_AUTOLOGON_POLICY)");
+    }
     if (!WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
         ThrowLastError("WinHttpSendRequest");
     }
