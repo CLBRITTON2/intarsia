@@ -95,7 +95,7 @@ struct IconStyle {
     float        sizeDips; // also the size of a window's icon in the windows module
     D2D1_COLOR_F color;
     float        gapDips;         // between the icon and the text after it
-    float        rotationDegrees; // transform: rotate(), clockwise about the icon's center, a tray's only
+    float        rotationDegrees; // transform: rotate(), clockwise about the icon's center, a tray's or group's only
     Transition   transition;      // of the rotation
 };
 
@@ -147,7 +147,7 @@ struct ModuleStyle {
     // A divider's line, in its color.
     float lineWidthDips;
     float lineHeight; // a share of the box's height, 0 to 1
-    // A tray's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
+    // A tray's or group's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
     // (.expanded).
     Transition transition;
     float      expandedIconRotationDegrees;
@@ -168,7 +168,8 @@ enum class ModuleKind : std::uint8_t {
     Battery,
     Tray,
     Custom,
-    Counter
+    Counter,
+    Group
 };
 
 // A module type as the config's type key and style.css's type selectors write it.
@@ -177,7 +178,7 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 15> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 16> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
@@ -193,6 +194,7 @@ inline constexpr std::array<ModuleTypeName, 15> kModuleTypes{{
     {.name = "tray", .kind = ModuleKind::Tray},
     {.name = "custom", .kind = ModuleKind::Custom},
     {.name = "counter", .kind = ModuleKind::Counter},
+    {.name = "group", .kind = ModuleKind::Group},
 }};
 
 enum class WindowManagerKind : std::uint8_t {
@@ -321,9 +323,18 @@ struct TrayConfig {
     std::wstring icon;
 };
 
+struct ModuleInstance;
+
+// A toggle, such as a Nerd Font glyph, that folds its members away and unfolds them after it. Each member is a module
+// no _modules list and no other group shows, and none is a group.
+struct GroupConfig {
+    std::wstring                icon;
+    std::vector<ModuleInstance> members; // in the order the group's modules key lists them
+};
+
 // The settings from a module's table: workspaces, windows, binding_mode and divider have none.
-using ModuleSettings =
-    std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig, TrayConfig, CounterConfig>;
+using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig, TrayConfig,
+                                    CounterConfig, GroupConfig>;
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {
@@ -347,19 +358,32 @@ struct Config {
     std::vector<LayoutConfig> layouts; // ascending by minLengthDips
 };
 
-// Whether any module of the config's own lists or of any layout matches.
+// Whether any module the config shows matches: one of its own lists' or of a layout's, or a member of a group one of
+// those shows.
 template <typename Predicate>
 bool AnyModuleInConfig(const Config& config, Predicate predicate) {
-    return AnyInSections(config.modules, predicate) ||
-        std::ranges::any_of(config.layouts, [&predicate](const LayoutConfig& layout) { return AnyInSections(layout.modules, predicate); });
+    const auto shows = [&predicate](const ModuleInstance& instance) {
+        const auto* group = std::get_if<GroupConfig>(&instance.settings);
+        return predicate(instance) || (group != nullptr && std::ranges::any_of(group->members, predicate));
+    };
+    return AnyInSections(config.modules, shows) || std::ranges::any_of(config.layouts, [&shows](const LayoutConfig& layout) { return AnyInSections(layout.modules, shows); });
 }
 
-// Every module of the config's own lists, then of each layout. A module several lists show is visited once per list.
+// Every module of the config's own lists, then of each layout, each group followed by its members. A module several
+// lists show is visited once per list.
 template <typename Visit>
 void ForEachModuleInConfig(const Config& config, Visit visit) {
-    ForEachInSections(config.modules, visit);
+    const auto visitShown = [&visit](const ModuleInstance& instance) {
+        visit(instance);
+        if (const auto* group = std::get_if<GroupConfig>(&instance.settings)) {
+            for (const ModuleInstance& member : group->members) {
+                visit(member);
+            }
+        }
+    };
+    ForEachInSections(config.modules, visitShown);
     for (const LayoutConfig& layout : config.layouts) {
-        ForEachInSections(layout.modules, visit);
+        ForEachInSections(layout.modules, visitShown);
     }
 }
 

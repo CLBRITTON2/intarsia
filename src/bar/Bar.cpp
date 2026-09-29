@@ -79,10 +79,25 @@ namespace {
         }
     }
 
-    std::optional<std::uint32_t> EarliestChange(const Sections<std::unique_ptr<IModule>>& modules) {
+    // Every entry of every section, each group's members right after it.
+    template <typename Visit>
+    void ForEachEntry(const Sections<ModuleEntry>& modules, Visit visit) {
+        ForEachInSections(modules, [&visit](const ModuleEntry& entry) {
+            visit(entry);
+            for (const ModuleEntry& member : entry.members) {
+                visit(member);
+            }
+        });
+    }
+
+    D2D1_RECT_F Intersection(const D2D1_RECT_F& first, const D2D1_RECT_F& second) {
+        return D2D1::RectF(std::max(first.left, second.left), std::max(first.top, second.top), std::min(first.right, second.right), std::min(first.bottom, second.bottom));
+    }
+
+    std::optional<std::uint32_t> EarliestChange(const Sections<ModuleEntry>& modules) {
         std::optional<std::uint32_t> earliest;
-        ForEachInSections(modules, [&earliest](const std::unique_ptr<IModule>& module) {
-            const std::optional<std::uint32_t> wait = module->MillisecondsUntilChange();
+        ForEachEntry(modules, [&earliest](const ModuleEntry& entry) {
+            const std::optional<std::uint32_t> wait = entry.module->MillisecondsUntilChange();
             if (wait.has_value() && (!earliest.has_value() || *wait < *earliest)) {
                 earliest = wait;
             }
@@ -174,9 +189,7 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
          const BarPlacement& placement, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _launcher(launcher), _frames(frames), _windowManager(sources.windowManager), _state(state), _control(control),
     _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
-    _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
-    _styles(MapSections(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), [](const ModuleInstance& instance) { return instance.style; })),
-    _window(CreateBarWindow(instance, this)) {
+    _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)), _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
@@ -189,7 +202,7 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
 
 void Bar::Build(HINSTANCE instance) {
     RequireFontFamily(_graphics.dwrite.Get(), _config.style.font.c_str());
-    ForEachInSections(_styles, [this](const ModuleStyle& style) { RequireFontFamily(_graphics.dwrite.Get(), style.icon.font.c_str()); });
+    ForEachEntry(_modules, [this](const ModuleEntry& entry) { RequireFontFamily(_graphics.dwrite.Get(), entry.style.icon.font.c_str()); });
     ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.style.font.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                      _config.style.fontSizeDips, L"en-us", &_textFormat),
                   "IDWriteFactory::CreateTextFormat");
@@ -393,45 +406,58 @@ void Bar::Redraw() {
 bool Bar::LayOutModules() {
     bool changed = false;
     // Every module lays out, so none is left holding stale content.
-    for (const auto& [modules, styles] : {std::pair{&_modules.left, &_styles.left}, std::pair{&_modules.center, &_styles.center}, std::pair{&_modules.right, &_styles.right}}) {
-        for (size_t index = 0; index < modules->size(); ++index) {
-            changed = (*modules)[index]->Layout(ModuleContext((*styles)[index])) || changed;
-        }
-    }
+    ForEachEntry(_modules, [this, &changed](const ModuleEntry& entry) { changed = entry.module->Layout(ModuleContext(entry.style)) || changed; });
     return changed;
 }
 
 // Each module's box along the bar: what it draws plus its padding on both sides. A module showing nothing, such as a
 // battery module with no battery, takes no room at all.
-std::vector<float> Bar::BoxLengths(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles) const {
+std::vector<float> Bar::BoxLengths(const std::vector<ModuleEntry>& entries) const {
     std::vector<float> lengths;
-    lengths.reserve(modules.size());
-    for (size_t index = 0; index < modules.size(); ++index) {
-        const float content = MainLength(modules[index]->Size(), _config.bar.edge);
-        lengths.push_back(content > 0.0f ? content + (2.0f * MainOf(styles[index].box.padding, _config.bar.edge)) : 0.0f);
+    lengths.reserve(entries.size());
+    for (const ModuleEntry& entry : entries) {
+        if (entry.group != nullptr) {
+            lengths.push_back(ArrangeMembers(entry, BoxLengths(entry.members)).length);
+            continue;
+        }
+        const float content = MainLength(entry.module->Size(), _config.bar.edge);
+        lengths.push_back(content > 0.0f ? content + (2.0f * MainOf(entry.style.box.padding, _config.bar.edge)) : 0.0f);
     }
     return lengths;
 }
 
+GroupLayout Bar::ArrangeMembers(const ModuleEntry& entry, const std::vector<float>& memberLengths) const {
+    const Edge edge = _config.bar.edge;
+    return ArrangeGroup(MainLength(entry.module->Size(), edge), memberLengths, entry.group->Revealed(), MainOf(entry.style.box.padding, edge));
+}
+
 void Bar::Draw() {
-    ID2D1DeviceContext*   context = _surface->Context();
-    const Sections<float> lengths{
-        .left = BoxLengths(_modules.left, _styles.left), .center = BoxLengths(_modules.center, _styles.center), .right = BoxLengths(_modules.right, _styles.right)};
-    const Edge             edge    = _config.bar.edge;
-    const SectionStyle&    section = _config.style.section;
-    const BarLayout        layout  = ArrangeBar(lengths, MainLength(context->GetSize(), edge), MainOf(section.margin, edge), MainOf(section.box.padding, edge));
-    const Sections<HitBox> boxes{.left   = PlaceSection(_modules.left, _styles.left, lengths.left, layout.left),
-                                 .center = PlaceSection(_modules.center, _styles.center, lengths.center, layout.center),
-                                 .right  = PlaceSection(_modules.right, _styles.right, lengths.right, layout.right)};
-    RECT                   window{};
+    ID2D1DeviceContext*         context = _surface->Context();
+    const Sections<float>       lengths{.left = BoxLengths(_modules.left), .center = BoxLengths(_modules.center), .right = BoxLengths(_modules.right)};
+    const Edge                  edge    = _config.bar.edge;
+    const SectionStyle&         section = _config.style.section;
+    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), edge), MainOf(section.margin, edge), MainOf(section.box.padding, edge));
+    const Sections<PlacedEntry> placed{.left   = PlaceSection(_modules.left, lengths.left, layout.left),
+                                       .center = PlaceSection(_modules.center, lengths.center, layout.center),
+                                       .right  = PlaceSection(_modules.right, lengths.right, layout.right)};
+    RECT                        window{};
     if (!GetWindowRect(_window, &window)) {
         ThrowLastError("GetWindowRect");
     }
     _hitBoxes.clear();
-    ForEachInSections(boxes, [this, &window](const HitBox& box) {
-        _hitBoxes.push_back(box);
-        box.module->Place(ModulePlacement{.window = window, .contentOrigin = box.contentOrigin, .dpi = _placement.dpi});
+    ForEachInSections(placed, [this](const PlacedEntry& entry) {
+        // Only what the fold uncovers of a member takes the cursor.
+        for (const HitBox& member : entry.members) {
+            const D2D1_RECT_F shown = Intersection(member.bounds, entry.shown);
+            if (shown.right > shown.left && shown.bottom > shown.top) {
+                _hitBoxes.push_back(HitBox{.module = member.module, .bounds = shown, .contentOrigin = member.contentOrigin});
+            }
+        }
+        _hitBoxes.push_back(entry.box);
     });
+    for (const HitBox& box : _hitBoxes) {
+        box.module->Place(ModulePlacement{.window = window, .contentOrigin = box.contentOrigin, .dpi = _placement.dpi});
+    }
     // Items move under a cursor that stays still, as a tray unfolds, and no WM_MOUSEMOVE says so.
     if (_cursor.has_value()) {
         Point(*_cursor);
@@ -439,9 +465,9 @@ void Bar::Draw() {
 
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    DrawSection(boxes.left, _styles.left, layout.left);
-    DrawSection(boxes.center, _styles.center, layout.center);
-    DrawSection(boxes.right, _styles.right, layout.right);
+    DrawSection(placed.left, layout.left);
+    DrawSection(placed.center, layout.center);
+    DrawSection(placed.right, layout.right);
     _surface->EndDrawAndPresent();
     _presented = true;
 }
@@ -459,26 +485,61 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
     }
 }
 
-std::vector<Bar::HitBox> Bar::PlaceSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths,
-                                           const SectionLayout& layout) const {
-    std::vector<HitBox> boxes;
-    if (layout.length <= 0.0f) {
-        return boxes;
-    }
+// The entry's box from start along the bar, spanning across it as every module's box does.
+Bar::HitBox Bar::PlaceBox(const ModuleEntry& entry, float start, float length) const {
     const Edge          edge     = _config.bar.edge;
     const SectionStyle& style    = _config.style.section;
     const float         boxStart = CrossOf(style.margin, edge) + CrossOf(style.box.padding, edge);
-    boxes.reserve(modules.size());
-    for (size_t index = 0; index < modules.size(); ++index) {
-        const D2D1_RECT_F box = MainCrossRect(edge, layout.offsets[index], lengths[index], boxStart, BoxCrossLength());
-        boxes.push_back(
-            HitBox{.module = modules[index].get(), .bounds = box, .contentOrigin = ContentOrigin(edge, box, MainOf(styles[index].box.padding, edge), modules[index]->Size())});
-    }
-    return boxes;
+    const D2D1_RECT_F   box      = MainCrossRect(edge, start, length, boxStart, BoxCrossLength());
+    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(edge, box, MainOf(entry.style.box.padding, edge), entry.module->Size())};
 }
 
-// The section's box, then each module's box (its background, and its hover while under the cursor), then the module.
-void Bar::DrawSection(const std::vector<HitBox>& boxes, const std::vector<ModuleStyle>& styles, const SectionLayout& layout) {
+std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const {
+    std::vector<PlacedEntry> placed;
+    if (layout.length <= 0.0f) {
+        return placed;
+    }
+    placed.reserve(entries.size());
+    for (size_t index = 0; index < entries.size(); ++index) {
+        const ModuleEntry& entry = entries[index];
+        const float        start = layout.offsets[index];
+        PlacedEntry        one{.entry = &entry, .box = PlaceBox(entry, start, lengths[index]), .toggle = {}, .members = {}, .shown = {}};
+        if (entry.group != nullptr) {
+            const std::vector<float> memberLengths = BoxLengths(entry.members);
+            const GroupLayout        group         = ArrangeMembers(entry, memberLengths);
+            one.toggle                             = PlaceBox(entry, start, group.toggleLength).bounds;
+            one.shown                              = PlaceBox(entry, start + group.shownStart, group.shownLength).bounds;
+            for (size_t member = 0; member < entry.members.size(); ++member) {
+                one.members.push_back(PlaceBox(entry.members[member], start + group.offsets[member], memberLengths[member]));
+            }
+        }
+        placed.push_back(std::move(one));
+    }
+    return placed;
+}
+
+void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
+    DrawBox(_surface->Context(), *_brushes, box.bounds, style.box, box.module == _pointed ? style.hover : style.box.background);
+    box.module->Draw(ModuleContext(style), box.contentOrigin);
+}
+
+void Bar::DrawGroup(const PlacedEntry& placed) {
+    ID2D1DeviceContext* context = _surface->Context();
+    const ModuleStyle&  style   = placed.entry->style;
+    DrawBox(context, *_brushes, placed.box.bounds, style.box, style.box.background);
+    if (placed.box.module == _pointed) {
+        DrawBox(context, *_brushes, placed.toggle, style.box, style.hover);
+    }
+    placed.box.module->Draw(ModuleContext(style), placed.box.contentOrigin);
+    context->PushAxisAlignedClip(placed.shown, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    for (size_t member = 0; member < placed.members.size(); ++member) {
+        DrawModule(placed.members[member], placed.entry->members[member].style);
+    }
+    context->PopAxisAlignedClip();
+}
+
+// The section's box, then each module.
+void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout) {
     if (layout.length <= 0.0f) {
         return;
     }
@@ -490,10 +551,12 @@ void Bar::DrawSection(const std::vector<HitBox>& boxes, const std::vector<Module
     const D2D1_RECT_F   section   = MainCrossRect(edge, layout.start, layout.length, margin, thickness - (2.0f * margin));
     DrawBox(context, *_brushes, section, style.box, style.box.background);
 
-    for (size_t index = 0; index < boxes.size(); ++index) {
-        const ModuleStyle& moduleStyle = styles[index];
-        DrawBox(context, *_brushes, boxes[index].bounds, moduleStyle.box, boxes[index].module == _pointed ? moduleStyle.hover : moduleStyle.box.background);
-        boxes[index].module->Draw(ModuleContext(moduleStyle), boxes[index].contentOrigin);
+    for (const PlacedEntry& placed : entries) {
+        if (placed.entry->group != nullptr) {
+            DrawGroup(placed);
+        } else {
+            DrawModule(placed.box, placed.entry->style);
+        }
     }
 }
 

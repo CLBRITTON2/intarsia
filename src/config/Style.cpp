@@ -519,7 +519,7 @@ namespace {
                 throw std::invalid_argument(std::format("'{}' must start with a module, as #cpu .icon, without .alert or :hover", text));
             }
             if (compounds.size() == 2 && HasClass(compounds[0], "expanded") && *part != StyleTarget::Icon) {
-                throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
+                throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's or group's .icon only, as #tray.expanded .icon", text));
             }
             if (compounds.size() == 2 && HasColoringState(compounds[0]) && *part != StyleTarget::Icon) {
                 throw std::invalid_argument(
@@ -528,7 +528,7 @@ namespace {
             return *part;
         }
         if (compounds.size() == 1 && IsModuleCompound(last) && HasClass(last, "expanded")) {
-            throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's .icon only, as #tray.expanded .icon", text));
+            throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's or group's .icon only, as #tray.expanded .icon", text));
         }
         if (compounds.size() == 1 && IsModuleCompound(last)) {
             if (last.hover && StateCount(last) > 0) {
@@ -582,7 +582,7 @@ namespace {
                 allowed.emplace_back("color");
                 return allowed;
             case StyleTarget::Icon:
-                // An unfolded tray's icon turns and nothing else, so its size never changes as it unfolds.
+                // An unfolded tray's or group's icon turns and nothing else, so its size never changes as it unfolds.
                 if (selector.compounds.size() == 2 && HasClass(selector.compounds.front(), "expanded")) {
                     return {"transform"};
                 }
@@ -727,7 +727,7 @@ namespace {
         return variables;
     }
 
-    // Each target animates one property: a tray's box its width as it unfolds, an icon its rotation.
+    // Each target animates one property: a tray's or group's box its width as it unfolds, an icon its rotation.
     void RequireTransitionedProperty(StyleTarget target, std::string_view value) {
         const std::string_view animated = ReadTransitionValue(value).property;
         const std::string_view expected = target == StyleTarget::Icon ? "transform" : "width";
@@ -956,11 +956,11 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
     const Element      expanded{.type = type, .id = name, .classes = {"module", "expanded"}, .hover = false};
     const Cascaded     iconRules(sheet, StyleTarget::Icon, &normal, &icon);
     const Cascaded     expandedIconRules(sheet, StyleTarget::Icon, &expanded, &icon);
-    if (kind != ModuleKind::Tray) {
+    if (kind != ModuleKind::Tray && kind != ModuleKind::Group) {
         for (const auto& [rules, property] :
              {std::pair{&box, "transition"}, std::pair{&iconRules, "transform"}, std::pair{&iconRules, "transition"}, std::pair{&expandedIconRules, "transform"}}) {
             if (const Declaration* declaration = rules->Find(property)) {
-                throw StyleError(sheet.source, declaration->line, std::format("{} animates a tray as it unfolds, and {} is a {} module", property, name, type));
+                throw StyleError(sheet.source, declaration->line, std::format("{} animates a tray or group as it unfolds, and {} is a {} module", property, name, type));
             }
         }
     }

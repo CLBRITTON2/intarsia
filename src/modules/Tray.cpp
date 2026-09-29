@@ -18,19 +18,18 @@ namespace {
 
 } // namespace
 
-Tray::Tray(TrayConfig config, ITray& tray, ModuleStyle style) : _config(std::move(config)), _tray(tray), _style(std::move(style)), _toggle(EmptyIconText()) {}
+Tray::Tray(TrayConfig config, ITray& tray, ModuleStyle style) : _config(std::move(config)), _tray(tray), _style(std::move(style)), _fold(_style), _toggle(EmptyIconText()) {}
 
 Tray::~Tray() {
     _tray.ShowRects(this, {});
 }
 
 bool Tray::Layout(const RenderContext& render) {
-    const auto  now     = std::chrono::steady_clock::now();
-    const float reveal  = _reveal.Value(now);
-    const float angle   = _style.icon.rotationDegrees + ((_style.expandedIconRotationDegrees - _style.icon.rotationDegrees) * _turn.Value(now));
-    bool        changed = !_laidOut || reveal != _revealShown || angle != _angleShown;
-    _revealShown        = reveal;
-    _angleShown         = angle;
+    const FoldPosition position = _fold.At(std::chrono::steady_clock::now());
+    const float        reveal   = position.reveal;
+    bool               changed  = !_laidOut || reveal != _revealShown || position.angleDegrees != _angleShown;
+    _revealShown                = reveal;
+    _angleShown                 = position.angleDegrees;
 
     // Folding keeps the icons until they are out of sight.
     const std::vector<TrayIcon> shown = reveal > 0.0f ? ShownIcons(_tray.Icons()) : std::vector<TrayIcon>{};
@@ -97,18 +96,11 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const size_t        toggle      = _slots.size();
     const D2D1_POINT_2F shifted     = D2D1::Point2F(origin.x - ToggleShift(), origin.y);
     DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _hovered == toggle ? toggleStyle.hoverBackground : toggleStyle.background, shifted);
-    const D2D1_POINT_2F start  = ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted);
-    const D2D1_POINT_2F center = D2D1::Point2F(start.x + (_toggle.size.width / 2.0f), start.y + (_toggle.size.height / 2.0f));
-    D2D1_MATRIX_3X2_F   transform{};
-    render.context->GetTransform(&transform);
-    render.context->SetTransform(D2D1::Matrix3x2F::Rotation(_angleShown, center) * *D2D1::Matrix3x2F::ReinterpretBaseType(&transform));
-    DrawIconText(render, start, _toggle, render.accent, render.foreground);
-    render.context->SetTransform(transform);
+    DrawTurnedIconText(render, ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted), _toggle, _angleShown, render.accent, render.foreground);
 }
 
 std::optional<std::uint32_t> Tray::MillisecondsUntilChange() const {
-    const auto now = std::chrono::steady_clock::now();
-    if (_reveal.Running(now) || _turn.Running(now)) {
+    if (_fold.Running(std::chrono::steady_clock::now())) {
         return 0;
     }
     return std::nullopt;
@@ -116,10 +108,7 @@ std::optional<std::uint32_t> Tray::MillisecondsUntilChange() const {
 
 void Tray::Click(D2D1_POINT_2F point) {
     if (ToggleAt(point)) {
-        const auto now = std::chrono::steady_clock::now();
-        _expanded      = !_expanded;
-        _reveal.Retarget(_expanded ? 1.0f : 0.0f, _style.transition, now);
-        _turn.Retarget(_expanded ? 1.0f : 0.0f, _style.icon.transition, now);
+        _fold.Toggle(std::chrono::steady_clock::now());
     } else if (const Slot* slot = SlotAt(point)) {
         _tray.Press(slot->icon, TrayButton::Left);
     }

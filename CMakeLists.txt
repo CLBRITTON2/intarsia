@@ -70,6 +70,8 @@ add_library(intarsia_core STATIC
   src/modules/Custom.cpp
   src/modules/DirectionToggle.cpp
   src/modules/Divider.cpp
+  src/modules/Fold.cpp
+  src/modules/Group.cpp
   src/modules/ItemRow.cpp
   src/modules/ModuleFactory.cpp
   src/modules/TextModule.cpp
@@ -158,6 +160,7 @@ if(BUILD_TESTING)
     tests/modules/CounterSampler.cpp
     tests/modules/Cpu.cpp
     tests/modules/DirectionToggle.cpp
+    tests/modules/Fold.cpp
     tests/modules/IconText.cpp
     tests/modules/ItemRow.cpp
     tests/modules/Memory.cpp

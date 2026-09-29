@@ -250,7 +250,109 @@ TEST(Config, ListsMayOnlyShowDefinedModules) {
 }
 
 TEST(Config, EveryDefinedModuleMustBeShown) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no _modules list shows it"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no _modules list or group shows it"));
+}
+
+namespace {
+
+    constexpr std::string_view kGroup = R"(        layout = { type = "group", icon = "+", modules = { "cpu", "memory" } },
+        cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
+        memory = { type = "memory", format = "{used:.1f} GB", icon = "m", interval = 2 },)";
+
+    std::string                WithGroup(std::string_view group) {
+        return WithRightModules(R"({ "layout" })", group);
+    }
+
+} // namespace
+
+TEST(Config, AGroupReadsItsIconAndItsMembersInOrder) {
+    const Config config = LoadText(WithGroup(kGroup));
+    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Group});
+    const GroupConfig& group = SettingsOf<GroupConfig>(config.modules.right, 0);
+    EXPECT_EQ(group.icon, L"+");
+    EXPECT_EQ(Kinds(group.members), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Memory}));
+    EXPECT_EQ(group.members.at(1).name, "memory");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(group.members, 1).interval, std::chrono::seconds(2));
+}
+
+TEST(Config, AGroupAndItsMembersAreStyledByTheirOwnNames) {
+    const Config          config = LoadStyled(WithGroup(kGroup),
+                                              std::string(kValidStyle) +
+                                                  "#cpu { color: #ff0000; } #layout { transition: width 200ms; } "
+                                                           "#layout .icon { transform: rotate(-90deg); } #layout.expanded .icon { transform: rotate(90deg); }");
+    const ModuleInstance& group  = config.modules.right.at(0);
+    EXPECT_EQ(group.style.transition.duration, std::chrono::milliseconds(200));
+    EXPECT_FLOAT_EQ(group.style.icon.rotationDegrees, -90.0f);
+    EXPECT_FLOAT_EQ(group.style.expandedIconRotationDegrees, 90.0f);
+    EXPECT_FLOAT_EQ(SettingsOf<GroupConfig>(config.modules.right, 0).members.at(0).style.color.r, 1.0f);
+}
+
+TEST(Config, AGroupTakesOnlyItsTypeIconAndModules) {
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"("memory" } },)", R"("memory" }, on_click = { "cmd" } },)"))); },
+                ConfigErrorWith("modules.layout.on_click is not a known key"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(icon = "+", )", ""))); }, ConfigErrorWith("modules.layout.icon is missing"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(icon = "+")", R"(icon = "")"))); }, ConfigErrorWith("modules.layout.icon must be a glyph to click"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", "{}"))); }, ConfigErrorWith("modules.layout.modules must name at least one module"));
+}
+
+TEST(Config, AGroupsMembersMustBeDefinedListedOnceAndNotGroups) {
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "disk" })"))); },
+                ConfigErrorWith("modules.layout.modules shows 'disk', which is not defined in modules"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "cpu" })"))); },
+                ConfigErrorWith("modules.layout.modules lists 'cpu' twice"));
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "inner" })") +
+                                      R"(
+        inner = { type = "group", icon = "-", modules = { "memory" } },)"));
+        },
+        ConfigErrorWith("modules.layout.modules lists 'inner', which is a group: groups do not nest"));
+}
+
+TEST(Config, AMemberShowsOnlyThroughItsOneGroup) {
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "layout", "cpu" })", kGroup)); },
+                ConfigErrorWith("modules.cpu is a member of group 'layout', so no _modules list may show it as well"));
+    EXPECT_THAT(
+        [] {
+            return LoadText(
+                Replace(WithGroup(kGroup), "layouts = {},", R"(layouts = { { min_length = 1921, modules_left = { "memory" }, modules_center = {}, modules_right = {} } },)"));
+        },
+        ConfigErrorWith("modules.memory is a member of group 'layout', so no _modules list may show it as well"));
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithRightModules(R"({ "layout", "other" })", std::string(kGroup) + R"(
+        other = { type = "group", icon = "-", modules = { "cpu" } },)"));
+        },
+        ConfigErrorWith("modules.cpu is a member of both group 'layout' and group 'other'"));
+    // One group any number of lists show is still one group.
+    EXPECT_NO_THROW(
+        LoadText(Replace(WithGroup(kGroup), "layouts = {},", R"(layouts = { { min_length = 1921, modules_left = { "layout" }, modules_center = {}, modules_right = {} } },)")));
+}
+
+TEST(Config, TheConfigsWalksReachAGroupsMembers) {
+    const Config             config = LoadText(WithGroup(kGroup));
+    std::vector<std::string> names;
+    ForEachModuleInConfig(config, [&names](const ModuleInstance& instance) { names.push_back(instance.name); });
+    EXPECT_EQ(names, (std::vector<std::string>{"title", "time", "layout", "cpu", "memory"}));
+    EXPECT_TRUE(AnyModuleInConfig(config, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Memory; }));
+    EXPECT_FALSE(AnyModuleInConfig(config, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Battery; }));
+}
+
+TEST(Config, AGroupsMembersMustSuitTheWindowManager) {
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "spaces" })") + R"(
+        spaces = { type = "workspaces" },)"));
+        },
+        ConfigErrorWith("workspaces needs a tiling window manager"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(interval = 1 },)", R"(interval = 1, on_click = { window_manager = "focus --next-workspace" } },)"))); },
+                ConfigErrorWith("window_manager 'windows' takes none"));
+}
+
+TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
+    const std::string config = WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "weather" })") + R"(
+        weather = { type = "custom", command = { "cmd" }, timeout = 5, output = "json", classes = { "sunny" }, format = "{text}", icon = "", interval = 30 },)");
+    EXPECT_NO_THROW(LoadStyled(config, std::string(kValidStyle) + "#weather.sunny { color: #ff0000; }"));
 }
 
 TEST(Config, TheLastLayoutAnEdgeReachesReplacesTheLists) {
@@ -314,7 +416,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
                 ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, "
-                                "network, battery, tray, custom, counter"));
+                                "network, battery, tray, custom, counter, group"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 

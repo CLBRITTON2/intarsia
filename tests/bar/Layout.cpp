@@ -39,6 +39,31 @@ TEST(Layout, CenterIsCenteredOnTheWholeBar) {
     EXPECT_EQ(layout.center.offsets, (std::vector<float>{400.0f, 500.0f}));
 }
 
+TEST(Layout, AFoldedGroupIsItsToggleInsideItsPadding) {
+    const GroupLayout group = ArrangeGroup(20.0f, {30.0f, 50.0f}, 0.0f, 4.0f);
+    EXPECT_EQ(group.length, 28.0f);
+    EXPECT_EQ(group.toggleLength, 28.0f);
+    // The members stay where the unfolded group puts them, past the box's end.
+    EXPECT_EQ(group.offsets, (std::vector<float>{28.0f, 58.0f}));
+    EXPECT_EQ(group.shownStart, 28.0f);
+    EXPECT_EQ(group.shownLength, 0.0f);
+}
+
+TEST(Layout, AnUnfoldedGroupPlacesItsMembersBoxToBoxAfterItsPaddedToggle) {
+    const GroupLayout group = ArrangeGroup(20.0f, {30.0f, 0.0f, 50.0f}, 1.0f, 4.0f);
+    EXPECT_EQ(group.length, 108.0f);
+    EXPECT_EQ(group.toggleLength, 28.0f);
+    EXPECT_EQ(group.offsets, (std::vector<float>{28.0f, 58.0f, 58.0f}));
+    EXPECT_EQ(group.shownStart, 28.0f);
+    EXPECT_EQ(group.shownLength, 80.0f);
+}
+
+TEST(Layout, AGroupMidWayTakesItsShareOfItsMembers) {
+    const GroupLayout group = ArrangeGroup(20.0f, {30.0f, 50.0f}, 0.25f, 4.0f);
+    EXPECT_EQ(group.length, 48.0f);
+    EXPECT_EQ(group.shownLength, 20.0f);
+}
+
 TEST(Layout, CenterWiderThanTheBarOverflowsBothEndsEqually) {
     const BarLayout layout = ArrangeBar({.left = {}, .center = {200.0f}, .right = {}}, 100.0f, 0.0f, 0.0f);
     EXPECT_EQ(layout.center.offsets, (std::vector<float>{-50.0f}));

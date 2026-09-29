@@ -1,7 +1,7 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/AnimatedValue.hpp"
+#include "modules/Fold.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
 #include "modules/ItemRow.hpp"
@@ -60,15 +60,13 @@ class Tray final : public IModule {
     D2D1_POINT_2F         RowPoint(D2D1_POINT_2F point) const;
     std::optional<size_t> ItemUnder(D2D1_POINT_2F point) const;
     // The shown icon under point, or null over the toggle or between items.
-    const Slot*   SlotAt(D2D1_POINT_2F point) const;
-    bool          ToggleAt(D2D1_POINT_2F point) const;
+    const Slot* SlotAt(D2D1_POINT_2F point) const;
+    bool        ToggleAt(D2D1_POINT_2F point) const;
 
-    TrayConfig    _config;
-    ITray&        _tray;
-    ModuleStyle   _style;
-    bool          _expanded = false;
-    AnimatedValue _reveal{0.0f}; // 0 folded, 1 unfolded
-    AnimatedValue _turn{0.0f};   // 0 at the icon's rotation, 1 at the .expanded icon's
+    TrayConfig  _config;
+    ITray&      _tray;
+    ModuleStyle _style;
+    Fold        _fold;
     // What the last layout read of them, so drawing and hit tests agree with one frame.
     float             _revealShown = 0.0f;
     float             _angleShown  = 0.0f;

@@ -10,7 +10,8 @@ answering, logs a fatal error, grows past the thresholds after warming up, or do
 
 The bar's tray always runs under a class of its own (--tray-class), so no scenario takes the desktop's tray icons. The
 tray scenario floods it from build\debug\tray_sender.exe (tests/stress/TraySender.cpp), restarted every 10 s so all
-its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons.
+its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons, and folds
+and unfolds a group of modules.
 
 Run it from an interactive desktop session: the bar needs a desktop to draw on.
 #>
@@ -132,6 +133,27 @@ function Send-TrayInput([int] $processId, [int] $second) {
     }
 }
 
+# The stats group is the first module on the left, so its toggle sits 18 DIPs in from the bar's left edge with the
+# stress style (section margin and padding, the module's padding, then half the glyph). Every few seconds the toggle is
+# clicked to fold or unfold it, and the cursor moves across the members it unfolds.
+function Send-GroupInput([int] $processId, [int] $second) {
+    $WM_MOUSEMOVE = 0x0200
+    $WM_LBUTTONUP = 0x0202
+    foreach ($window in @(Get-BarWindows $processId)) {
+        $rect = [Stress.Native+RECT]::new()
+        if (-not [Stress.Native]::GetClientRect($window, [ref] $rect)) {
+            continue
+        }
+        $scale  = [Stress.Native]::GetDpiForWindow($window) / 96.0
+        $y      = [int] (($rect.Bottom - $rect.Top) / 2)
+        $toggle = [int] (18 * $scale)
+        if ($second % $toggleEverySeconds -eq 1) {
+            Send-BarMouse $window $WM_LBUTTONUP $toggle $y
+        }
+        Send-BarMouse $window $WM_MOUSEMOVE ($toggle + [int] ((20 + ($second * 23) % 100) * $scale)) $y
+    }
+}
+
 function Get-Sample([System.Diagnostics.Process] $process) {
     $process.Refresh()
     return [pscustomobject]@{
@@ -144,7 +166,8 @@ function Get-Sample([System.Diagnostics.Process] $process) {
     }
 }
 
-# A config with every GlazeWM module and a clock, cpu and memory ticking each second, plus the named optional modules:
+# A config with every GlazeWM module and a clock, cpu and memory ticking each second (cpu and memory in the stats group,
+# first on the left, which starts folded), plus the named optional modules:
 # the custom endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json, and the
 # tray, last so its toggle sits at the bar's right end whatever it unfolds.
 function New-StressConfig([string] $path, [int] $revision, [string[]] $optional) {
@@ -164,14 +187,14 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $optional)
     $shown       = @($optionalModules.Keys | Where-Object { $_ -in $optional })
     $custom      = @($shown | Where-Object { $_ -ne 'tray' })
     $trayList    = @($shown | Where-Object { $_ -eq 'tray' })
-    $rightList   = (@('"tiling"') + ($custom | ForEach-Object { "`"$_`"" }) + @('"cpu"', '"memory"') + ($trayList | ForEach-Object { "`"$_`"" })) -join ', '
+    $rightList   = (@('"tiling"') + ($custom | ForEach-Object { "`"$_`"" }) + ($trayList | ForEach-Object { "`"$_`"" })) -join ', '
     $definitions = ($shown | ForEach-Object { "        $_ = $($optionalModules[$_])," }) -join "`n"
     $config = @"
 -- stress revision $revision
 return {
     bar = { edge = "top", layer = "top", space = "reserve", thickness = 40 },
     window_manager = "glazewm",
-    modules_left = { "workspaces", "divider", "mode", "apps", "title" },
+    modules_left = { "stats", "workspaces", "divider", "mode", "apps", "title" },
     modules_center = { "clock" },
     modules_right = { $rightList },
     layouts = {},
@@ -184,6 +207,7 @@ return {
         tiling = { type = "tiling_direction", horizontal = "H", vertical = "V" },
         clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1,
                   on_scroll_up = { window_manager = "focus --next-workspace" } },
+        stats = { type = "group", icon = ">", modules = { "cpu", "memory" } },
         cpu = { type = "cpu", format = "{usage}%", icon = "", interval = 1 },
         memory = { type = "memory", format = "{used:.1f}", icon = "", interval = 1 },
 $definitions
@@ -210,6 +234,9 @@ tooltip { padding: 6px; background: #1f1d2e; border: 1px solid var(--border); bo
 .item.focused { color: #191724; background: #9ccfd8; font-weight: bold; }
 .item.empty { color: #908caa; }
 #divider { width: 1px; height: 60%; color: var(--border); }
+#stats { transition: width 300ms ease-out; }
+#stats .icon { transition: transform 200ms ease; }
+#stats.expanded .icon { transform: rotate(90deg); }
 '@
     if ('tray' -in $optional) {
         $style += "`n" + @'
@@ -294,6 +321,7 @@ function Invoke-Scenario([string] $name) {
                         -RedirectStandardOutput (Join-Path $work "sender-$senderStarts.out") -RedirectStandardError (Join-Path $work "sender-$senderStarts.err")
                 }
                 Send-TrayInput $bar.Id $second
+                Send-GroupInput $bar.Id $second
             }
             $samples.Add((Get-Sample $bar))
         }

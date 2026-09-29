@@ -17,7 +17,8 @@ return {
     window_manager = "glazewm",
 
     -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
-    -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #clock.
+    -- does not define, or a module no list or group shows, is an error. style.css styles a module by its name, as
+    -- #clock.
     modules_left = { "workspaces", "divider", "apps", "mode" },
     modules_center = {},
     modules_right = { "tray", "tiling", "net", "cpu", "memory", "volume", "battery", "clock" },
@@ -36,8 +37,8 @@ return {
     },
 
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
-    -- tiling_direction, divider, cpu, memory, audio, network, battery, tray, custom or counter. One type can appear
-    -- under several names with different settings, such as a second clock with its own format.
+    -- tiling_direction, divider, cpu, memory, audio, network, battery, tray, custom, counter or group. One type can
+    -- appear under several names with different settings, such as a second clock with its own format.
     --
     -- clock, window, cpu, memory, audio, network, battery, custom and counter take optional on_click, on_right_click,
     -- on_middle_click, on_scroll_up and on_scroll_down actions. { program, arguments... } starts a program: it must be
@@ -180,6 +181,16 @@ return {
         --     format = "{value:.0f}%",
         --     icon = "\u{E7F4}",
         --     interval = 2,
+        -- },
+
+        -- A group module folds its members away behind its icon, and a click on the icon unfolds them after it. It
+        -- starts folded. Each member is a module of its own, with its own style, tooltip and actions, that no list and
+        -- no other group shows, and none is a group. How it unfolds and how the icon turns is style.css's, as for the
+        -- tray. Add "more" to a list, with the gpu and weather examples above, to show it.
+        -- more = {
+        --     type = "group",
+        --     icon = "\u{E712}",
+        --     modules = { "gpu", "weather" }, -- in the order they unfold
         -- },
     },
 }

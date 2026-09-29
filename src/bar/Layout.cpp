@@ -30,3 +30,17 @@ BarLayout ArrangeBar(const Sections<float>& lengths, float barLength, float marg
         .right  = PlaceSection(lengths.right, barLength - margin - SectionLength(lengths.right, padding), padding),
     };
 }
+
+GroupLayout ArrangeGroup(float toggleLength, const std::vector<float>& memberLengths, float revealed, float padding) {
+    const float members = std::accumulate(memberLengths.begin(), memberLengths.end(), 0.0f);
+    const float shown   = revealed * members;
+    const float toggle  = toggleLength + (2.0f * padding);
+    GroupLayout group{.length = toggle + shown, .toggleLength = toggle, .shownStart = toggle, .shownLength = shown, .offsets = {}};
+    group.offsets.reserve(memberLengths.size());
+    float next = toggle;
+    for (const float length : memberLengths) {
+        group.offsets.push_back(next);
+        next += length;
+    }
+    return group;
+}

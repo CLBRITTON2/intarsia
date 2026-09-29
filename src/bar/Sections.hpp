@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <vector>
 
-// The three groups a bar lays out along its edge: left and center and right on a horizontal bar, top and center and
+// The three sections a bar lays out along its edge: left and center and right on a horizontal bar, top and center and
 // bottom on a vertical one.
 template <typename T>
 struct Sections {

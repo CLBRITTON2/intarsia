@@ -88,8 +88,10 @@ class Bar {
     RenderContext ModuleContext(const ModuleStyle& style) const;
     float         BoxCrossLength() const;
     // Whether any module's content changed.
-    bool               LayOutModules();
-    std::vector<float> BoxLengths(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles) const;
+    bool LayOutModules();
+    // A group's length takes in the revealed share of its members'.
+    std::vector<float> BoxLengths(const std::vector<ModuleEntry>& entries) const;
+    GroupLayout        ArrangeMembers(const ModuleEntry& entry, const std::vector<float>& memberLengths) const;
     void               Draw();
     // Where a module's box was last drawn, and where its content starts, for routing clicks to it.
     struct HitBox {
@@ -97,11 +99,24 @@ class Bar {
         D2D1_RECT_F   bounds;
         D2D1_POINT_2F contentOrigin;
     };
+    // One entry as placed for a frame: its box and, for a group, its toggle's span, its members' boxes in its members'
+    // order, and the span the fold uncovers of them, outside of which they neither draw nor take the cursor.
+    struct PlacedEntry {
+        const ModuleEntry*  entry;
+        HitBox              box;
+        D2D1_RECT_F         toggle;
+        std::vector<HitBox> members;
+        D2D1_RECT_F         shown;
+    };
 
-    std::vector<HitBox> PlaceSection(const std::vector<std::unique_ptr<IModule>>& modules, const std::vector<ModuleStyle>& styles, const std::vector<float>& lengths,
-                                     const SectionLayout& layout) const;
-    void                DrawSection(const std::vector<HitBox>& boxes, const std::vector<ModuleStyle>& styles, const SectionLayout& layout);
-    void                ScheduleNextChange();
+    HitBox                   PlaceBox(const ModuleEntry& entry, float start, float length) const;
+    std::vector<PlacedEntry> PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const;
+    void                     DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
+    // The module's box (its background, or its hover under the cursor), then the module.
+    void DrawModule(const HitBox& box, const ModuleStyle& style);
+    // The group's box, its hover over the toggle's span alone under the cursor, the toggle, then its members.
+    void DrawGroup(const PlacedEntry& placed);
+    void ScheduleNextChange();
     // Stops drawing and posts to control, once.
     void ReportDeviceLost(const DeviceLostError& error);
     // The box under a point in client pixels, or null between modules.
@@ -116,27 +131,26 @@ class Bar {
     // A cursor move: hovers what it is over and draws the bar if that changed.
     void PointAt(POINT client);
     // Hides the tooltip and waits for the cursor to rest again before showing the next one.
-    void                               RestartHover();
-    void                               ShowTooltip();
+    void                  RestartHover();
+    void                  ShowTooltip();
 
-    const GraphicsDevice&              _graphics;
-    const Config&                      _config;
-    Launcher&                          _launcher;
-    FrameClock&                        _frames;
-    bool                               _animating = false;
-    IWindowManager&                    _windowManager; // takes the window_manager actions
-    AppState&                          _state;
-    HWND                               _control;
-    std::uint32_t                      _deviceLostMessage;
-    bool                               _deviceLost = false;
-    bool                               _presented  = false;
-    BarPlacement                       _placement;
-    AppBarRoute                        _route;
-    Sections<std::unique_ptr<IModule>> _modules;
-    Sections<ModuleStyle>              _styles; // each module's, in the same places as _modules
-    std::vector<HitBox>                _hitBoxes;
-    IModule*                           _pointed = nullptr; // the module under the cursor, null when there is none
-    std::optional<POINT>               _cursor;            // client pixels where the cursor last moved, null once it left
+    const GraphicsDevice& _graphics;
+    const Config&         _config;
+    Launcher&             _launcher;
+    FrameClock&           _frames;
+    bool                  _animating = false;
+    IWindowManager&       _windowManager; // takes the window_manager actions
+    AppState&             _state;
+    HWND                  _control;
+    std::uint32_t         _deviceLostMessage;
+    bool                  _deviceLost = false;
+    bool                  _presented  = false;
+    BarPlacement          _placement;
+    AppBarRoute           _route;
+    Sections<ModuleEntry> _modules;
+    std::vector<HitBox>   _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
+    IModule*              _pointed = nullptr; // the module under the cursor, null when there is none
+    std::optional<POINT>  _cursor;            // client pixels where the cursor last moved, null once it left
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                  _surface;

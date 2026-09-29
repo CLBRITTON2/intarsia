@@ -94,6 +94,15 @@ void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconT
     }
 }
 
+void DrawTurnedIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, float degrees, ID2D1Brush* iconBrush, ID2D1Brush* textBrush) {
+    const D2D1_POINT_2F center = D2D1::Point2F(origin.x + (laidOut.size.width / 2.0f), origin.y + (laidOut.size.height / 2.0f));
+    D2D1_MATRIX_3X2_F   transform{};
+    render.context->GetTransform(&transform);
+    render.context->SetTransform(D2D1::Matrix3x2F::Rotation(degrees, center) * *D2D1::Matrix3x2F::ReinterpretBaseType(&transform));
+    DrawIconText(render, origin, laidOut, iconBrush, textBrush);
+    render.context->SetTransform(transform);
+}
+
 IconText EmptyIconText() {
     return IconText{.icon             = nullptr,
                     .text             = nullptr,

@@ -32,6 +32,9 @@ IconText LayOutWeightedText(const RenderContext& render, std::wstring_view text,
 // on the em's center).
 void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* iconBrush, ID2D1Brush* textBrush);
 
+// DrawIconText turned clockwise by degrees about the laid out box's center, as a fold's toggle turns.
+void DrawTurnedIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, float degrees, ID2D1Brush* iconBrush, ID2D1Brush* textBrush);
+
 // Nothing laid out yet.
 IconText EmptyIconText();
 

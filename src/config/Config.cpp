@@ -19,6 +19,7 @@
 #include <format>
 #include <fstream>
 #include <initializer_list>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string_view>
@@ -269,8 +270,10 @@ namespace {
     AudioConfig      ReadAudioConfig(const TableReader& module);
     NetworkConfig    ReadNetworkConfig(const TableReader& module);
     BatteryConfig    ReadBatteryConfig(const TableReader& module);
+    GroupConfig      ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style);
 
-    ModuleSettings   ReadModuleSettings(const TableReader& module, ModuleKind kind) {
+    // definitions, sheet and style are for a group, whose members are modules of their own.
+    ModuleSettings ReadModuleSettings(const TableReader& module, ModuleKind kind, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
         switch (kind) {
             case ModuleKind::Clock:
             case ModuleKind::Cpu:
@@ -289,26 +292,62 @@ namespace {
                 module.RejectUnknownKeys({"type", "horizontal", "vertical"});
                 return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
             case ModuleKind::Tray: module.RejectUnknownKeys({"type", "icon"}); return TrayConfig{.icon = ToWide(module.String("icon"))};
+            case ModuleKind::Group: return ReadGroupConfig(module, definitions, sheet, style);
         }
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
     }
 
-    // Every name a _modules list shows must be defined in the modules table, which holds one table per module.
+    ModuleInstance ReadModuleInstance(const TableReader& definitions, const std::string& name, const TableReader& module, ModuleKind kind, const StyleSheet& sheet,
+                                      const StyleConfig& style) {
+        ModuleSettings      settings = ReadModuleSettings(module, kind, definitions, sheet, style);
+        const CustomConfig* custom   = std::get_if<CustomConfig>(&settings);
+        ModuleStyle         styled   = ResolveModuleStyle(sheet, style, kind, name, custom != nullptr ? custom->classes : std::vector<std::string>{});
+        return ModuleInstance{.name = name, .kind = kind, .settings = std::move(settings), .style = std::move(styled)};
+    }
+
+    // The table of a module a list shows, which must be defined in the modules table, one table per module.
+    TableReader DefinedModule(const TableReader& lists, std::string_view listKey, const TableReader& definitions, const std::string& name) {
+        if (!definitions.Has(name)) {
+            throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
+        }
+        return definitions.Table(name);
+    }
+
     std::vector<ModuleInstance> ReadModuleList(const TableReader& lists, const TableReader& definitions, std::string_view listKey, const StyleSheet& sheet,
                                                const StyleConfig& style) {
         std::vector<ModuleInstance> instances;
         for (const std::string& name : lists.StringList(listKey)) {
-            if (!definitions.Has(name)) {
-                throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
-            }
-            const TableReader   module   = definitions.Table(name);
-            const ModuleKind    kind     = ParseModuleType(module);
-            ModuleSettings      settings = ReadModuleSettings(module, kind);
-            const CustomConfig* custom   = std::get_if<CustomConfig>(&settings);
-            ModuleStyle         styled   = ResolveModuleStyle(sheet, style, kind, name, custom != nullptr ? custom->classes : std::vector<std::string>{});
-            instances.push_back(ModuleInstance{.name = name, .kind = kind, .settings = std::move(settings), .style = std::move(styled)});
+            const TableReader module = DefinedModule(lists, listKey, definitions, name);
+            instances.push_back(ReadModuleInstance(definitions, name, module, ParseModuleType(module), sheet, style));
         }
         return instances;
+    }
+
+    // A group's members are read before any check that they are shown nowhere else, which needs the whole config.
+    GroupConfig ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        group.RejectUnknownKeys({"type", "icon", "modules"});
+        std::wstring icon = ToWide(group.String("icon"));
+        if (icon.empty()) {
+            throw group.Error(std::format("{} must be a glyph to click, as \"+\": a group with an empty icon could never unfold", group.KeyPath("icon")));
+        }
+        const std::vector<std::string> names = group.StringList("modules");
+        if (names.empty()) {
+            throw group.Error(std::format("{} must name at least one module", group.KeyPath("modules")));
+        }
+        std::vector<ModuleInstance> members;
+        members.reserve(names.size());
+        for (const std::string& name : names) {
+            if (std::ranges::any_of(members, [&name](const ModuleInstance& member) { return member.name == name; })) {
+                throw group.Error(std::format("{} lists '{}' twice", group.KeyPath("modules"), name));
+            }
+            const TableReader module = DefinedModule(group, "modules", definitions, name);
+            const ModuleKind  kind   = ParseModuleType(module);
+            if (kind == ModuleKind::Group) {
+                throw group.Error(std::format("{} lists '{}', which is a group: groups do not nest", group.KeyPath("modules"), name));
+            }
+            members.push_back(ReadModuleInstance(definitions, name, module, kind, sheet, style));
+        }
+        return GroupConfig{.icon = std::move(icon), .members = std::move(members)};
     }
 
     Sections<ModuleInstance> ReadSections(const TableReader& lists, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
@@ -339,8 +378,37 @@ namespace {
                 throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
             }
             if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
-                throw definitions.Error(std::format("{} is defined but no _modules list shows it", definitions.KeyPath(name)));
+                throw definitions.Error(std::format("{} is defined but no _modules list or group shows it", definitions.KeyPath(name)));
             }
+        }
+    }
+
+    // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
+    void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
+        std::vector<const Sections<ModuleInstance>*> lists{&config.modules};
+        for (const LayoutConfig& layout : config.layouts) {
+            lists.push_back(&layout.modules);
+        }
+        std::map<std::string, std::string, std::less<>> groupOf;
+        for (const Sections<ModuleInstance>* sections : lists) {
+            ForEachInSections(*sections, [&](const ModuleInstance& instance) {
+                const auto* group = std::get_if<GroupConfig>(&instance.settings);
+                if (group == nullptr) {
+                    return;
+                }
+                for (const ModuleInstance& member : group->members) {
+                    const auto listed = [&member](const ModuleInstance& shown) { return shown.name == member.name; };
+                    if (std::ranges::any_of(lists, [&listed](const Sections<ModuleInstance>* other) { return AnyInSections(*other, listed); })) {
+                        throw definitions.Error(
+                            std::format("{} is a member of group '{}', so no _modules list may show it as well", definitions.KeyPath(member.name), instance.name));
+                    }
+                    const auto [entry, added] = groupOf.try_emplace(member.name, instance.name);
+                    if (!added && entry->second != instance.name) {
+                        throw definitions.Error(std::format("{} is a member of both group '{}' and group '{}', and one group shows it", definitions.KeyPath(member.name),
+                                                            entry->second, instance.name));
+                    }
+                }
+            });
         }
     }
 
@@ -771,6 +839,7 @@ Config LoadConfig(const std::filesystem::path& path) {
     Config config{
         .bar = barConfig, .style = std::move(style), .windowManager = ParseWindowManager(root, "window_manager"), .modules = std::move(modules), .layouts = std::move(layouts)};
     RejectUnshownModules(definitions, config);
+    RequireMembersInOneGroup(definitions, config);
     RequireKnownIds(sheet, definitions.Keys());
     std::vector<DeclaredClasses> declared;
     ForEachModuleInConfig(config, [&declared](const ModuleInstance& instance) {

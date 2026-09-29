@@ -252,11 +252,22 @@ TEST(Style, ATrayWithoutTransitionsChangesAtOnce) {
     EXPECT_FLOAT_EQ(tray.expandedIconRotationDegrees, 30.0f);
 }
 
-TEST(Style, TransitionsAndRotationsAreATraysOnly) {
+TEST(Style, AGroupTakesTheTraysTransitionsAndUnfoldedIconRotation) {
+    const ModuleStyle group = StyleOf("group { transition: width 250ms linear; } #layout .icon { transform: rotate(-90deg); transition: transform 100ms; } "
+                                      "#layout.expanded .icon { transform: rotate(90deg); }",
+                                      ModuleKind::Group, "layout");
+    EXPECT_EQ(group.transition.duration, std::chrono::milliseconds(250));
+    EXPECT_EQ(group.transition.timing, TimingFunction::Linear);
+    EXPECT_FLOAT_EQ(group.icon.rotationDegrees, -90.0f);
+    EXPECT_EQ(group.icon.transition.duration, std::chrono::milliseconds(100));
+    EXPECT_FLOAT_EQ(group.expandedIconRotationDegrees, 90.0f);
+}
+
+TEST(Style, TransitionsAndRotationsAreATraysOrGroupsOnly) {
     EXPECT_THAT([] { return StyleOf("cpu { transition: width 1s; }", ModuleKind::Cpu, "cpu"); },
-                ConfigErrorWith("transition animates a tray as it unfolds, and cpu is a cpu module"));
-    EXPECT_THAT([] { return StyleOf(".icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray"));
-    EXPECT_THAT([] { return StyleOf(".expanded .icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray"));
+                ConfigErrorWith("transition animates a tray or group as it unfolds, and cpu is a cpu module"));
+    EXPECT_THAT([] { return StyleOf(".icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray or group"));
+    EXPECT_THAT([] { return StyleOf(".expanded .icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray or group"));
 }
 
 TEST(Style, TransitionsAndRotationsAreCheckedAsTheyParse) {
@@ -266,8 +277,8 @@ TEST(Style, TransitionsAndRotationsAreCheckedAsTheyParse) {
     EXPECT_THAT([] { return Parse("tray { transition: width 1s bouncy; }"); }, ConfigErrorWith("timing function 'bouncy'"));
     EXPECT_THAT([] { return Parse("tray { transition: width; }"); }, ConfigErrorWith("must be none, or a property"));
     EXPECT_THAT([] { return Parse("tray .icon { transform: scale(2); }"); }, ConfigErrorWith("rotate(180deg)"));
-    EXPECT_THAT([] { return Parse("tray.expanded { background: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's .icon only"));
-    EXPECT_THAT([] { return Parse("tray.expanded .item { color: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's .icon only"));
+    EXPECT_THAT([] { return Parse("tray.expanded { background: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's or group's .icon only"));
+    EXPECT_THAT([] { return Parse("group.expanded .item { color: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's or group's .icon only"));
     EXPECT_THAT([] { return Parse("tray.expanded .icon { color: #fff; }"); }, ConfigErrorWith("which takes: transform"));
 }
 
