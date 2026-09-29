@@ -115,8 +115,8 @@ return {
 
 // The shipped configs must load with their style, so neither drifts from the loader. What they show is theirs to change.
 TEST(Config, ShippedConfigsLoad) {
-    EXPECT_NO_THROW(LoadConfig(INTARSIA_BASIC_CONFIG));
-    EXPECT_NO_THROW(LoadConfig(INTARSIA_EXAMPLE_CONFIG));
+    EXPECT_NO_THROW(LoadConfig(INTARSIA_WINDOWS_CONFIG));
+    EXPECT_NO_THROW(LoadConfig(INTARSIA_GLAZEWM_CONFIG));
 }
 
 TEST(Config, ValidConfigParsesIntoTypedValues) {

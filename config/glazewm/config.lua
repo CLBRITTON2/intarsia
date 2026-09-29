@@ -1,14 +1,14 @@
 -- intarsia reads this from %USERPROFILE%\.config\intarsia\config.lua. Every key is required. How the bar looks lives in
--- style.css beside it.
+-- style.css beside it. This config runs with GlazeWM and takes its icons from Segoe MDL2 Assets, which Windows ships.
 return {
     bar = {
         edge = "top", -- top, bottom, left or right
         -- top: above other windows, lowered while a fullscreen app runs. bottom: other windows can cover it.
-        layer = "bottom",
+        layer = "top",
         -- reserve: the monitor's work area leaves the bar out, so maximized windows stop at it. share: the work area
         -- keeps the bar's strip, as for a plain window, so the window manager's gap has to make room for it.
-        space = "share",
-        thickness = 54, -- DIPs, scaled by each monitor's DPI
+        space = "reserve",
+        thickness = 44, -- DIPs, scaled by each monitor's DPI
     },
 
     -- glazewm: workspaces and focus over GlazeWM's IPC, retried while GlazeWM is down
@@ -17,21 +17,21 @@ return {
     window_manager = "glazewm",
 
     -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
-    -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #date.
-    modules_left = { "workspaces", "divider", "apps", "divider_date", "date" },
+    -- does not define, or a module no list shows, is an error. style.css styles a module by its name, as #clock.
+    modules_left = { "workspaces", "divider", "apps", "mode" },
     modules_center = {},
-    modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "mic", "battery" },
+    modules_right = { "tray", "tiling", "net", "cpu", "memory", "volume", "battery", "clock" },
 
     -- A layout replaces the three lists above on a bar whose monitor is at least min_length DIPs long along the bar's
     -- edge (its width for a top or bottom bar, pixels divided by the scale). The last layout a monitor reaches wins, so
     -- each min_length must be greater than the one before. {} shows the lists above everywhere.
     layouts = {
-        -- Wider than 1920 DIPs, the date moves to the center.
+        -- From 1600 DIPs wide, the clock moves to the center.
         {
-            min_length = 1921,
-            modules_left = { "workspaces", "divider", "apps" },
-            modules_center = { "date" },
-            modules_right = { "tray", "mode", "tiling", "net", "cpu", "memory", "volume", "mic", "battery" },
+            min_length = 1600,
+            modules_left = { "workspaces", "divider", "apps", "mode" },
+            modules_center = { "clock" },
+            modules_right = { "tray", "tiling", "net", "cpu", "memory", "volume", "battery" },
         },
     },
 
@@ -40,10 +40,10 @@ return {
     -- under several names with different settings, such as a second clock with its own format.
     --
     -- clock, window, cpu, memory, audio, network, battery, custom and counter take optional on_click, on_right_click,
-    -- on_middle_click, on_scroll_up and on_scroll_down actions. { program, arguments... } starts a program: it must be an .exe (absolute, or found on PATH when the
-    -- config loads), and it starts without a shell, so arguments reach it exactly as written.
-    -- { window_manager = "focus --next-workspace" } sends the window manager a command in its own syntax instead,
-    -- without starting a process (glazewm only).
+    -- on_middle_click, on_scroll_up and on_scroll_down actions. { program, arguments... } starts a program: it must be
+    -- an .exe (absolute, or found on PATH when the config loads), and it starts without a shell, so arguments reach it
+    -- exactly as written. { window_manager = "focus --next-workspace" } sends the window manager a command in its own
+    -- syntax instead, without starting a process (glazewm only).
     --
     -- They also take an optional tooltip: a second format for the same value, shown while the cursor rests on the
     -- module. The workspaces module shows why the window manager is disconnected, with no key needed.
@@ -52,18 +52,17 @@ return {
         workspaces = { type = "workspaces" },
         -- A line between modules, sized by width and height in style.css. Each place a line appears is its own module.
         divider = { type = "divider" },
-        divider_date = { type = "divider" },
         -- One item per window on the displayed workspace, .focused for the focused one. Click one to focus it.
         apps = { type = "windows" },
         -- One item per active binding mode, nothing while none is active.
         mode = { type = "binding_mode" },
         -- The focused container's tiling direction, drawn as an icon. Click to flip it.
-        tiling = { type = "tiling_direction", horizontal = "⇄", vertical = "⇵" },
-        date = {
+        tiling = { type = "tiling_direction", horizontal = "\u{E8AB}", vertical = "\u{E8CB}" },
+        clock = {
             type = "clock",
-            format = "{time:%a %d %b %Y, %H:%M}", -- {time} takes a std::format chrono spec
+            format = "{time:%a %d %b  %H:%M}", -- {time} takes a std::format chrono spec
             tooltip = "{time:%A %d %B %Y, %H:%M:%S}",
-            icon = "\u{F1441}",
+            icon = "\u{E823}",
             interval = 60, -- seconds between redraws, aligned to the clock
         },
         cpu = {
@@ -72,8 +71,8 @@ return {
             -- {ghz} is the current clock speed as a double, {max_core} the busiest logical processor as a whole percent,
             -- and {cores} every logical processor's usage, four to a line
             tooltip = "Speed {ghz:.2f} GHz\n{cores}",
-            icon = "\u{F4BC}",
-            interval = 1,
+            icon = "\u{E950}",
+            interval = 2,
             on_click = { "C:\\Windows\\System32\\Taskmgr.exe" },
         },
         memory = {
@@ -81,8 +80,8 @@ return {
             format = "{used:.1f} GB", -- {used} is gibibytes in use, as a double
             -- {total}, {available}, {cached}, {committed} and {commit_limit} are gibibytes too, {percent} the share in use
             tooltip = "{used:.1f} of {total:.0f} GB ({percent}%)\nCached {cached:.1f} GB\nCommitted {committed:.1f} of {commit_limit:.0f} GB",
-            icon = "\u{EFC5}",
-            interval = 1,
+            icon = "\u{E964}",
+            interval = 2,
             on_click = { "C:\\Windows\\System32\\resmon.exe" },
         },
         -- The interface the internet is reached through, sampled every second. Formats and the tooltip can use {ssid},
@@ -96,33 +95,24 @@ return {
             format_ethernet = "",
             format_disconnected = "",
             -- Weakest signal to strongest, the range split evenly between them.
-            icons_wifi = { "\u{F092F}", "\u{F091F}", "\u{F0922}", "\u{F0925}", "\u{F0928}" },
-            icon_ethernet = "\u{F0200}",
-            icon_disconnected = "\u{F092E}",
+            icons_wifi = { "\u{E872}", "\u{E873}", "\u{E874}", "\u{E701}" },
+            icon_ethernet = "\u{E839}",
+            icon_disconnected = "\u{EB55}",
             tooltip = "{interface} {ssid} {signal}%\n{ip}\n↓ {down}  ↑ {up}",
             on_click = { "C:\\Windows\\explorer.exe", "ms-settings:network-status" },
         },
         -- The default output (speakers) or input (microphone) device's volume, by flow, following device switches.
         -- Click toggles mute, scroll changes the volume by step percent, unless on_click or on_scroll_up and
         -- on_scroll_down replace them. The formats and tooltip can use {volume} (a whole percent) and {device} (its
-        -- name). Shows nothing while there is no device of its flow.
+        -- name). Shows nothing while there is no device of its flow. A second audio module with flow = "input" shows
+        -- the microphone.
         volume = {
             type = "audio",
             flow = "output",
             format = "{volume}%",
             format_muted = "muted",
-            icon = "\u{F057E}",
-            icon_muted = "\u{F0581}",
-            step = 5,
-            tooltip = "{device}",
-        },
-        mic = {
-            type = "audio",
-            flow = "input",
-            format = "{volume}%",
-            format_muted = "muted",
-            icon = "\u{F036C}",
-            icon_muted = "\u{F036D}",
+            icon = "\u{E767}",
+            icon_muted = "\u{E74F}",
             step = 5,
             tooltip = "{device}",
         },
@@ -137,12 +127,12 @@ return {
             format_charging = "{capacity}%",
             format_plugged = "{capacity}%",
             -- Emptiest to fullest while discharging, the range split evenly between them.
-            icons = { "\u{F008E}", "\u{F007C}", "\u{F007E}", "\u{F0081}", "\u{F0079}" },
-            icon_charging = "\u{F0084}",
-            icon_plugged = "\u{F06A5}",
+            icons = { "\u{E850}", "\u{E853}", "\u{E856}", "\u{E859}", "\u{E83F}" },
+            icon_charging = "\u{E83E}",
+            icon_plugged = "\u{EA93}",
             -- Discharging at or under these percents draws the module in its .warning, then .critical, colors.
-            warning_at = 40,
-            critical_at = 20,
+            warning_at = 30,
+            critical_at = 15,
             tooltip = "{capacity}% {time}\nHealth {health}%",
             on_click = { "C:\\Windows\\explorer.exe", "ms-settings:batterysaver" },
         },
@@ -150,7 +140,7 @@ return {
         -- toggle showing icon until it is clicked. Click an icon for its app's window, right click it for its menu.
         -- How it unfolds and how the toggle turns is style.css's. While a tray module shows, the bar receives the
         -- icons in the taskbar's place and passes each on to it, so the taskbar still has them all once the bar exits.
-        tray = { type = "tray", icon = "\u{F054}" },
+        tray = { type = "tray", icon = "\u{E76C}" },
         -- A window module shows the focused window's title. Add "title" to a list to show it.
         -- title = {
         --     type = "window",
@@ -168,13 +158,13 @@ return {
         -- unlisted class, and each shows its reason as an alert. Add "weather" to a list to show it.
         -- weather = {
         --     type = "custom",
-        --     -- Absolute, so another curl.exe earlier on PATH (such as MSYS2's) is never picked instead.
+        --     -- Absolute, so another curl.exe earlier on PATH is never picked instead.
         --     command = { "C:\\Windows\\System32\\curl.exe", "--silent", "--fail", "https://wttr.in/?format=%c%t" },
         --     timeout = 10,
         --     output = "text",
         --     classes = {}, -- the classes a JSON output may name
         --     format = "{text}", -- {text} is the output's text, as a string
-        --     icon = "",
+        --     icon = "\u{E753}",
         --     interval = 900,
         -- },
         --
@@ -188,7 +178,7 @@ return {
         --     counter = "\\GPU Engine(*engtype_3D)\\Utilization Percentage",
         --     combine = "sum",
         --     format = "{value:.0f}%",
-        --     icon = "",
+        --     icon = "\u{E7F4}",
         --     interval = 2,
         -- },
     },

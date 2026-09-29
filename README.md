@@ -73,12 +73,12 @@ refuses uncommitted changes and a version the changelog lacks. The Release workf
 ## Run
 
 The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.css` beside it for how it
-looks. Start from `config\basic`, a plain bar that needs nothing but Windows, or `config\example`, which runs with
-GlazeWM, uses JetBrainsMono Nerd Font and documents every key and selector:
+looks. Start from `config\windows`, a plain bar that needs nothing but Windows, or `config\glazewm`, which runs with
+GlazeWM and documents every key and selector:
 
 ```powershell
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\intarsia | Out-Null
-Copy-Item config\basic\config.lua, config\basic\style.css $env:USERPROFILE\.config\intarsia
+Copy-Item config\windows\config.lua, config\windows\style.css $env:USERPROFILE\.config\intarsia
 Start-Process build\release\intarsia.exe -RedirectStandardError $env:TEMP\intarsia.log
 ```
 
@@ -99,8 +99,8 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/config/` | the Lua config loader and the style sheet parser |
 | `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
-| `config/basic/` | a plain config and style that need nothing but Windows |
-| `config/example/` | a config and style that document every key and selector |
+| `config/windows/` | a plain config and style that need nothing but Windows |
+| `config/glazewm/` | a config and style for GlazeWM that document every key and selector |
 | `tests/` | unit tests mirroring `src/`, and `tests/stress/` for the stress tests' IPC server |
 | `CHANGELOG.md` | what each release changed |
 | `scripts/` | build, test, stress test, lint, changelog and release |
