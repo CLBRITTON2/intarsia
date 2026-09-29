@@ -404,3 +404,6 @@ Config LoadConfig(const std::filesystem::path& path);
 
 // The sections of the last layout whose minimum edgeLengthDips reaches, or the config's own lists when none does.
 const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float edgeLengthDips);
+
+// Whether any bar can show a module of kind (AnyModuleInConfig).
+bool ShowsKind(const Config& config, ModuleKind kind);

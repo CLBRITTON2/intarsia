@@ -887,3 +887,7 @@ const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float
     }
     return *chosen;
 }
+
+bool ShowsKind(const Config& config, ModuleKind kind) {
+    return AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
+}

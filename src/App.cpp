@@ -50,11 +50,7 @@ namespace {
     constexpr std::chrono::milliseconds kFirstDeviceRetry{500};
     constexpr std::chrono::milliseconds kLongestDeviceRetry{10000};
 
-    bool                                ShowsKind(const Config& config, ModuleKind kind) {
-        return AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
-    }
-
-    bool ShowsAudioFlow(const Config& config, AudioFlow flow) {
+    bool                                ShowsAudioFlow(const Config& config, AudioFlow flow) {
         return AnyModuleInConfig(config, [flow](const ModuleInstance& instance) {
             const auto* audio = std::get_if<AudioConfig>(&instance.settings);
             return audio != nullptr && audio->flow == flow;
@@ -139,7 +135,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control.get(), kConfigChanged, kWatcherFailed, kConfigSettle)),
-    _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
+    _windowManager(CreateWindowManager(*_config, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
     _counterSamplers(std::make_unique<CounterSamplers>(*_config, _changes)) {
     MatchSourcesToConfig();
     Bar::RegisterWindowClass(_instance);
@@ -293,7 +289,7 @@ void App::ReloadConfig() {
     // Reset before creating the replacement: the native backend allows one instance at a time.
     _windowManager.reset();
     _config          = std::move(config);
-    _windowManager   = CreateWindowManager(_config->windowManager, _changes, _glazeWmPort);
+    _windowManager   = CreateWindowManager(*_config, _changes, _glazeWmPort);
     _commandPollers  = std::make_unique<CommandPollers>(*_config, _changes);
     _counterSamplers = std::make_unique<CounterSamplers>(*_config, _changes);
     MatchSourcesToConfig();

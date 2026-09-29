@@ -27,7 +27,7 @@ Native::ActiveInstance::~ActiveInstance() {
 }
 
 Native::Native(ChangeSignal& changes) :
-    _active(this), _changes(changes), _foreground(GetForegroundWindow()), _title(WindowTitle(_foreground)), _foregroundHook(HookEvent(EVENT_SYSTEM_FOREGROUND, 0)),
+    _active(this), _changes(changes), _foreground(GetForegroundWindow()), _title(WindowTitle(_foreground)), _foregroundHook(HookEvent(EVENT_SYSTEM_FOREGROUND, 0, 0)),
     _titleHook(HookTitleChanges(_foreground)) {}
 
 std::optional<FocusedWindow> Native::Focused() const {
@@ -73,22 +73,24 @@ void Native::RunCommand(const std::string& command) {
     throw std::logic_error("the native backend takes no commands, cannot run '" + command + "'");
 }
 
-// process 0 hooks every process.
-Native::UniqueHook Native::HookEvent(std::uint32_t event, std::uint32_t process) {
-    HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, process, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+// A process or thread of 0 hooks every one.
+Native::UniqueHook Native::HookEvent(std::uint32_t event, std::uint32_t process, std::uint32_t thread) {
+    HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, process, thread, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (hook == nullptr) {
         ThrowLastError("SetWinEventHook");
     }
     return UniqueHook(hook);
 }
 
-// Hooks only the window's own process: a hook on every process wakes the bar for each name change on the desktop.
+// Hooks only the window's own thread: a wider hook wakes the bar for each name change of every other window and
+// control there.
 Native::UniqueHook Native::HookTitleChanges(HWND window) {
-    DWORD process = 0;
-    if (window == nullptr || GetWindowThreadProcessId(window, &process) == 0 || process == 0) {
+    DWORD       process = 0;
+    const DWORD thread  = window != nullptr ? GetWindowThreadProcessId(window, &process) : 0;
+    if (thread == 0 || process == 0) {
         return UniqueHook(nullptr);
     }
-    return HookEvent(EVENT_OBJECT_NAMECHANGE, process);
+    return HookEvent(EVENT_OBJECT_NAMECHANGE, process, thread);
 }
 
 void CALLBACK Native::OnWinEvent(HWINEVENTHOOK, DWORD event, HWND window, LONG object, LONG child, DWORD, DWORD) {

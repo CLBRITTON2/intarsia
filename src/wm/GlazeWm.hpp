@@ -21,8 +21,9 @@
 // the socket. The focused title comes from Windows events, since GlazeWM sends no event when a title changes.
 class GlazeWm final : public IWindowManager {
   public:
-    // port is GlazeWM's IPC port on 127.0.0.1, 6123 unless a test server stands in.
-    GlazeWm(ChangeSignal& changes, std::uint16_t port);
+    // port is GlazeWM's IPC port on 127.0.0.1, 6123 unless a test server stands in. focus follows the focused window,
+    // or is null when nothing shows it, since its hooks wake the bar for every focus change and retitle.
+    GlazeWm(ChangeSignal& changes, std::uint16_t port, std::unique_ptr<Native> focus);
     ~GlazeWm() override;
     GlazeWm(const GlazeWm&)                                  = delete;
     GlazeWm&                       operator=(const GlazeWm&) = delete;
@@ -61,15 +62,15 @@ class GlazeWm final : public IWindowManager {
     void SendSerialized(WebSocket& socket, std::string_view text);
     void Publish(const Snapshot& snapshot);
     // Queues a command built by makeCommand, which throws ProtocolError for an argument GlazeWM cannot take.
-    void               QueueCommand(const std::function<std::string()>& makeCommand);
+    void                    QueueCommand(const std::function<std::string()>& makeCommand);
 
-    Native             _native;
-    std::uint16_t      _port;
-    ChangeSignal&      _changes;
-    UniqueHandle       _stopEvent;
-    mutable std::mutex _mutex; // guards the members below it up to _sendMutex
-    Snapshot           _snapshot;
-    bool               _stopping = false;
+    std::unique_ptr<Native> _focus;
+    std::uint16_t           _port;
+    ChangeSignal&           _changes;
+    UniqueHandle            _stopEvent;
+    mutable std::mutex      _mutex; // guards the members below it up to _sendMutex
+    Snapshot                _snapshot;
+    bool                    _stopping = false;
     // Shared so the sender or the destructor can still use the socket while the session that opened it is ending.
     std::shared_ptr<WebSocket> _socket;
     std::mutex                 _sendMutex;

@@ -9,5 +9,6 @@
 #include <cstdint>
 #include <memory>
 
-// glazeWmPort is where the GlazeWM backend connects on 127.0.0.1, unused by the others.
-std::unique_ptr<IWindowManager> CreateWindowManager(WindowManagerKind kind, ChangeSignal& changes, std::uint16_t glazeWmPort);
+// The config's window manager backend. glazeWmPort is where the GlazeWM backend connects on 127.0.0.1, unused by the
+// others.
+std::unique_ptr<IWindowManager> CreateWindowManager(const Config& config, ChangeSignal& changes, std::uint16_t glazeWmPort);
