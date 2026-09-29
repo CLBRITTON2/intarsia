@@ -6,7 +6,8 @@ Stress tests the running bar. Fails on a crash, a leak or a hang.
 Each scenario runs build\debug\intarsia.exe with a generated config against build\debug\glazewm.exe, a test IPC server
 (tests/stress/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
 objects, threads, CPU, and whether its windows still answer messages. A scenario fails when the bar exits, stops
-answering, logs a fatal error, grows past the thresholds after warming up, or does not exit cleanly on WM_CLOSE.
+answering, logs a fatal error, grows past the thresholds after warming up, or does not exit cleanly on WM_CLOSE. Once
+warmed up it also fails when a monitor lacks exactly one bar along its top edge.
 
 The bar's tray always runs under a class of its own (--tray-class), so no scenario takes the desktop's tray icons. The
 tray scenario floods it from build\debug\tray_sender.exe (tests/stress/TraySender.cpp), restarted every 10 s so all
@@ -49,6 +50,7 @@ $maxThreadGrowth    = 8
 $warmupSeconds      = 10
 # The idle scenario ticks a clock, cpu and memory each second and gets a GlazeWM event a second, and runs no commands.
 $maxIdleCpuPercent = 3
+$barThicknessDips  = 40
 # The invalid scenario saves its config this far in, and the bar has this long after the save to end with the error (it
 # waits a second for a later save to supersede the failed one).
 $invalidSaveSecond   = 20
@@ -63,6 +65,50 @@ Add-Type -Namespace Stress -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out RECT rect);
 [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+[DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+[DllImport("user32.dll", SetLastError = true)] static extern bool GetWindowRect(IntPtr window, out RECT rect);
+[DllImport("user32.dll", SetLastError = true)] static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+[DllImport("user32.dll", SetLastError = true)] static extern bool GetMonitorInfoW(IntPtr monitor, ref MONITORINFO info);
+[DllImport("shcore.dll")] static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
+delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
+[StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int Size; public RECT Monitor; public RECT Work; public uint Flags; }
+public struct MonitorArea { public RECT Bounds; public RECT Work; public uint Dpi; }
+
+// Both answer in physical pixels, as the per-monitor aware bar sees them, whatever the script host's awareness.
+static readonly IntPtr PerMonitorAwareV2 = new IntPtr(-4);
+
+public static RECT WindowRect(IntPtr window) {
+    IntPtr previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+    try {
+        RECT rect;
+        if (!GetWindowRect(window, out rect)) { throw new System.ComponentModel.Win32Exception(); }
+        return rect;
+    } finally {
+        SetThreadDpiAwarenessContext(previous);
+    }
+}
+
+public static MonitorArea[] Monitors() {
+    IntPtr previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+    try {
+        var handles = new System.Collections.Generic.List<IntPtr>();
+        MonitorEnumProc collect = (IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data) => { handles.Add(monitor); return true; };
+        if (!EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, collect, IntPtr.Zero)) { throw new System.ComponentModel.Win32Exception(); }
+        var monitors = new MonitorArea[handles.Count];
+        for (int index = 0; index < handles.Count; index++) {
+            var info = new MONITORINFO { Size = Marshal.SizeOf(typeof(MONITORINFO)) };
+            if (!GetMonitorInfoW(handles[index], ref info)) { throw new System.ComponentModel.Win32Exception(); }
+            uint dpiX, dpiY;
+            // MDT_EFFECTIVE_DPI (0), the DPI the bar scales by.
+            Marshal.ThrowExceptionForHR(GetDpiForMonitor(handles[index], 0, out dpiX, out dpiY));
+            monitors[index] = new MonitorArea { Bounds = info.Monitor, Work = info.Work, Dpi = dpiX };
+        }
+        return monitors;
+    } finally {
+        SetThreadDpiAwarenessContext(previous);
+    }
+}
 '@
 
 function Get-FreePort {
@@ -161,6 +207,35 @@ function Send-GroupInput([int] $processId, [int] $second) {
     }
 }
 
+function Format-Rect([Stress.Native+RECT] $rect) {
+    return "($($rect.Left), $($rect.Top), $($rect.Right), $($rect.Bottom))"
+}
+
+# How the bars sit wrong: each monitor needs exactly one, along its top edge at full width and the config's thickness at
+# that monitor's DPI. Prints each monitor's work area too, which shows whether the session's shell reserved the strip
+# (a shell that ignores the bar leaves the work area whole, which is not a failure).
+function Test-BarGeometry([int] $processId) {
+    $failures = @()
+    $monitors = @([Stress.Native]::Monitors())
+    $bars     = @(Get-BarWindows $processId | ForEach-Object { [Stress.Native]::WindowRect($_) })
+    if ($bars.Count -ne $monitors.Count) {
+        $failures += "had $($bars.Count) bar windows for $($monitors.Count) monitors"
+    }
+    foreach ($monitor in $monitors) {
+        $bounds = $monitor.Bounds
+        # lround, as the bar rounds DIPs to pixels.
+        $thickness = [int] [math]::Round($barThicknessDips * $monitor.Dpi / 96.0, [MidpointRounding]::AwayFromZero)
+        $expected  = [Stress.Native+RECT] @{ Left = $bounds.Left; Top = $bounds.Top; Right = $bounds.Right; Bottom = $bounds.Top + $thickness }
+        $matching  = @($bars | Where-Object { (Format-Rect $_) -eq (Format-Rect $expected) })
+        $reserved  = $monitor.Work.Top -ge $expected.Bottom
+        Write-Host "monitor $(Format-Rect $bounds) at $($monitor.Dpi) dpi: work area $(Format-Rect $monitor.Work), strip reserved: $reserved"
+        if ($matching.Count -ne 1) {
+            $failures += "had $($matching.Count) bars at $(Format-Rect $expected) on the monitor at $(Format-Rect $bounds), bars are at $(($bars | ForEach-Object { Format-Rect $_ }) -join ' ')"
+        }
+    }
+    return $failures
+}
+
 # How the bar failed to end after the invalid config: the fatal error must be the config error it logged on the save,
 # and every bar must be gone while the error message is up.
 function Test-InvalidConfigEnd([string] $barLog, [string] $fatalLine, [int] $processId) {
@@ -216,7 +291,7 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $optional)
     $config = @"
 -- stress revision $revision
 return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
     window_manager = "glazewm",
     modules_left = { "stats", "workspaces", "divider", "mode", "apps", "title" },
     modules_center = { "clock" },
@@ -331,6 +406,14 @@ function Invoke-Scenario([string] $name) {
             if ($responsiveness -eq 'none' -and $second -gt 5 -and $name -ne 'reload') {
                 $failures.Add("had no bar windows at ${second}s")
                 break
+            }
+            # Not in reload, whose twenty rebuilds a second leave any moment's set of bars half built.
+            if ($second -eq $warmupSeconds -and $name -ne 'reload') {
+                $geometryFailures = @(Test-BarGeometry $bar.Id)
+                if ($geometryFailures.Count -gt 0) {
+                    $failures.AddRange([string[]] $geometryFailures)
+                    break
+                }
             }
             if ($name -eq 'reload') {
                 # Twenty saves a second: every settled save rebuilds every bar.
