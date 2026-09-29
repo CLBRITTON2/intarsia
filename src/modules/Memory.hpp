@@ -4,7 +4,9 @@
 #include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
 
+#include <chrono>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 // Bytes as gibibytes (1024^3), the unit Task Manager calls GB.
@@ -30,5 +32,8 @@ class Memory final : public TextModule {
     explicit Memory(TextModuleConfig config);
 
   private:
-    ModuleText Format(const std::string& spec) override;
+    ModuleText                            Format(const std::string& spec) override;
+
+    MemoryUsage                           _usage;
+    std::chrono::steady_clock::time_point _sampledAt;
 };

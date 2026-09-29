@@ -1,5 +1,6 @@
 #include "modules/Cpu.hpp"
 
+#include "modules/Ticks.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
@@ -81,11 +82,10 @@ Cpu::Cpu(TextModuleConfig config) :
     _performance(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\% Processor Performance")),
     _cores(CounterIfNamed(Settings(), {"max_core", "cores"}, L"\\Processor(*)\\% Processor Time")) {}
 
-// Samples at most once per interval: the bar also redraws for other modules, and a sample over a few milliseconds
-// would swing between 0 and 100. The 50 ms slack is for the redraw timer firing a little early.
+// A sample over a few milliseconds would also swing between 0 and 100.
 ModuleText Cpu::Format(const std::string& spec) {
     const auto now = std::chrono::steady_clock::now();
-    if (now - _sampledAt >= Settings().interval - std::chrono::milliseconds(50)) {
+    if (SampleDue(_sampledAt, now, Settings().interval)) {
         Sample();
         _sampledAt = now;
     }

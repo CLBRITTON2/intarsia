@@ -1,5 +1,6 @@
 #include "modules/Memory.hpp"
 
+#include "modules/Ticks.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
@@ -7,6 +8,7 @@
 
 #include <psapi.h>
 
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
@@ -35,10 +37,16 @@ double BytesToGibibytes(std::uint64_t bytes) {
 }
 
 Memory::Memory(TextModuleConfig config) :
-    TextModule(std::move(config), "memory", MemoryPlaceholders(MemoryUsage{.totalBytes = 1, .availableBytes = 0, .cachedBytes = 0, .committedBytes = 0, .commitLimitBytes = 0})) {}
+    TextModule(std::move(config), "memory", MemoryPlaceholders(MemoryUsage{.totalBytes = 1, .availableBytes = 0, .cachedBytes = 0, .committedBytes = 0, .commitLimitBytes = 0})),
+    _usage(ReadMemoryUsage()), _sampledAt(std::chrono::steady_clock::now()) {}
 
 ModuleText Memory::Format(const std::string& spec) {
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(ReadMemoryUsage()))), .state = TextState::Normal, .classIndex = 0};
+    const auto now = std::chrono::steady_clock::now();
+    if (SampleDue(_sampledAt, now, Settings().interval)) {
+        _usage     = ReadMemoryUsage();
+        _sampledAt = now;
+    }
+    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))), .state = TextState::Normal, .classIndex = 0};
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {

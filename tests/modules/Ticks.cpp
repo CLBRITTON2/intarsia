@@ -25,3 +25,11 @@ TEST(Ticks, AlignsToEachInterval) {
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(1'250), std::chrono::seconds(1)), std::chrono::milliseconds(750));
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(3'599'000), std::chrono::seconds(3600)), std::chrono::milliseconds(1'000));
 }
+
+TEST(Ticks, ASampleIsDueOncePerIntervalWithSlackForAnEarlyTimer) {
+    const std::chrono::steady_clock::time_point sampledAt{std::chrono::seconds(10)};
+    EXPECT_FALSE(SampleDue(sampledAt, sampledAt, std::chrono::seconds(2)));
+    EXPECT_FALSE(SampleDue(sampledAt, sampledAt + std::chrono::milliseconds(1'949), std::chrono::seconds(2)));
+    EXPECT_TRUE(SampleDue(sampledAt, sampledAt + std::chrono::milliseconds(1'950), std::chrono::seconds(2)));
+    EXPECT_TRUE(SampleDue(sampledAt, sampledAt + std::chrono::seconds(5), std::chrono::seconds(2)));
+}

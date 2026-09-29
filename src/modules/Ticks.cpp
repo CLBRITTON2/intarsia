@@ -5,3 +5,7 @@ std::chrono::milliseconds TimeUntilNextTick(std::chrono::system_clock::time_poin
     const auto period     = std::chrono::duration_cast<std::chrono::milliseconds>(interval);
     return period - (sinceEpoch % period);
 }
+
+bool SampleDue(std::chrono::steady_clock::time_point sampledAt, std::chrono::steady_clock::time_point now, std::chrono::seconds interval) {
+    return now - sampledAt >= interval - std::chrono::milliseconds(50);
+}
