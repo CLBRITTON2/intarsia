@@ -110,10 +110,6 @@ namespace {
         return earliest;
     }
 
-    std::string RectText(const RECT& rect) {
-        return std::format("{},{},{},{}", rect.left, rect.top, rect.right, rect.bottom);
-    }
-
     std::string MillisecondsText(std::chrono::steady_clock::duration duration) {
         return std::format("{:.1f}", std::chrono::duration<double, std::milli>(duration).count());
     }

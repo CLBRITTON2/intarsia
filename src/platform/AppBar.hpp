@@ -6,6 +6,7 @@
 #include <shellapi.h>
 
 #include <cstdint>
+#include <string>
 
 enum class Edge : std::uint8_t {
     Top,
@@ -55,10 +56,14 @@ enum class AppBarRoute : std::uint8_t {
 // Strip of the given thickness along one edge of area.
 RECT DockedRect(const RECT& area, Edge edge, std::int32_t thickness);
 
-void RegisterAppBar(HWND window, std::uint32_t callbackMessage);
-void UnregisterAppBar(HWND window);
+// left,top,right,bottom, as log values write a rect.
+std::string RectText(const RECT& rect);
 
-// Asks the shell for space on the monitor and reserves it. The shell may shrink the request around other appbars.
+void        RegisterAppBar(HWND window, std::uint32_t callbackMessage);
+void        UnregisterAppBar(HWND window);
+
+// Asks the shell for space on the monitor and reserves it. The shell may shrink the request around other appbars. Logs
+// each answer and the monitor's work area after it, since the shell never reports a request it ignored.
 RECT ReserveAppBarRect(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness);
 
 // ReserveAppBarRect asked of taskbar, Explorer's taskbar window, in the form shell32 would send. A taskbar that does

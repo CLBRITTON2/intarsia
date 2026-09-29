@@ -72,14 +72,29 @@ namespace {
         data.rc = answer.rect;
     }
 
+    RECT WorkArea(const RECT& monitorRect) {
+        MONITORINFO info{};
+        info.cbSize = sizeof(info);
+        if (!GetMonitorInfoW(MonitorFromRect(&monitorRect, MONITOR_DEFAULTTONEAREST), &info)) {
+            ThrowLastError("GetMonitorInfoW(appbar work area)");
+        }
+        return info.rcWork;
+    }
+
     // QUERYPOS only moves the side facing the edge, so the thickness is reapplied from that side before SETPOS.
     RECT Reserve(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, const std::function<void(std::uint32_t, APPBARDATA&)>& send) {
         APPBARDATA data = AppBarData(window);
         data.uEdge      = ShellEdge(edge);
         data.rc         = monitorRect;
         send(ABM_QUERYPOS, data);
-        data.rc = DockedRect(data.rc, edge, thickness);
+        const RECT queried = data.rc;
+        data.rc            = DockedRect(data.rc, edge, thickness);
         send(ABM_SETPOS, data);
+        Log(LogLevel::Info, "bar", "appbar_reserved",
+            {{.key = "monitor", .value = RectText(monitorRect)},
+             {.key = "queried", .value = RectText(queried)},
+             {.key = "set", .value = RectText(data.rc)},
+             {.key = "work_area", .value = RectText(WorkArea(monitorRect))}});
         return data.rc;
     }
 
@@ -108,6 +123,10 @@ RECT DockedRect(const RECT& area, Edge edge, std::int32_t thickness) {
         case Edge::Right: rect.left = rect.right - thickness; return rect;
     }
     throw std::invalid_argument(std::format("unknown edge {}", static_cast<std::int32_t>(edge)));
+}
+
+std::string RectText(const RECT& rect) {
+    return std::format("{},{},{},{}", rect.left, rect.top, rect.right, rect.bottom);
 }
 
 void RegisterAppBar(HWND window, std::uint32_t callbackMessage) {
