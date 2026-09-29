@@ -13,6 +13,7 @@
 #include "platform/FileWatcher.hpp"
 #include "platform/FrameClock.hpp"
 #include "platform/Process.hpp"
+#include "platform/WindowProc.hpp"
 #include "render/Graphics.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 #include "wm/IWindowManager.hpp"
@@ -69,7 +70,7 @@ class App {
     AppState                  _state         = {.error = nullptr};
     bool                      _redrawPending = false;
     std::exception_ptr        _configError; // the last reload's failure, fatal unless another save follows soon
-    HWND                      _control;
+    UniqueOwnedWindow         _control;
     // Shared by every source of module data, which outlive none of it: declared before them all.
     ChangeSignal _changes;
     // Paces animations for every bar, which outlive none of it.

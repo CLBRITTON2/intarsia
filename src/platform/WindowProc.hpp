@@ -5,6 +5,8 @@
 #include <windows.h>
 
 #include <exception>
+#include <memory>
+#include <type_traits>
 
 // The window procedure for a window created with its Owner as the CreateWindowExW lpParam. Owner provides
 // HandleMessage(HWND, UINT, WPARAM, LPARAM) and a _state whose error member receives any exception HandleMessage
@@ -29,3 +31,14 @@ LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARA
         return 0;
     }
 }
+
+// Destroys a window made for OwnedWindowProc, detaching its owner first, whose other members may already be gone. As a
+// member, it destroys the window even when the owner's constructor throws, which runs no destructor body.
+struct OwnedWindowDestroyer {
+    void operator()(HWND window) const {
+        SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+        DestroyWindow(window);
+    }
+};
+
+using UniqueOwnedWindow = std::unique_ptr<std::remove_pointer_t<HWND>, OwnedWindowDestroyer>;

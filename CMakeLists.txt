@@ -181,6 +181,7 @@ if(BUILD_TESTING)
     tests/platform/PerformanceCounter.cpp
     tests/platform/Text.cpp
     tests/platform/WebSocket.cpp
+    tests/platform/WindowProc.cpp
     tests/platform/WorkQueue.cpp
     tests/render/Icon.cpp
     tests/render/Surface.cpp

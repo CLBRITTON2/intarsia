@@ -138,9 +138,9 @@ namespace {
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),
     _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry),
-    _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control, kSourcesChanged), _frames(_control, kAnimationFrame, kFrameClockFailed),
+    _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged), _frames(_control.get(), kAnimationFrame, kFrameClockFailed),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
-                                           _control, kConfigChanged, kWatcherFailed, kConfigSettle)),
+                                           _control.get(), kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
     _counterSamplers(std::make_unique<CounterSamplers>(*_config, _changes)) {
     MatchSourcesToConfig();
@@ -163,7 +163,6 @@ App::~App() {
     _commandPollers.reset();
     _windowManager.reset();
     _watcher.reset();
-    DestroyWindow(_control);
 }
 
 std::int32_t App::Run() {
@@ -184,7 +183,7 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
         case kDeviceLost: HandleDeviceLost(); return 0;
         case kSourcesChanged:
             if (!_redrawPending) {
-                if (SetTimer(_control, kRedrawTimer, kRedrawDelayMs, nullptr) == 0) {
+                if (SetTimer(_control.get(), kRedrawTimer, kRedrawDelayMs, nullptr) == 0) {
                     ThrowLastError("SetTimer(redraw)");
                 }
                 _redrawPending = true;
@@ -192,13 +191,13 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             return 0;
         case WM_DISPLAYCHANGE:
             // Setting the timer again restarts it, so the rebuild waits for the last change in a burst.
-            if (SetTimer(_control, kDisplaysTimer, kDisplaysSettleMs, nullptr) == 0) {
+            if (SetTimer(_control.get(), kDisplaysTimer, kDisplaysSettleMs, nullptr) == 0) {
                 ThrowLastError("SetTimer(displays)");
             }
             return 0;
         case WM_TIMER:
             if (wParam == kRedrawTimer) {
-                KillTimer(_control, kRedrawTimer);
+                KillTimer(_control.get(), kRedrawTimer);
                 _redrawPending = false;
                 _changes.Acknowledge();
                 if (_windowIcons != nullptr) {
@@ -208,13 +207,13 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                     bar->Refresh();
                 }
             } else if (wParam == kDisplaysTimer) {
-                KillTimer(_control, kDisplaysTimer);
+                KillTimer(_control.get(), kDisplaysTimer);
                 RebuildBarsIfMonitorsChanged();
             } else if (wParam == kDeviceTimer) {
-                KillTimer(_control, kDeviceTimer);
+                KillTimer(_control.get(), kDeviceTimer);
                 RecreateDevice();
             } else if (wParam == kConfigFailedTimer) {
-                KillTimer(_control, kConfigFailedTimer);
+                KillTimer(_control.get(), kConfigFailedTimer);
                 std::rethrow_exception(_configError);
             }
             return 0;
@@ -277,7 +276,7 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
                                                                 .battery         = _battery.get(),
                                                                 .tray            = _tray.get(),
                                                                 .monitor         = placement.monitor},
-                                                  _launcher, _frames, placement, AppBarRouteForTray(), _state, _control, kDeviceLost));
+                                                  _launcher, _frames, placement, AppBarRouteForTray(), _state, _control.get(), kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }
@@ -295,14 +294,14 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
 // but only once the file has stayed unchanged for kConfigConfirm: a reload can read a file an editor is still writing
 // (truncated, not yet filled), and the next save supersedes that read.
 void App::HandleConfigChanged() {
-    KillTimer(_control, kConfigFailedTimer);
+    KillTimer(_control.get(), kConfigFailedTimer);
     _configError = nullptr;
     try {
         ReloadConfig();
     } catch (const ConfigError& error) {
         Log(LogLevel::Warning, "app", "config_invalid", {{.key = "reason", .value = error.what()}, {.key = "fatal_in_ms", .value = std::to_string(kConfigConfirm.count())}});
         _configError = std::current_exception();
-        if (SetTimer(_control, kConfigFailedTimer, static_cast<std::uint32_t>(kConfigConfirm.count()), nullptr) == 0) {
+        if (SetTimer(_control.get(), kConfigFailedTimer, static_cast<std::uint32_t>(kConfigConfirm.count()), nullptr) == 0) {
             ThrowLastError("SetTimer(config failed)");
         }
     }
@@ -336,7 +335,7 @@ void App::MatchSourcesToConfig() {
     _network = MatchedToConfig<INetwork>(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this] { return std::make_unique<IpHelper>(_changes); });
     _battery = MatchedToConfig<IBattery>(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
     _tray    = MatchedToConfig<ShellNotifyIcon>(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
-        auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control, kTrayFailed);
+        auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control.get(), kTrayFailed);
         // Apps add their icons again for the taskbar's class only, so a tray of another class has no one to tell.
         if (_trayClass == kTaskbarClass) {
             AnnounceTray();
@@ -385,7 +384,7 @@ void App::HandleDeviceLost() {
 
 void App::ScheduleDeviceRetry() {
     _recovering = true;
-    if (SetTimer(_control, kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), nullptr) == 0) {
+    if (SetTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), nullptr) == 0) {
         ThrowLastError("SetTimer(device)");
     }
 }
