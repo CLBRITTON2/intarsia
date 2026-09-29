@@ -14,6 +14,7 @@
 #include <cstring>
 #include <functional>
 #include <optional>
+#include <span>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -104,11 +105,23 @@ namespace {
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
-    // Runs call on a desktop of the test's own, where no Explorer runs, with a taskbar window that captures what shell32
-    // sends it.
-    std::vector<std::byte> CaptureFromShell32(const std::function<void(HWND taskbar)>& call) {
-        std::vector<std::byte> captured;
-        std::thread([&captured, &call] {
+    // A monitor above the primary has negative coordinates.
+    constexpr RECT   kAbovePrimary{.left = 100, .top = -2100, .right = 130, .bottom = -2070};
+
+    // Answers every icon rect query with kAbovePrimary, as the tray answers one.
+    LRESULT CALLBACK AnswerAbovePrimary(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+        if (message == WM_COPYDATA) {
+            const auto* data = IntToPointer<const COPYDATASTRUCT>(lParam);
+            if (data->dwData == kIconRectCopyData) {
+                return IconRectAnswer(ParseIconRectQuery(std::span(static_cast<const std::byte*>(data->lpData), data->cbData)).part, kAbovePrimary);
+            }
+        }
+        return DefWindowProcW(window, message, wParam, lParam);
+    }
+
+    // Runs call on a desktop of the test's own, where no Explorer runs, with a taskbar window of the given procedure.
+    void RunWithTaskbar(WNDPROC procedure, void* state, const std::function<void(HWND taskbar)>& call) {
+        std::thread([procedure, state, &call] {
             HDESK desktop = CreateDesktopW(L"intarsia-tray-test", nullptr, nullptr, 0, GENERIC_ALL, nullptr);
             if (desktop == nullptr || !SetThreadDesktop(desktop)) {
                 return;
@@ -116,16 +129,23 @@ namespace {
             HINSTANCE   instance = GetModuleHandleW(nullptr);
             WNDCLASSEXW registration{};
             registration.cbSize        = sizeof(registration);
-            registration.lpfnWndProc   = CaptureCopyData;
+            registration.lpfnWndProc   = procedure;
             registration.hInstance     = instance;
             registration.lpszClassName = kTaskbarClass;
             RegisterClassExW(&registration);
-            HWND taskbar = CreateWindowExW(WS_EX_TOOLWINDOW, kTaskbarClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, &captured);
+            HWND taskbar = CreateWindowExW(WS_EX_TOOLWINDOW, kTaskbarClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, state);
             call(taskbar);
             DestroyWindow(taskbar);
             UnregisterClassW(kTaskbarClass, instance);
             CloseDesktop(desktop);
         }).join();
+    }
+
+    // Runs call on a desktop of the test's own, where no Explorer runs, with a taskbar window that captures what shell32
+    // sends it.
+    std::vector<std::byte> CaptureFromShell32(const std::function<void(HWND taskbar)>& call) {
+        std::vector<std::byte> captured;
+        RunWithTaskbar(CaptureCopyData, &captured, call);
         return captured;
     }
 
@@ -177,6 +197,24 @@ TEST(ShellNotifyIcon, Shell32SendsTheIconRectQueryTheParserReads) {
     EXPECT_EQ(static_cast<std::uintptr_t>(query.owner), owner);
     EXPECT_EQ(query.id, 42u);
     EXPECT_EQ(query.guid, GUID{});
+}
+
+TEST(ShellNotifyIcon, Shell32ReadsAnIconRectAboveThePrimaryMonitor) {
+    HRESULT result = E_FAIL;
+    RECT    rect{};
+    RunWithTaskbar(AnswerAbovePrimary, nullptr, [&result, &rect](HWND taskbar) {
+        NOTIFYICONIDENTIFIER icon{};
+        icon.cbSize = sizeof(icon);
+        icon.hWnd   = taskbar;
+        icon.uID    = 42;
+        result      = Shell_NotifyIconGetRect(&icon, &rect);
+    });
+
+    EXPECT_EQ(result, S_OK);
+    EXPECT_EQ(rect.left, kAbovePrimary.left);
+    EXPECT_EQ(rect.top, kAbovePrimary.top);
+    EXPECT_EQ(rect.right, kAbovePrimary.right);
+    EXPECT_EQ(rect.bottom, kAbovePrimary.bottom);
 }
 
 TEST_F(ShellNotifyIconTray, AnAddedIconShowsWithItsPixelsAndTooltip) {
