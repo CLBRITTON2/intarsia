@@ -9,10 +9,9 @@
 #include <optional>
 #include <string>
 
-// The default output device's volume through format, or format_muted and icon_muted in the module's .muted colors
-// while it is muted. A click
-// toggles mute and a scroll changes the volume by step, unless the config binds those inputs to actions. Shows
-// nothing while there is no output device.
+// The default output or input device's volume through format, or format_muted and icon_muted in the module's .muted
+// colors while it is muted. A click toggles mute and a scroll changes the volume by step, unless the config binds those
+// inputs to actions. Shows nothing while there is no device of its flow.
 class Audio final : public IModule {
   public:
     // Throws ConfigError when a format is not a valid spec for its values.
@@ -35,8 +34,8 @@ class Audio final : public IModule {
 // The volume as the formats get it: a whole percent.
 std::int32_t VolumePercent(float volume);
 
-// The icon and text for output, empty while there is none.
-ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output);
+// The icon and text for device, empty while there is none.
+ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device);
 
 // The volume one scroll notch away: stepPercent up or down, landing on a whole percent within 0 to 1.
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction);

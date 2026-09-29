@@ -102,11 +102,13 @@ return {
             tooltip = "{interface} {ssid} {signal}%\n{ip}\n↓ {down}  ↑ {up}",
             on_click = { "C:\\Windows\\explorer.exe", "ms-settings:network-status" },
         },
-        -- The default output device's volume, following device switches. Click toggles mute, scroll changes the volume
-        -- by step percent, unless on_click or on_scroll_up and on_scroll_down replace them. The formats and tooltip can
-        -- use {volume} (a whole percent) and {device} (its name). Shows nothing while there is no output device.
+        -- The default output (speakers) or input (microphone) device's volume, by flow, following device switches.
+        -- Click toggles mute, scroll changes the volume by step percent, unless on_click or on_scroll_up and
+        -- on_scroll_down replace them. The formats and tooltip can use {volume} (a whole percent) and {device} (its
+        -- name). Shows nothing while there is no device of its flow.
         volume = {
             type = "audio",
+            flow = "output",
             format = "{volume}%",
             format_muted = "muted",
             icon = "\u{F057E}",

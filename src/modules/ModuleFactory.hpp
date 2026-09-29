@@ -24,7 +24,8 @@ struct ModuleSources {
     const CommandPollers&  commandPollers;
     const CounterSamplers& counterSamplers;
     WindowIcons*           windowIcons;
-    IAudio*                audio;
+    IAudio*                audioOutput;
+    IAudio*                audioInput;
     const INetwork*        network;
     const IBattery*        battery;
     ITray*                 tray;

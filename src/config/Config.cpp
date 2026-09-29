@@ -526,13 +526,23 @@ namespace {
         return CounterConfig{.path = ReadCounterPath(module, "counter"), .combine = ParseCounterCombine(module, "combine"), .text = ReadTextFields(module)};
     }
 
+    AudioFlow ParseAudioFlow(const TableReader& module, std::string_view key) {
+        const std::string value = module.String(key);
+        if (value == "output")
+            return AudioFlow::Output;
+        if (value == "input")
+            return AudioFlow::Input;
+        throw module.Error(std::format("{} must be one of output, input, got '{}'", module.KeyPath(key), value));
+    }
+
     AudioConfig ReadAudioConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithOptionalKeys({"type", "format", "format_muted", "icon", "icon_muted", "step"}));
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "flow", "format", "format_muted", "icon", "icon_muted", "step"}));
         const std::int64_t step = PositiveWholeNumber(module, "step");
         if (step > 100) {
             throw module.Error(std::format("{} is a percent of full volume, from 1 to 100, got {}", module.KeyPath("step"), step));
         }
-        return AudioConfig{.format      = module.String("format"),
+        return AudioConfig{.flow        = ParseAudioFlow(module, "flow"),
+                           .format      = module.String("format"),
                            .formatMuted = module.String("format_muted"),
                            .tooltip     = ReadTooltip(module),
                            .icon        = ToWide(module.String("icon")),

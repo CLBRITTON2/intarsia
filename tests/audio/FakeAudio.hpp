@@ -5,15 +5,15 @@
 #include <optional>
 #include <vector>
 
-// An output device a test sets directly, recording the changes modules ask for.
+// A default device a test sets directly, recording the changes modules ask for.
 class FakeAudio final : public IAudio {
   public:
-    std::optional<AudioOutput> output;
+    std::optional<AudioDevice> device;
     std::vector<float>         volumes;
     std::vector<bool>          mutes;
 
-    std::optional<AudioOutput> Output() const override {
-        return output;
+    std::optional<AudioDevice> Device() const override {
+        return device;
     }
     void SetVolume(float volume) override {
         volumes.push_back(volume);

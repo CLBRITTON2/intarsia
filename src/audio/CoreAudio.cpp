@@ -36,14 +36,22 @@ namespace {
 
     constexpr DWORD kRetryMs = 2000;
 
-    // Tells the worker when the default output device changes. The notification threads must not call back into Core
-    // Audio, so this only wakes the worker.
+    EDataFlow       CoreAudioFlow(AudioFlow flow) {
+        return flow == AudioFlow::Output ? eRender : eCapture;
+    }
+
+    std::string FlowName(AudioFlow flow) {
+        return flow == AudioFlow::Output ? "output" : "input";
+    }
+
+    // Tells the worker when the default device of its flow changes. The notification threads must not call back into
+    // Core Audio, so this only wakes the worker.
     class DeviceNotifications final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IMMNotificationClient> {
       public:
-        explicit DeviceNotifications(CoreAudio& audio) : _audio(audio) {}
+        DeviceNotifications(CoreAudio& audio, EDataFlow flow) : _audio(audio), _flow(flow) {}
 
         HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR) override {
-            if (flow == eRender && role == eConsole) {
+            if (flow == _flow && role == eConsole) {
                 _audio.OnDefaultDeviceChanged();
             }
             return S_OK;
@@ -63,6 +71,7 @@ namespace {
 
       private:
         CoreAudio& _audio;
+        EDataFlow  _flow;
     };
 
     // Carries every volume or mute change on the device, whoever made it, into the snapshot.
@@ -90,7 +99,7 @@ namespace {
         return name;
     }
 
-    // One output device's volume control, with its change notifications registered for as long as it lives.
+    // One device's volume control, with its change notifications registered for as long as it lives.
     class Endpoint {
       public:
         Endpoint(IMMDevice* device, CoreAudio& audio) : _name(FriendlyName(device)), _callback(Make<VolumeNotifications>(audio)) {
@@ -103,12 +112,12 @@ namespace {
         Endpoint(const Endpoint&)              = delete;
         Endpoint&   operator=(const Endpoint&) = delete;
 
-        AudioOutput Read() const {
+        AudioDevice Read() const {
             float volume = 0.0f;
             ThrowIfFailed(_volume->GetMasterVolumeLevelScalar(&volume), "IAudioEndpointVolume::GetMasterVolumeLevelScalar");
             BOOL muted = FALSE;
             ThrowIfFailed(_volume->GetMute(&muted), "IAudioEndpointVolume::GetMute");
-            return AudioOutput{.device = _name, .volume = volume, .muted = muted != FALSE};
+            return AudioDevice{.name = _name, .volume = volume, .muted = muted != FALSE};
         }
 
         void SetVolume(float volume) const {
@@ -125,10 +134,10 @@ namespace {
         ComPtr<IAudioEndpointVolume>         _volume;
     };
 
-    // The device enumerator, with the default device notifications registered for as long as it lives.
+    // The device enumerator, with the default device notifications of one flow registered for as long as it lives.
     class Devices {
       public:
-        explicit Devices(CoreAudio& audio) : _client(Make<DeviceNotifications>(audio)) {
+        Devices(CoreAudio& audio, EDataFlow flow) : _flow(flow), _client(Make<DeviceNotifications>(audio, flow)) {
             ThrowIfFailed(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&_enumerator)), "CoCreateInstance(MMDeviceEnumerator)");
             ThrowIfFailed(_enumerator->RegisterEndpointNotificationCallback(_client.Get()), "IMMDeviceEnumerator::RegisterEndpointNotificationCallback");
         }
@@ -138,10 +147,10 @@ namespace {
         Devices(const Devices&)            = delete;
         Devices& operator=(const Devices&) = delete;
 
-        // The default output device's control, or null when the system has no output device.
-        std::unique_ptr<Endpoint> DefaultOutput(CoreAudio& audio) const {
+        // The default device's control, or null when the system has no device of the flow.
+        std::unique_ptr<Endpoint> DefaultDevice(CoreAudio& audio) const {
             ComPtr<IMMDevice> device;
-            const HRESULT     found = _enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
+            const HRESULT     found = _enumerator->GetDefaultAudioEndpoint(_flow, eConsole, &device);
             if (found == E_NOTFOUND) {
                 return nullptr;
             }
@@ -150,14 +159,15 @@ namespace {
         }
 
       private:
+        EDataFlow                     _flow;
         ComPtr<IMMNotificationClient> _client;
         ComPtr<IMMDeviceEnumerator>   _enumerator;
     };
 
 } // namespace
 
-CoreAudio::CoreAudio(ChangeSignal& changes) :
-    _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(audio stop)")),
+CoreAudio::CoreAudio(ChangeSignal& changes, AudioFlow flow) :
+    _changes(changes), _flow(flow), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(audio stop)")),
     _deviceEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio device)")),
     _requestEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio request)")), _thread([this] { Run(); }) {}
 
@@ -166,9 +176,9 @@ CoreAudio::~CoreAudio() {
     _thread.join();
 }
 
-std::optional<AudioOutput> CoreAudio::Output() const {
+std::optional<AudioDevice> CoreAudio::Device() const {
     const std::scoped_lock lock(_mutex);
-    return _output;
+    return _device;
 }
 
 void CoreAudio::SetVolume(float volume) {
@@ -194,22 +204,22 @@ void CoreAudio::OnDefaultDeviceChanged() {
 void CoreAudio::OnVolumeNotified(float volume, bool muted) {
     {
         const std::scoped_lock lock(_mutex);
-        if (!_output.has_value() || (_output->volume == volume && _output->muted == muted)) {
+        if (!_device.has_value() || (_device->volume == volume && _device->muted == muted)) {
             return;
         }
-        _output->volume = volume;
-        _output->muted  = muted;
+        _device->volume = volume;
+        _device->muted  = muted;
     }
     _changes.Notify("audio");
 }
 
-void CoreAudio::Publish(std::optional<AudioOutput> output) {
+void CoreAudio::Publish(std::optional<AudioDevice> device) {
     {
         const std::scoped_lock lock(_mutex);
-        if (output == _output) {
+        if (device == _device) {
             return;
         }
-        _output = std::move(output);
+        _device = std::move(device);
     }
     _changes.Notify("audio");
 }
@@ -219,7 +229,7 @@ void CoreAudio::Run() {
     // Core Audio calls back on its own threads, which a multithreaded apartment allows without marshalling.
     const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
     if (FAILED(initialized)) {
-        Log(LogLevel::Error, "audio", "com_init_failed", {{.key = "reason", .value = Win32Error("CoInitializeEx", initialized).what()}});
+        Log(LogLevel::Error, "audio", "com_init_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = Win32Error("CoInitializeEx", initialized).what()}});
         return;
     }
     {
@@ -234,12 +244,12 @@ void CoreAudio::Run() {
                 endpoint.reset();
                 try {
                     if (devices == nullptr) {
-                        devices = std::make_unique<Devices>(*this);
+                        devices = std::make_unique<Devices>(*this, CoreAudioFlow(_flow));
                     }
-                    endpoint = devices->DefaultOutput(*this);
-                    Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioOutput>(endpoint->Read()));
+                    endpoint = devices->DefaultDevice(*this);
+                    Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioDevice>(endpoint->Read()));
                     if (failing) {
-                        Log(LogLevel::Info, "audio", "recovered", {});
+                        Log(LogLevel::Info, "audio", "recovered", {{.key = "flow", .value = FlowName(_flow)}});
                     }
                     failing = false;
                 } catch (const Win32Error& error) {
@@ -247,14 +257,15 @@ void CoreAudio::Run() {
                     devices.reset();
                     Publish(std::nullopt);
                     if (!failing) {
-                        Log(LogLevel::Warning, "audio", "unavailable", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(kRetryMs)}});
+                        Log(LogLevel::Warning, "audio", "unavailable",
+                            {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(kRetryMs)}});
                     }
                     failing = true;
                 }
             }
             const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, failing ? kRetryMs : INFINITE);
             if (woke == WAIT_FAILED) {
-                Log(LogLevel::Error, "audio", "wait_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
+                Log(LogLevel::Error, "audio", "wait_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "error", .value = std::to_string(GetLastError())}});
                 Publish(std::nullopt);
                 break;
             }
@@ -282,7 +293,7 @@ void CoreAudio::Run() {
                     }
                 } catch (const Win32Error& error) {
                     // The device most likely went away mid-change, so the request is dropped and the device read again.
-                    Log(LogLevel::Warning, "audio", "change_failed", {{.key = "reason", .value = error.what()}});
+                    Log(LogLevel::Warning, "audio", "change_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}});
                     attach = true;
                 }
                 continue;

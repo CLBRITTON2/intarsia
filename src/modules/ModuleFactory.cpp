@@ -53,7 +53,10 @@ std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const Modu
         case ModuleKind::Divider: return std::make_unique<Divider>(instance.style);
         case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
         case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
-        case ModuleKind::Audio: return std::make_unique<Audio>(RequireSettings<AudioConfig>(instance), RequireSource(sources.audio, instance));
+        case ModuleKind::Audio: {
+            const AudioConfig& config = RequireSettings<AudioConfig>(instance);
+            return std::make_unique<Audio>(config, RequireSource(config.flow == AudioFlow::Output ? sources.audioOutput : sources.audioInput, instance));
+        }
         case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), RequireSource(sources.network, instance));
         case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), RequireSource(sources.battery, instance));
         case ModuleKind::Tray: return std::make_unique<Tray>(RequireSettings<TrayConfig>(instance), RequireSource(sources.tray, instance), instance.style);

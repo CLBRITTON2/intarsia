@@ -12,7 +12,8 @@
 namespace {
 
     AudioConfig TestConfig() {
-        return AudioConfig{.format      = "{volume}%",
+        return AudioConfig{.flow        = AudioFlow::Output,
+                           .format      = "{volume}%",
                            .formatMuted = "muted",
                            .tooltip     = "{device} at {volume}%",
                            .icon        = L"V",
@@ -21,8 +22,8 @@ namespace {
                            .actions     = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
     }
 
-    AudioOutput Speakers(float volume, bool muted) {
-        return AudioOutput{.device = L"Speakers", .volume = volume, .muted = muted};
+    AudioDevice Speakers(float volume, bool muted) {
+        return AudioDevice{.name = L"Speakers", .volume = volume, .muted = muted};
     }
 
 } // namespace
@@ -48,7 +49,7 @@ TEST(Audio, AStepLandsOnAWholePercentWithinTheRange) {
 
 TEST(Audio, ClickTogglesMuteAndScrollStepsTheVolume) {
     FakeAudio audio;
-    audio.output = Speakers(0.5f, false);
+    audio.device = Speakers(0.5f, false);
     Audio module(TestConfig(), audio);
     module.Click(D2D1::Point2F(0.0f, 0.0f));
     module.Scroll(ScrollDirection::Up);
@@ -56,7 +57,7 @@ TEST(Audio, ClickTogglesMuteAndScrollStepsTheVolume) {
     EXPECT_EQ(audio.mutes, std::vector<bool>{true});
     EXPECT_EQ(audio.volumes, (std::vector<float>{0.55f, 0.45f}));
 
-    audio.output = Speakers(0.5f, true);
+    audio.device = Speakers(0.5f, true);
     module.Click(D2D1::Point2F(0.0f, 0.0f));
     EXPECT_EQ(audio.mutes, (std::vector<bool>{true, false}));
 }
@@ -78,20 +79,20 @@ TEST(Audio, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
     FakeAudio            audio;
     const TextOnlyRender render;
     Audio                module(TestConfig(), audio);
-    audio.output = Speakers(0.5f, false);
+    audio.device = Speakers(0.5f, false);
     EXPECT_TRUE(module.Layout(render.Context()));
     EXPECT_GT(module.Size().width, 0.0f);
     EXPECT_FALSE(module.Layout(render.Context()));
     // Under half a percent rounds to the same text.
-    audio.output = Speakers(0.501f, false);
+    audio.device = Speakers(0.501f, false);
     EXPECT_FALSE(module.Layout(render.Context()));
-    audio.output = Speakers(0.5f, true);
+    audio.device = Speakers(0.5f, true);
     EXPECT_TRUE(module.Layout(render.Context()));
 }
 
 TEST(Audio, TooltipNamesTheDevice) {
     FakeAudio audio;
-    audio.output = Speakers(0.3f, false);
+    audio.device = Speakers(0.3f, false);
     Audio module(TestConfig(), audio);
     EXPECT_EQ(module.TooltipText(), L"Speakers at 30%");
 }

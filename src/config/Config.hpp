@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio/IAudio.hpp"
 #include "bar/Sections.hpp"
 #include "platform/AppBar.hpp"
 #include "platform/Process.hpp"
@@ -272,9 +273,10 @@ struct CounterConfig {
     TextModuleConfig text;
 };
 
-// The default output device's volume. The formats and tooltip can use {volume} (a whole percent) and {device} (its
-// name).
+// The default output or input device's volume. The formats and tooltip can use {volume} (a whole percent) and {device}
+// (its name).
 struct AudioConfig {
+    AudioFlow                  flow;
     std::string                format;
     std::string                formatMuted;
     std::optional<std::string> tooltip;

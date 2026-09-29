@@ -10,21 +10,21 @@
 
 namespace {
 
-    std::vector<Placeholder> AudioPlaceholders(const AudioOutput& output) {
-        return {{.name = "volume", .value = std::int64_t{VolumePercent(output.volume)}}, {.name = "device", .value = ToUtf8(output.device)}};
+    std::vector<Placeholder> AudioPlaceholders(const AudioDevice& device) {
+        return {{.name = "volume", .value = std::int64_t{VolumePercent(device.volume)}}, {.name = "device", .value = ToUtf8(device.name)}};
     }
 
 } // namespace
 
 Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _audio(audio) {
-    const std::vector<Placeholder> samples = AudioPlaceholders(AudioOutput{.device = L"Speakers", .volume = 0.5f, .muted = false});
+    const std::vector<Placeholder> samples = AudioPlaceholders(AudioDevice{.name = L"Speakers", .volume = 0.5f, .muted = false});
     RequirePlaceholders("audio format", _config.format, samples);
     RequirePlaceholders("audio format_muted", _config.formatMuted, samples);
     RequireOptionalPlaceholders("audio tooltip", _config.tooltip, samples);
 }
 
 bool Audio::Layout(const RenderContext& render) {
-    return _line.Update(render, FormatAudio(_config, _audio.Output()));
+    return _line.Update(render, FormatAudio(_config, _audio.Device()));
 }
 
 D2D1_SIZE_F Audio::Size() const {
@@ -36,16 +36,16 @@ void Audio::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
 }
 
 void Audio::Click(D2D1_POINT_2F) {
-    const std::optional<AudioOutput> output = _audio.Output();
-    if (output.has_value()) {
-        _audio.SetMuted(!output->muted);
+    const std::optional<AudioDevice> device = _audio.Device();
+    if (device.has_value()) {
+        _audio.SetMuted(!device->muted);
     }
 }
 
 void Audio::Scroll(ScrollDirection direction) {
-    const std::optional<AudioOutput> output = _audio.Output();
-    if (output.has_value()) {
-        _audio.SetVolume(SteppedVolume(output->volume, _config.stepPercent, direction));
+    const std::optional<AudioDevice> device = _audio.Device();
+    if (device.has_value()) {
+        _audio.SetVolume(SteppedVolume(device->volume, _config.stepPercent, direction));
     }
 }
 
@@ -54,25 +54,25 @@ const ModuleActions& Audio::Actions() const {
 }
 
 std::optional<std::wstring> Audio::TooltipText() {
-    const std::optional<AudioOutput> output = _audio.Output();
-    if (!_config.tooltip.has_value() || !output.has_value()) {
+    const std::optional<AudioDevice> device = _audio.Device();
+    if (!_config.tooltip.has_value() || !device.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*_config.tooltip, AudioPlaceholders(*output)));
+    return ToWide(FormatPlaceholders(*_config.tooltip, AudioPlaceholders(*device)));
 }
 
 std::int32_t VolumePercent(float volume) {
     return static_cast<std::int32_t>(std::lround(volume * 100.0f));
 }
 
-ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioOutput>& output) {
-    if (!output.has_value()) {
+ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device) {
+    if (!device.has_value()) {
         return ModuleText{.icon = {}, .text = {}, .state = TextState::Normal, .classIndex = 0};
     }
-    const std::string& format = output->muted ? config.formatMuted : config.format;
-    return ModuleText{.icon       = output->muted ? config.iconMuted : config.icon,
-                      .text       = ToWide(FormatPlaceholders(format, AudioPlaceholders(*output))),
-                      .state      = output->muted ? TextState::Muted : TextState::Normal,
+    const std::string& format = device->muted ? config.formatMuted : config.format;
+    return ModuleText{.icon       = device->muted ? config.iconMuted : config.icon,
+                      .text       = ToWide(FormatPlaceholders(format, AudioPlaceholders(*device))),
+                      .state      = device->muted ? TextState::Muted : TextState::Normal,
                       .classIndex = 0};
 }
 

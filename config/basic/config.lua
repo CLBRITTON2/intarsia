@@ -39,6 +39,7 @@ return {
         },
         volume = {
             type = "audio",
+            flow = "output",
             format = "{volume}%",
             format_muted = "muted",
             icon = "\u{E767}",

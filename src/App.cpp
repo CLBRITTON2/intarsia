@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 
 namespace {
 
@@ -53,6 +54,13 @@ namespace {
 
     bool                                ShowsKind(const Config& config, ModuleKind kind) {
         return AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
+    }
+
+    bool ShowsAudioFlow(const Config& config, AudioFlow flow) {
+        return AnyModuleInConfig(config, [flow](const ModuleInstance& instance) {
+            const auto* audio = std::get_if<AudioConfig>(&instance.settings);
+            return audio != nullptr && audio->flow == flow;
+        });
     }
 
     // A source kept while the config shows a module of its kind, so its state survives reloads that keep it, and
@@ -148,7 +156,8 @@ App::~App() {
     _tray.reset();
     _battery.reset();
     _network.reset();
-    _audio.reset();
+    _audioInput.reset();
+    _audioOutput.reset();
     _windowIcons.reset();
     _counterSamplers.reset();
     _commandPollers.reset();
@@ -262,7 +271,8 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
                                                                 .commandPollers  = *_commandPollers,
                                                                 .counterSamplers = *_counterSamplers,
                                                                 .windowIcons     = _windowIcons.get(),
-                                                                .audio           = _audio.get(),
+                                                                .audioOutput     = _audioOutput.get(),
+                                                                .audioInput      = _audioInput.get(),
                                                                 .network         = _network.get(),
                                                                 .battery         = _battery.get(),
                                                                 .tray            = _tray.get(),
@@ -319,10 +329,13 @@ void App::ReloadConfig() {
 
 void App::MatchSourcesToConfig() {
     _windowIcons = MatchedToConfig<WindowIcons>(std::move(_windowIcons), ShowsKind(*_config, ModuleKind::Windows), [this] { return std::make_unique<WindowIcons>(_changes); });
-    _audio       = MatchedToConfig<IAudio>(std::move(_audio), ShowsKind(*_config, ModuleKind::Audio), [this] { return std::make_unique<CoreAudio>(_changes); });
-    _network     = MatchedToConfig<INetwork>(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this] { return std::make_unique<IpHelper>(_changes); });
-    _battery     = MatchedToConfig<IBattery>(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
-    _tray        = MatchedToConfig<ShellNotifyIcon>(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
+    _audioOutput =
+        MatchedToConfig<IAudio>(std::move(_audioOutput), ShowsAudioFlow(*_config, AudioFlow::Output), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Output); });
+    _audioInput =
+        MatchedToConfig<IAudio>(std::move(_audioInput), ShowsAudioFlow(*_config, AudioFlow::Input), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Input); });
+    _network = MatchedToConfig<INetwork>(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this] { return std::make_unique<IpHelper>(_changes); });
+    _battery = MatchedToConfig<IBattery>(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
+    _tray    = MatchedToConfig<ShellNotifyIcon>(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
         auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control, kTrayFailed);
         // Apps add their icons again for the taskbar's class only, so a tray of another class has no one to tell.
         if (_trayClass == kTaskbarClass) {

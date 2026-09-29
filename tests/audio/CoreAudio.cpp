@@ -37,18 +37,18 @@ TEST(CoreAudio, ReadsTheDefaultOutputDevice) {
     HWND         target = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
     ChangeSignal changes(target, kChanged);
     {
-        const CoreAudio audio(changes);
+        const CoreAudio audio(changes, AudioFlow::Output);
         const auto      deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while (!audio.Output().has_value() && std::chrono::steady_clock::now() < deadline) {
+        while (!audio.Device().has_value() && std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        const std::optional<AudioOutput> output = audio.Output();
-        if (!output.has_value()) {
+        const std::optional<AudioDevice> device = audio.Device();
+        if (!device.has_value()) {
             FAIL() << "no output device read within 5 s";
         }
-        EXPECT_FALSE(output->device.empty());
-        EXPECT_GE(output->volume, 0.0f);
-        EXPECT_LE(output->volume, 1.0f);
+        EXPECT_FALSE(device->name.empty());
+        EXPECT_GE(device->volume, 0.0f);
+        EXPECT_LE(device->volume, 1.0f);
         MSG message{};
         EXPECT_TRUE(PeekMessageW(&message, target, kChanged, kChanged, PM_REMOVE));
     }
@@ -60,7 +60,7 @@ TEST(CoreAudio, StopsPromptlyRightAfterStarting) {
     ChangeSignal changes(target, kChanged);
     const auto   started = std::chrono::steady_clock::now();
     for (std::int32_t round = 0; round < 20; ++round) {
-        const CoreAudio audio(changes);
+        const CoreAudio audio(changes, AudioFlow::Output);
     }
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(5));
     DestroyWindow(target);

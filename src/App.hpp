@@ -84,10 +84,11 @@ class App {
     std::unique_ptr<CommandPollers>  _commandPollers;
     std::unique_ptr<CounterSamplers> _counterSamplers;
     // Each null while the config shows no module of its kind, and kept across reloads that show one, since its state
-    // (icons, the output device) belongs to the system, not to a config. Window icons are trimmed to the listed
-    // windows on every change.
+    // (icons, the default devices) belongs to the system, not to a config. Window icons are trimmed to the listed
+    // windows on every change. Each audio flow is a kind of its own.
     std::unique_ptr<WindowIcons>     _windowIcons;
-    std::unique_ptr<IAudio>          _audio;
+    std::unique_ptr<IAudio>          _audioOutput;
+    std::unique_ptr<IAudio>          _audioInput;
     std::unique_ptr<INetwork>        _network;
     std::unique_ptr<IBattery>        _battery;
     std::unique_ptr<ShellNotifyIcon> _tray;
