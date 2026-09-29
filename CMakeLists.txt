@@ -15,8 +15,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # SDL checks, Control Flow Guard and CET shadow stack compatibility for every target, Lua and the tests included.
+# An incremental relink can leave the Control Flow Guard table stale, so an indirect call into an object it did not
+# recompile fails fast in ntdll (FAST_FAIL_GUARD_ICALL_CHECK_FAILURE).
 add_compile_options(/sdl /guard:cf)
-add_link_options(/guard:cf /CETCOMPAT)
+add_link_options(/guard:cf /CETCOMPAT /INCREMENTAL:NO)
 
 include(FetchContent)
 
