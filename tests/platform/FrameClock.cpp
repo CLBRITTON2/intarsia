@@ -1,4 +1,5 @@
 #include "platform/FrameClock.hpp"
+#include "render/Graphics.hpp"
 
 #include <gtest/gtest.h>
 
@@ -30,11 +31,11 @@ namespace {
 
 } // namespace
 
-// At 60 to 360 Hz half a second is 30 to 180 frames. A clock that did not wait for composition would post thousands.
+// At 60 to 360 Hz half a second is 30 to 180 frames. A clock that did not wait for the refresh would post thousands.
 TEST(FrameClock, PostsOncePerDisplayFrameWhileStarted) {
     HWND target = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
     {
-        FrameClock clock(target, kFrame, kFailed);
+        FrameClock clock(target, kFrame, kFailed, OutputForMonitor(MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY)).output);
         EXPECT_EQ(CountFrames(clock, target, std::chrono::milliseconds(200)), 0);
 
         clock.Start();

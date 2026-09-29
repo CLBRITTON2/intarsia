@@ -3,14 +3,13 @@
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 
-#include <dwmapi.h>
-
 #include <array>
 #include <string>
 #include <utility>
 
-FrameClock::FrameClock(HWND target, std::uint32_t frameMessage, std::uint32_t failedMessage) :
-    _target(target), _frameMessage(frameMessage), _failedMessage(failedMessage), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame stop)")),
+FrameClock::FrameClock(HWND target, std::uint32_t frameMessage, std::uint32_t failedMessage, Microsoft::WRL::ComPtr<IDXGIOutput> output) :
+    _target(target), _frameMessage(frameMessage), _failedMessage(failedMessage), _output(std::move(output)),
+    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame stop)")),
     _runningEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame running)")), _thread([this] { Run(); }) {}
 
 FrameClock::~FrameClock() {
@@ -39,7 +38,7 @@ std::exception_ptr FrameClock::TakeError() {
     return std::exchange(_error, nullptr);
 }
 
-// The running event stays set while started, so each pass waits one composition in DwmFlush.
+// The running event stays set while started, so each pass waits one vertical blank.
 void FrameClock::Run() {
     const std::array<HANDLE, 2> events{_stopEvent.get(), _runningEvent.get()};
     try {
@@ -51,7 +50,7 @@ void FrameClock::Run() {
             if (woke != WAIT_OBJECT_0 + 1) {
                 ThrowLastError("WaitForMultipleObjects(frame)");
             }
-            ThrowIfFailed(DwmFlush(), "DwmFlush");
+            ThrowIfFailed(_output->WaitForVBlank(), "IDXGIOutput::WaitForVBlank");
             if (!_pending.exchange(true) && !PostMessageW(_target, _frameMessage, 0, 0)) {
                 ThrowLastError("PostMessageW(frame)");
             }

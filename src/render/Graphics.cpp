@@ -1,6 +1,7 @@
 #include "render/Graphics.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
 #include <windows.h>
@@ -9,8 +10,37 @@
 #include <cmath>
 #include <format>
 #include <stdexcept>
+#include <string>
 
 using Microsoft::WRL::ComPtr;
+
+namespace {
+
+    std::wstring AdapterName(IDXGIAdapter* adapter) {
+        DXGI_ADAPTER_DESC description{};
+        ThrowIfFailed(adapter->GetDesc(&description), "IDXGIAdapter::GetDesc");
+        return description.Description;
+    }
+
+    std::wstring DisplayName(HMONITOR monitor) {
+        MONITORINFOEXW info{};
+        info.cbSize = sizeof(info);
+        if (!GetMonitorInfoW(monitor, &info)) {
+            ThrowLastError("GetMonitorInfoW");
+        }
+        return info.szDevice;
+    }
+
+    std::uint32_t RefreshHz(const std::wstring& display) {
+        DEVMODEW mode{};
+        mode.dmSize = sizeof(mode);
+        if (!EnumDisplaySettingsW(display.c_str(), ENUM_CURRENT_SETTINGS, &mode)) {
+            throw std::runtime_error(std::format("EnumDisplaySettingsW found no current mode for display {}", ToUtf8(display)));
+        }
+        return mode.dmDisplayFrequency;
+    }
+
+} // namespace
 
 GraphicsDevice CreateGraphicsDevice() {
     GraphicsDevice device;
@@ -21,6 +51,9 @@ GraphicsDevice CreateGraphicsDevice() {
     ComPtr<IDXGIDevice> dxgiDevice;
     ThrowIfFailed(device.d3d.As(&dxgiDevice), "ID3D11Device::QueryInterface(IDXGIDevice)");
     ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&device.dxgiFactory)), "CreateDXGIFactory2");
+    ComPtr<IDXGIAdapter> adapter;
+    ThrowIfFailed(dxgiDevice->GetAdapter(&adapter), "IDXGIDevice::GetAdapter");
+    Log(LogLevel::Info, "graphics", "device_created", {{.key = "adapter", .value = ToUtf8(AdapterName(adapter.Get()))}});
 
     ThrowIfFailed(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, device.d2dFactory.GetAddressOf()), "D2D1CreateFactory");
     ThrowIfFailed(device.d2dFactory->CreateDevice(dxgiDevice.Get(), &device.d2d), "ID2D1Factory1::CreateDevice");
@@ -30,6 +63,33 @@ GraphicsDevice CreateGraphicsDevice() {
     ThrowIfFailed(DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&device.composition)), "DCompositionCreateDevice");
 
     return device;
+}
+
+MonitorOutput OutputForMonitor(HMONITOR monitor) {
+    ComPtr<IDXGIFactory2> factory;
+    ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)), "CreateDXGIFactory2");
+    const std::wstring display = DisplayName(monitor);
+    for (std::uint32_t adapterIndex = 0;; ++adapterIndex) {
+        ComPtr<IDXGIAdapter1> adapter;
+        const HRESULT         adapterFound = factory->EnumAdapters1(adapterIndex, &adapter);
+        if (adapterFound == DXGI_ERROR_NOT_FOUND) {
+            throw std::runtime_error(std::format("no graphics adapter lists display {} as an output", ToUtf8(display)));
+        }
+        ThrowIfFailed(adapterFound, "IDXGIFactory1::EnumAdapters1");
+        for (std::uint32_t outputIndex = 0;; ++outputIndex) {
+            ComPtr<IDXGIOutput> output;
+            const HRESULT       outputFound = adapter->EnumOutputs(outputIndex, &output);
+            if (outputFound == DXGI_ERROR_NOT_FOUND) {
+                break;
+            }
+            ThrowIfFailed(outputFound, "IDXGIAdapter::EnumOutputs");
+            DXGI_OUTPUT_DESC description{};
+            ThrowIfFailed(output->GetDesc(&description), "IDXGIOutput::GetDesc");
+            if (description.Monitor == monitor) {
+                return MonitorOutput{.output = output, .adapter = AdapterName(adapter.Get()), .refreshHz = RefreshHz(display)};
+            }
+        }
+    }
 }
 
 void ThrowIfDeviceFailed(HRESULT result, std::string_view call) {

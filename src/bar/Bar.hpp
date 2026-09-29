@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bar/FrameStats.hpp"
 #include "bar/Layout.hpp"
 #include "bar/Sections.hpp"
 #include "bar/Tooltip.hpp"
@@ -47,8 +48,8 @@ struct AppState {
 // lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.
 class Bar {
   public:
-    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
-        const BarPlacement& placement, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage);
+    Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
+        AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -69,9 +70,6 @@ class Bar {
 
     // True once a frame reached the screen, which shows the device worked.
     bool HasPresented() const;
-
-    // True while a module animates, so the bar wants every display frame from the frame clock.
-    bool Animating() const;
 
   private:
     template <typename Owner>
@@ -131,26 +129,27 @@ class Bar {
     // A cursor move: hovers what it is over and draws the bar if that changed.
     void PointAt(POINT client);
     // Hides the tooltip and waits for the cursor to rest again before showing the next one.
-    void                  RestartHover();
-    void                  ShowTooltip();
+    void                        RestartHover();
+    void                        ShowTooltip();
 
-    const GraphicsDevice& _graphics;
-    const Config&         _config;
-    Launcher&             _launcher;
-    FrameClock&           _frames;
-    bool                  _animating = false;
-    IWindowManager&       _windowManager; // takes the window_manager actions
-    AppState&             _state;
-    HWND                  _control;
-    std::uint32_t         _deviceLostMessage;
-    bool                  _deviceLost = false;
-    bool                  _presented  = false;
-    BarPlacement          _placement;
-    AppBarRoute           _route;
-    Sections<ModuleEntry> _modules;
-    std::vector<HitBox>   _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
-    IModule*              _pointed = nullptr; // the module under the cursor, null when there is none
-    std::optional<POINT>  _cursor;            // client pixels where the cursor last moved, null once it left
+    const GraphicsDevice&       _graphics;
+    const Config&               _config;
+    Launcher&                   _launcher;
+    std::unique_ptr<FrameClock> _frames; // paced by this bar's monitor, null until the window exists
+    bool                        _animating = false;
+    std::optional<FrameStats>   _animationFrames; // null while no animation runs
+    IWindowManager&             _windowManager;   // takes the window_manager actions
+    AppState&                   _state;
+    HWND                        _control;
+    std::uint32_t               _deviceLostMessage;
+    bool                        _deviceLost = false;
+    bool                        _presented  = false;
+    BarPlacement                _placement;
+    AppBarRoute                 _route;
+    Sections<ModuleEntry>       _modules;
+    std::vector<HitBox>         _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
+    IModule*                    _pointed = nullptr; // the module under the cursor, null when there is none
+    std::optional<POINT>        _cursor;            // client pixels where the cursor last moved, null once it left
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                  _surface;

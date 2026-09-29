@@ -37,7 +37,9 @@ void Surface::Resize(std::uint32_t width, std::uint32_t height, std::uint32_t dp
 
 void Surface::EndDrawAndPresent() {
     ThrowIfDeviceFailed(_context->EndDraw(), "ID2D1DeviceContext::EndDraw");
-    ThrowIfDeviceFailed(_swapChain->Present(1, 0), "IDXGISwapChain1::Present");
+    // Frames are paced by the bar's frame clock. A present that waited for the refresh here would hold the UI thread
+    // past the clock's next tick, and the frame it would have drawn is dropped.
+    ThrowIfDeviceFailed(_swapChain->Present(0, 0), "IDXGISwapChain1::Present");
 }
 
 void Surface::BindRenderTarget(std::uint32_t dpi) {

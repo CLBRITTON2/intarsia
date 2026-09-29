@@ -44,8 +44,6 @@ namespace {
     constexpr std::uint32_t kDisplaysSettleMs = 500;
     constexpr std::uint32_t kDeviceLost       = WM_APP + 5;
     constexpr std::uint32_t kTrayFailed       = WM_APP + 6;
-    constexpr std::uint32_t kAnimationFrame   = WM_APP + 7;
-    constexpr std::uint32_t kFrameClockFailed = WM_APP + 8;
     // Windows is often still switching adapters when a device is lost, so the new device waits a moment, backing off
     // while each new device is lost before it draws a frame.
     constexpr UINT_PTR                  kDeviceTimer = 3;
@@ -138,7 +136,7 @@ namespace {
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),
     _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry),
-    _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged), _frames(_control.get(), kAnimationFrame, kFrameClockFailed),
+    _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control.get(), kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(_config->windowManager, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
@@ -150,8 +148,6 @@ App::App(HINSTANCE instance, LaunchOptions options) :
 }
 
 App::~App() {
-    // Nothing may post to the control window once the bars are gone, and the frame clock posts while it runs.
-    _frames.Stop();
     _bars.clear();
     _tray.reset();
     _battery.reset();
@@ -226,25 +222,6 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             std::rethrow_exception(error);
         }
-        case kAnimationFrame:
-            for (const std::unique_ptr<Bar>& bar : _bars) {
-                bar->Refresh();
-            }
-            // Only after drawing: GetMessage takes posted messages before input, so a frame posted while the bars drew
-            // would starve clicks until the animation ended.
-            _frames.Acknowledge();
-            if (std::ranges::none_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->Animating(); })) {
-                _frames.Stop();
-            }
-            return 0;
-        case kFrameClockFailed: {
-            const std::exception_ptr error = _frames.TakeError();
-            if (!error) {
-                Log(LogLevel::Warning, "app", "spurious_frame_clock_failure", {});
-                return 0;
-            }
-            std::rethrow_exception(error);
-        }
         case kTrayFailed: {
             const std::exception_ptr error = _tray != nullptr ? _tray->TakeError() : nullptr;
             // Like the watcher's, any process can post this message.
@@ -276,7 +253,7 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
                                                                 .battery         = _battery.get(),
                                                                 .tray            = _tray.get(),
                                                                 .monitor         = placement.monitor},
-                                                  _launcher, _frames, placement, AppBarRouteForTray(), _state, _control.get(), kDeviceLost));
+                                                  _launcher, placement, AppBarRouteForTray(), _state, _control.get(), kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }

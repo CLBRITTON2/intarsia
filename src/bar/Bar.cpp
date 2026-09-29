@@ -5,6 +5,7 @@
 #include "platform/AppBar.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
+#include "platform/Text.hpp"
 #include "platform/WindowProc.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 
@@ -13,15 +14,19 @@
 
 #include <cstdint>
 #include <algorithm>
+#include <chrono>
 #include <format>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
 namespace {
 
-    constexpr wchar_t       kWindowClass[]  = L"IntarsiaBar";
-    constexpr std::uint32_t kAppBarCallback = WM_APP + 1;
-    constexpr UINT_PTR      kChangeTimer    = 1;
+    constexpr wchar_t       kWindowClass[]    = L"IntarsiaBar";
+    constexpr std::uint32_t kAppBarCallback   = WM_APP + 1;
+    constexpr std::uint32_t kAnimationFrame   = WM_APP + 2;
+    constexpr std::uint32_t kFrameClockFailed = WM_APP + 3;
+    constexpr UINT_PTR      kChangeTimer      = 1;
 
     bool                    IsHorizontal(Edge edge) {
         return edge == Edge::Top || edge == Edge::Bottom;
@@ -105,6 +110,27 @@ namespace {
         return earliest;
     }
 
+    std::string RectText(const RECT& rect) {
+        return std::format("{},{},{},{}", rect.left, rect.top, rect.right, rect.bottom);
+    }
+
+    std::string MillisecondsText(std::chrono::steady_clock::duration duration) {
+        return std::format("{:.1f}", std::chrono::duration<double, std::milli>(duration).count());
+    }
+
+    // The first frame is the one the animation started on, so the intervals between frames number one fewer.
+    void LogAnimationFrames(const FrameStats& stats, const RECT& monitorRect) {
+        const std::chrono::steady_clock::duration length = stats.last - stats.first;
+        const std::chrono::steady_clock::duration mean   = stats.frames > 1 ? length / (stats.frames - 1) : std::chrono::steady_clock::duration::zero();
+        Log(LogLevel::Info, "bar", "animation_frames",
+            {{.key = "monitor", .value = RectText(monitorRect)},
+             {.key = "frames", .value = std::to_string(stats.frames)},
+             {.key = "length_ms", .value = MillisecondsText(length)},
+             {.key = "mean_interval_ms", .value = MillisecondsText(mean)},
+             {.key = "longest_interval_ms", .value = MillisecondsText(stats.longestInterval)},
+             {.key = "longest_present_ms", .value = MillisecondsText(stats.longestPresent)}});
+    }
+
     // The action an input runs, or nullopt when the config binds none to it.
     const std::optional<ModuleAction>& ActionFor(const ModuleActions& actions, ModuleInput input) {
         switch (input) {
@@ -185,16 +211,18 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
     }
 }
 
-Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, FrameClock& frames,
-         const BarPlacement& placement, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
-    _graphics(graphics), _config(config), _launcher(launcher), _frames(frames), _windowManager(sources.windowManager), _state(state), _control(control),
-    _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
-    _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)), _window(CreateBarWindow(instance, this)) {
+Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
+         AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
+    _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
+    _placement(placement), _route(route), _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
+    _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
         Build(instance);
     } catch (...) {
+        // The clock's thread posts to the window, so it stops first.
+        _frames.reset();
         DestroyWindow(_window);
         throw;
     }
@@ -207,6 +235,13 @@ void Bar::Build(HINSTANCE instance) {
                                                      _config.style.fontSizeDips, L"en-us", &_textFormat),
                   "IDWriteFactory::CreateTextFormat");
 
+    const MonitorOutput output = OutputForMonitor(_placement.monitor);
+    Log(LogLevel::Info, "bar", "placed",
+        {{.key = "monitor", .value = RectText(_placement.monitorRect)},
+         {.key = "dpi", .value = std::to_string(_placement.dpi)},
+         {.key = "refresh_hz", .value = std::to_string(output.refreshHz)},
+         {.key = "adapter", .value = ToUtf8(output.adapter)}});
+    _frames = std::make_unique<FrameClock>(_window, kAnimationFrame, kFrameClockFailed, output.output);
     RegisterAppBar(_window, kAppBarCallback);
     Dock();
     PlaceInZOrder(LayerZOrder(_config.bar.layer));
@@ -222,6 +257,8 @@ void Bar::Build(HINSTANCE instance) {
 }
 
 Bar::~Bar() {
+    // The clock's thread posts to the window, so it stops first.
+    _frames.reset();
     if (_window != nullptr) {
         DestroyWindow(_window);
     }
@@ -259,6 +296,24 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
                 Refresh();
             }
             return 0;
+        case kAnimationFrame:
+            Refresh();
+            // Only after drawing: GetMessage takes posted messages before input, so a frame posted while the bar drew
+            // would starve clicks until the animation ended.
+            _frames->Acknowledge();
+            if (!_animating || _deviceLost) {
+                _frames->Stop();
+            }
+            return 0;
+        case kFrameClockFailed: {
+            const std::exception_ptr error = _frames->TakeError();
+            // Any process on the desktop can post this message, so one with nothing stored behind it is not fatal.
+            if (!error) {
+                Log(LogLevel::Warning, "bar", "spurious_frame_clock_failure", {});
+                return 0;
+            }
+            std::rethrow_exception(error);
+        }
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
         case WM_MOUSEMOVE: PointAt(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}); return 0;
         case WM_MOUSEHOVER: ShowTooltip(); return 0;
@@ -358,10 +413,6 @@ bool Bar::DeviceLost() const {
 
 bool Bar::HasPresented() const {
     return _presented;
-}
-
-bool Bar::Animating() const {
-    return _animating && !_deviceLost;
 }
 
 // Catches a lost device itself because App calls it outside the window procedure.
@@ -468,8 +519,13 @@ void Bar::Draw() {
     DrawSection(placed.left, layout.left);
     DrawSection(placed.center, layout.center);
     DrawSection(placed.right, layout.right);
+    const std::chrono::steady_clock::time_point presenting = std::chrono::steady_clock::now();
     _surface->EndDrawAndPresent();
     _presented = true;
+    if (_animating) {
+        const std::chrono::steady_clock::time_point presented = std::chrono::steady_clock::now();
+        _animationFrames                                      = WithFrame(_animationFrames, presented, presented - presenting);
+    }
 }
 
 void Bar::ReportDeviceLost(const DeviceLostError& error) {
@@ -599,11 +655,15 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
 void Bar::ScheduleNextChange() {
     const std::optional<std::uint32_t> wait = EarliestChange(_modules);
     _animating                              = wait == 0u;
+    if (!_animating && _animationFrames.has_value()) {
+        LogAnimationFrames(*_animationFrames, _placement.monitorRect);
+        _animationFrames.reset();
+    }
     if (!wait.has_value() || _animating) {
         KillTimer(_window, kChangeTimer);
         // A timer ticks at the system's 15.6 ms, off the display's refresh, so an animation follows the frame clock.
         if (_animating) {
-            _frames.Start();
+            _frames->Start();
         }
         return;
     }

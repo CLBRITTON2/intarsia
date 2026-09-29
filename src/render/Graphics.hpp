@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 
 // Shared by every bar: one D3D device feeds all swap chains and one DComp device commits all visuals.
@@ -22,7 +23,18 @@ struct GraphicsDevice {
     Microsoft::WRL::ComPtr<IDCompositionDevice> composition;
 };
 
+// Logs the adapter it renders on, which may not be the one showing a given monitor.
 GraphicsDevice CreateGraphicsDevice();
+
+struct MonitorOutput {
+    Microsoft::WRL::ComPtr<IDXGIOutput> output;
+    std::wstring                        adapter; // the adapter showing the monitor, not always the one rendering
+    std::uint32_t                       refreshHz;
+};
+
+// The DXGI output showing monitor, read from a new factory so a monitor attached since the device was made is listed.
+// Throws std::runtime_error when no adapter lists the monitor.
+MonitorOutput OutputForMonitor(HMONITOR monitor);
 
 // The graphics device is gone (driver update, driver crash, GPU removed) and nothing made from it works again. Only
 // App can recover, by creating a new device and everything drawn with it.
