@@ -91,7 +91,9 @@ add_library(intarsia_core STATIC
   src/platform/PeerProcess.cpp
   src/platform/PerformanceCounter.cpp
   src/platform/Process.cpp
+  src/platform/ShellLaunch.cpp
   src/platform/Text.cpp
+  src/platform/Token.cpp
   src/platform/WebSocket.cpp
   src/render/BrushCache.cpp
   src/render/Graphics.cpp
@@ -182,7 +184,9 @@ if(BUILD_TESTING)
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
     tests/platform/PerformanceCounter.cpp
+    tests/platform/ShellLaunch.cpp
     tests/platform/Text.cpp
+    tests/platform/Token.cpp
     tests/platform/WebSocket.cpp
     tests/platform/WindowProc.cpp
     tests/platform/WorkQueue.cpp

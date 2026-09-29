@@ -3,6 +3,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Text.hpp"
+#include "platform/Token.hpp"
 
 #include <winsock2.h>
 #include <iphlpapi.h>
@@ -42,25 +43,8 @@ namespace {
         throw PeerVerificationError("GetExtendedTcpTable kept growing past its reported size");
     }
 
-    std::vector<std::byte> TokenBuffer(HANDLE token, TOKEN_INFORMATION_CLASS kind, std::string_view name) {
-        DWORD size = 0;
-        GetTokenInformation(token, kind, nullptr, 0, &size);
-        std::vector<std::byte> buffer(size);
-        if (!GetTokenInformation(token, kind, buffer.data(), size, &size)) {
-            ThrowLastError(std::format("GetTokenInformation({})", name));
-        }
-        return buffer;
-    }
-
     PSID UserSid(std::vector<std::byte>& tokenUser) {
         return reinterpret_cast<TOKEN_USER*>(tokenUser.data())->User.Sid;
-    }
-
-    // The mandatory level's RID, such as SECURITY_MANDATORY_MEDIUM_RID.
-    std::uint32_t IntegrityLevel(HANDLE token) {
-        std::vector<std::byte> label = TokenBuffer(token, TokenIntegrityLevel, "TokenIntegrityLevel");
-        PSID                   sid   = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(label.data())->Label.Sid;
-        return *GetSidSubAuthority(sid, static_cast<DWORD>(*GetSidSubAuthorityCount(sid) - 1));
     }
 
 } // namespace
