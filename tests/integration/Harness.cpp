@@ -282,6 +282,61 @@ namespace integration {
         }
     }
 
+    Capture CaptureScreenOver(HWND window) {
+        // Per-monitor aware, so the rect and the copy are in the physical pixels the bar draws.
+        DPI_AWARENESS_CONTEXT previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        RECT                  rect{};
+        const BOOL            found = GetWindowRect(window, &rect);
+        SetThreadDpiAwarenessContext(previous);
+        if (!found) {
+            ThrowLastError("GetWindowRect(bar)");
+        }
+        Capture capture{.width = rect.right - rect.left, .height = rect.bottom - rect.top, .pixels = {}};
+        capture.pixels.resize(static_cast<size_t>(capture.width) * static_cast<size_t>(capture.height));
+
+        HDC screen = GetDC(nullptr);
+        if (screen == nullptr) {
+            throw std::runtime_error("GetDC(screen) failed");
+        }
+        HDC     memory = CreateCompatibleDC(screen);
+        HBITMAP bitmap = CreateCompatibleBitmap(screen, capture.width, capture.height);
+        HGDIOBJ old    = SelectObject(memory, bitmap);
+        // CAPTUREBLT takes layered windows too, as the bar is one.
+        const BOOL copied = BitBlt(memory, 0, 0, capture.width, capture.height, screen, rect.left, rect.top, SRCCOPY | CAPTUREBLT);
+        SelectObject(memory, old);
+        // A negative height asks for rows top to bottom.
+        BITMAPINFO info{};
+        info.bmiHeader          = BITMAPINFOHEADER{.biSize          = sizeof(BITMAPINFOHEADER),
+                                                   .biWidth         = capture.width,
+                                                   .biHeight        = -capture.height,
+                                                   .biPlanes        = 1,
+                                                   .biBitCount      = 32,
+                                                   .biCompression   = BI_RGB,
+                                                   .biSizeImage     = 0,
+                                                   .biXPelsPerMeter = 0,
+                                                   .biYPelsPerMeter = 0,
+                                                   .biClrUsed       = 0,
+                                                   .biClrImportant  = 0};
+        const std::int32_t rows = GetDIBits(memory, bitmap, 0, static_cast<UINT>(capture.height), capture.pixels.data(), &info, DIB_RGB_COLORS);
+        DeleteObject(bitmap);
+        DeleteDC(memory);
+        ReleaseDC(nullptr, screen);
+        if (!copied) {
+            ThrowLastError("BitBlt(screen)");
+        }
+        if (rows != capture.height) {
+            throw std::runtime_error(std::format("GetDIBits copied {} of {} rows", rows, capture.height));
+        }
+        for (std::uint32_t& pixel : capture.pixels) {
+            pixel &= 0xFFFFFF;
+        }
+        return capture;
+    }
+
+    size_t CountPixels(const Capture& capture, std::uint32_t rgb) {
+        return static_cast<size_t>(std::ranges::count(capture.pixels, rgb));
+    }
+
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
         std::vector<std::string> folded;
         std::ranges::unique_copy(lines, std::back_inserter(folded));

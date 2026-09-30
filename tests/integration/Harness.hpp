@@ -67,6 +67,17 @@ namespace integration {
     // Sends a left click every few pixels along the bar's middle, left to right, each handled before the next is sent.
     void SweepClicks(HWND bar);
 
+    // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
+    struct Capture {
+        std::int32_t               width;
+        std::int32_t               height;
+        std::vector<std::uint32_t> pixels;
+    };
+
+    // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
+    Capture CaptureScreenOver(HWND window);
+    size_t  CountPixels(const Capture& capture, std::uint32_t rgb);
+
     // Each run of equal lines folded into one.
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);
 
