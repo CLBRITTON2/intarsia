@@ -13,7 +13,11 @@ namespace {
 
 } // namespace
 
-Win32Error::Win32Error(std::string_view call, HRESULT result) : std::runtime_error(DescribeFailure(call, result)) {}
+Win32Error::Win32Error(std::string_view call, HRESULT result) : std::runtime_error(DescribeFailure(call, result)), _result(result) {}
+
+HRESULT Win32Error::Result() const {
+    return _result;
+}
 
 void ThrowIfFailed(HRESULT result, std::string_view call) {
     if (FAILED(result)) {

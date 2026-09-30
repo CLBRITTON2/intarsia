@@ -107,6 +107,11 @@ namespace {
         HANDLE _handle = nullptr;
     };
 
+    // True when the failure means the client's handle is no longer good, as after the WLAN service restarts.
+    bool WlanClientLost(HRESULT result) {
+        return result == HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE) || result == HRESULT_FROM_WIN32(RPC_S_SERVER_UNAVAILABLE) || result == HRESULT_FROM_WIN32(RPC_S_CALL_FAILED);
+    }
+
 } // namespace
 
 IpHelper::IpHelper(ChangeSignal& changes) :
@@ -160,8 +165,11 @@ void IpHelper::Run() {
                         wlanLog.Succeeded();
                     } catch (const Win32Error& error) {
                         // The link is still Wi-Fi, only its details are missing. Windows 11 withholds them from apps
-                        // without location access (ERROR_ACCESS_DENIED), which the log's reason shows.
-                        wlan.reset();
+                        // without location access (ERROR_ACCESS_DENIED), which the log's reason shows. The client
+                        // stays open unless the WLAN service lost it.
+                        if (WlanClientLost(error.Result())) {
+                            wlan.reset();
+                        }
                         wlanLog.Failed("wifi_details_unavailable", error);
                     }
                 }
