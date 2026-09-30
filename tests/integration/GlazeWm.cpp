@@ -71,6 +71,28 @@ section { margin: 4px; padding: 3px; background: #191724; }
 .item.focused { background: #2e86c1; }
 )";
 
+    constexpr std::string_view kWorkspacesConfig = R"(
+return {
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    window_manager = "glazewm",
+    modules_left = { "workspaces" },
+    modules_center = {},
+    modules_right = {},
+    layouts = {},
+    modules = { workspaces = { type = "workspaces" } },
+}
+)";
+
+    constexpr std::uint32_t    kTextColor  = 0xE0DEF4;
+    constexpr std::uint32_t    kAlertColor = 0xE74C3C;
+
+    // Large text, so glyph stems cover whole pixels in the exact color.
+    constexpr std::string_view kAlertStyle = R"(
+* { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
+section { margin: 4px; padding: 3px; background: #191724; }
+.alert { color: #e74c3c; }
+)";
+
     // The mean column of the pixels in rgb, or nullopt when there are none.
     std::optional<double> MeanColumn(const integration::Capture& capture, std::uint32_t rgb) {
         double sum   = 0;
@@ -110,6 +132,26 @@ TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
     integration::Log("bar_logged", std::format("text=event=connected lines={}", bar.LogLines("event=connected").size()));
     EXPECT_THAT(bar.CommandsFromSweep(),
                 ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace", "command toggle-tiling-direction"));
+}
+
+TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosing) {
+    integration::RunningBar bar("disconnect", kWorkspacesConfig, kAlertStyle);
+    ASSERT_TRUE(integration::Eventually([&bar] { return integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), kTextColor) > 0; }, std::chrono::seconds(5)))
+        << "the connected workspaces never drew in the text color";
+    const size_t connectedPixels = integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), kAlertColor);
+    integration::Log("pixels_counted", std::format("color=#{:06x} count={} while=connected", kAlertColor, connectedPixels));
+    EXPECT_EQ(connectedPixels, 0U);
+
+    bar.StopServer();
+    size_t alertPixels = 0;
+    EXPECT_TRUE(integration::Eventually(
+        [&] {
+            alertPixels = integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), kAlertColor);
+            return alertPixels > 0;
+        },
+        std::chrono::seconds(2)))
+        << "no pixel drew in the alert color within 2 s of the server closing";
+    integration::Log("pixels_counted", std::format("color=#{:06x} count={} while=disconnected", kAlertColor, alertPixels));
 }
 
 TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
