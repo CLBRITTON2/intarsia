@@ -2,10 +2,11 @@
 
 #include "network/INetwork.hpp"
 #include "platform/ChangeSignal.hpp"
-#include "platform/Handle.hpp"
+#include "platform/StoppableThread.hpp"
+
+#include <windows.h>
 
 #include <mutex>
-#include <thread>
 
 // The network state through the IP Helper API (the default route's interface, its address and byte counters) and the
 // WLAN API (the connected network's name and signal). A worker thread samples once a second, since traffic rates need
@@ -14,21 +15,19 @@
 class IpHelper final : public INetwork {
   public:
     explicit IpHelper(ChangeSignal& changes);
-    ~IpHelper() override;
     IpHelper(const IpHelper&)               = delete;
     IpHelper&    operator=(const IpHelper&) = delete;
 
     NetworkState State() const override;
 
   private:
-    void               Run();
+    void               Run(HANDLE stopEvent);
 
     ChangeSignal&      _changes;
-    UniqueHandle       _stopEvent;
     mutable std::mutex _mutex; // guards _state
     NetworkState       _state;
     // Declared last so every member above exists before the thread starts.
-    std::thread _thread;
+    StoppableThread _thread;
 };
 
 // Whether two states differ in nothing but their rates.

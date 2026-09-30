@@ -29,13 +29,7 @@ double CombineCounterValues(const std::vector<double>& values, CounterCombine co
 
 CounterSampler::CounterSampler(std::string name, const CounterConfig& config, ChangeSignal& changes) :
     _name(std::move(name)), _path(config.path), _combine(config.combine), _interval(config.text.interval), _changes(changes),
-    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(counter sampler stop)")),
-    _reading{.outcome = CounterOutcome::Pending, .value = 0.0, .detail = {}}, _thread([this] { Run(); }) {}
-
-CounterSampler::~CounterSampler() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _reading{.outcome = CounterOutcome::Pending, .value = 0.0, .detail = {}}, _thread("counter sampler", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 CounterReading CounterSampler::Reading() const {
     const std::scoped_lock lock(_mutex);
@@ -44,7 +38,7 @@ CounterReading CounterSampler::Reading() const {
 
 // A freshly added counter's first sample only starts its rates, and a sample without a value keeps the last reading,
 // so neither publishes anything unless it fails.
-void CounterSampler::Run() {
+void CounterSampler::Run(HANDLE stopEvent) {
     std::unique_ptr<PerformanceCounter> counter;
     while (true) {
         const auto started = std::chrono::steady_clock::now();
@@ -64,7 +58,7 @@ void CounterSampler::Run() {
             Publish(CounterReading{.outcome = CounterOutcome::Failed, .value = 0.0, .detail = error.what()});
         }
         const auto wait = std::max(std::chrono::duration_cast<std::chrono::milliseconds>(started + _interval - std::chrono::steady_clock::now()), std::chrono::milliseconds(0));
-        if (WaitForSingleObject(_stopEvent.get(), static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0) {
+        if (WaitForSingleObject(stopEvent, static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0) {
             return;
         }
     }

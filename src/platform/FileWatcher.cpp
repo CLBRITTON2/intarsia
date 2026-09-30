@@ -29,21 +29,16 @@ FileWatcher::FileWatcher(const std::filesystem::path& directory, std::vector<std
     _directory(OwnHandle(CreateFileW(directory.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr),
                          "CreateFileW(config directory)")),
-    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")), _thread([this] { Watch(); }) {}
-
-FileWatcher::~FileWatcher() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _thread("file watcher", [this](HANDLE stopEvent) { Watch(stopEvent); }) {}
 
 std::exception_ptr FileWatcher::TakeError() {
     const std::scoped_lock lock(_errorMutex);
     return std::exchange(_error, nullptr);
 }
 
-void FileWatcher::Watch() {
+void FileWatcher::Watch(HANDLE stopEvent) {
     try {
-        WatchUntilStopped();
+        WatchUntilStopped(stopEvent);
     } catch (...) {
         {
             const std::scoped_lock lock(_errorMutex);
@@ -56,12 +51,12 @@ void FileWatcher::Watch() {
     }
 }
 
-void FileWatcher::WatchUntilStopped() {
+void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
     const UniqueHandle          readDone = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(read)");
     std::vector<DWORD>          buffer(kBufferDwords);
     const DWORD                 bufferBytes = static_cast<DWORD>(buffer.size() * sizeof(DWORD));
     OVERLAPPED                  overlapped{};
-    const std::array<HANDLE, 2> waits{_stopEvent.get(), readDone.get()};
+    const std::array<HANDLE, 2> waits{stopEvent, readDone.get()};
     bool                        pending = false;
     bool                        reading = false;
 

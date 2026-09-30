@@ -167,14 +167,8 @@ namespace {
 } // namespace
 
 CoreAudio::CoreAudio(ChangeSignal& changes, AudioFlow flow) :
-    _changes(changes), _flow(flow), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(audio stop)")),
-    _deviceEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio device)")),
-    _requestEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio request)")), _thread([this] { Run(); }) {}
-
-CoreAudio::~CoreAudio() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _changes(changes), _flow(flow), _deviceEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio device)")),
+    _requestEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio request)")), _thread("audio", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 std::optional<AudioDevice> CoreAudio::Device() const {
     const std::scoped_lock lock(_mutex);
@@ -225,7 +219,7 @@ void CoreAudio::Publish(std::optional<AudioDevice> device) {
 }
 
 // Nothing here may throw out of the thread, so every Core Audio failure is logged and retried.
-void CoreAudio::Run() {
+void CoreAudio::Run(HANDLE stopEvent) {
     // Core Audio calls back on its own threads, which a multithreaded apartment allows without marshalling.
     const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
     if (FAILED(initialized)) {
@@ -237,7 +231,7 @@ void CoreAudio::Run() {
         std::unique_ptr<Endpoint>   endpoint;
         bool                        attach  = true;
         bool                        failing = false;
-        const std::array<HANDLE, 3> waits{_stopEvent.get(), _deviceEvent.get(), _requestEvent.get()};
+        const std::array<HANDLE, 3> waits{stopEvent, _deviceEvent.get(), _requestEvent.get()};
         while (true) {
             if (attach) {
                 attach = false;

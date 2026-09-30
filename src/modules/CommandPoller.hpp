@@ -2,7 +2,7 @@
 
 #include "config/Config.hpp"
 #include "platform/ChangeSignal.hpp"
-#include "platform/Handle.hpp"
+#include "platform/StoppableThread.hpp"
 
 #include <windows.h>
 
@@ -14,7 +14,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <vector>
 
 enum class CommandOutcome : std::uint8_t {
@@ -44,16 +43,14 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format, const st
 class CommandPoller {
   public:
     CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes);
-    // Kills a run in progress rather than waiting for it.
-    ~CommandPoller();
     CommandPoller(const CommandPoller&)            = delete;
     CommandPoller& operator=(const CommandPoller&) = delete;
 
     CommandResult  Result() const;
 
   private:
-    void                     Run();
-    CommandResult            RunOnce() const;
+    void                     Run(HANDLE stopEvent);
+    CommandResult            RunOnce(HANDLE stopEvent) const;
     void                     Publish(const CommandResult& result);
 
     std::string              _name;
@@ -63,11 +60,11 @@ class CommandPoller {
     CustomOutput             _output;
     std::vector<std::string> _classes;
     ChangeSignal&            _changes;
-    UniqueHandle             _stopEvent;
     mutable std::mutex       _mutex;
     CommandResult            _result;
-    // Declared last so every member above exists before the thread starts.
-    std::thread _thread;
+    // Declared last so every member above exists before the thread starts. Destruction kills a run in progress rather
+    // than waiting for it.
+    StoppableThread _thread;
 };
 
 // One poller per custom module name, shared by every bar that shows it, so each command runs once however many monitors

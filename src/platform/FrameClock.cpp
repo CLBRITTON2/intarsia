@@ -9,13 +9,7 @@
 
 FrameClock::FrameClock(HWND target, std::uint32_t frameMessage, std::uint32_t failedMessage, Microsoft::WRL::ComPtr<IDXGIOutput> output) :
     _target(target), _frameMessage(frameMessage), _failedMessage(failedMessage), _output(std::move(output)),
-    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame stop)")),
-    _runningEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame running)")), _thread([this] { Run(); }) {}
-
-FrameClock::~FrameClock() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _runningEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame running)")), _thread("frame", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 void FrameClock::Start() {
     if (!SetEvent(_runningEvent.get())) {
@@ -39,8 +33,8 @@ std::exception_ptr FrameClock::TakeError() {
 }
 
 // The running event stays set while started, so each pass waits one vertical blank.
-void FrameClock::Run() {
-    const std::array<HANDLE, 2> events{_stopEvent.get(), _runningEvent.get()};
+void FrameClock::Run(HANDLE stopEvent) {
+    const std::array<HANDLE, 2> events{stopEvent, _runningEvent.get()};
     try {
         for (;;) {
             const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(events.size()), events.data(), FALSE, INFINITE);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/Handle.hpp"
+#include "platform/StoppableThread.hpp"
 
 #include <windows.h>
 
@@ -9,7 +10,6 @@
 #include <functional>
 #include <mutex>
 #include <optional>
-#include <thread>
 #include <utility>
 
 // A bounded queue drained in order by its own thread, for work the UI thread must not wait on.
@@ -22,14 +22,8 @@ class WorkQueue {
     // there, so it can own what has to live on that thread (a COM apartment). Neither may throw: nothing there could
     // catch it.
     WorkQueue(size_t capacity, std::function<Process()> makeProcess) :
-        _capacity(capacity), _makeProcess(std::move(makeProcess)), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(work queue stop)")),
-        _queuedEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(work queue queued)")), _thread([this] { Run(); }) {}
-
-    // Stops after the item in progress: whatever is still queued is dropped.
-    ~WorkQueue() {
-        SetEvent(_stopEvent.get());
-        _thread.join();
-    }
+        _capacity(capacity), _makeProcess(std::move(makeProcess)), _queuedEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(work queue queued)")),
+        _thread("work queue", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
     WorkQueue(const WorkQueue&)            = delete;
     WorkQueue& operator=(const WorkQueue&) = delete;
@@ -48,11 +42,11 @@ class WorkQueue {
     }
 
   private:
-    void Run() {
+    void Run(HANDLE stopEvent) {
         const Process               process = _makeProcess();
-        const std::array<HANDLE, 2> waits{_stopEvent.get(), _queuedEvent.get()};
+        const std::array<HANDLE, 2> waits{stopEvent, _queuedEvent.get()};
         while (WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE) == WAIT_OBJECT_0 + 1) {
-            while (WaitForSingleObject(_stopEvent.get(), 0) == WAIT_TIMEOUT) {
+            while (WaitForSingleObject(stopEvent, 0) == WAIT_TIMEOUT) {
                 std::optional<Item> item = Pop();
                 if (!item.has_value()) {
                     break;
@@ -74,10 +68,10 @@ class WorkQueue {
 
     size_t                   _capacity;
     std::function<Process()> _makeProcess;
-    UniqueHandle             _stopEvent;
     UniqueHandle             _queuedEvent;
     std::mutex               _mutex;
     std::deque<Item>         _queue;
-    // Declared last so every member above exists before the thread starts.
-    std::thread _thread;
+    // Declared last so every member above exists before the thread starts. Destruction stops after the item in
+    // progress: whatever is still queued is dropped.
+    StoppableThread _thread;
 };

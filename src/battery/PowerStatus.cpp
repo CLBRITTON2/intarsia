@@ -124,16 +124,10 @@ void PowerNotificationCloser::operator()(HPOWERNOTIFY notification) const {
 }
 
 PowerStatus::PowerStatus(ChangeSignal& changes) :
-    _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(battery stop)")),
-    _wakeEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(battery wake)")),
+    _changes(changes), _wakeEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(battery wake)")),
     _powerSource(RegisterWake(GUID_ACDC_POWER_SOURCE, _wakeEvent.get(), "PowerSettingRegisterNotification(GUID_ACDC_POWER_SOURCE)")),
     _percentRemaining(RegisterWake(GUID_BATTERY_PERCENTAGE_REMAINING, _wakeEvent.get(), "PowerSettingRegisterNotification(GUID_BATTERY_PERCENTAGE_REMAINING)")),
-    _thread([this] { Run(); }) {}
-
-PowerStatus::~PowerStatus() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _thread("battery", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 std::optional<BatteryState> PowerStatus::State() const {
     const std::scoped_lock lock(_mutex);
@@ -141,10 +135,10 @@ std::optional<BatteryState> PowerStatus::State() const {
 }
 
 // Nothing here may throw out of the thread, so every failure is logged once and the next sample tries again.
-void PowerStatus::Run() {
+void PowerStatus::Run(HANDLE stopEvent) {
     FailureLog                  sampleLog("battery");
     FailureLog                  healthLog("battery");
-    const std::array<HANDLE, 2> events{_stopEvent.get(), _wakeEvent.get()};
+    const std::array<HANDLE, 2> events{stopEvent, _wakeEvent.get()};
     DWORD                       woke = WAIT_TIMEOUT;
     do {
         std::optional<BatteryState> state;

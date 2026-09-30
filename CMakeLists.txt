@@ -97,6 +97,7 @@ add_library(intarsia_core STATIC
   src/platform/PerformanceCounter.cpp
   src/platform/Process.cpp
   src/platform/ShellLaunch.cpp
+  src/platform/StoppableThread.cpp
   src/platform/Text.cpp
   src/platform/Token.cpp
   src/platform/WebSocket.cpp

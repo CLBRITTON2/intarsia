@@ -3,6 +3,7 @@
 #include "battery/IBattery.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
+#include "platform/StoppableThread.hpp"
 
 #include <windows.h>
 
@@ -10,7 +11,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <thread>
 #include <vector>
 
 struct PowerNotificationCloser {
@@ -25,17 +25,15 @@ using UniquePowerNotification = std::unique_ptr<void, PowerNotificationCloser>;
 class PowerStatus final : public IBattery {
   public:
     explicit PowerStatus(ChangeSignal& changes);
-    ~PowerStatus() override;
     PowerStatus(const PowerStatus&)                           = delete;
     PowerStatus&                operator=(const PowerStatus&) = delete;
 
     std::optional<BatteryState> State() const override;
 
   private:
-    void                        Run();
+    void                        Run(HANDLE stopEvent);
 
     ChangeSignal&               _changes;
-    UniqueHandle                _stopEvent;
     UniqueHandle                _wakeEvent; // set by the power notifications
     mutable std::mutex          _mutex;     // guards _state
     std::optional<BatteryState> _state;
@@ -43,7 +41,7 @@ class PowerStatus final : public IBattery {
     UniquePowerNotification _powerSource;
     UniquePowerNotification _percentRemaining;
     // Declared last so every member above exists before the thread starts.
-    std::thread _thread;
+    StoppableThread _thread;
 };
 
 // One battery's capacities in mWh, as its driver reports them.

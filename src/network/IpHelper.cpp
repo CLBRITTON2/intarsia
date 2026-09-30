@@ -115,14 +115,9 @@ namespace {
 } // namespace
 
 IpHelper::IpHelper(ChangeSignal& changes) :
-    _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(network stop)")),
+    _changes(changes),
     _state{.link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0},
-    _thread([this] { Run(); }) {}
-
-IpHelper::~IpHelper() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _thread("network", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 NetworkState IpHelper::State() const {
     const std::scoped_lock lock(_mutex);
@@ -130,7 +125,7 @@ NetworkState IpHelper::State() const {
 }
 
 // Nothing here may throw out of the thread, so every failure is logged once and the next sample tries again.
-void IpHelper::Run() {
+void IpHelper::Run(HANDLE stopEvent) {
     std::optional<Counters>     last;
     std::unique_ptr<WlanClient> wlan;
     FailureLog                  sampleLog("network");
@@ -192,8 +187,8 @@ void IpHelper::Run() {
         if (changed) {
             _changes.Notify("network");
         }
-    } while (WaitForSingleObject(_stopEvent.get(), kSampleMs) == WAIT_TIMEOUT);
-    if (WaitForSingleObject(_stopEvent.get(), 0) != WAIT_OBJECT_0) {
+    } while (WaitForSingleObject(stopEvent, kSampleMs) == WAIT_TIMEOUT);
+    if (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0) {
         Log(LogLevel::Error, "network", "wait_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
     }
 }

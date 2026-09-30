@@ -3,10 +3,10 @@
 #include "audio/IAudio.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
+#include "platform/StoppableThread.hpp"
 
 #include <mutex>
 #include <optional>
-#include <thread>
 
 // The default device of one flow through Windows Core Audio (MMDevice and IAudioEndpointVolume). A worker thread owns
 // every Core Audio object: it follows default device changes and volume notifications into a snapshot the UI thread
@@ -15,7 +15,6 @@
 class CoreAudio final : public IAudio {
   public:
     CoreAudio(ChangeSignal& changes, AudioFlow flow);
-    ~CoreAudio() override;
     CoreAudio(const CoreAudio&)                            = delete;
     CoreAudio&                 operator=(const CoreAudio&) = delete;
 
@@ -28,12 +27,11 @@ class CoreAudio final : public IAudio {
     void OnVolumeNotified(float volume, bool muted);
 
   private:
-    void                       Run();
+    void                       Run(HANDLE stopEvent);
     void                       Publish(std::optional<AudioDevice> device);
 
     ChangeSignal&              _changes;
     AudioFlow                  _flow;
-    UniqueHandle               _stopEvent;
     UniqueHandle               _deviceEvent;  // the default device changed, so the worker attaches to it
     UniqueHandle               _requestEvent; // a change is waiting in _pendingVolume or _pendingMuted
     mutable std::mutex         _mutex;        // guards everything below
@@ -42,5 +40,5 @@ class CoreAudio final : public IAudio {
     std::optional<float> _pendingVolume;
     std::optional<bool>  _pendingMuted;
     // Declared last so every member above exists before the thread starts.
-    std::thread _thread;
+    StoppableThread _thread;
 };

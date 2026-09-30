@@ -128,40 +128,35 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format, const st
 
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :
     _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _classes(config.classes),
-    _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command poller stop)")),
-    _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}}, _thread([this] { Run(); }) {}
-
-CommandPoller::~CommandPoller() {
-    SetEvent(_stopEvent.get());
-    _thread.join();
-}
+    _changes(changes), _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}},
+    _thread("command poller", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 CommandResult CommandPoller::Result() const {
     const std::scoped_lock lock(_mutex);
     return _result;
 }
 
-void CommandPoller::Run() {
+void CommandPoller::Run(HANDLE stopEvent) {
     while (true) {
         const auto          started = std::chrono::steady_clock::now();
-        const CommandResult result  = RunOnce();
+        const CommandResult result  = RunOnce(stopEvent);
         // A run the destructor cut short says nothing about the command.
-        if (WaitForSingleObject(_stopEvent.get(), 0) == WAIT_OBJECT_0) {
+        if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) {
             return;
         }
         Publish(result);
         const auto wait = std::max(std::chrono::duration_cast<std::chrono::milliseconds>(started + _interval - std::chrono::steady_clock::now()), std::chrono::milliseconds(0));
-        if (WaitForSingleObject(_stopEvent.get(), static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0) {
+        if (WaitForSingleObject(stopEvent, static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0) {
             return;
         }
     }
 }
 
 // Runs on the poller thread, so every failure becomes a result instead of an exception.
-CommandResult CommandPoller::RunOnce() const {
+CommandResult CommandPoller::RunOnce(HANDLE stopEvent) const {
     std::string output;
     try {
-        output = CaptureOutput(_command, _timeout, kMaxOutputBytes, _stopEvent.get());
+        output = CaptureOutput(_command, _timeout, kMaxOutputBytes, stopEvent);
     } catch (const CommandError& error) {
         return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
     } catch (const Win32Error& error) {
