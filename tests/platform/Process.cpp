@@ -9,11 +9,13 @@
 #include <cstdint>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -55,6 +57,44 @@ namespace {
     auto CommandErrorWith(std::string_view text) {
         return testing::ThrowsMessage<CommandError>(testing::HasSubstr(std::string(text)));
     }
+
+    constexpr std::wstring_view kStubName = L"intarsia-path-stub";
+
+    // A directory holding an empty kStubName.exe, current for as long as it lives, with PATH and the current directory
+    // put back when it goes.
+    class StubDirectory {
+      public:
+        StubDirectory() :
+            _path(std::filesystem::temp_directory_path() / ("intarsia-path-test-" + std::to_string(GetCurrentProcessId()))), _previousDirectory(std::filesystem::current_path()),
+            _previousPath(Path()) {
+            std::filesystem::create_directories(_path);
+            std::ofstream(_path / (std::wstring(kStubName) + L".exe")).close();
+            std::filesystem::current_path(_path);
+        }
+        ~StubDirectory() {
+            SetEnvironmentVariableW(L"PATH", _previousPath.c_str());
+            std::error_code error;
+            std::filesystem::current_path(_previousDirectory, error);
+            std::filesystem::remove_all(_path, error);
+        }
+        StubDirectory(const StubDirectory&)                          = delete;
+        StubDirectory&               operator=(const StubDirectory&) = delete;
+
+        const std::filesystem::path& Get() const {
+            return _path;
+        }
+
+      private:
+        static std::wstring Path() {
+            std::wstring value(32767, L'\0');
+            value.resize(GetEnvironmentVariableW(L"PATH", value.data(), static_cast<DWORD>(value.size())));
+            return value;
+        }
+
+        std::filesystem::path _path;
+        std::filesystem::path _previousDirectory;
+        std::wstring          _previousPath;
+    };
 
 } // namespace
 
@@ -113,4 +153,19 @@ TEST(Process, RelativePathsWithDirectoriesDoNotResolve) {
     EXPECT_FALSE(ResolveProgram(L"System32\\cmd.exe").has_value());
     EXPECT_FALSE(ResolveProgram(L"\\Windows\\System32\\cmd.exe").has_value());
     EXPECT_FALSE(ResolveProgram(L"C:cmd.exe").has_value());
+}
+
+// A relative PATH entry (".", an empty one, "bin") names wherever the bar happened to start, never a place a program is
+// installed.
+TEST(Process, RelativePathEntriesAreNotSearched) {
+    const StubDirectory directory;
+    SetEnvironmentVariableW(L"PATH", (L".;;..\\" + directory.Get().filename().wstring()).c_str());
+    EXPECT_FALSE(ResolveProgram(kStubName).has_value());
+
+    SetEnvironmentVariableW(L"PATH", (L".;" + directory.Get().wstring()).c_str());
+    const std::optional<std::filesystem::path> found = ResolveProgram(kStubName);
+    if (!found.has_value()) {
+        FAIL() << "the absolute entry was not searched";
+    }
+    EXPECT_TRUE(std::filesystem::equivalent(found->parent_path(), directory.Get()));
 }

@@ -14,6 +14,8 @@
 #include <cstdint>
 #include <format>
 #include <memory>
+#include <ranges>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -61,6 +63,23 @@ namespace {
         const DWORD  copied = GetEnvironmentVariableW(L"PATH", value.data(), length);
         value.resize(copied);
         return value;
+    }
+
+    // PATH's absolute entries, joined for SearchPathW, which resolves a relative one (".", an empty one, "bin")
+    // against the current directory.
+    std::wstring AbsoluteEntries(std::wstring_view path) {
+        std::wstring kept;
+        for (const auto entry : std::views::split(path, L';')) {
+            const std::wstring_view text(entry.begin(), entry.end());
+            if (!std::filesystem::path(text).is_absolute()) {
+                continue;
+            }
+            if (!kept.empty()) {
+                kept += L';';
+            }
+            kept += text;
+        }
+        return kept;
     }
 
     // ShellExecuteExW can use COM shell extensions, which need an apartment on the calling thread.
@@ -273,7 +292,7 @@ std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program) {
         return std::nullopt;
     }
     // An explicit search path keeps SearchPathW from also looking in the current directory.
-    const std::wstring         searchPath = PathVariable();
+    const std::wstring         searchPath = AbsoluteEntries(PathVariable());
     std::array<wchar_t, 32768> found{};
     const DWORD                length = SearchPathW(searchPath.c_str(), std::wstring(program).c_str(), L".exe", static_cast<DWORD>(found.size()), found.data(), nullptr);
     if (searchPath.empty() || length == 0 || length >= found.size()) {
