@@ -113,7 +113,7 @@ TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
 }
 
 TEST(Config, DrawsTheColorOfASavedStyle) {
-    integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { color: #27ae60; }"));
+    const integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { color: #27ae60; }"));
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the module never drew in the first style's color";
 
     bar.SaveStyle(StyleWithRules("#mark { color: #f39c12; }"));

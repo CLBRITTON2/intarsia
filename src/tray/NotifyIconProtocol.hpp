@@ -149,10 +149,10 @@ std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, const std:
 
 // One click on an icon, as double click detection compares them.
 struct TrayClick {
-    std::intptr_t                         owner;
-    std::uint32_t                         id;
-    TrayButton                            button;
-    POINT                                 cursor;
+    std::intptr_t                         owner{};
+    std::uint32_t                         id{};
+    TrayButton                            button{};
+    POINT                                 cursor{};
     std::chrono::steady_clock::time_point time;
 };
 

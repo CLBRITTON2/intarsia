@@ -72,7 +72,7 @@ class ShellNotifyIcon final : public ITray {
     void          Publish(std::vector<TrayIcon> icons);
     void          Run(std::promise<void>& ready);
     void          RunLoop();
-    void          Fail(std::exception_ptr error);
+    void          Fail(const std::exception_ptr& error);
 
     ChangeSignal& _changes;
     std::wstring  _windowClass;

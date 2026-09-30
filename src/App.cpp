@@ -66,7 +66,10 @@ namespace {
         if (!shown) {
             return nullptr;
         }
-        return source != nullptr ? std::move(source) : create();
+        if (source != nullptr) {
+            return source;
+        }
+        return create();
     }
 
     // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.

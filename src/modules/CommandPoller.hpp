@@ -54,7 +54,7 @@ class CommandPoller {
   private:
     void                     Run();
     CommandResult            RunOnce() const;
-    void                     Publish(CommandResult result);
+    void                     Publish(const CommandResult& result);
 
     std::string              _name;
     Command                  _command;

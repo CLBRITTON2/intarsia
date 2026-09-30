@@ -173,7 +173,7 @@ CommandResult CommandPoller::RunOnce() const {
 }
 
 // Posts and logs only on a change, so a command that keeps failing the same way logs once.
-void CommandPoller::Publish(CommandResult result) {
+void CommandPoller::Publish(const CommandResult& result) {
     {
         const std::scoped_lock lock(_mutex);
         if (result == _result) {

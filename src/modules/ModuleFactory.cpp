@@ -71,7 +71,8 @@ namespace {
     ModuleEntry CreateEntry(const ModuleInstance& instance, const ModuleSources& sources) {
         const auto* settings = std::get_if<GroupConfig>(&instance.settings);
         if (settings == nullptr) {
-            return ModuleEntry{.module = CreateModule(instance, sources), .style = instance.style, .group = nullptr, .members = {}};
+            std::unique_ptr<IModule> module = CreateModule(instance, sources);
+            return ModuleEntry{.module = std::move(module), .style = instance.style, .group = nullptr, .members = {}};
         }
         auto                     group = std::make_unique<Group>(*settings, instance.style);
         const Group*             view  = group.get();

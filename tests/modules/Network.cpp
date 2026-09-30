@@ -40,7 +40,7 @@ TEST(Network, EachLinkHasItsFormatAndIcon) {
     wired.link          = NetworkLink::Ethernet;
     wired.interfaceName = L"Ethernet 2";
     EXPECT_EQ(FormatNetwork(TestConfig(), wired), (ModuleText{.icon = L"E", .text = L"Ethernet 2", .state = TextState::Normal, .classIndex = 0}));
-    FakeNetwork none;
+    const FakeNetwork none;
     EXPECT_EQ(FormatNetwork(TestConfig(), none.state), (ModuleText{.icon = L"X", .text = L"offline", .state = TextState::Normal, .classIndex = 0}));
 }
 
@@ -78,7 +78,7 @@ TEST(Network, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
 
 // The backend tells of link changes only, so a rate on the bar is read on a tick, and one only in the tooltip is not.
 TEST(Network, ARateInAFormatMakesTheModuleTick) {
-    FakeNetwork network;
+    const FakeNetwork network;
     EXPECT_FALSE(ShowsRates(TestConfig()));
     EXPECT_EQ(Network(TestConfig(), network).MillisecondsUntilChange(), std::nullopt);
     NetworkConfig rates  = TestConfig();

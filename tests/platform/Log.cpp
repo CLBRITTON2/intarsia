@@ -12,8 +12,8 @@
 namespace {
 
     std::string ReadAll(const std::filesystem::path& path) {
-        std::ifstream     file(path, std::ios::binary);
-        std::stringstream text;
+        const std::ifstream file(path, std::ios::binary);
+        std::stringstream   text;
         text << file.rdbuf();
         return text.str();
     }

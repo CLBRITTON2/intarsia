@@ -346,7 +346,7 @@ struct ModuleInstance {
 
 // The sections a bar shows in place of the config's own lists once its edge is at least minLengthDips long.
 struct LayoutConfig {
-    float                    minLengthDips;
+    float                    minLengthDips{};
     Sections<ModuleInstance> modules;
 };
 

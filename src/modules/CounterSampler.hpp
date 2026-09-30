@@ -45,7 +45,7 @@ class CounterSampler {
 
   private:
     void                 Run();
-    void                 Publish(CounterReading reading);
+    void                 Publish(const CounterReading& reading);
 
     std::string          _name;
     std::wstring         _path;

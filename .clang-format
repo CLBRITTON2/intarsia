@@ -62,3 +62,6 @@ BraceWrapping:
 AlignConsecutiveDeclarations: AcrossEmptyLines
 
 NamespaceIndentation: All
+
+InsertBraces: true
+InsertNewlineAtEOF: true

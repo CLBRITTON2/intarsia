@@ -12,8 +12,8 @@ enum class ChargeState : std::uint8_t {
 
 // The system's batteries taken together, as Windows reports them.
 struct BatteryState {
-    ChargeState                 charge;
-    std::int32_t                percent;       // 0 to 100
+    ChargeState                 charge{};
+    std::int32_t                percent{};     // 0 to 100
     std::optional<std::int32_t> secondsLeft;   // on battery, once Windows has an estimate
     std::optional<std::int32_t> healthPercent; // full charge capacity against design capacity, when the batteries report both
 

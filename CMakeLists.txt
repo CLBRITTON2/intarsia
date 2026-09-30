@@ -20,6 +20,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(/sdl /guard:cf)
 add_link_options(/guard:cf /CETCOMPAT /INCREMENTAL:NO)
 
+# Whole-program optimization (/GL, /LTCG) for release, so calls inline across translation units.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+
 include(FetchContent)
 
 # Lua ships no CMake build, so the release tarball is built here as a static library.

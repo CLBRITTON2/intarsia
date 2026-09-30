@@ -204,41 +204,51 @@ namespace {
 
     WindowManagerKind ParseWindowManager(const TableReader& table, std::string_view key) {
         const std::string value = table.String(key);
-        if (value == "windows")
+        if (value == "windows") {
             return WindowManagerKind::Windows;
-        if (value == "glazewm")
+        }
+        if (value == "glazewm") {
             return WindowManagerKind::GlazeWm;
+        }
         throw table.Error(std::format("{} must be one of windows, glazewm, got '{}'", table.KeyPath(key), value));
     }
 
     Edge ParseEdge(const TableReader& table, std::string_view key) {
         const std::string value = table.String(key);
-        if (value == "top")
+        if (value == "top") {
             return Edge::Top;
-        if (value == "bottom")
+        }
+        if (value == "bottom") {
             return Edge::Bottom;
-        if (value == "left")
+        }
+        if (value == "left") {
             return Edge::Left;
-        if (value == "right")
+        }
+        if (value == "right") {
             return Edge::Right;
+        }
         throw table.Error(std::format("{} must be one of top, bottom, left, right, got '{}'", table.KeyPath(key), value));
     }
 
     Layer ParseLayer(const TableReader& table, std::string_view key) {
         const std::string value = table.String(key);
-        if (value == "top")
+        if (value == "top") {
             return Layer::Top;
-        if (value == "bottom")
+        }
+        if (value == "bottom") {
             return Layer::Bottom;
+        }
         throw table.Error(std::format("{} must be one of top, bottom, got '{}'", table.KeyPath(key), value));
     }
 
     Space ParseSpace(const TableReader& table, std::string_view key) {
         const std::string value = table.String(key);
-        if (value == "reserve")
+        if (value == "reserve") {
             return Space::Reserve;
-        if (value == "share")
+        }
+        if (value == "share") {
             return Space::Share;
+        }
         throw table.Error(std::format("{} must be one of reserve, share, got '{}'", table.KeyPath(key), value));
     }
 
@@ -424,7 +434,7 @@ namespace {
         if (!program.has_value()) {
             throw module.Error(std::format("{} names '{}', which is not an existing file or a program on PATH", module.KeyPath(key), argv.front()));
         }
-        std::wstring extension = program->extension().wstring();
+        const std::wstring extension = program->extension().wstring();
         if (CompareStringOrdinal(extension.c_str(), static_cast<std::int32_t>(extension.size()), L".exe", 4, TRUE) != CSTR_EQUAL) {
             throw module.Error(std::format("{} resolves to {}, which is not an .exe", module.KeyPath(key), ToUtf8(program->wstring())));
         }
@@ -527,10 +537,12 @@ namespace {
 
     CustomOutput ParseCustomOutput(const TableReader& module, std::string_view key) {
         const std::string value = module.String(key);
-        if (value == "text")
+        if (value == "text") {
             return CustomOutput::Text;
-        if (value == "json")
+        }
+        if (value == "json") {
             return CustomOutput::Json;
+        }
         throw module.Error(std::format("{} must be one of text, json, got '{}'", module.KeyPath(key), value));
     }
 
@@ -566,12 +578,15 @@ namespace {
 
     CounterCombine ParseCounterCombine(const TableReader& module, std::string_view key) {
         const std::string value = module.String(key);
-        if (value == "sum")
+        if (value == "sum") {
             return CounterCombine::Sum;
-        if (value == "max")
+        }
+        if (value == "max") {
             return CounterCombine::Max;
-        if (value == "average")
+        }
+        if (value == "average") {
             return CounterCombine::Average;
+        }
         throw module.Error(std::format("{} must be one of sum, max, average, got '{}'", module.KeyPath(key), value));
     }
 
@@ -597,10 +612,12 @@ namespace {
 
     AudioFlow ParseAudioFlow(const TableReader& module, std::string_view key) {
         const std::string value = module.String(key);
-        if (value == "output")
+        if (value == "output") {
             return AudioFlow::Output;
-        if (value == "input")
+        }
+        if (value == "input") {
             return AudioFlow::Input;
+        }
         throw module.Error(std::format("{} must be one of output, input, got '{}'", module.KeyPath(key), value));
     }
 
@@ -681,7 +698,7 @@ namespace {
     // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
     // converting one later cannot fail.
     std::string ReadFile(const std::filesystem::path& path, std::string_view what) {
-        std::ifstream file(path, std::ios::binary);
+        const std::ifstream file(path, std::ios::binary);
         if (!file) {
             throw ConfigError(std::format("cannot open {} file {}", what, ToUtf8(path.wstring())));
         }

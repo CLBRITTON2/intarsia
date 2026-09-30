@@ -5,7 +5,7 @@ Fails when any source file is not clang-formatted or trips a clang-tidy error.
 .DESCRIPTION
 Uses the LLVM tools bundled with Visual Studio 2022 so local runs and CI share one clang version. clang-format
 output changes between LLVM majors, so the script refuses any major other than the pinned one. clang-tidy runs one
-process per translation unit, as many at once as there are logical processors.
+process per translation unit, as many at once as there are logical processors and free memory allows.
 
 .PARAMETER Changed
 Checks only the sources that differ from HEAD (staged, unstaged or untracked), plus the translation units that
@@ -18,6 +18,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $pinnedLlvmMajor = 19
+$gbPerUnit       = 2
 $repoRoot        = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot 'VsDevShell.ps1')
@@ -97,7 +98,12 @@ try {
 }
 
 $buildDir = Join-Path $repoRoot 'build\lint'
-$results  = $units | ForEach-Object -ThrottleLimit ([Environment]::ProcessorCount) -Parallel {
+# The static analyzer takes up to about 2 GB per unit, so free memory, not the core count, bounds how many run at once.
+# Half of it stays with the rest of the desktop.
+$freeGb   = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB
+$jobs     = [Math]::Max(1, [Math]::Min([Environment]::ProcessorCount, [Math]::Floor($freeGb / 2 / $gbPerUnit)))
+Write-Host "clang-tidy running $jobs at once ($([Math]::Round($freeGb, 1)) GB free)"
+$results  = $units | ForEach-Object -ThrottleLimit $jobs -Parallel {
     $output = & $using:clangTidy -p $using:buildDir --quiet $_ 2>&1
     [pscustomobject]@{
         Unit     = $_

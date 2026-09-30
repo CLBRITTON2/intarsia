@@ -71,7 +71,7 @@ void CounterSampler::Run() {
 }
 
 // Posts and logs only on a change, so a counter that keeps failing the same way logs once.
-void CounterSampler::Publish(CounterReading reading) {
+void CounterSampler::Publish(const CounterReading& reading) {
     {
         const std::scoped_lock lock(_mutex);
         if (reading == _reading) {

@@ -435,7 +435,7 @@ void ShellNotifyIcon::RunLoop() {
 }
 
 // Stops the thread and leaves the error for App, which ends the process with it.
-void ShellNotifyIcon::Fail(std::exception_ptr error) {
+void ShellNotifyIcon::Fail(const std::exception_ptr& error) {
     {
         const std::scoped_lock lock(_mutex);
         if (_error) {

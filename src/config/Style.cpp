@@ -811,7 +811,7 @@ namespace {
         template <typename Reader>
         auto Read(std::string_view property, Reader reader, decltype(reader(std::string_view())) inherited) const -> decltype(reader(std::string_view())) {
             const Declaration* declaration = Find(property);
-            return declaration == nullptr ? inherited : reader(declaration->value);
+            return declaration == nullptr ? std::move(inherited) : reader(declaration->value);
         }
 
         D2D1_COLOR_F Color(std::string_view property, const D2D1_COLOR_F& inherited) const {

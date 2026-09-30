@@ -79,7 +79,7 @@ TEST(PeerProcess, RejectsAnotherImageName) {
 
 TEST(PeerProcess, RejectsALowIntegrityProcessOfThisUser) {
     const UniqueHandle token      = LowIntegrityToken();
-    std::wstring       executable = TestExecutable();
+    const std::wstring executable = TestExecutable();
     STARTUPINFOW       startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION child{};
