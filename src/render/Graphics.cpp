@@ -45,8 +45,10 @@ namespace {
 GraphicsDevice CreateGraphicsDevice() {
     GraphicsDevice device;
 
-    ThrowIfFailed(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &device.d3d, nullptr, nullptr),
-                  "D3D11CreateDevice");
+    // A driver's worker thread gains nothing on frames this small, and one driver's threaded path keeps about 50 KB for
+    // good of every bitmap released while two swap chains present.
+    constexpr UINT kDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;
+    ThrowIfFailed(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, kDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &device.d3d, nullptr, nullptr), "D3D11CreateDevice");
 
     ComPtr<IDXGIDevice> dxgiDevice;
     ThrowIfFailed(device.d3d.As(&dxgiDevice), "ID3D11Device::QueryInterface(IDXGIDevice)");
