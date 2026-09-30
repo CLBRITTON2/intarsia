@@ -343,16 +343,51 @@ namespace integration {
         }
     }
 
-    Capture CaptureScreenOver(HWND window) {
-        // Per-monitor aware, so the rect and the copy are in the physical pixels the bar draws.
+    SavedCursor::SavedCursor() : _position{} {
+        if (!GetPhysicalCursorPos(&_position)) {
+            ThrowLastError("GetPhysicalCursorPos");
+        }
+    }
+
+    SavedCursor::~SavedCursor() {
+        if (!SetPhysicalCursorPos(_position.x, _position.y)) {
+            Log("cursor_restore_failed", std::format("x={} y={} error={}", _position.x, _position.y, GetLastError()));
+        }
+    }
+
+    void PlaceCursor(HWND bar, std::int32_t x) {
+        const RECT rect = PhysicalWindowRect(bar);
+        if (!SetPhysicalCursorPos(rect.left + x, (rect.top + rect.bottom) / 2)) {
+            ThrowLastError(std::format("SetPhysicalCursorPos(bar column {})", x));
+        }
+    }
+
+    HWND VisibleTooltipWindow(std::uint32_t processId) {
+        HWND window = nullptr;
+        while ((window = FindWindowExW(nullptr, window, L"IntarsiaTooltip", nullptr)) != nullptr) {
+            DWORD owner = 0;
+            GetWindowThreadProcessId(window, &owner);
+            if (owner == processId && IsWindowVisible(window)) {
+                return window;
+            }
+        }
+        return nullptr;
+    }
+
+    RECT PhysicalWindowRect(HWND window) {
         DPI_AWARENESS_CONTEXT previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         RECT                  rect{};
         const BOOL            found = GetWindowRect(window, &rect);
         SetThreadDpiAwarenessContext(previous);
         if (!found) {
-            ThrowLastError("GetWindowRect(bar)");
+            ThrowLastError("GetWindowRect");
         }
-        Capture capture{.width = rect.right - rect.left, .height = rect.bottom - rect.top, .pixels = {}};
+        return rect;
+    }
+
+    Capture CaptureScreenOver(HWND window) {
+        const RECT rect = PhysicalWindowRect(window);
+        Capture    capture{.width = rect.right - rect.left, .height = rect.bottom - rect.top, .pixels = {}};
         capture.pixels.resize(static_cast<size_t>(capture.width) * static_cast<size_t>(capture.height));
 
         HDC screen = GetDC(nullptr);
@@ -503,6 +538,18 @@ namespace integration {
     void RunningBar::ClickAt(std::int32_t x) const {
         SendClick(PrimaryBar(), x);
         Log("click", std::format("x={}", x));
+    }
+
+    void RunningBar::MoveCursorTo(std::int32_t x) const {
+        PlaceCursor(PrimaryBar(), x);
+        Log("cursor_moved", std::format("x={}", x));
+    }
+
+    HWND RunningBar::Tooltip() const {
+        if (!_bar.has_value()) {
+            throw std::logic_error("the bar is closed");
+        }
+        return VisibleTooltipWindow(_bar->Id());
     }
 
     std::optional<size_t> RunningBar::PixelsOf(std::uint32_t rgb) const {

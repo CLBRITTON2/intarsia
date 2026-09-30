@@ -79,6 +79,23 @@ namespace integration {
     std::uint32_t SweepClicks(HWND bar);
     // Sends a left click at column x of the bar's middle row and waits until the bar has handled it.
     void SendClick(HWND bar, std::int32_t x);
+    // Where the real cursor was when made, where it goes back to when destroyed.
+    class SavedCursor {
+      public:
+        SavedCursor();
+        ~SavedCursor();
+        SavedCursor(const SavedCursor&)            = delete;
+        SavedCursor& operator=(const SavedCursor&) = delete;
+
+      private:
+        POINT _position;
+    };
+
+    // Moves the real cursor to column x of the bar's middle row. Hover and leave come only from the real cursor: a
+    // sent WM_MOUSEMOVE starts TrackMouseEvent, which posts WM_MOUSELEAVE at once while the cursor is elsewhere.
+    void PlaceCursor(HWND bar, std::int32_t x);
+    // The process's tooltip window while it is shown, or null.
+    HWND VisibleTooltipWindow(std::uint32_t processId);
 
     // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
     struct Capture {
@@ -87,6 +104,8 @@ namespace integration {
         std::vector<std::uint32_t> pixels;
     };
 
+    // The window's screen rect in the physical pixels the bar draws, whatever this process's DPI awareness.
+    RECT PhysicalWindowRect(HWND window);
     // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
     Capture CaptureScreenOver(HWND window);
     size_t  CountPixels(const Capture& capture, std::uint32_t rgb);
@@ -115,6 +134,10 @@ namespace integration {
         HWND        PrimaryBar() const;
         // Clicks the primary bar at column x of its middle row and logs it.
         void ClickAt(std::int32_t x) const;
+        // Moves the real cursor to column x of the primary bar's middle row and logs it.
+        void MoveCursorTo(std::int32_t x) const;
+        // The bar's tooltip window while it is shown, or null.
+        HWND Tooltip() const;
         // Each is nullopt while the primary bar has no window, as between the bars a reload replaces and their new
         // ones.
         std::optional<size_t> PixelsOf(std::uint32_t rgb) const;
