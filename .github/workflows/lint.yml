@@ -2,6 +2,9 @@ name: Lint (clang-format, clang-tidy)
 
 on: workflow_dispatch
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     # windows-2025 carries Visual Studio 2026, and the scripts pin Visual Studio 2022 and its bundled LLVM.
@@ -9,7 +12,9 @@ jobs:
     # A hung tool would otherwise burn the six hour default of the account's Windows minutes.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       - name: clang-format and clang-tidy
         shell: pwsh
         run: ./scripts/lint.ps1
