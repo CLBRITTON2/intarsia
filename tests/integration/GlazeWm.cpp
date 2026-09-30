@@ -93,22 +93,6 @@ section { margin: 4px; padding: 3px; background: #191724; }
 .alert { color: #e74c3c; }
 )";
 
-    // The mean column of the pixels in rgb, or nullopt when there are none.
-    std::optional<double> MeanColumn(const integration::Capture& capture, std::uint32_t rgb) {
-        double sum   = 0;
-        size_t count = 0;
-        for (size_t index = 0; index < capture.pixels.size(); ++index) {
-            if (capture.pixels[index] == rgb) {
-                sum += static_cast<double>(index % static_cast<size_t>(capture.width));
-                ++count;
-            }
-        }
-        if (count == 0) {
-            return std::nullopt;
-        }
-        return sum / static_cast<double>(count);
-    }
-
 } // namespace
 
 TEST(GlazeWm, ClicksAlongTheBarSendEachItemsCommandInOrder) {
@@ -162,7 +146,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
     std::optional<double>         firstColumn;
     ASSERT_TRUE(integration::Eventually(
         [&] {
-            firstColumn = MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
+            firstColumn = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
             return firstColumn.has_value();
         },
         std::chrono::seconds(5)))
@@ -173,7 +157,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
     std::optional<double> secondColumn;
     EXPECT_TRUE(integration::Eventually(
         [&] {
-            secondColumn = MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
+            secondColumn = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
             return firstColumn.has_value() && secondColumn.has_value() && *secondColumn > *firstColumn;
         },
         std::chrono::seconds(5)))

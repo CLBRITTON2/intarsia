@@ -208,7 +208,8 @@ if(BUILD_TESTING)
   gtest_discover_tests(intarsia_gtests)
 
   # Runs the real bar against the test GlazeWM server below, so ctest runs it apart from the unit tests by its label.
-  add_executable(intarsia_integration tests/integration/Harness.cpp tests/integration/GlazeWm.cpp tests/integration/Style.cpp)
+  add_executable(intarsia_integration tests/integration/Harness.cpp tests/integration/GlazeWm.cpp tests/integration/Style.cpp tests/integration/Tray.cpp
+                                      tests/integration/TrayApp.cpp)
   target_link_libraries(intarsia_integration PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:stress_glazewm_server>")
   add_dependencies(intarsia_integration intarsia stress_glazewm_server)

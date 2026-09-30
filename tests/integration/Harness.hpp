@@ -19,6 +19,8 @@ namespace integration {
 
     // The test server lists only windows whose title starts with this (tests/stress/GlazeWmServer.cpp).
     inline constexpr std::wstring_view kWindowTitle = L"intarsia integration";
+    // The bar's --tray-class, one no app uses, so the bar never takes the desktop's tray.
+    inline constexpr std::wstring_view kTrayClass = L"IntarsiaIntegrationTray";
 
     // A child process with stdin on a pipe and stdout and stderr in files, killed with its job if the test ends without
     // closing it.
@@ -73,6 +75,8 @@ namespace integration {
     // Sends a left click every few pixels along the bar's middle, left to right, each handled before the next is sent.
     // The number of clicks sent.
     std::uint32_t SweepClicks(HWND bar);
+    // Sends a left click at column x of the bar's middle row and waits until the bar has handled it.
+    void SendClick(HWND bar, std::int32_t x);
 
     // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
     struct Capture {
@@ -84,6 +88,8 @@ namespace integration {
     // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
     Capture CaptureScreenOver(HWND window);
     size_t  CountPixels(const Capture& capture, std::uint32_t rgb);
+    // The mean column of the pixels in rgb, or nullopt when there are none.
+    std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb);
 
     // Each run of equal lines folded into one.
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);
@@ -98,6 +104,8 @@ namespace integration {
         RunningBar& operator=(const RunningBar&) = delete;
 
         HWND        PrimaryBar() const;
+        // Clicks the primary bar at column x of its middle row and logs it.
+        void ClickAt(std::int32_t x) const;
         // Every command the server has received so far, across its restarts.
         std::vector<std::string> Commands() const;
         // Commands sent after a sweep of clicks along the primary bar, with repeats folded. Waits until the stream

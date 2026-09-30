@@ -19,8 +19,6 @@ namespace integration {
     namespace {
 
         constexpr wchar_t kWindowClass[] = L"IntarsiaIntegrationWindow";
-        // A class no app uses, so the bar never takes the desktop's tray.
-        constexpr wchar_t kTrayClass[] = L"IntarsiaIntegrationTray";
         // Narrower than any item the bar draws, so a sweep clicks every item at least once.
         constexpr std::int32_t kSweepStepPixels = 3;
         // How long the command stream stays unchanged before a sweep's commands count as all sent.
@@ -317,17 +315,24 @@ namespace integration {
         if (!GetClientRect(bar, &client)) {
             ThrowLastError("GetClientRect(bar)");
         }
-        const std::int32_t middle = (client.bottom - client.top) / 2;
-        std::uint32_t      clicks = 0;
+        std::uint32_t clicks = 0;
         for (std::int32_t x = client.left; x < client.right; x += kSweepStepPixels) {
-            DWORD_PTR result = 0;
-            // Sent, not posted, so the bar handles each click before the next and none waits in its queue.
-            if (SendMessageTimeoutW(bar, WM_LBUTTONUP, 0, MAKELPARAM(x, middle), SMTO_ABORTIFHUNG, 1000, &result) == 0) {
-                ThrowLastError(std::format("SendMessageTimeoutW(WM_LBUTTONUP at {})", x));
-            }
+            SendClick(bar, x);
             ++clicks;
         }
         return clicks;
+    }
+
+    void SendClick(HWND bar, std::int32_t x) {
+        RECT client{};
+        if (!GetClientRect(bar, &client)) {
+            ThrowLastError("GetClientRect(bar)");
+        }
+        DWORD_PTR result = 0;
+        // Sent, not posted, so the bar handles each click before the next and none waits in its queue.
+        if (SendMessageTimeoutW(bar, WM_LBUTTONUP, 0, MAKELPARAM(x, (client.bottom - client.top) / 2), SMTO_ABORTIFHUNG, 1000, &result) == 0) {
+            ThrowLastError(std::format("SendMessageTimeoutW(WM_LBUTTONUP at {})", x));
+        }
     }
 
     Capture CaptureScreenOver(HWND window) {
@@ -385,6 +390,21 @@ namespace integration {
         return static_cast<size_t>(std::ranges::count(capture.pixels, rgb));
     }
 
+    std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb) {
+        double sum   = 0;
+        size_t count = 0;
+        for (size_t index = 0; index < capture.pixels.size(); ++index) {
+            if (capture.pixels[index] == rgb) {
+                sum += static_cast<double>(index % static_cast<size_t>(capture.width));
+                ++count;
+            }
+        }
+        if (count == 0) {
+            return std::nullopt;
+        }
+        return sum / static_cast<double>(count);
+    }
+
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
         std::vector<std::string> folded;
         std::ranges::unique_copy(lines, std::back_inserter(folded));
@@ -400,7 +420,7 @@ namespace integration {
         const auto started = std::chrono::steady_clock::now();
         _bar.emplace(Executable(INTARSIA_EXE),
                      std::vector<std::wstring>{L"--config", configPath.wstring(), L"--log", (_work / "intarsia-file.log").wstring(), L"--glazewm-port", std::to_wstring(_port),
-                                               L"--tray-class", kTrayClass},
+                                               L"--tray-class", std::wstring(kTrayClass)},
                      _work / "bar.out", _work / "bar.err");
         Log("bar_started", std::format("pid={} program={}", _bar->Id(), LogValue(INTARSIA_EXE)));
         if (!Eventually([this] { return !LogLines("event=connected").empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
@@ -451,6 +471,11 @@ namespace integration {
             throw std::logic_error("the bar was never started");
         }
         return PrimaryBarWindow(_bar->Id());
+    }
+
+    void RunningBar::ClickAt(std::int32_t x) const {
+        SendClick(PrimaryBar(), x);
+        Log("click", std::format("x={}", x));
     }
 
     std::vector<std::string> RunningBar::Commands() const {

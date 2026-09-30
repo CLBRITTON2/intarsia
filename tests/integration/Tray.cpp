@@ -1,0 +1,191 @@
+#include "Harness.hpp"
+#include "TrayApp.hpp"
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <shellapi.h>
+
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <format>
+#include <iterator>
+#include <optional>
+#include <string_view>
+#include <vector>
+
+using testing::ElementsAre;
+
+namespace {
+
+    constexpr std::string_view kConfig = R"(
+return {
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    window_manager = "glazewm",
+    modules_left = { "tray" },
+    modules_center = {},
+    modules_right = {},
+    layouts = {},
+    modules = { tray = { type = "tray", icon = "T" } },
+}
+)";
+
+    constexpr std::uint32_t    kToggleColor = 0x8E44AD;
+
+    // Icons at 16 DIPs, the size the test icons are made at, and no transitions, so a fold is done on the next frame.
+    constexpr std::string_view kStyle = R"(
+* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
+section { margin: 4px; padding: 3px; background: #191724; }
+#tray .icon { font-size: 16px; }
+#tray .item { padding: 4px; margin: 0 1px; }
+#tray .item.toggle { background: #8e44ad; }
+)";
+
+    constexpr std::uint32_t    kGreen  = 0x27AE60;
+    constexpr std::uint32_t    kOrange = 0xF39C12;
+    constexpr auto             kDrawn  = std::chrono::seconds(5);
+    // The tray drops the icons of closed owners every 5 s.
+    constexpr auto kSwept = std::chrono::seconds(7);
+
+    size_t         PixelsOf(const integration::RunningBar& bar, std::uint32_t rgb) {
+        return integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), rgb);
+    }
+
+    bool Draws(const integration::RunningBar& bar, std::uint32_t rgb, std::chrono::milliseconds limit) {
+        const bool drawn = integration::Eventually([&] { return PixelsOf(bar, rgb) > 0; }, limit);
+        integration::Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, PixelsOf(bar, rgb)));
+        return drawn;
+    }
+
+    bool StopsDrawing(const integration::RunningBar& bar, std::uint32_t rgb, std::chrono::milliseconds limit) {
+        const bool gone = integration::Eventually([&] { return PixelsOf(bar, rgb) == 0; }, limit);
+        integration::Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, PixelsOf(bar, rgb)));
+        return gone;
+    }
+
+    // Clicks the middle of the pixels drawn in rgb. False when none are drawn within kDrawn.
+    bool ClickColor(const integration::RunningBar& bar, std::uint32_t rgb) {
+        std::optional<double> column;
+        if (!integration::Eventually(
+                [&] {
+                    column = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), rgb);
+                    return column.has_value();
+                },
+                kDrawn)) {
+            return false;
+        }
+        bar.ClickAt(static_cast<std::int32_t>(column.value_or(0)));
+        return true;
+    }
+
+    std::vector<LPARAM> LParams(const std::vector<TrayInputMessage>& messages, std::uint32_t id) {
+        std::vector<LPARAM> lParams;
+        for (const TrayInputMessage& message : messages) {
+            integration::Log("tray_received", std::format("id={} message={:#x} wparam={:#x} lparam={:#x}", id, message.message, message.wParam, message.lParam));
+            lParams.push_back(message.lParam);
+        }
+        return lParams;
+    }
+
+    std::vector<WPARAM> WParams(const std::vector<TrayInputMessage>& messages) {
+        std::vector<WPARAM> wParams;
+        std::ranges::transform(messages, std::back_inserter(wParams), &TrayInputMessage::wParam);
+        return wParams;
+    }
+
+    LPARAM Version4Event(std::uint32_t event, std::uint32_t id) {
+        return MAKELPARAM(static_cast<WORD>(event), static_cast<WORD>(id));
+    }
+
+} // namespace
+
+TEST(Tray, DrawsAnAddedIconOnlyWhileUnfolded) {
+    const integration::RunningBar bar("tray-draw", kConfig, kStyle);
+    const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
+    ASSERT_TRUE(app.Add(kGreen));
+
+    ASSERT_TRUE(ClickColor(bar, kToggleColor)) << "the tray's toggle never drew";
+    EXPECT_TRUE(Draws(bar, kGreen, kDrawn)) << "the icon never drew once the tray unfolded";
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    EXPECT_TRUE(StopsDrawing(bar, kGreen, kDrawn)) << "the icon still drew after the tray folded";
+}
+
+TEST(Tray, PostsAClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
+    const integration::RunningBar bar("tray-click", kConfig, kStyle);
+    const integration::TrayApp    current(1, NOTIFYICON_VERSION_4);
+    const integration::TrayApp    legacy(2, 0);
+    ASSERT_TRUE(current.Add(kGreen));
+    ASSERT_TRUE(legacy.Add(kOrange));
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+
+    ASSERT_TRUE(ClickColor(bar, kGreen)) << "the version 4 icon never drew";
+    ASSERT_TRUE(ClickColor(bar, kOrange)) << "the version 0 icon never drew";
+    integration::Eventually([&] { return current.Received().size() >= 3 && legacy.Received().size() >= 2; }, kDrawn);
+
+    EXPECT_THAT(LParams(current.Received(), 1), ElementsAre(Version4Event(WM_LBUTTONDOWN, 1), Version4Event(WM_LBUTTONUP, 1), Version4Event(NIN_SELECT, 1)));
+    EXPECT_THAT(LParams(legacy.Received(), 2), ElementsAre(WM_LBUTTONDOWN, WM_LBUTTONUP));
+    EXPECT_THAT(WParams(legacy.Received()), ElementsAre(WPARAM{2}, WPARAM{2}));
+}
+
+TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
+    const integration::RunningBar bar("tray-rect", kConfig, kStyle);
+    const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
+    ASSERT_TRUE(app.Add(kGreen));
+    EXPECT_FALSE(app.IconRect().has_value()) << "the tray answered a rect for an icon no bar shows";
+
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    std::optional<double> column;
+    ASSERT_TRUE(integration::Eventually(
+        [&] {
+            column = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kGreen);
+            return column.has_value() && app.IconRect().has_value();
+        },
+        kDrawn))
+        << "the icon never drew with a rect";
+    const RECT rect = app.IconRect().value_or(RECT{});
+    RECT       window{};
+    GetWindowRect(bar.PrimaryBar(), &window);
+    integration::Log("icon_rect",
+                     std::format("left={} top={} right={} bottom={} bar_left={} bar_top={} bar_bottom={} icon_column={:.1f}", rect.left, rect.top, rect.right, rect.bottom,
+                                 window.left, window.top, window.bottom, column.value_or(-1)));
+    EXPECT_LE(rect.left - window.left, column.value_or(-1));
+    EXPECT_GE(rect.right - window.left, column.value_or(-1));
+    EXPECT_GE(rect.top, window.top);
+    EXPECT_LE(rect.bottom, window.bottom);
+    EXPECT_GT(rect.bottom, rect.top);
+}
+
+TEST(Tray, DrawsTheNewPixelsOfAModifiedIcon) {
+    const integration::RunningBar bar("tray-modify", kConfig, kStyle);
+    const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
+    ASSERT_TRUE(app.Add(kGreen));
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    ASSERT_TRUE(Draws(bar, kGreen, kDrawn));
+
+    ASSERT_TRUE(app.Modify(kOrange));
+    EXPECT_TRUE(Draws(bar, kOrange, kDrawn)) << "the modified icon's new color never drew";
+    EXPECT_TRUE(StopsDrawing(bar, kGreen, kDrawn)) << "the icon's old color still drew";
+}
+
+TEST(Tray, RemovesADeletedIcon) {
+    const integration::RunningBar bar("tray-delete", kConfig, kStyle);
+    const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
+    ASSERT_TRUE(app.Add(kGreen));
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    ASSERT_TRUE(Draws(bar, kGreen, kDrawn));
+
+    ASSERT_TRUE(app.Delete());
+    EXPECT_TRUE(StopsDrawing(bar, kGreen, kDrawn)) << "the deleted icon still drew";
+}
+
+TEST(Tray, RemovesTheIconOfAClosedOwner) {
+    const integration::RunningBar bar("tray-owner", kConfig, kStyle);
+    integration::TrayApp          app(1, NOTIFYICON_VERSION_4);
+    ASSERT_TRUE(app.Add(kGreen));
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    ASSERT_TRUE(Draws(bar, kGreen, kDrawn));
+
+    app.CloseOwner();
+    EXPECT_TRUE(StopsDrawing(bar, kGreen, kSwept)) << "the icon of a closed owner still drew";
+}
