@@ -33,6 +33,16 @@ pwsh -File scripts/test.ps1
 This builds the debug preset and runs the GoogleTest suite through ctest. `tests/` mirrors `src/`, one file per unit.
 Some tests create windows and a Direct3D device, so run them from an interactive desktop session.
 
+## Integration tests
+
+```powershell
+pwsh -File scripts/integration.ps1
+```
+
+This runs the real bar against a test GlazeWM IPC server and judges it only by what it does outside its process, such
+as the commands the server receives for clicks along the bar. `tests/integration/` holds the harness and the cases.
+Run it from an interactive desktop session.
+
 ## Stress tests
 
 ```powershell

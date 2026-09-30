@@ -1,7 +1,8 @@
-// Test IPC server for the stress tests in scripts/stress.ps1. It answers the bar's queries the way GlazeWM does, plus
-// the load or faults a scenario names. Built as glazewm.exe, the image name the bar's peer check requires.
+// Test IPC server for the stress tests in scripts/stress.ps1 and the integration tests. It answers the bar's queries the
+// way GlazeWM does, plus the load or faults a scenario names, and prints every command it receives to stdout on a line
+// of its own. Built as glazewm.exe, the image name the bar's peer check requires.
 //
-//   glazewm.exe --port <n> --scenario <normal|flood|malformed|stall|flap|reject>
+//   glazewm.exe --port <n> --scenario <normal|flood|malformed|stall|flap|reject|integration>
 
 #include "../platform/Loopback.hpp"
 
@@ -21,12 +22,13 @@
 namespace {
 
     enum class Scenario : std::uint8_t {
-        Normal,    // answers everything and sends an event a second
-        Flood,     // answers everything and sends events as fast as the socket takes them
-        Malformed, // answers, then sends one kind of broken message per connection
-        Stall,     // accepts the connection and never answers the upgrade
-        Flap,      // answers, then drops the connection after a random moment
-        Reject     // answers every query with a failure
+        Normal,     // answers everything and sends an event a second
+        Flood,      // answers everything and sends events as fast as the socket takes them
+        Malformed,  // answers, then sends one kind of broken message per connection
+        Stall,      // accepts the connection and never answers the upgrade
+        Flap,       // answers, then drops the connection after a random moment
+        Reject,     // answers every query with a failure
+        Integration // answers everything, sends no events, and lists only the integration tests' own windows
     };
 
     struct Options {
@@ -35,18 +37,19 @@ namespace {
     };
 
     Scenario ParseScenario(std::string_view name) {
-        constexpr std::array<std::pair<std::string_view, Scenario>, 6> kScenarios{{{"normal", Scenario::Normal},
+        constexpr std::array<std::pair<std::string_view, Scenario>, 7> kScenarios{{{"normal", Scenario::Normal},
                                                                                    {"flood", Scenario::Flood},
                                                                                    {"malformed", Scenario::Malformed},
                                                                                    {"stall", Scenario::Stall},
                                                                                    {"flap", Scenario::Flap},
-                                                                                   {"reject", Scenario::Reject}}};
+                                                                                   {"reject", Scenario::Reject},
+                                                                                   {"integration", Scenario::Integration}}};
         for (const auto& [known, scenario] : kScenarios) {
             if (known == name) {
                 return scenario;
             }
         }
-        throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flood, malformed, stall, flap or reject", name));
+        throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flood, malformed, stall, flap, reject or integration", name));
     }
 
     Options ParseOptions(std::int32_t argc, char** argv) {
@@ -68,11 +71,22 @@ namespace {
         return Options{.port = *port, .scenario = *scenario};
     }
 
+    // Every window the integration tests open has a title starting with this (tests/integration/Harness.hpp).
+    constexpr std::wstring_view kIntegrationTitle = L"intarsia integration";
+
+    struct WindowCollection {
+        bool              integrationOnly;
+        std::vector<HWND> windows;
+    };
+
     // Real top-level windows, so the bar's windows module reads real icons.
-    BOOL CALLBACK CollectWindow(HWND window, LPARAM windows) {
-        auto* collected = reinterpret_cast<std::vector<HWND>*>(windows); // NOLINT(performance-no-int-to-ptr)
-        if (IsWindowVisible(window) && GetWindowTextLengthW(window) > 0 && collected->size() < 12) {
-            collected->push_back(window);
+    BOOL CALLBACK CollectWindow(HWND window, LPARAM collection) {
+        auto*                   collected = reinterpret_cast<WindowCollection*>(collection); // NOLINT(performance-no-int-to-ptr)
+        std::array<wchar_t, 64> title{};
+        GetWindowTextW(window, title.data(), static_cast<std::int32_t>(title.size()));
+        const bool wanted = !collected->integrationOnly || std::wstring_view(title.data()).starts_with(kIntegrationTitle);
+        if (IsWindowVisible(window) && GetWindowTextLengthW(window) > 0 && wanted && collected->windows.size() < 12) {
+            collected->windows.push_back(window);
         }
         return TRUE;
     }
@@ -94,11 +108,12 @@ namespace {
     }
 
     // Two workspaces on the primary monitor, the displayed one holding real windows inside a split.
-    std::string Monitors(size_t focused) {
-        const auto        monitor = reinterpret_cast<std::intptr_t>(MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY));
-        std::vector<HWND> windows;
-        EnumWindows(CollectWindow, reinterpret_cast<LPARAM>(&windows));
-        std::string children;
+    std::string Monitors(size_t focused, bool integrationOnly) {
+        const auto       monitor = reinterpret_cast<std::intptr_t>(MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY));
+        WindowCollection collection{.integrationOnly = integrationOnly, .windows = {}};
+        EnumWindows(CollectWindow, reinterpret_cast<LPARAM>(&collection));
+        const std::vector<HWND>& windows = collection.windows;
+        std::string              children;
         for (size_t index = 0; index < windows.size(); ++index) {
             children += std::format(R"({}{{"type":"window","id":"{}","handle":{},"hasFocus":{}}})", index == 0 ? "" : ",", Uuid(index),
                                     reinterpret_cast<std::intptr_t>(windows[index]), index == focused % std::max<size_t>(windows.size(), 1) ? "true" : "false");
@@ -147,12 +162,15 @@ namespace {
                     return;
                 }
                 const std::string_view text = *request;
+                if (text.starts_with("command ")) {
+                    std::cout << text << std::endl;
+                }
                 if (scenario == Scenario::Reject && text.starts_with("query ")) {
                     loopback::SendText(peer, Failure(text));
                 } else if (text.starts_with("sub ")) {
                     loopback::SendText(peer, Response(text, R"({"subscriptionId":"s"})"));
                 } else if (text == "query monitors") {
-                    loopback::SendText(peer, Response(text, Monitors(focused)));
+                    loopback::SendText(peer, Response(text, Monitors(focused, scenario == Scenario::Integration)));
                 } else if (text == "query binding-modes") {
                     loopback::SendText(peer, Response(text, focused % 2 == 0 ? R"({"bindingModes":[]})" : R"({"bindingModes":[{"name":"resize","displayName":null}]})"));
                 } else if (text == "query tiling-direction") {
@@ -166,7 +184,7 @@ namespace {
                 loopback::SendText(peer, Broken(connection));
                 sentBroken = true;
             }
-            if (std::chrono::steady_clock::now() >= nextEvent) {
+            if (scenario != Scenario::Integration && std::chrono::steady_clock::now() >= nextEvent) {
                 ++focused;
                 for (const std::string_view eventType : {"focus_changed", "binding_modes_changed", "tiling_direction_changed"}) {
                     loopback::SendText(peer, Event(eventType));
