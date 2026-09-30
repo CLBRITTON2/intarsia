@@ -54,7 +54,8 @@ pwsh -File scripts/soak.ps1 -Preset release
 
 This runs the real bar through the load real use puts on it, each scenario against a test GlazeWM IPC server
 (`tests/support/GlazeWmServer.cpp`): idle, steady events, a server that drops the connection every second or two, a
-config rewritten twenty times a second, and a tray that apps keep adding, changing and removing icons in. Custom
+config rewritten twenty times a second, a tray that apps keep adding, changing and removing icons in, and a foreground
+window that retitles itself about 60 times a second (`tests/soak/WindowSender.cpp`, which must keep the foreground). Custom
 modules run commands that print past the output cap, outlive their timeout and fail. The bar is sampled every second
 and a scenario fails if it crashes, stops answering, logs a fatal error, leaks memory, handles, GDI or USER objects or
 threads, idles above 3% of a core, or does not exit cleanly. `-Scenario` picks scenarios and `-Seconds` sets how long

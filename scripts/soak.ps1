@@ -14,11 +14,15 @@ tray scenario floods it from build\debug\tray_sender.exe (tests/soak/TraySender.
 its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons, and folds
 and unfolds a group of modules.
 
+The retitle scenario runs the windows backend instead, whose titles come only from the foreground window, and starts
+build\debug\window_sender.exe (tests/soak/WindowSender.cpp), which takes the foreground and retitles itself about 60
+times a second. Leave it in the foreground for the whole run: it fails once another window takes it.
+
 Run it from an interactive desktop session: the bar needs a desktop to draw on.
 #>
 param(
-    [ValidateSet('idle', 'normal', 'flap', 'reload', 'tray')]
-    [string[]] $Scenario = @('idle', 'normal', 'flap', 'reload', 'tray'),
+    [ValidateSet('idle', 'normal', 'flap', 'reload', 'tray', 'retitle')]
+    [string[]] $Scenario = @('idle', 'normal', 'flap', 'reload', 'tray', 'retitle'),
     [int] $Seconds = 60,
     # The bar build under test. The test server only builds with the debug preset's tests.
     [ValidateSet('debug', 'release')]
@@ -34,6 +38,7 @@ $repoRoot  = Split-Path -Parent $PSScriptRoot
 $barExe    = Join-Path $repoRoot "build\$Preset\intarsia.exe"
 $serverExe = Join-Path $repoRoot 'build\debug\glazewm.exe'
 $senderExe = Join-Path $repoRoot 'build\debug\tray_sender.exe'
+$retitlerExe = Join-Path $repoRoot 'build\debug\window_sender.exe'
 $trayClass = 'IntarsiaSoakTray'
 # The tray sender is restarted this often, and the tray's toggle clicked this often.
 $senderRestartSeconds = 10
@@ -48,6 +53,9 @@ $warmupSeconds      = 10
 # The idle scenario ticks a clock, cpu and memory each second and gets a GlazeWM event a second, and runs no commands.
 $maxIdleCpuPercent = 3
 $barThicknessDips  = 40
+# The window sender aims at 60. Release drew them at about 3.3% of a core, each a title read and a redraw.
+$minRetitlesPerSecond = 40
+$maxRetitleCpuPercent = 6
 
 Add-Type -Namespace Soak -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr process, uint flags);
@@ -293,6 +301,30 @@ $definitions
     [System.IO.File]::WriteAllText($path, $config)
 }
 
+# The idle scenario's modules without a window manager: the foreground window's title, a clock, and cpu and memory in
+# the stats group, and the divider, which the style names too.
+function New-RetitleConfig([string] $path) {
+    $config = @"
+return {
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
+    window_manager = "windows",
+    modules_left = { "stats", "divider", "title" },
+    modules_center = { "clock" },
+    modules_right = {},
+    layouts = {},
+    modules = {
+        divider = { type = "divider" },
+        title = { type = "window", max_length = 60, tooltip = "{title}" },
+        clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1 },
+        stats = { type = "group", icon = ">", modules = { "cpu", "memory" } },
+        cpu = { type = "cpu", format = "{usage}%", icon = "", interval = 1 },
+        memory = { type = "memory", format = "{used:.1f}", icon = "", interval = 1 },
+    },
+}
+"@
+    [System.IO.File]::WriteAllText($path, $config)
+}
+
 # A style that draws every box the bar has: sections, module boxes with hover, items in every state, a divider, and
 # a tray that animates as it unfolds when the config shows one (an #id naming no module stops the bar).
 function New-SoakStyle([string] $path, [string[]] $optional) {
@@ -329,11 +361,15 @@ function Invoke-Scenario([string] $name) {
     New-Item -ItemType Directory -Force $work | Out-Null
     $configPath = Join-Path $work 'config.lua'
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
-    $optional   = if ($name -eq 'idle') { @() } else { @('endless', 'hang', 'fail', 'json') }
+    $optional   = if ($name -in @('idle', 'retitle')) { @() } else { @('endless', 'hang', 'fail', 'json') }
     if ($name -eq 'tray') {
         $optional += 'tray'
     }
-    New-SoakConfig $configPath 0 $optional
+    if ($name -eq 'retitle') {
+        New-RetitleConfig $configPath
+    } else {
+        New-SoakConfig $configPath 0 $optional
+    }
     New-SoakStyle (Join-Path $work 'style.css') $optional
     $port       = Get-FreePort
     $serverName = if ($name -eq 'flap') { 'flap' } else { 'normal' }
@@ -343,6 +379,7 @@ function Invoke-Scenario([string] $name) {
     $bar    = $null
     $sender = $null
     $senderStarts = 0
+    $retitler = $null
 
     $failures   = [System.Collections.Generic.List[string]]::new()
     $samples    = [System.Collections.Generic.List[object]]::new()
@@ -407,6 +444,16 @@ function Invoke-Scenario([string] $name) {
                 Send-TrayInput $bar.Id $second
                 Send-GroupInput $bar.Id $second
             }
+            if ($name -eq 'retitle') {
+                # Started once the bar is up, from this console, which may hand it the foreground.
+                if ($null -eq $retitler) {
+                    $retitler = Start-Process $retitlerExe -PassThru `
+                        -RedirectStandardOutput (Join-Path $work 'retitler.out') -RedirectStandardError (Join-Path $work 'retitler.err')
+                } elseif ($retitler.HasExited) {
+                    $failures.Add("window sender exited with code $($retitler.ExitCode) at ${second}s (2: it could not take the foreground or lost it): $(Get-Content -Raw (Join-Path $work 'retitler.err'))")
+                    break
+                }
+            }
             $samples.Add((Get-Sample $bar))
         }
 
@@ -423,10 +470,21 @@ function Invoke-Scenario([string] $name) {
             if ($final.Threads - $baseline.Threads -gt $maxThreadGrowth) { $failures.Add("threads grew $($baseline.Threads) to $($final.Threads)") }
             $cpuPercent = ($final.Cpu - $baseline.Cpu).TotalMilliseconds / (($samples.Count - 1 - $warmupSeconds) * 10.0)
             if ($name -eq 'idle' -and $cpuPercent -gt $maxIdleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU while nearly idle") }
+            if ($name -eq 'retitle' -and $cpuPercent -gt $maxRetitleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU following retitles") }
+        }
+        # A sender that retitles too little passes every other check without loading the bar. It reports every 5 s.
+        if ($name -eq 'retitle' -and $failures.Count -eq 0) {
+            $report   = Select-String -Path (Join-Path $work 'retitler.out') -Pattern '^retitles=(\d+)$' | Select-Object -Last 1
+            $retitles = if ($report) { [int] $report.Matches[0].Groups[1].Value } else { 0 }
+            $expected = ($samples.Count - 6) * $minRetitlesPerSecond
+            if ($retitles -lt $expected) { $failures.Add("the window sender reported $retitles retitles, under the $expected of $minRetitlesPerSecond a second") }
         }
     } finally {
         if ($null -ne $sender -and -not $sender.HasExited) {
             Stop-Process -Id $sender.Id -Force
+        }
+        if ($null -ne $retitler -and -not $retitler.HasExited) {
+            Stop-Process -Id $retitler.Id -Force
         }
         if ($null -ne $bar -and -not $bar.HasExited) {
             # taskkill gives up on a window a rebuild destroys under it, before it reaches the rest.
@@ -465,7 +523,7 @@ if (-not $NoBuild) {
         & (Join-Path $PSScriptRoot 'build.ps1') -Preset release
     }
 }
-foreach ($exe in @($barExe, $serverExe, $senderExe)) {
+foreach ($exe in @($barExe, $serverExe, $senderExe, $retitlerExe)) {
     if (-not (Test-Path $exe)) {
         throw "$exe not found, build the debug preset first"
     }

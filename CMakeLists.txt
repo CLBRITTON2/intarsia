@@ -231,4 +231,10 @@ if(BUILD_TESTING)
   add_executable(soak_tray_sender tests/soak/TraySender.cpp)
   set_target_properties(soak_tray_sender PROPERTIES OUTPUT_NAME tray_sender)
   target_link_libraries(soak_tray_sender PRIVATE intarsia_core)
+
+  # The soak tests' foreground window, retitled as a terminal showing progress retitles itself.
+  add_executable(soak_window_sender tests/soak/WindowSender.cpp)
+  set_target_properties(soak_window_sender PROPERTIES OUTPUT_NAME window_sender)
+  target_compile_definitions(soak_window_sender PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_compile_options(soak_window_sender PRIVATE /W4 /WX /permissive- /utf-8)
 endif()
