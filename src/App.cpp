@@ -49,6 +49,8 @@ namespace {
     constexpr UINT_PTR                  kDeviceTimer = 3;
     constexpr std::chrono::milliseconds kFirstDeviceRetry{500};
     constexpr std::chrono::milliseconds kLongestDeviceRetry{10000};
+    // Long enough that a window with no icon at all costs a read only now and then.
+    constexpr std::chrono::milliseconds kWindowIconRetry{10000};
 
     bool                                ShowsAudioFlow(const Config& config, AudioFlow flow) {
         return AnyModuleInConfig(config, [flow](const ModuleInstance& instance) {
@@ -65,15 +67,6 @@ namespace {
             return nullptr;
         }
         return source != nullptr ? std::move(source) : create();
-    }
-
-    std::vector<std::intptr_t> WindowHandles(const std::vector<ManagedWindow>& windows) {
-        std::vector<std::intptr_t> handles;
-        handles.reserve(windows.size());
-        for (const ManagedWindow& window : windows) {
-            handles.push_back(window.handle);
-        }
-        return handles;
     }
 
     // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.
@@ -193,7 +186,7 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 _redrawPending = false;
                 _changes.Acknowledge();
                 if (_windowIcons != nullptr) {
-                    _windowIcons->Retain(WindowHandles(_windowManager->Windows()));
+                    _windowIcons->ForgetClosed();
                 }
                 for (const std::unique_ptr<Bar>& bar : _bars) {
                     bar->Refresh();
@@ -300,7 +293,8 @@ void App::ReloadConfig() {
 }
 
 void App::MatchSourcesToConfig() {
-    _windowIcons = MatchedToConfig<WindowIcons>(std::move(_windowIcons), ShowsKind(*_config, ModuleKind::Windows), [this] { return std::make_unique<WindowIcons>(_changes); });
+    _windowIcons = MatchedToConfig<WindowIcons>(std::move(_windowIcons), ShowsKind(*_config, ModuleKind::Windows),
+                                                [this] { return std::make_unique<WindowIcons>(_changes, kWindowIconRetry); });
     _audioOutput =
         MatchedToConfig<IAudio>(std::move(_audioOutput), ShowsAudioFlow(*_config, AudioFlow::Output), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Output); });
     _audioInput =

@@ -4,9 +4,10 @@
 #include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
 
+#include <chrono>
 #include <cstdint>
-#include <algorithm>
-#include <array>
+#include <map>
+#include <optional>
 #include <string>
 #include <type_traits>
 
@@ -35,16 +36,20 @@ HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
     return nullptr;
 }
 
-WindowIcons::WindowIcons(ChangeSignal& changes) : _changes(changes), _reader(kMaxQueuedReads, [this](const std::intptr_t& window) { Read(window); }) {}
+WindowIcons::WindowIcons(ChangeSignal& changes, std::chrono::milliseconds retryAfter) :
+    _changes(changes), _retryAfter(retryAfter), _reader(kMaxQueuedReads, [this](const std::intptr_t& window) { Read(window); }) {}
 
 std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
     {
         const std::scoped_lock lock(_mutex);
         const auto             icon = _icons.find(window);
-        if (icon != _icons.end()) {
-            return icon->second;
+        if (icon == _icons.end()) {
+            _icons.emplace(window, Entry{.pixels = nullptr, .retryAt = std::nullopt});
+        } else if (!icon->second.retryAt.has_value() || std::chrono::steady_clock::now() < *icon->second.retryAt) {
+            return icon->second.pixels;
+        } else {
+            icon->second.retryAt.reset();
         }
-        _icons.emplace(window, nullptr);
     }
     if (!_reader.Push(window)) {
         const std::scoped_lock lock(_mutex);
@@ -53,12 +58,12 @@ std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
     return nullptr;
 }
 
-void WindowIcons::Retain(const std::vector<std::intptr_t>& windows) {
+void WindowIcons::ForgetClosed() {
     const std::scoped_lock lock(_mutex);
-    std::erase_if(_icons, [&windows](const auto& icon) { return std::ranges::find(windows, icon.first) == windows.end(); });
+    std::erase_if(_icons, [](const auto& icon) { return IsWindow(IntToPointer<std::remove_pointer_t<HWND>>(icon.first)) == FALSE; });
 }
 
-// Runs on the reader thread, so failures are logged: the window then shows no icon.
+// Runs on the reader thread, so failures are logged: the window then shows no icon until a retry finds one.
 void WindowIcons::Read(std::intptr_t window) {
     std::shared_ptr<const IconPixels> pixels;
     // WIC needs an apartment on the calling thread.
@@ -77,11 +82,12 @@ void WindowIcons::Read(std::intptr_t window) {
     {
         const std::scoped_lock lock(_mutex);
         const auto             icon = _icons.find(window);
-        // Retain dropped it while it was being read: the window is gone.
+        // ForgetClosed dropped it while it was being read: the window is gone.
         if (icon == _icons.end()) {
             return;
         }
-        icon->second = std::move(pixels);
+        icon->second.retryAt = pixels == nullptr ? std::optional(std::chrono::steady_clock::now() + _retryAfter) : std::nullopt;
+        icon->second.pixels  = std::move(pixels);
     }
     _changes.Notify("window_icons");
 }
