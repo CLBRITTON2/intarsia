@@ -25,11 +25,11 @@ TEST(LaunchOptions, NoArgumentsKeepTheDefaults) {
 }
 
 TEST(LaunchOptions, ReadsTheConfigPathLogPathPortAndTrayClass) {
-    const LaunchOptions options = Parse({L"--config", L"D:\\stress\\config.lua", L"--log", L"D:\\stress\\bar.log", L"--glazewm-port", L"50123", L"--tray-class", L"StressTray"});
-    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\stress\\config.lua"));
-    EXPECT_EQ(options.logPath, std::filesystem::path(L"D:\\stress\\bar.log"));
+    const LaunchOptions options = Parse({L"--config", L"D:\\soak\\config.lua", L"--log", L"D:\\soak\\bar.log", L"--glazewm-port", L"50123", L"--tray-class", L"SoakTray"});
+    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\soak\\config.lua"));
+    EXPECT_EQ(options.logPath, std::filesystem::path(L"D:\\soak\\bar.log"));
     EXPECT_EQ(options.glazeWmPort, 50123);
-    EXPECT_EQ(options.trayClass, L"StressTray");
+    EXPECT_EQ(options.trayClass, L"SoakTray");
 }
 
 TEST(LaunchOptions, RejectsBadArguments) {

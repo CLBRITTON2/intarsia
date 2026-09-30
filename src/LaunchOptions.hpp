@@ -11,10 +11,10 @@
 // The command line: intarsia.exe [--config <path>] [--log <path>] [--glazewm-port <port>] [--tray-class <name>].
 struct LaunchOptions {
     std::filesystem::path configPath;
-    // The stress tests log beside their config, since a running bar keeps the default log open.
+    // The soak tests log beside their config, since a running bar keeps the default log open.
     std::filesystem::path logPath;
-    std::uint16_t         glazeWmPort; // the stress tests point the bar at its own server while GlazeWM holds 6123
-    // The stress tests give the tray a class no app sends to, so it never takes the desktop's icons.
+    std::uint16_t         glazeWmPort; // the soak tests point the bar at its own server while GlazeWM holds 6123
+    // The soak tests give the tray a class no app sends to, so it never takes the desktop's icons.
     std::wstring trayClass;
 };
 

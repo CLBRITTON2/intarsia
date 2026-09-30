@@ -1,4 +1,4 @@
-// Tray flood for the tray scenario in scripts/stress.ps1. It sends the bar's tray window what apps and hostile
+// Tray flood for the tray scenario in scripts/soak.ps1. It sends the bar's tray window what apps and hostile
 // processes can: adds, modifies, deletes and version changes from owner windows that come and go, icon handles that do
 // not read, tooltips of every awkward kind, malformed payloads and the appbar messages a taskbar forwards. It runs until
 // killed, and exits 2 when the tray stops answering and 3 when no tray window of the class exists.

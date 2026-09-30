@@ -3,7 +3,7 @@
 Builds the debug preset and runs the integration tests, printing each test's steps.
 
 .DESCRIPTION
-Each test starts the real build\debug\intarsia.exe against build\debug\glazewm.exe (tests/stress/GlazeWmServer.cpp) on
+Each test starts the real build\debug\intarsia.exe against build\debug\glazewm.exe (tests/support/GlazeWmServer.cpp) on
 a free port and judges it by what it does outside its process. Every step prints a line to stdout: each process
 started, each sweep of clicks and every command it sent, each pushed event, the bar's exit, then the bar's log and the
 server's stderr. Each test's config, style and logs stay in %TEMP%\intarsia-integration-<test>-<pid>.

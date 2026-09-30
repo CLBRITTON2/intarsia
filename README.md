@@ -46,19 +46,19 @@ save, its exit code and the messages a tray app gets.
 sweep of clicks sent, pushed events, tray messages sent and received, pixels found, the bar's exit code, and then the
 bar's log. Run it from an interactive desktop session.
 
-## Stress tests
+## Soak tests
 
 ```powershell
-pwsh -File scripts/stress.ps1 -Preset release
+pwsh -File scripts/soak.ps1 -Preset release
 ```
 
-This runs the real bar through a set of scenarios, each against a test GlazeWM IPC server
-(`tests/stress/GlazeWmServer.cpp`): idle, steady events, an event flood, malformed and oversized messages, a server that
-never finishes the handshake, one that drops the connection every second or two, one that rejects every query, and a
-config rewritten twenty times a second. Custom modules run commands that print past the output cap, outlive their
-timeout and fail. The bar is sampled every second and a scenario fails if it crashes, stops answering, logs a fatal
-error, leaks memory, handles, GDI or USER objects or threads, idles above 3% of a core, or does not exit cleanly.
-`-Scenario` picks scenarios, `-Seconds` sets how long each runs, and a long `-Seconds` makes it a soak test.
+This runs the real bar through the load real use puts on it, each scenario against a test GlazeWM IPC server
+(`tests/support/GlazeWmServer.cpp`): idle, steady events, a server that drops the connection every second or two, a
+config rewritten twenty times a second, and a tray that apps keep adding, changing and removing icons in. Custom
+modules run commands that print past the output cap, outlive their timeout and fail. The bar is sampled every second
+and a scenario fails if it crashes, stops answering, logs a fatal error, leaks memory, handles, GDI or USER objects or
+threads, idles above 3% of a core, or does not exit cleanly. `-Scenario` picks scenarios and `-Seconds` sets how long
+each runs.
 
 ## Lint
 
@@ -115,9 +115,9 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
 | `config/windows/` | a plain config and style that need nothing but Windows |
 | `config/glazewm/` | a config and style for GlazeWM that document every key and selector |
-| `tests/` | unit tests mirroring `src/`, and `tests/stress/` for the stress tests' IPC server |
+| `tests/` | unit tests mirroring `src/`, `tests/integration/`, `tests/soak/`, and `tests/support/` for the test GlazeWM server both use |
 | `CHANGELOG.md` | what each release changed |
-| `scripts/` | build, test, stress test, lint, changelog and release |
+| `scripts/` | build, test, soak test, lint, changelog and release |
 
 ## License
 

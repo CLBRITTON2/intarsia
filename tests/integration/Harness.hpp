@@ -13,11 +13,11 @@
 #include <string_view>
 #include <vector>
 
-// Runs the real intarsia.exe against the test GlazeWM server (tests/stress/GlazeWmServer.cpp) and observes it only
+// Runs the real intarsia.exe against the test GlazeWM server (tests/support/GlazeWmServer.cpp) and observes it only
 // from outside the process: the commands the server receives, the bar's windows and its log.
 namespace integration {
 
-    // The test server lists only windows whose title starts with this (tests/stress/GlazeWmServer.cpp).
+    // The test server lists only windows whose title starts with this (tests/support/GlazeWmServer.cpp).
     inline constexpr std::wstring_view kWindowTitle = L"intarsia integration";
     // The bar's --tray-class, one no app uses, so the bar never takes the desktop's tray.
     inline constexpr std::wstring_view kTrayClass = L"IntarsiaIntegrationTray";

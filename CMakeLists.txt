@@ -209,9 +209,9 @@ if(BUILD_TESTING)
   add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
                                       tests/integration/GlazeWm.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp tests/integration/TrayApp.cpp)
   target_link_libraries(intarsia_integration PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
-  target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:stress_glazewm_server>"
+  target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:test_glazewm_server>"
                                                           INTARSIA_ARGV_RECORDER="$<TARGET_FILE:integration_argv_recorder>")
-  add_dependencies(intarsia_integration intarsia stress_glazewm_server integration_argv_recorder)
+  add_dependencies(intarsia_integration intarsia test_glazewm_server integration_argv_recorder)
   gtest_discover_tests(intarsia_integration PROPERTIES LABELS integration)
 
   # The program the integration tests' actions and custom commands run.
@@ -220,15 +220,15 @@ if(BUILD_TESTING)
   target_compile_definitions(integration_argv_recorder PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_compile_options(integration_argv_recorder PRIVATE /W4 /WX /permissive- /utf-8)
 
-  # The stress tests' IPC server (scripts/stress.ps1), named glazewm.exe because the bar's peer check requires it.
-  add_executable(stress_glazewm_server tests/stress/GlazeWmServer.cpp)
-  set_target_properties(stress_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
-  target_compile_definitions(stress_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_options(stress_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
-  target_link_libraries(stress_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
+  # The soak tests' IPC server (scripts/soak.ps1), named glazewm.exe because the bar's peer check requires it.
+  add_executable(test_glazewm_server tests/support/GlazeWmServer.cpp)
+  set_target_properties(test_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
+  target_compile_definitions(test_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_compile_options(test_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
+  target_link_libraries(test_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
 
-  # The stress tests' tray flood, sending the tray the payloads apps do. It takes their layout from the core.
-  add_executable(stress_tray_sender tests/stress/TraySender.cpp)
-  set_target_properties(stress_tray_sender PROPERTIES OUTPUT_NAME tray_sender)
-  target_link_libraries(stress_tray_sender PRIVATE intarsia_core)
+  # The soak tests' tray flood, sending the tray the payloads apps do. It takes their layout from the core.
+  add_executable(soak_tray_sender tests/soak/TraySender.cpp)
+  set_target_properties(soak_tray_sender PROPERTIES OUTPUT_NAME tray_sender)
+  target_link_libraries(soak_tray_sender PRIVATE intarsia_core)
 endif()

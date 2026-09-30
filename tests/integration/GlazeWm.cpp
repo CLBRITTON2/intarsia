@@ -42,7 +42,7 @@ section { margin: 4px; padding: 3px; background: #191724; }
 .item.focused { color: #191724; background: #9ccfd8; }
 )";
 
-    // The ids the test server gives the windows it lists, in its order (tests/stress/GlazeWmServer.cpp).
+    // The ids the test server gives the windows it lists, in its order (tests/support/GlazeWmServer.cpp).
     constexpr std::string_view kFirstWindowId  = "00000000-0000-4000-8000-000000000000";
     constexpr std::string_view kSecondWindowId = "00000000-0000-4000-8000-000000000001";
 

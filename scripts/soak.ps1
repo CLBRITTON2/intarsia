@@ -1,16 +1,16 @@
 <#
 .SYNOPSIS
-Stress tests the running bar. Fails on a crash, a leak or a hang.
+Soak tests the running bar. Fails on a crash, a leak or a hang.
 
 .DESCRIPTION
 Each scenario runs build\debug\intarsia.exe with a generated config against build\debug\glazewm.exe, a test IPC server
-(tests/stress/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
+(tests/support/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
 objects, threads, CPU, and whether its windows still answer messages. A scenario fails when the bar exits, stops
 answering, logs a fatal error, grows past the thresholds after warming up, or does not exit cleanly on WM_CLOSE. Once
 warmed up it also fails when a monitor lacks exactly one bar along its top edge.
 
 The bar's tray always runs under a class of its own (--tray-class), so no scenario takes the desktop's tray icons. The
-tray scenario floods it from build\debug\tray_sender.exe (tests/stress/TraySender.cpp), restarted every 10 s so all
+tray scenario floods it from build\debug\tray_sender.exe (tests/soak/TraySender.cpp), restarted every 10 s so all
 its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons, and folds
 and unfolds a group of modules.
 
@@ -34,7 +34,7 @@ $repoRoot  = Split-Path -Parent $PSScriptRoot
 $barExe    = Join-Path $repoRoot "build\$Preset\intarsia.exe"
 $serverExe = Join-Path $repoRoot 'build\debug\glazewm.exe'
 $senderExe = Join-Path $repoRoot 'build\debug\tray_sender.exe'
-$trayClass = 'IntarsiaStressTray'
+$trayClass = 'IntarsiaSoakTray'
 # The tray sender is restarted this often, and the tray's toggle clicked this often.
 $senderRestartSeconds = 10
 $toggleEverySeconds   = 2
@@ -49,7 +49,7 @@ $warmupSeconds      = 10
 $maxIdleCpuPercent = 3
 $barThicknessDips  = 40
 
-Add-Type -Namespace Stress -Name Native -MemberDefinition @'
+Add-Type -Namespace Soak -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr process, uint flags);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string className, string title);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
@@ -118,12 +118,12 @@ function Get-BarWindows([int] $processId) {
     $window  = [IntPtr]::Zero
     while ($true) {
         # [NullString]: PowerShell turns $null into "" for a string parameter, which would match only untitled windows.
-        $window = [Stress.Native]::FindWindowExW([IntPtr]::Zero, $window, 'IntarsiaBar', [NullString]::Value)
+        $window = [Soak.Native]::FindWindowExW([IntPtr]::Zero, $window, 'IntarsiaBar', [NullString]::Value)
         if ($window -eq [IntPtr]::Zero) {
             break
         }
         [uint32] $owner = 0
-        [void][Stress.Native]::GetWindowThreadProcessId($window, [ref] $owner)
+        [void][Soak.Native]::GetWindowThreadProcessId($window, [ref] $owner)
         if ($owner -eq $processId) {
             $windows += $window
         }
@@ -141,7 +141,7 @@ function Get-Responsiveness([int] $processId) {
     foreach ($window in $windows) {
         [IntPtr] $result = [IntPtr]::Zero
         # SMTO_ABORTIFHUNG (2)
-        if ([Stress.Native]::SendMessageTimeoutW($window, 0, [IntPtr]::Zero, [IntPtr]::Zero, 2, 1000, [ref] $result) -eq [IntPtr]::Zero) {
+        if ([Soak.Native]::SendMessageTimeoutW($window, 0, [IntPtr]::Zero, [IntPtr]::Zero, 2, 1000, [ref] $result) -eq [IntPtr]::Zero) {
             return 'hung'
         }
     }
@@ -151,10 +151,10 @@ function Get-Responsiveness([int] $processId) {
 # Posts what the bar takes as a click or cursor move at a client point in pixels.
 function Send-BarMouse([IntPtr] $window, [uint32] $message, [int] $x, [int] $y) {
     $point = [IntPtr](($y -shl 16) -bor ($x -band 0xFFFF))
-    [void][Stress.Native]::PostMessageW($window, $message, [IntPtr]::Zero, $point)
+    [void][Soak.Native]::PostMessageW($window, $message, [IntPtr]::Zero, $point)
 }
 
-# The tray is the last module, so its toggle sits at the bar's right end, 26 DIPs in from the edge with the stress
+# The tray is the last module, so its toggle sits at the bar's right end, 26 DIPs in from the edge with the soak
 # style (section margin and padding, the module's padding, the toggle's margin and its padding). Every few seconds the
 # toggle is clicked to fold or unfold the tray, and every second the cursor moves over and right clicks a spot across the
 # icons it unfolds, which reach the sender's owner windows.
@@ -163,11 +163,11 @@ function Send-TrayInput([int] $processId, [int] $second) {
     $WM_LBUTTONUP = 0x0202
     $WM_RBUTTONUP = 0x0205
     foreach ($window in @(Get-BarWindows $processId)) {
-        $rect = [Stress.Native+RECT]::new()
-        if (-not [Stress.Native]::GetClientRect($window, [ref] $rect)) {
+        $rect = [Soak.Native+RECT]::new()
+        if (-not [Soak.Native]::GetClientRect($window, [ref] $rect)) {
             continue
         }
-        $scale  = [Stress.Native]::GetDpiForWindow($window) / 96.0
+        $scale  = [Soak.Native]::GetDpiForWindow($window) / 96.0
         $y      = [int] (($rect.Bottom - $rect.Top) / 2)
         $toggle = $rect.Right - [int] (26 * $scale)
         if ($second % $toggleEverySeconds -eq 0) {
@@ -180,17 +180,17 @@ function Send-TrayInput([int] $processId, [int] $second) {
 }
 
 # The stats group is the first module on the left, so its toggle sits 18 DIPs in from the bar's left edge with the
-# stress style (section margin and padding, the module's padding, then half the glyph). Every few seconds the toggle is
+# soak style (section margin and padding, the module's padding, then half the glyph). Every few seconds the toggle is
 # clicked to fold or unfold it, and the cursor moves across the members it unfolds.
 function Send-GroupInput([int] $processId, [int] $second) {
     $WM_MOUSEMOVE = 0x0200
     $WM_LBUTTONUP = 0x0202
     foreach ($window in @(Get-BarWindows $processId)) {
-        $rect = [Stress.Native+RECT]::new()
-        if (-not [Stress.Native]::GetClientRect($window, [ref] $rect)) {
+        $rect = [Soak.Native+RECT]::new()
+        if (-not [Soak.Native]::GetClientRect($window, [ref] $rect)) {
             continue
         }
-        $scale  = [Stress.Native]::GetDpiForWindow($window) / 96.0
+        $scale  = [Soak.Native]::GetDpiForWindow($window) / 96.0
         $y      = [int] (($rect.Bottom - $rect.Top) / 2)
         $toggle = [int] (18 * $scale)
         if ($second % $toggleEverySeconds -eq 1) {
@@ -200,7 +200,7 @@ function Send-GroupInput([int] $processId, [int] $second) {
     }
 }
 
-function Format-Rect([Stress.Native+RECT] $rect) {
+function Format-Rect([Soak.Native+RECT] $rect) {
     return "($($rect.Left), $($rect.Top), $($rect.Right), $($rect.Bottom))"
 }
 
@@ -209,8 +209,8 @@ function Format-Rect([Stress.Native+RECT] $rect) {
 # (a shell that ignores the bar leaves the work area whole, which is not a failure).
 function Test-BarGeometry([int] $processId) {
     $failures = @()
-    $monitors = @([Stress.Native]::Monitors())
-    $bars     = @(Get-BarWindows $processId | ForEach-Object { [Stress.Native]::WindowRect($_) })
+    $monitors = @([Soak.Native]::Monitors())
+    $bars     = @(Get-BarWindows $processId | ForEach-Object { [Soak.Native]::WindowRect($_) })
     if ($bars.Count -ne $monitors.Count) {
         $failures += "had $($bars.Count) bar windows for $($monitors.Count) monitors"
     }
@@ -218,7 +218,7 @@ function Test-BarGeometry([int] $processId) {
         $bounds = $monitor.Bounds
         # lround, as the bar rounds DIPs to pixels.
         $thickness = [int] [math]::Round($barThicknessDips * $monitor.Dpi / 96.0, [MidpointRounding]::AwayFromZero)
-        $expected  = [Stress.Native+RECT] @{ Left = $bounds.Left; Top = $bounds.Top; Right = $bounds.Right; Bottom = $bounds.Top + $thickness }
+        $expected  = [Soak.Native+RECT] @{ Left = $bounds.Left; Top = $bounds.Top; Right = $bounds.Right; Bottom = $bounds.Top + $thickness }
         $matching  = @($bars | Where-Object { (Format-Rect $_) -eq (Format-Rect $expected) })
         $reserved  = $monitor.Work.Top -ge $expected.Bottom
         Write-Host "monitor $(Format-Rect $bounds) at $($monitor.Dpi) dpi: work area $(Format-Rect $monitor.Work), strip reserved: $reserved"
@@ -234,8 +234,8 @@ function Get-Sample([System.Diagnostics.Process] $process) {
     return [pscustomobject]@{
         PrivateMB = [math]::Round($process.PrivateMemorySize64 / 1MB, 1)
         Handles   = $process.HandleCount
-        Gdi       = [Stress.Native]::GetGuiResources($process.Handle, 0)
-        User      = [Stress.Native]::GetGuiResources($process.Handle, 1)
+        Gdi       = [Soak.Native]::GetGuiResources($process.Handle, 0)
+        User      = [Soak.Native]::GetGuiResources($process.Handle, 1)
         Threads   = $process.Threads.Count
         Cpu       = $process.TotalProcessorTime
     }
@@ -245,7 +245,7 @@ function Get-Sample([System.Diagnostics.Process] $process) {
 # first on the left, which starts folded), plus the named optional modules:
 # the custom endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json, and the
 # tray, last so its toggle sits at the bar's right end whatever it unfolds.
-function New-StressConfig([string] $path, [int] $revision, [string[]] $optional) {
+function New-SoakConfig([string] $path, [int] $revision, [string[]] $optional) {
     $cmd  = 'C:\\Windows\\System32\\cmd.exe'
     $ping = 'C:\\Windows\\System32\\PING.EXE'
     $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
@@ -265,7 +265,7 @@ function New-StressConfig([string] $path, [int] $revision, [string[]] $optional)
     $rightList   = (@('"tiling"') + ($custom | ForEach-Object { "`"$_`"" }) + ($trayList | ForEach-Object { "`"$_`"" })) -join ', '
     $definitions = ($shown | ForEach-Object { "        $_ = $($optionalModules[$_])," }) -join "`n"
     $config = @"
--- stress revision $revision
+-- soak revision $revision
 return {
     bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
     window_manager = "glazewm",
@@ -295,7 +295,7 @@ $definitions
 
 # A style that draws every box the bar has: sections, module boxes with hover, items in every state, a divider, and
 # a tray that animates as it unfolds when the config shows one (an #id naming no module stops the bar).
-function New-StressStyle([string] $path, [string[]] $optional) {
+function New-SoakStyle([string] $path, [string[]] $optional) {
     $style = @'
 :root { --foreground: #e0def4; --border: rgba(110, 106, 134, 0.25); }
 * { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
@@ -325,7 +325,7 @@ tooltip { padding: 6px; background: #1f1d2e; border: 1px solid var(--border); bo
 }
 
 function Invoke-Scenario([string] $name) {
-    $work = Join-Path $LogRoot "intarsia-stress-$name-$PID"
+    $work = Join-Path $LogRoot "intarsia-soak-$name-$PID"
     New-Item -ItemType Directory -Force $work | Out-Null
     $configPath = Join-Path $work 'config.lua'
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
@@ -333,8 +333,8 @@ function Invoke-Scenario([string] $name) {
     if ($name -eq 'tray') {
         $optional += 'tray'
     }
-    New-StressConfig $configPath 0 $optional
-    New-StressStyle (Join-Path $work 'style.css') $optional
+    New-SoakConfig $configPath 0 $optional
+    New-SoakStyle (Join-Path $work 'style.css') $optional
     $port       = Get-FreePort
     $serverName = if ($name -eq 'flap') { 'flap' } else { 'normal' }
     $barLog     = Join-Path $work 'intarsia.log'
@@ -385,7 +385,7 @@ function Invoke-Scenario([string] $name) {
             if ($name -eq 'reload') {
                 # Twenty saves a second: every settled save rebuilds every bar.
                 for ($save = 0; $save -lt 20; $save++) {
-                    New-StressConfig $configPath ($second * 20 + $save) $optional
+                    New-SoakConfig $configPath ($second * 20 + $save) $optional
                     Start-Sleep -Milliseconds 50
                 }
             }
@@ -429,6 +429,10 @@ function Invoke-Scenario([string] $name) {
             Stop-Process -Id $sender.Id -Force
         }
         if ($null -ne $bar -and -not $bar.HasExited) {
+            # taskkill gives up on a window a rebuild destroys under it, before it reaches the rest.
+            if ($name -eq 'reload') {
+                Start-Sleep -Seconds 1
+            }
             # WM_CLOSE through taskkill without /F, as a user would stop it: every bar must release its strip and exit.
             taskkill /PID $bar.Id | Out-Null
             if (-not $bar.WaitForExit(10000)) {
@@ -473,5 +477,5 @@ $results = foreach ($name in $Scenario) {
 }
 $results | Format-Table -AutoSize | Out-String -Width 400 | Write-Host
 if (@($results | Where-Object Result -ne 'pass').Count -gt 0) {
-    throw 'stress scenarios failed'
+    throw 'soak scenarios failed'
 }
