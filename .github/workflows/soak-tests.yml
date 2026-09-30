@@ -28,7 +28,7 @@ jobs:
           SOAK_PRESET: ${{ inputs.preset }}
           SOAK_SECONDS: ${{ inputs.seconds }}
           SOAK_LOGS: ${{ runner.temp }}\soak
-        run: ./scripts/soak.ps1 -Preset $env:SOAK_PRESET -Seconds ([int] $env:SOAK_SECONDS) -LogRoot $env:SOAK_LOGS
+        run: ./scripts/run-soak-tests.ps1 -Preset $env:SOAK_PRESET -Seconds ([int] $env:SOAK_SECONDS) -LogRoot $env:SOAK_LOGS
       - name: upload soak logs
         # Most useful when the soak tests failed.
         if: always()

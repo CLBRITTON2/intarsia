@@ -1,7 +1,7 @@
 # Changelog
 
-What each release changed, newest first. `scripts/changelog.ps1` starts a version's section from the commits since the
-last release.
+What each release changed, newest first. `scripts/draft-changelog.ps1` starts a version's section from the commits
+since the last release.
 
 ## 0.1.0 (2026-09-28)
 

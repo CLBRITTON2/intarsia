@@ -21,13 +21,13 @@ jobs:
       - uses: actions/checkout@v5
       - name: unit and config tests
         shell: pwsh
-        run: ./scripts/test.ps1
+        run: ./scripts/run-unit-tests.ps1
       - name: build and package
         shell: pwsh
         # Through the environment, never interpolated into the script, so no input can inject a command.
         env:
           RELEASE_VERSION: ${{ inputs.version }}
-        run: ./scripts/release.ps1 -Version $env:RELEASE_VERSION
+        run: ./scripts/package-release.ps1 -Version $env:RELEASE_VERSION
       - name: upload package
         uses: actions/upload-artifact@v4
         with:

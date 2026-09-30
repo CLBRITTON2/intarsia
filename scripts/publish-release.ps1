@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Publishes the package scripts/release.ps1 built as the GitHub release v<Version>, tagging Commit.
+Publishes the package scripts/package-release.ps1 built as the GitHub release v<Version>, tagging Commit.
 
 .PARAMETER Version
-The version scripts/release.ps1 packaged, as major.minor.patch.
+The version scripts/package-release.ps1 packaged, as major.minor.patch.
 
 .PARAMETER Commit
 The commit the release tags, the one the package was built from.
@@ -22,7 +22,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'ChangelogSection.ps1')
+. (Join-Path $PSScriptRoot 'read-release-notes.ps1')
 Assert-Version $Version
 
 $dist  = Join-Path (Split-Path -Parent $PSScriptRoot) 'build\dist'
@@ -30,7 +30,7 @@ $zip   = Join-Path $dist "intarsia-$Version.zip"
 $notes = Join-Path $dist 'release-notes.md'
 foreach ($path in @($zip, $notes)) {
     if (-not (Test-Path $path)) {
-        throw "$path not found: run scripts/release.ps1 -Version $Version first"
+        throw "$path not found: run scripts/package-release.ps1 -Version $Version first"
     }
 }
 

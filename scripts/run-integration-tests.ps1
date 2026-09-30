@@ -15,10 +15,9 @@ Run it from an interactive desktop session: the bar needs a desktop to draw on.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'vs-dev-shell.ps1')
+
 & (Join-Path $PSScriptRoot 'build.ps1') -Preset debug
 
 # GoogleTest runs one test at a time, since every bar docks to the same monitors.
-& (Join-Path (Split-Path -Parent $PSScriptRoot) 'build\debug\intarsia_integration.exe')
-if ($LASTEXITCODE -ne 0) {
-    throw "intarsia_integration.exe failed with exit code $LASTEXITCODE"
-}
+Invoke-Checked 'intarsia_integration.exe' { & (Join-Path (Split-Path -Parent $PSScriptRoot) 'build\debug\intarsia_integration.exe') }

@@ -21,7 +21,7 @@ $pinnedLlvmMajor = 19
 $gbPerUnit       = 2
 $repoRoot        = Split-Path -Parent $PSScriptRoot
 
-. (Join-Path $PSScriptRoot 'VsDevShell.ps1')
+. (Join-Path $PSScriptRoot 'vs-dev-shell.ps1')
 
 function Assert-LlvmMajor([string] $tool, [int] $major) {
     if (-not (Test-Path $tool)) {
@@ -33,13 +33,6 @@ function Assert-LlvmMajor([string] $tool, [int] $major) {
     }
     if ([int] $Matches[1] -ne $major) {
         throw "$tool is LLVM $($Matches[1]), this repo pins LLVM $major"
-    }
-}
-
-function Invoke-Checked([string] $what, [scriptblock] $command) {
-    & $command
-    if ($LASTEXITCODE -ne 0) {
-        throw "$what failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -62,10 +55,7 @@ $allUnits = @($allSources | Where-Object { $_ -like '*.cpp' })
 if ($Changed) {
     Push-Location $repoRoot
     try {
-        $changedPaths = @(git diff --name-only HEAD) + @(git ls-files --others --exclude-standard)
-        if ($LASTEXITCODE -ne 0) {
-            throw "git failed with exit code $LASTEXITCODE"
-        }
+        $changedPaths = @(Invoke-Checked 'git diff' { git diff --name-only HEAD }) + @(Invoke-Checked 'git ls-files' { git ls-files --others --exclude-standard })
     } finally {
         Pop-Location
     }

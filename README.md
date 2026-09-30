@@ -27,7 +27,7 @@ the dependency downloads.
 ## Test
 
 ```powershell
-pwsh -File scripts/test.ps1
+pwsh -File scripts/run-unit-tests.ps1
 ```
 
 This builds the debug preset and runs the GoogleTest suite through ctest. `tests/` mirrors `src/`, one file per unit.
@@ -36,7 +36,7 @@ Some tests create windows and a Direct3D device, so run them from an interactive
 ## Integration tests
 
 ```powershell
-pwsh -File scripts/integration.ps1
+pwsh -File scripts/run-integration-tests.ps1
 ```
 
 This runs the real bar against a test GlazeWM IPC server and judges it only by what it does outside its process, such
@@ -49,7 +49,7 @@ bar's log. Run it from an interactive desktop session.
 ## Soak tests
 
 ```powershell
-pwsh -File scripts/soak.ps1 -Preset release
+pwsh -File scripts/run-soak-tests.ps1 -Preset release
 ```
 
 This runs the real bar through the load real use puts on it, each scenario against a test GlazeWM IPC server
@@ -74,15 +74,15 @@ This checks formatting with clang-format and runs clang-tidy over `src/` and `te
 ## Release
 
 ```powershell
-pwsh -File scripts/changelog.ps1 -Version 0.2.0 -From v0.1.0
-pwsh -File scripts/release.ps1 -Version 0.2.0
+pwsh -File scripts/draft-changelog.ps1 -Version 0.2.0 -From v0.1.0
+pwsh -File scripts/package-release.ps1 -Version 0.2.0
 ```
 
-`changelog.ps1` adds a section for the version to `CHANGELOG.md`, one line per commit since the previous release's tag
-(for the first release, pass the first commit). Edit it and commit. `release.ps1` then builds from a clean
-`build\dist` with the version stamped into `intarsia.exe`, and packages `build\dist\intarsia-<version>.zip` with both
-configs, this README, the license and the changelog, and `build\dist\release-notes.md` with the version's section. It
-refuses uncommitted changes and a version the changelog lacks. The Release workflow runs the tests and both steps on
+`draft-changelog.ps1` adds a section for the version to `CHANGELOG.md`, one line per commit since the previous
+release's tag (for the first release, pass the first commit). Edit it and commit. `package-release.ps1` then builds
+from a clean `build\dist` with the version stamped into `intarsia.exe`, and packages `build\dist\intarsia-<version>.zip`
+with both configs, this README, the license and the changelog, and `build\dist\release-notes.md` with the version's
+section. It refuses uncommitted changes and a version the changelog lacks. The Release workflow runs the tests and both steps on
 `windows-2022`, then `scripts/publish-release.ps1` publishes the zip as the GitHub release `v<version>`.
 
 ## Run

@@ -1,8 +1,8 @@
-// Tray apps for the tray scenario in scripts/soak.ps1. A few owner windows keep icons in the bar's tray window and send
-// what apps send, at about the rate a busy desktop's apps do: adds with new pixels, tooltip and icon changes, hides and
-// shows, deletes and version changes, and now and then an owner that dies without deleting its icons, as a crashed
-// app's do. It runs until killed, and exits 2 when the tray stops answering and 3 when no tray window of the class
-// exists.
+// Tray apps for the tray scenario in scripts/run-soak-tests.ps1. A few owner windows keep icons in the bar's tray
+// window and send what apps send, at about the rate a busy desktop's apps do: adds with new pixels, tooltip and icon
+// changes, hides and shows, deletes and version changes, and now and then an owner that dies without deleting its
+// icons, as a crashed app's do. It runs until killed, and exits 2 when the tray stops answering and 3 when no tray
+// window of the class exists.
 //
 //   tray_sender.exe --class <window class the bar's tray registered, from --tray-class>
 

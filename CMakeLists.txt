@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(intarsia LANGUAGES CXX RC)
 
-# The version intarsia.exe's version resource carries. scripts/release.ps1 sets it, every other build stays 0.0.0.
+# The version intarsia.exe's version resource carries. scripts/package-release.ps1 sets it, every other build stays
+# 0.0.0.
 set(INTARSIA_VERSION "0.0.0" CACHE STRING "Version stamped into intarsia.exe, as major.minor.patch")
 if(NOT INTARSIA_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
   message(FATAL_ERROR "INTARSIA_VERSION must be major.minor.patch, got '${INTARSIA_VERSION}'")
@@ -231,7 +232,8 @@ if(BUILD_TESTING)
   target_compile_definitions(test_pipe_holder PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_compile_options(test_pipe_holder PRIVATE /W4 /WX /permissive- /utf-8)
 
-  # The soak tests' IPC server (scripts/soak.ps1), named glazewm.exe because the bar's peer check requires it.
+  # The soak tests' IPC server (scripts/run-soak-tests.ps1), named glazewm.exe because the bar's peer check requires
+  # it.
   add_executable(test_glazewm_server tests/support/GlazeWmServer.cpp)
   set_target_properties(test_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
   target_compile_definitions(test_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)

@@ -1,6 +1,6 @@
-// Test IPC server for the soak tests in scripts/soak.ps1 and the integration tests. It answers the bar's queries the
-// way GlazeWM does, plus the load or faults a scenario names, and prints every command it receives to stdout on a line
-// of its own. Built as glazewm.exe, the image name the bar's peer check requires.
+// Test IPC server for the soak tests in scripts/run-soak-tests.ps1 and the integration tests. It answers the bar's
+// queries the way GlazeWM does, plus the load or faults a scenario names, and prints every command it receives to
+// stdout on a line of its own. Built as glazewm.exe, the image name the bar's peer check requires.
 //
 //   glazewm.exe --port <n> --scenario <normal|flap|integration>
 //

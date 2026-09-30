@@ -1,6 +1,7 @@
-// Foreground retitles for the retitle scenario in scripts/soak.ps1. It shows a window, takes the foreground and retitles
-// the window about 60 times a second with a spinner and a percentage, as a terminal showing progress does. It runs
-// until killed, and exits 2 when it cannot take the foreground or loses it, since the bar then follows another window.
+// Foreground retitles for the retitle scenario in scripts/run-soak-tests.ps1. It shows a window, takes the foreground
+// and retitles the window about 60 times a second with a spinner and a percentage, as a terminal showing progress
+// does. It runs until killed, and exits 2 when it cannot take the foreground or loses it, since the bar then follows
+// another window.
 //
 //   window_sender.exe
 

@@ -164,28 +164,38 @@ function Send-BarMouse([IntPtr] $window, [uint32] $message, [int] $x, [int] $y) 
     [void][Soak.Native]::PostMessageW($window, $message, [IntPtr]::Zero, $point)
 }
 
+# Each bar window's client width, its middle row and its DPI scale, all in pixels.
+function Get-BarRows([int] $processId) {
+    foreach ($window in @(Get-BarWindows $processId)) {
+        $rect = [Soak.Native+RECT]::new()
+        if ([Soak.Native]::GetClientRect($window, [ref] $rect)) {
+            [pscustomobject]@{
+                Window = $window
+                Right  = $rect.Right
+                Y      = [int] (($rect.Bottom - $rect.Top) / 2)
+                Scale  = [Soak.Native]::GetDpiForWindow($window) / 96.0
+            }
+        }
+    }
+}
+
+$WM_MOUSEMOVE = 0x0200
+$WM_LBUTTONUP = 0x0202
+$WM_RBUTTONUP = 0x0205
+
 # The tray is the last module, so its toggle sits at the bar's right end, 26 DIPs in from the edge with the soak
 # style (section margin and padding, the module's padding, the toggle's margin and its padding). Every few seconds the
 # toggle is clicked to fold or unfold the tray, and every second the cursor moves over and right clicks a spot across the
 # icons it unfolds, which reach the sender's owner windows.
 function Send-TrayInput([int] $processId, [int] $second) {
-    $WM_MOUSEMOVE = 0x0200
-    $WM_LBUTTONUP = 0x0202
-    $WM_RBUTTONUP = 0x0205
-    foreach ($window in @(Get-BarWindows $processId)) {
-        $rect = [Soak.Native+RECT]::new()
-        if (-not [Soak.Native]::GetClientRect($window, [ref] $rect)) {
-            continue
-        }
-        $scale  = [Soak.Native]::GetDpiForWindow($window) / 96.0
-        $y      = [int] (($rect.Bottom - $rect.Top) / 2)
-        $toggle = $rect.Right - [int] (26 * $scale)
+    foreach ($row in @(Get-BarRows $processId)) {
+        $toggle = $row.Right - [int] (26 * $row.Scale)
         if ($second % $toggleEverySeconds -eq 0) {
-            Send-BarMouse $window $WM_LBUTTONUP $toggle $y
+            Send-BarMouse $row.Window $WM_LBUTTONUP $toggle $row.Y
         }
-        $icon = $toggle - [int] ((30 + ($second * 37) % 300) * $scale)
-        Send-BarMouse $window $WM_MOUSEMOVE $icon $y
-        Send-BarMouse $window $WM_RBUTTONUP $icon $y
+        $icon = $toggle - [int] ((30 + ($second * 37) % 300) * $row.Scale)
+        Send-BarMouse $row.Window $WM_MOUSEMOVE $icon $row.Y
+        Send-BarMouse $row.Window $WM_RBUTTONUP $icon $row.Y
     }
 }
 
@@ -193,20 +203,12 @@ function Send-TrayInput([int] $processId, [int] $second) {
 # soak style (section margin and padding, the module's padding, then half the glyph). Every few seconds the toggle is
 # clicked to fold or unfold it, and the cursor moves across the members it unfolds.
 function Send-GroupInput([int] $processId, [int] $second) {
-    $WM_MOUSEMOVE = 0x0200
-    $WM_LBUTTONUP = 0x0202
-    foreach ($window in @(Get-BarWindows $processId)) {
-        $rect = [Soak.Native+RECT]::new()
-        if (-not [Soak.Native]::GetClientRect($window, [ref] $rect)) {
-            continue
-        }
-        $scale  = [Soak.Native]::GetDpiForWindow($window) / 96.0
-        $y      = [int] (($rect.Bottom - $rect.Top) / 2)
-        $toggle = [int] (18 * $scale)
+    foreach ($row in @(Get-BarRows $processId)) {
+        $toggle = [int] (18 * $row.Scale)
         if ($second % $toggleEverySeconds -eq 1) {
-            Send-BarMouse $window $WM_LBUTTONUP $toggle $y
+            Send-BarMouse $row.Window $WM_LBUTTONUP $toggle $row.Y
         }
-        Send-BarMouse $window $WM_MOUSEMOVE ($toggle + [int] ((20 + ($second * 23) % 100) * $scale)) $y
+        Send-BarMouse $row.Window $WM_MOUSEMOVE ($toggle + [int] ((20 + ($second * 23) % 100) * $row.Scale)) $row.Y
     }
 }
 
@@ -265,6 +267,12 @@ function Get-Sample([System.Diagnostics.Process] $process, [System.Diagnostics.S
     }
 }
 
+# A custom module running command every second. Each argument is written into a Lua string as it is.
+function Format-CustomModule([string[]] $command, [int] $timeout, [string] $output) {
+    $arguments = ($command | ForEach-Object { "`"$_`"" }) -join ', '
+    return "{ type = `"custom`", command = { $arguments }, timeout = $timeout, output = `"$output`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
+}
+
 # A config with every GlazeWM module and a clock, cpu and memory ticking each second (cpu and memory in the stats group,
 # first on the left, which starts folded), plus the named optional modules:
 # the custom endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json, and the
@@ -275,12 +283,12 @@ function New-SoakConfig([string] $path, [int] $revision, [string[]] $optional) {
     $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
     $optionalModules = [ordered]@{
         # Prints until the output cap kills it, every second.
-        endless = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`" }, timeout = 5, output = `"text`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
+        endless = Format-CustomModule @($cmd, '/c', 'for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx') 5 'text'
         # Outlives its timeout, with a child of its own, every second.
-        hang    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"$ping -n 30 127.0.0.1`" }, timeout = 1, output = `"text`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
-        fail    = "{ type = `"custom`", command = { `"$cmd`", `"/c`", `"exit 3`" }, timeout = 5, output = `"text`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
+        hang    = Format-CustomModule @($cmd, '/c', "$ping -n 30 127.0.0.1") 1 'text'
+        fail    = Format-CustomModule @($cmd, '/c', 'exit 3') 5 'text'
         # A process slow to start, printing JSON. cmd.exe would keep the backslashes of escaped quotes.
-        json    = "{ type = `"custom`", command = { `"$powershell`", `"-NoProfile`", `"-Command`", `"'{\`"text\`":\`"ok\`",\`"tooltip\`":\`"line\`",\`"alert\`":true}'`" }, timeout = 5, output = `"json`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
+        json    = Format-CustomModule @($powershell, '-NoProfile', '-Command', '''{\"text\":\"ok\",\"tooltip\":\"line\",\"alert\":true}''') 5 'json'
         tray    = '{ type = "tray", icon = ">" }'
     }
     $shown       = @($optionalModules.Keys | Where-Object { $_ -in $optional })

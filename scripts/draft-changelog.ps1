@@ -18,21 +18,19 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'ChangelogSection.ps1')
+. (Join-Path $PSScriptRoot 'read-release-notes.ps1')
+. (Join-Path $PSScriptRoot 'vs-dev-shell.ps1')
 Assert-Version $Version
 
 $repoRoot  = Split-Path -Parent $PSScriptRoot
 $changelog = Join-Path $repoRoot 'CHANGELOG.md'
-if ($null -ne (Get-ChangelogSection $changelog $Version)) {
+if ($null -ne (Get-ReleaseNotes $changelog $Version)) {
     throw "CHANGELOG.md already has a section for $Version"
 }
 
 Push-Location $repoRoot
 try {
-    $subjects = @(git log --no-merges --reverse --format=%s "$From..HEAD")
-    if ($LASTEXITCODE -ne 0) {
-        throw "git log $From..HEAD failed with exit code $LASTEXITCODE"
-    }
+    $subjects = @(Invoke-Checked "git log $From..HEAD" { git log --no-merges --reverse --format=%s "$From..HEAD" })
 } finally {
     Pop-Location
 }
@@ -42,12 +40,9 @@ if ($subjects.Count -eq 0) {
 
 $lines = @(Get-Content $changelog)
 # The section goes above the newest one, or after the header when there is none yet.
-$insertAt = $lines.Count
-for ($i = 0; $i -lt $lines.Count; $i++) {
-    if ($lines[$i] -match '^## ') {
-        $insertAt = $i
-        break
-    }
+$insertAt = Find-Line $lines '^## ' 0
+if ($insertAt -lt 0) {
+    $insertAt = $lines.Count
 }
 $section = @("## $Version ($(Get-Date -Format 'yyyy-MM-dd'))", '') + @($subjects | ForEach-Object { "- $($_.Trim())" }) + @('')
 $before  = if ($insertAt -gt 0) { @($lines[0..($insertAt - 1)]) } else { @() }

@@ -1,12 +1,19 @@
 <#
 .SYNOPSIS
-Dot-source to get Enter-Vs2022DevShell, which puts the VS 2022 x64 toolchain first on PATH for this session.
-
-.DESCRIPTION
-CMake and Ninja are taken from Visual Studio as well, ahead of anything else on PATH: another CMake, such as MSYS2's,
-can carry its own curl CA bundle and fail FetchContent downloads over HTTPS.
+Dot-source to get Enter-Vs2022DevShell, which puts the VS 2022 x64 toolchain first on PATH for this session, and
+Invoke-Checked, which fails on a native command's nonzero exit.
 #>
 
+# Runs a native command and throws when it exits nonzero. Its output passes through.
+function Invoke-Checked([string] $what, [scriptblock] $command) {
+    & $command
+    if ($LASTEXITCODE -ne 0) {
+        throw "$what failed with exit code $LASTEXITCODE"
+    }
+}
+
+# Returns the install's path. CMake and Ninja are taken from Visual Studio as well, ahead of anything else on PATH:
+# another CMake, such as MSYS2's, can carry its own curl CA bundle and fail FetchContent downloads over HTTPS.
 function Enter-Vs2022DevShell {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path $vswhere)) {
