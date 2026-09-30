@@ -1,4 +1,4 @@
-name: Unit and config tests
+name: Unit tests
 
 on: workflow_dispatch
 
@@ -15,6 +15,6 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - name: unit and config tests
+      - name: unit tests
         shell: pwsh
         run: ./scripts/run-unit-tests.ps1

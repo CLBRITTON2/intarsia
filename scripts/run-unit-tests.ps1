@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Builds the debug preset and runs the unit and config tests through ctest. The integration tests run apart, through
+Builds the debug preset and runs the unit tests through ctest. The integration tests run apart, through
 scripts/run-integration-tests.ps1.
 #>
 Set-StrictMode -Version Latest
