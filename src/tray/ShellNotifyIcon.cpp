@@ -287,7 +287,7 @@ bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
     std::shared_ptr<const IconPixels> pixels;
     if ((message.flags & NIF_ICON) != 0 && message.icon != 0) {
         try {
-            pixels = std::make_shared<const IconPixels>(IconToPixels(IntToPointer<std::remove_pointer_t<HICON>>(message.icon)));
+            pixels = std::make_shared<const IconPixels>(IconToPixels(*_imaging.Get(), IntToPointer<std::remove_pointer_t<HICON>>(message.icon)));
             _iconLog.Succeeded();
         } catch (const Win32Error& error) {
             // The icon stays without pixels, and so hidden, until the app sets one that reads.
@@ -380,8 +380,10 @@ void ShellNotifyIcon::Run(std::promise<void>& ready) {
     const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
     try {
         ThrowIfFailed(initialized, "CoInitializeEx(tray)");
-        _window = CreateTrayWindow(_windowClass, WindowProc, this);
+        _imaging = CreateImagingFactory();
+        _window  = CreateTrayWindow(_windowClass, WindowProc, this);
     } catch (...) {
+        _imaging.Reset();
         if (SUCCEEDED(initialized)) {
             CoUninitialize();
         }
@@ -400,6 +402,7 @@ void ShellNotifyIcon::Run(std::promise<void>& ready) {
     } catch (...) {
         DestroyWindow(_window);
         UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
+        _imaging.Reset();
         CoUninitialize();
         ready.set_exception(std::current_exception());
         return;
@@ -409,6 +412,7 @@ void ShellNotifyIcon::Run(std::promise<void>& ready) {
     } catch (...) { Fail(std::current_exception()); }
     DestroyWindow(_window);
     UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
+    _imaging.Reset();
     CoUninitialize();
 }
 

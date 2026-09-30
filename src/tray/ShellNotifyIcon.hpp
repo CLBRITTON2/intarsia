@@ -6,7 +6,9 @@
 #include "tray/ITray.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 
+#include <wincodec.h>
 #include <windows.h>
+#include <wrl/client.h>
 
 #include <cstdint>
 #include <exception>
@@ -83,13 +85,14 @@ class ShellNotifyIcon final : public ITray {
     FailureLog               _hoverLog{"tray"};
     FailureLog               _cursorLog{"tray"};
     // The tray thread's alone.
-    HWND       _window   = nullptr;
-    HWND       _explorer = nullptr;
-    FailureLog _messageLog{"tray"};
-    FailureLog _iconLog{"tray"};
-    FailureLog _ownerLog{"tray"};
-    FailureLog _forwardLog{"tray"};
-    FailureLog _rectLog{"tray"};
+    HWND                                       _window   = nullptr;
+    HWND                                       _explorer = nullptr;
+    Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging; // released before the thread's CoUninitialize
+    FailureLog                                 _messageLog{"tray"};
+    FailureLog                                 _iconLog{"tray"};
+    FailureLog                                 _ownerLog{"tray"};
+    FailureLog                                 _forwardLog{"tray"};
+    FailureLog                                 _rectLog{"tray"};
     // Guards _icons, _views and _error.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;

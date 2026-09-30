@@ -53,15 +53,19 @@ namespace {
 
 } // namespace
 
-IconPixels IconToPixels(HICON icon) {
+ComPtr<IWICImagingFactory> CreateImagingFactory() {
+    ComPtr<IWICImagingFactory> imaging;
+    ThrowIfFailed(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&imaging)), "CoCreateInstance(CLSID_WICImagingFactory)");
+    return imaging;
+}
+
+IconPixels IconToPixels(IWICImagingFactory& imaging, HICON icon) {
     const IconSize size = ReadIconSize(icon);
     RequireReadableSize(size.width, size.height);
-    ComPtr<IWICImagingFactory> factory;
-    ThrowIfFailed(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)), "CoCreateInstance(CLSID_WICImagingFactory)");
     ComPtr<IWICBitmap> bitmap;
-    ThrowIfFailed(factory->CreateBitmapFromHICON(icon, &bitmap), "IWICImagingFactory::CreateBitmapFromHICON");
+    ThrowIfFailed(imaging.CreateBitmapFromHICON(icon, &bitmap), "IWICImagingFactory::CreateBitmapFromHICON");
     ComPtr<IWICFormatConverter> converter;
-    ThrowIfFailed(factory->CreateFormatConverter(&converter), "IWICImagingFactory::CreateFormatConverter");
+    ThrowIfFailed(imaging.CreateFormatConverter(&converter), "IWICImagingFactory::CreateFormatConverter");
     ThrowIfFailed(converter->Initialize(bitmap.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom),
                   "IWICFormatConverter::Initialize");
 

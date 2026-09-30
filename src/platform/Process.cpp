@@ -318,7 +318,7 @@ void RestrictDllSearchToSystem32() {
     }
 }
 
-Launcher::Launcher() : _queue(kMaxQueuedLaunches, Start) {}
+Launcher::Launcher() : _queue(kMaxQueuedLaunches, [] { return WorkQueue<Command>::Process(Start); }) {}
 
 void Launcher::Launch(const Command& command) {
     if (!_queue.Push(command)) {

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -17,6 +18,34 @@ namespace {
     constexpr std::uint32_t kIconTimeoutMs = 100;
     // Windows appear a few at a time, so a full queue means a burst: the rest are asked for again on the next layout.
     constexpr size_t kMaxQueuedReads = 64;
+
+    // The reader thread's COM apartment and WIC factory, made and ended on that thread. Without them the thread reads
+    // no icons, which is logged once.
+    class ReaderApartment {
+      public:
+        ReaderApartment() : _initialized(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE)) {
+            try {
+                ThrowIfFailed(_initialized, "CoInitializeEx(window icons)");
+                _imaging = CreateImagingFactory();
+            } catch (const Win32Error& error) { Log(LogLevel::Error, "window_icons", "imaging_unavailable", {{.key = "reason", .value = error.what()}}); }
+        }
+        ~ReaderApartment() {
+            _imaging.Reset();
+            if (SUCCEEDED(_initialized)) {
+                CoUninitialize();
+            }
+        }
+        ReaderApartment(const ReaderApartment&)               = delete;
+        ReaderApartment&    operator=(const ReaderApartment&) = delete;
+
+        IWICImagingFactory* Imaging() const {
+            return _imaging.Get();
+        }
+
+      private:
+        HRESULT                                    _initialized;
+        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging;
+    };
 
 } // namespace
 
@@ -37,7 +66,10 @@ HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
 }
 
 WindowIcons::WindowIcons(ChangeSignal& changes, std::chrono::milliseconds retryAfter) :
-    _changes(changes), _retryAfter(retryAfter), _reader(kMaxQueuedReads, [this](const std::intptr_t& window) { Read(window); }) {}
+    _changes(changes), _retryAfter(retryAfter), _reader(kMaxQueuedReads, [this] {
+        auto apartment = std::make_shared<ReaderApartment>();
+        return WorkQueue<std::intptr_t>::Process([this, apartment](const std::intptr_t& window) { Read(apartment->Imaging(), window); });
+    }) {}
 
 std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
     {
@@ -64,20 +96,15 @@ void WindowIcons::ForgetClosed() {
 }
 
 // Runs on the reader thread, so failures are logged: the window then shows no icon until a retry finds one.
-void WindowIcons::Read(std::intptr_t window) {
+void WindowIcons::Read(IWICImagingFactory* imaging, std::intptr_t window) {
     std::shared_ptr<const IconPixels> pixels;
-    // WIC needs an apartment on the calling thread.
-    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
     try {
-        HICON icon = WindowIcon(IntToPointer<std::remove_pointer_t<HWND>>(window), kIconTimeoutMs);
+        HICON icon = imaging != nullptr ? WindowIcon(IntToPointer<std::remove_pointer_t<HWND>>(window), kIconTimeoutMs) : nullptr;
         if (icon != nullptr) {
-            pixels = std::make_shared<const IconPixels>(IconToPixels(icon));
+            pixels = std::make_shared<const IconPixels>(IconToPixels(*imaging, icon));
         }
     } catch (const Win32Error& error) {
         Log(LogLevel::Warning, "window_icons", "read_failed", {{.key = "window", .value = std::to_string(window)}, {.key = "reason", .value = error.what()}});
-    }
-    if (SUCCEEDED(initialized)) {
-        CoUninitialize();
     }
     {
         const std::scoped_lock lock(_mutex);

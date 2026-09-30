@@ -12,13 +12,17 @@
 #include <thread>
 #include <utility>
 
-// A bounded queue drained in order by its own thread, for work the UI thread must not wait on. process runs on that
-// thread and must not throw: nothing there could catch it.
+// A bounded queue drained in order by its own thread, for work the UI thread must not wait on.
 template <typename Item>
 class WorkQueue {
   public:
-    WorkQueue(size_t capacity, std::function<void(const Item&)> process) :
-        _capacity(capacity), _process(std::move(process)), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(work queue stop)")),
+    using Process = std::function<void(const Item&)>;
+
+    // makeProcess runs first on the queue's thread, and the process it returns handles every item there and is destroyed
+    // there, so it can own what has to live on that thread (a COM apartment). Neither may throw: nothing there could
+    // catch it.
+    WorkQueue(size_t capacity, std::function<Process()> makeProcess) :
+        _capacity(capacity), _makeProcess(std::move(makeProcess)), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(work queue stop)")),
         _queuedEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(work queue queued)")), _thread([this] { Run(); }) {}
 
     // Stops after the item in progress: whatever is still queued is dropped.
@@ -45,6 +49,7 @@ class WorkQueue {
 
   private:
     void Run() {
+        const Process               process = _makeProcess();
         const std::array<HANDLE, 2> waits{_stopEvent.get(), _queuedEvent.get()};
         while (WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE) == WAIT_OBJECT_0 + 1) {
             while (WaitForSingleObject(_stopEvent.get(), 0) == WAIT_TIMEOUT) {
@@ -52,7 +57,7 @@ class WorkQueue {
                 if (!item.has_value()) {
                     break;
                 }
-                _process(*item);
+                process(*item);
             }
         }
     }
@@ -67,12 +72,12 @@ class WorkQueue {
         return item;
     }
 
-    size_t                           _capacity;
-    std::function<void(const Item&)> _process;
-    UniqueHandle                     _stopEvent;
-    UniqueHandle                     _queuedEvent;
-    std::mutex                       _mutex;
-    std::deque<Item>                 _queue;
+    size_t                   _capacity;
+    std::function<Process()> _makeProcess;
+    UniqueHandle             _stopEvent;
+    UniqueHandle             _queuedEvent;
+    std::mutex               _mutex;
+    std::deque<Item>         _queue;
     // Declared last so every member above exists before the thread starts.
     std::thread _thread;
 };

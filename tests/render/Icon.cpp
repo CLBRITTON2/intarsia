@@ -30,48 +30,60 @@ namespace {
         return icon;
     }
 
+    // A COM apartment and a WIC factory for the test's thread, as a thread that reads icons holds them.
+    class IconReading : public testing::Test {
+      protected:
+        void SetUp() override {
+            ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
+            _imaging = CreateImagingFactory();
+        }
+        void TearDown() override {
+            _imaging.Reset();
+            CoUninitialize();
+        }
+
+        IWICImagingFactory& Imaging() const {
+            return *_imaging.Get();
+        }
+
+      private:
+        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging;
+    };
+
 } // namespace
 
-TEST(Icon, IconToPixelsGivesPremultipliedPixelsAtTheIconSize) {
-    ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
-    const IconPixels pixels = IconToPixels(LoadIconW(nullptr, IDI_APPLICATION));
-    CoUninitialize();
+TEST_F(IconReading, IconToPixelsGivesPremultipliedPixelsAtTheIconSize) {
+    const IconPixels pixels = IconToPixels(Imaging(), LoadIconW(nullptr, IDI_APPLICATION));
     EXPECT_GT(pixels.width, 0u);
     EXPECT_GT(pixels.height, 0u);
     EXPECT_EQ(pixels.pbgra.size(), static_cast<size_t>(pixels.width) * pixels.height * 4);
 }
 
 // Any process can hand the tray an icon of any size, and each would be held in full by every bar.
-TEST(Icon, IconsLargerThanTheCapAreRefused) {
-    ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
+TEST_F(IconReading, IconsLargerThanTheCapAreRefused) {
     HICON largest = BlankIcon(static_cast<std::int32_t>(kMaxIconSide));
     HICON tooBig  = BlankIcon(static_cast<std::int32_t>(kMaxIconSide) + 1);
     ASSERT_NE(largest, nullptr);
     ASSERT_NE(tooBig, nullptr);
-    EXPECT_EQ(IconToPixels(largest).width, kMaxIconSide);
-    EXPECT_THROW(IconToPixels(tooBig), Win32Error);
+    EXPECT_EQ(IconToPixels(Imaging(), largest).width, kMaxIconSide);
+    EXPECT_THROW(IconToPixels(Imaging(), tooBig), Win32Error);
     DestroyIcon(largest);
     DestroyIcon(tooBig);
-    CoUninitialize();
 }
 
-TEST(Icon, MonochromeIconsAreMeasuredByHalfTheirMask) {
-    ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
+TEST_F(IconReading, MonochromeIconsAreMeasuredByHalfTheirMask) {
     HICON largest = MonochromeIcon(static_cast<std::int32_t>(kMaxIconSide));
     HICON tooBig  = MonochromeIcon(static_cast<std::int32_t>(kMaxIconSide) + 1);
     ASSERT_NE(largest, nullptr);
     ASSERT_NE(tooBig, nullptr);
-    const IconPixels pixels = IconToPixels(largest);
+    const IconPixels pixels = IconToPixels(Imaging(), largest);
     EXPECT_EQ(pixels.width, kMaxIconSide);
     EXPECT_EQ(pixels.height, kMaxIconSide);
-    EXPECT_THROW(IconToPixels(tooBig), Win32Error);
+    EXPECT_THROW(IconToPixels(Imaging(), tooBig), Win32Error);
     DestroyIcon(largest);
     DestroyIcon(tooBig);
-    CoUninitialize();
 }
 
-TEST(Icon, AHandleThatIsNoIconIsRefused) {
-    ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
-    EXPECT_THROW(IconToPixels(nullptr), Win32Error);
-    CoUninitialize();
+TEST_F(IconReading, AHandleThatIsNoIconIsRefused) {
+    EXPECT_THROW(IconToPixels(Imaging(), nullptr), Win32Error);
 }

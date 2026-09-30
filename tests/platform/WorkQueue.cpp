@@ -4,24 +4,34 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
 
+namespace {
+
+    // A makeProcess that hands the queue process as it is.
+    std::function<WorkQueue<std::int32_t>::Process()> Handling(const WorkQueue<std::int32_t>::Process& process) {
+        return [process] { return process; };
+    }
+
+} // namespace
+
 TEST(WorkQueue, ProcessesItemsInOrder) {
     std::mutex                mutex;
     std::vector<std::int32_t> processed;
     std::promise<void>        done;
     {
-        WorkQueue<std::int32_t> queue(8, [&](const std::int32_t& item) {
-            const std::scoped_lock lock(mutex);
-            processed.push_back(item);
-            if (item == 3) {
-                done.set_value();
-            }
-        });
+        WorkQueue<std::int32_t> queue(8, Handling([&](const std::int32_t& item) {
+                                          const std::scoped_lock lock(mutex);
+                                          processed.push_back(item);
+                                          if (item == 3) {
+                                              done.set_value();
+                                          }
+                                      }));
         for (std::int32_t item = 1; item <= 3; ++item) {
             ASSERT_TRUE(queue.Push(item));
         }
@@ -34,12 +44,12 @@ TEST(WorkQueue, RejectsAnItemPastCapacity) {
     std::promise<void>       started;
     std::promise<void>       release;
     const std::shared_future released = release.get_future().share();
-    WorkQueue<std::int32_t>  queue(2, [&](const std::int32_t& item) {
-        if (item == 0) {
-            started.set_value();
-            released.wait();
-        }
-    });
+    WorkQueue<std::int32_t>  queue(2, Handling([&](const std::int32_t& item) {
+                                      if (item == 0) {
+                                          started.set_value();
+                                          released.wait();
+                                      }
+                                  }));
     ASSERT_TRUE(queue.Push(0));
     started.get_future().wait();
     EXPECT_TRUE(queue.Push(1));
@@ -58,18 +68,18 @@ TEST(WorkQueue, StopsAfterTheItemInProgressAndDropsTheRest) {
     std::promise<void>        secondStarted;
     std::promise<void>        secondRelease;
     const std::shared_future  secondReleased = secondRelease.get_future().share();
-    auto                      queue          = std::make_unique<WorkQueue<std::int32_t>>(8, [&](const std::int32_t& item) {
-        if (item == 0) {
-            firstStarted.set_value();
-            firstReleased.wait();
-        }
-        if (item == 1) {
-            secondStarted.set_value();
-            secondReleased.wait();
-        }
-        const std::scoped_lock lock(mutex);
-        processed.push_back(item);
-    });
+    auto                      queue          = std::make_unique<WorkQueue<std::int32_t>>(8, Handling([&](const std::int32_t& item) {
+                                                               if (item == 0) {
+                                                                   firstStarted.set_value();
+                                                                   firstReleased.wait();
+                                                               }
+                                                               if (item == 1) {
+                                                                   secondStarted.set_value();
+                                                                   secondReleased.wait();
+                                                               }
+                                                               const std::scoped_lock lock(mutex);
+                                                               processed.push_back(item);
+                                                           }));
     // Item 0 holds the thread so 1 to 3 wait together, then item 1 holds it while the queue stops.
     ASSERT_TRUE(queue->Push(0));
     firstStarted.get_future().wait();
@@ -85,4 +95,45 @@ TEST(WorkQueue, StopsAfterTheItemInProgressAndDropsTheRest) {
     secondRelease.set_value();
     stopped.get();
     EXPECT_EQ(processed, (std::vector<std::int32_t>{0, 1}));
+}
+
+namespace {
+
+    // Notes the thread it is destroyed on.
+    class ThreadNoter {
+      public:
+        explicit ThreadNoter(std::thread::id* destroyedOn) : _destroyedOn(destroyedOn) {}
+        ~ThreadNoter() {
+            *_destroyedOn = std::this_thread::get_id();
+        }
+        ThreadNoter(const ThreadNoter&)            = delete;
+        ThreadNoter& operator=(const ThreadNoter&) = delete;
+
+      private:
+        std::thread::id* _destroyedOn;
+    };
+
+} // namespace
+
+// A process can own what is bound to a thread (a COM apartment), so it is made and destroyed where the items run.
+TEST(WorkQueue, MakesAndDestroysItsProcessOnItsOwnThread) {
+    std::thread::id    madeOn;
+    std::thread::id    processedOn;
+    std::thread::id    destroyedOn;
+    std::promise<void> done;
+    {
+        WorkQueue<std::int32_t> queue(8, [&] {
+            madeOn     = std::this_thread::get_id();
+            auto noter = std::make_shared<ThreadNoter>(&destroyedOn);
+            return WorkQueue<std::int32_t>::Process([&processedOn, &done, noter](const std::int32_t&) {
+                processedOn = std::this_thread::get_id();
+                done.set_value();
+            });
+        });
+        ASSERT_TRUE(queue.Push(1));
+        done.get_future().wait();
+    }
+    EXPECT_NE(madeOn, std::this_thread::get_id());
+    EXPECT_EQ(madeOn, processedOn);
+    EXPECT_EQ(destroyedOn, processedOn);
 }

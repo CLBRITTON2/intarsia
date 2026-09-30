@@ -40,7 +40,8 @@ class WindowIcons {
         std::optional<std::chrono::steady_clock::time_point> retryAt;
     };
 
-    void                           Read(std::intptr_t window);
+    // Null imaging reads nothing: the reader thread could not set up WIC.
+    void                           Read(IWICImagingFactory* imaging, std::intptr_t window);
 
     ChangeSignal&                  _changes;
     std::chrono::milliseconds      _retryAfter;

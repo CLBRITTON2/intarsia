@@ -31,7 +31,9 @@ GlazeWm::GlazeWm(ChangeSignal& changes, std::uint16_t port, std::unique_ptr<Nati
               .bindingModes = {},
               .direction    = std::nullopt,
               .status       = WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"}},
-    _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands, [this](const std::string& command) { SendCommand(command); })), _receiver([this] { Receive(); }) {}
+    _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands,
+                                                     [this] { return WorkQueue<std::string>::Process([this](const std::string& command) { SendCommand(command); }); })),
+    _receiver([this] { Receive(); }) {}
 
 // Stops the sender first so no send is pending, then closes the socket: WinHttpWebSocketClose cancels the receiver's
 // pending receive, which is the documented way to unblock it.
