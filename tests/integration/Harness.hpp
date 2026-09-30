@@ -59,6 +59,8 @@ namespace integration {
     // Prints "<local time> event=<event> <fields>" to stdout, the fields as key=value pairs.
     void Log(std::string_view event, std::string_view fields);
 
+    // Where NewWorkDirectory(name), and so a RunningBar named name, keeps its files, known before either makes it.
+    std::filesystem::path WorkDirectoryPath(std::string_view name);
     // A new empty directory under the temp directory, kept after the test so its logs can be read.
     std::filesystem::path    NewWorkDirectory(std::string_view name);
     std::uint16_t            FreePort();
@@ -88,8 +90,15 @@ namespace integration {
     // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
     Capture CaptureScreenOver(HWND window);
     size_t  CountPixels(const Capture& capture, std::uint32_t rgb);
+    // Columns from the leftmost pixel in rgb to the rightmost, both counted, or nullopt when there are none.
+    std::optional<std::int32_t> ColumnSpan(const Capture& capture, std::uint32_t rgb);
     // The mean column of the pixels in rgb, or nullopt when there are none.
     std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb);
+
+    // argv_recorder.exe (tests/integration/ArgvRecorder.cpp), for a config's actions and custom commands to name.
+    std::filesystem::path ArgvRecorderPath();
+    // text as a Lua long string, which takes backslashes and quotes as they are.
+    std::string LuaString(std::string_view text);
 
     // Each run of equal lines folded into one.
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);

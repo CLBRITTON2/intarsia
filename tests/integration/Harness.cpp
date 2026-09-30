@@ -254,8 +254,12 @@ namespace integration {
         DestroyWindow(_window);
     }
 
+    std::filesystem::path WorkDirectoryPath(std::string_view name) {
+        return std::filesystem::temp_directory_path() / std::format("intarsia-integration-{}-{}", name, GetCurrentProcessId());
+    }
+
     std::filesystem::path NewWorkDirectory(std::string_view name) {
-        const std::filesystem::path work = std::filesystem::temp_directory_path() / std::format("intarsia-integration-{}-{}", name, GetCurrentProcessId());
+        const std::filesystem::path work = WorkDirectoryPath(name);
         std::filesystem::remove_all(work);
         std::filesystem::create_directories(work);
         return work;
@@ -394,6 +398,22 @@ namespace integration {
         return static_cast<size_t>(std::ranges::count(capture.pixels, rgb));
     }
 
+    std::optional<std::int32_t> ColumnSpan(const Capture& capture, std::uint32_t rgb) {
+        std::optional<std::int32_t> leftmost;
+        std::optional<std::int32_t> rightmost;
+        for (size_t index = 0; index < capture.pixels.size(); ++index) {
+            if (capture.pixels[index] == rgb) {
+                const auto column = static_cast<std::int32_t>(index % static_cast<size_t>(capture.width));
+                leftmost          = std::min(leftmost.value_or(column), column);
+                rightmost         = std::max(rightmost.value_or(column), column);
+            }
+        }
+        if (!leftmost.has_value() || !rightmost.has_value()) {
+            return std::nullopt;
+        }
+        return *rightmost - *leftmost + 1;
+    }
+
     std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb) {
         double sum   = 0;
         size_t count = 0;
@@ -407,6 +427,14 @@ namespace integration {
             return std::nullopt;
         }
         return sum / static_cast<double>(count);
+    }
+
+    std::filesystem::path ArgvRecorderPath() {
+        return Executable(INTARSIA_ARGV_RECORDER).make_preferred();
+    }
+
+    std::string LuaString(std::string_view text) {
+        return std::format("[==[{}]==]", text);
     }
 
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
