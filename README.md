@@ -59,7 +59,8 @@ window that retitles itself about 60 times a second (`tests/soak/WindowSender.cp
 modules run commands that print past the output cap, outlive their timeout and fail. The bar is sampled every second
 and a scenario fails if it crashes, stops answering, logs a fatal error, leaks memory, handles, GDI or USER objects or
 threads, idles above 3% of a core, or does not exit cleanly. `-Scenario` picks scenarios and `-Seconds` sets how long
-each runs.
+each runs. A run of 600 seconds or more judges growth by its trend per hour over the run's second half instead, as in
+`-Seconds 3600 -Scenario normal,tray` for an hour-long check.
 
 ## Lint
 

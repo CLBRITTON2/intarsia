@@ -10,7 +10,7 @@ answering, logs a fatal error, grows past the thresholds after warming up, or do
 warmed up it also fails when a monitor lacks exactly one bar along its top edge.
 
 The bar's tray always runs under a class of its own (--tray-class), so no scenario takes the desktop's tray icons. The
-tray scenario floods it from build\debug\tray_sender.exe (tests/soak/TraySender.cpp), restarted every 10 s so all
+tray scenario feeds it from build\debug\tray_sender.exe (tests/soak/TraySender.cpp), restarted every 10 s so all
 its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons, and folds
 and unfolds a group of modules.
 
@@ -44,7 +44,9 @@ $trayClass = 'IntarsiaSoakTray'
 $senderRestartSeconds = 10
 $toggleEverySeconds   = 2
 
-# Growth allowed between the warmed-up baseline and the end of a scenario.
+# Growth allowed between the warmed-up baseline and the end of a scenario, or, in a run of $longRunSeconds or more,
+# per hour of the run's second half.
+$longRunSeconds     = 600
 $maxPrivateGrowthMB = 16
 $maxHandleGrowth    = 64
 $maxGuiObjectGrowth = 32
@@ -237,9 +239,23 @@ function Test-BarGeometry([int] $processId) {
     return $failures
 }
 
-function Get-Sample([System.Diagnostics.Process] $process) {
+# The least squares slope of one sampled property against time, scaled to an hour.
+function Get-GrowthPerHour([object[]] $samples, [string] $property) {
+    $meanTime  = ($samples | Measure-Object -Property Seconds -Average).Average
+    $meanValue = ($samples | Measure-Object -Property $property -Average).Average
+    $covariance = 0.0
+    $variance   = 0.0
+    foreach ($sample in $samples) {
+        $covariance += ($sample.Seconds - $meanTime) * ($sample.$property - $meanValue)
+        $variance   += [math]::Pow($sample.Seconds - $meanTime, 2)
+    }
+    return $covariance / $variance * 3600
+}
+
+function Get-Sample([System.Diagnostics.Process] $process, [System.Diagnostics.Stopwatch] $clock) {
     $process.Refresh()
     return [pscustomobject]@{
+        Seconds   = $clock.Elapsed.TotalSeconds
         PrivateMB = [math]::Round($process.PrivateMemorySize64 / 1MB, 1)
         Handles   = $process.HandleCount
         Gdi       = [Soak.Native]::GetGuiResources($process.Handle, 0)
@@ -384,6 +400,7 @@ function Invoke-Scenario([string] $name) {
     $failures   = [System.Collections.Generic.List[string]]::new()
     $samples    = [System.Collections.Generic.List[object]]::new()
     $cpuPercent = $null
+    $clock      = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         $server = Start-Process $serverExe -ArgumentList '--port', $port, '--scenario', $serverName -PassThru -WindowStyle Hidden `
             -RedirectStandardOutput (Join-Path $work 'server.out') -RedirectStandardError (Join-Path $work 'server.err')
@@ -454,7 +471,7 @@ function Invoke-Scenario([string] $name) {
                     break
                 }
             }
-            $samples.Add((Get-Sample $bar))
+            $samples.Add((Get-Sample $bar $clock))
         }
 
         if ($failures.Count -eq 0 -and $samples.Count -le $warmupSeconds + 5) {
@@ -463,11 +480,21 @@ function Invoke-Scenario([string] $name) {
         if ($failures.Count -eq 0) {
             $baseline = $samples[$warmupSeconds]
             $final    = $samples[$samples.Count - 1]
-            if ($final.PrivateMB - $baseline.PrivateMB -gt $maxPrivateGrowthMB) { $failures.Add("private memory grew $($baseline.PrivateMB) to $($final.PrivateMB) MB") }
-            if ($final.Handles - $baseline.Handles -gt $maxHandleGrowth) { $failures.Add("handles grew $($baseline.Handles) to $($final.Handles)") }
-            if ($final.Gdi - $baseline.Gdi -gt $maxGuiObjectGrowth) { $failures.Add("GDI objects grew $($baseline.Gdi) to $($final.Gdi)") }
-            if ($final.User - $baseline.User -gt $maxGuiObjectGrowth) { $failures.Add("USER objects grew $($baseline.User) to $($final.User)") }
-            if ($final.Threads - $baseline.Threads -gt $maxThreadGrowth) { $failures.Add("threads grew $($baseline.Threads) to $($final.Threads)") }
+            if ($Seconds -ge $longRunSeconds) {
+                # The first half's growth is caches filling, and a leak keeps growing through the second.
+                $settled = $samples.GetRange([int] ($samples.Count / 2), $samples.Count - [int] ($samples.Count / 2)).ToArray()
+                $limits  = [ordered]@{ PrivateMB = $maxPrivateGrowthMB; Handles = $maxHandleGrowth; Gdi = $maxGuiObjectGrowth; User = $maxGuiObjectGrowth; Threads = $maxThreadGrowth }
+                foreach ($property in $limits.Keys) {
+                    $perHour = Get-GrowthPerHour $settled $property
+                    if ($perHour -gt $limits[$property]) { $failures.Add("$property grew $([math]::Round($perHour, 1)) an hour over the second half, past $($limits[$property])") }
+                }
+            } else {
+                if ($final.PrivateMB - $baseline.PrivateMB -gt $maxPrivateGrowthMB) { $failures.Add("private memory grew $($baseline.PrivateMB) to $($final.PrivateMB) MB") }
+                if ($final.Handles - $baseline.Handles -gt $maxHandleGrowth) { $failures.Add("handles grew $($baseline.Handles) to $($final.Handles)") }
+                if ($final.Gdi - $baseline.Gdi -gt $maxGuiObjectGrowth) { $failures.Add("GDI objects grew $($baseline.Gdi) to $($final.Gdi)") }
+                if ($final.User - $baseline.User -gt $maxGuiObjectGrowth) { $failures.Add("USER objects grew $($baseline.User) to $($final.User)") }
+                if ($final.Threads - $baseline.Threads -gt $maxThreadGrowth) { $failures.Add("threads grew $($baseline.Threads) to $($final.Threads)") }
+            }
             $cpuPercent = ($final.Cpu - $baseline.Cpu).TotalMilliseconds / (($samples.Count - 1 - $warmupSeconds) * 10.0)
             if ($name -eq 'idle' -and $cpuPercent -gt $maxIdleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU while nearly idle") }
             if ($name -eq 'retitle' -and $cpuPercent -gt $maxRetitleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU following retitles") }

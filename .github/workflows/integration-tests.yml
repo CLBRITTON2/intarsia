@@ -1,0 +1,15 @@
+name: Integration tests
+
+on: workflow_dispatch
+
+jobs:
+  integration-tests:
+    # windows-2025 carries Visual Studio 2026, and the scripts pin Visual Studio 2022 and its bundled LLVM.
+    runs-on: windows-2022
+    # A hung test would otherwise burn the six hour default of the account's Windows minutes.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: integration tests
+        shell: pwsh
+        run: ./scripts/integration.ps1

@@ -227,7 +227,7 @@ if(BUILD_TESTING)
   target_compile_options(test_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
   target_link_libraries(test_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
 
-  # The soak tests' tray flood, sending the tray the payloads apps do. It takes their layout from the core.
+  # The soak tests' tray apps, sending the tray what apps do at their rate. It takes the payload layout from the core.
   add_executable(soak_tray_sender tests/soak/TraySender.cpp)
   set_target_properties(soak_tray_sender PROPERTIES OUTPUT_NAME tray_sender)
   target_link_libraries(soak_tray_sender PRIVATE intarsia_core)
