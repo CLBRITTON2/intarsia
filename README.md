@@ -41,7 +41,8 @@ pwsh -File scripts/integration.ps1
 
 This runs the real bar against a test GlazeWM IPC server and judges it only by what it does outside its process, such
 as the commands the server receives for clicks along the bar. `tests/integration/` holds the harness and the cases.
-Run it from an interactive desktop session.
+Each step prints a line: the processes started, every command a sweep of clicks sent, pushed events, pixels found, the
+bar's exit code, and then the bar's log. Run it from an interactive desktop session.
 
 ## Stress tests
 

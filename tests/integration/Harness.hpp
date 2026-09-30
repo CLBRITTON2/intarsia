@@ -54,6 +54,9 @@ namespace integration {
         HWND _window;
     };
 
+    // Prints "<local time> event=<event> <fields>" to stdout, the fields as key=value pairs.
+    void Log(std::string_view event, std::string_view fields);
+
     // A new empty directory under the temp directory, kept after the test so its logs can be read.
     std::filesystem::path    NewWorkDirectory(std::string_view name);
     std::uint16_t            FreePort();
@@ -68,7 +71,8 @@ namespace integration {
     HWND PrimaryBarWindow(std::uint32_t processId);
 
     // Sends a left click every few pixels along the bar's middle, left to right, each handled before the next is sent.
-    void SweepClicks(HWND bar);
+    // The number of clicks sent.
+    std::uint32_t SweepClicks(HWND bar);
 
     // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
     struct Capture {
@@ -107,6 +111,10 @@ namespace integration {
         void PushFocus(size_t index);
 
       private:
+        // Sweeps once, logs each command it sent with how many clicks sent it, and returns them all.
+        std::vector<std::string> Sweep(std::uint32_t attempt) const;
+        // Prints the bar's log and every server's stderr, each line tagged with its file.
+        void                        PrintLogs() const;
         std::filesystem::path       ServerOutput(std::uint32_t start) const;
 
         std::filesystem::path       _work;

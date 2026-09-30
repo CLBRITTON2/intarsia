@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <format>
 #include <string_view>
 
 namespace {
@@ -43,4 +44,5 @@ TEST(Style, DrawsTheSectionBackgroundOnScreen) {
         },
         std::chrono::seconds(5)))
         << drawn << " pixels of the section color";
+    integration::Log("pixels_counted", std::format("color=#{:06x} count={}", kSectionColor, drawn));
 }

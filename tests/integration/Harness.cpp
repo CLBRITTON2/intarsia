@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <format>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <thread>
@@ -119,7 +120,30 @@ namespace integration {
             return std::filesystem::path(ToWide(path));
         }
 
+        std::int64_t MillisecondsSince(std::chrono::steady_clock::time_point start) {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+        }
+
+        std::string LogValue(std::string_view value) {
+            return std::format("\"{}\"", value);
+        }
+
+        std::string WindowHandle(HWND window) {
+            return std::format("{:#x}", reinterpret_cast<std::uintptr_t>(window));
+        }
+
+        std::string CommandText(const std::string& line) {
+            constexpr std::string_view kPrefix = "command ";
+            return line.substr(kPrefix.size());
+        }
+
     } // namespace
+
+    void Log(std::string_view event, std::string_view fields) {
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        std::cout << std::format("{:02}:{:02}:{:02}.{:03} event={} {}", now.wHour, now.wMinute, now.wSecond, now.wMilliseconds, event, fields) << std::endl;
+    }
 
     ChildProcess::ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
                                const std::filesystem::path& stderrPath) : _job(KillOnCloseJob()), _id(0) {
@@ -221,6 +245,7 @@ namespace integration {
         }
         // Minimized, so it counts as visible to the server without covering the desktop.
         ShowWindow(_window, SW_SHOWMINNOACTIVE);
+        Log("window_opened", std::format("title={} handle={}", LogValue(ToUtf8(title)), WindowHandle(_window)));
     }
 
     TestWindow::~TestWindow() {
@@ -287,19 +312,22 @@ namespace integration {
         return nullptr;
     }
 
-    void SweepClicks(HWND bar) {
+    std::uint32_t SweepClicks(HWND bar) {
         RECT client{};
         if (!GetClientRect(bar, &client)) {
             ThrowLastError("GetClientRect(bar)");
         }
         const std::int32_t middle = (client.bottom - client.top) / 2;
+        std::uint32_t      clicks = 0;
         for (std::int32_t x = client.left; x < client.right; x += kSweepStepPixels) {
             DWORD_PTR result = 0;
             // Sent, not posted, so the bar handles each click before the next and none waits in its queue.
             if (SendMessageTimeoutW(bar, WM_LBUTTONUP, 0, MAKELPARAM(x, middle), SMTO_ABORTIFHUNG, 1000, &result) == 0) {
                 ThrowLastError(std::format("SendMessageTimeoutW(WM_LBUTTONUP at {})", x));
             }
+            ++clicks;
         }
+        return clicks;
     }
 
     Capture CaptureScreenOver(HWND window) {
@@ -364,31 +392,58 @@ namespace integration {
     }
 
     RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style) : _work(NewWorkDirectory(testName)), _port(FreePort()), _serverStarts(0) {
+        Log("work_directory", std::format("path={}", LogValue(_work.string())));
         const std::filesystem::path configPath = _work / "config.lua";
         WriteText(configPath, config);
         WriteText(_work / "style.css", style);
         StartServer();
+        const auto started = std::chrono::steady_clock::now();
         _bar.emplace(Executable(INTARSIA_EXE),
                      std::vector<std::wstring>{L"--config", configPath.wstring(), L"--log", (_work / "intarsia-file.log").wstring(), L"--glazewm-port", std::to_wstring(_port),
                                                L"--tray-class", kTrayClass},
                      _work / "bar.out", _work / "bar.err");
+        Log("bar_started", std::format("pid={} program={}", _bar->Id(), LogValue(INTARSIA_EXE)));
         if (!Eventually([this] { return !LogLines("event=connected").empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
-            throw std::runtime_error(std::format("the bar did not connect and show a bar on the primary monitor within {} s (logs in {})", kStartLimit.count(), _work.string()));
+            PrintLogs();
+            throw std::runtime_error(
+                std::format("the bar did not connect and show a bar on the primary monitor within {} s (bar log {})", kStartLimit.count(), (_work / "bar.err").string()));
         }
+        RECT client{};
+        GetClientRect(PrimaryBar(), &client);
+        Log("bar_ready",
+            std::format("pid={} after_ms={} primary_bar={} size={}x{}", _bar->Id(), MillisecondsSince(started), WindowHandle(PrimaryBar()), client.right, client.bottom));
     }
 
     // A child left running is killed with its job as the members go.
     RunningBar::~RunningBar() {
         try {
             if (_bar.has_value()) {
-                const std::optional<std::uint32_t> code = _bar->Close(kExitLimit);
+                const auto                         closing = std::chrono::steady_clock::now();
+                const std::optional<std::uint32_t> code    = _bar->Close(kExitLimit);
                 if (!code.has_value()) {
-                    ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (logs in " << _work.string() << ")";
-                } else if (*code != 0) {
-                    ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (logs in " << _work.string() << ")";
+                    Log("bar_still_running", std::format("pid={} after_ms={}", _bar->Id(), MillisecondsSince(closing)));
+                    ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
+                } else {
+                    Log("bar_exited", std::format("pid={} code={} after_ms={}", _bar->Id(), *code, MillisecondsSince(closing)));
+                    if (*code != 0) {
+                        ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
+                    }
                 }
             }
+            PrintLogs();
         } catch (const std::exception& error) { ADD_FAILURE() << "closing the bar failed: " << error.what() << " (logs in " << _work.string() << ")"; }
+    }
+
+    void RunningBar::PrintLogs() const {
+        std::vector<std::filesystem::path> files{_work / "bar.err"};
+        for (std::uint32_t start = 1; start <= _serverStarts; ++start) {
+            files.push_back(_work / std::format("server-{}.err", start));
+        }
+        for (const std::filesystem::path& file : files) {
+            for (const std::string& line : ReadLines(file)) {
+                std::cout << file.filename().string() << "| " << line << std::endl;
+            }
+        }
     }
 
     HWND RunningBar::PrimaryBar() const {
@@ -407,24 +462,31 @@ namespace integration {
     }
 
     std::vector<std::string> RunningBar::CommandsFromSweep() const {
-        const auto count = [this] { return Commands().size(); };
         // Sweeps that run before the bar has the server's answers, or while it reconnects, send nothing, so they
         // repeat until one sends a command. The sweep after that one sees what the bar settled on.
-        const bool ready = Eventually(
-            [&] {
-                const size_t before = count();
-                SweepClicks(PrimaryBar());
-                return SettledCount(count) > before;
-            },
-            kStartLimit);
-        if (!ready) {
+        std::uint32_t attempt = 0;
+        if (!Eventually([&] { return !Sweep(++attempt).empty(); }, kStartLimit)) {
+            Log("sweeps_sent_nothing", std::format("attempts={} limit_s={}", attempt, kStartLimit.count()));
             return {};
         }
-        const size_t before = count();
-        SweepClicks(PrimaryBar());
+        return WithoutRepeats(Sweep(++attempt));
+    }
+
+    std::vector<std::string> RunningBar::Sweep(std::uint32_t attempt) const {
+        const auto          count   = [this] { return Commands().size(); };
+        const size_t        before  = count();
+        const auto          started = std::chrono::steady_clock::now();
+        const std::uint32_t clicks  = SweepClicks(PrimaryBar());
         SettledCount(count);
         const std::vector<std::string> commands = Commands();
-        return WithoutRepeats(std::vector<std::string>(commands.begin() + static_cast<std::ptrdiff_t>(before), commands.end()));
+        const std::vector<std::string> sent(commands.begin() + static_cast<std::ptrdiff_t>(before), commands.end());
+        Log("sweep", std::format("attempt={} clicks={} commands={} after_ms={}", attempt, clicks, sent.size(), MillisecondsSince(started)));
+        for (auto run = sent.begin(); run != sent.end();) {
+            const auto next = std::find_if(run, sent.end(), [&](const std::string& line) { return line != *run; });
+            Log("command_received", std::format("attempt={} text={} clicks={}", attempt, LogValue(CommandText(*run)), std::distance(run, next)));
+            run = next;
+        }
+        return sent;
     }
 
     std::vector<std::string> RunningBar::LogLines(std::string_view text) const {
@@ -435,31 +497,39 @@ namespace integration {
 
     void RunningBar::StopServer() {
         if (_server.has_value()) {
+            const std::uint32_t pid = _server->Id();
             _server->Kill();
             _server.reset();
+            Log("server_killed", std::format("pid={} start={}", pid, _serverStarts));
         }
     }
 
     // Waits for the server to listen, since the bar backs off for seconds after a refused connection.
     void RunningBar::StartServer() {
         ++_serverStarts;
+        const auto started = std::chrono::steady_clock::now();
         _server.emplace(Executable(INTARSIA_GLAZEWM_SERVER), std::vector<std::wstring>{L"--port", std::to_wstring(_port), L"--scenario", L"integration"},
                         ServerOutput(_serverStarts), _work / std::format("server-{}.err", _serverStarts));
         if (!Eventually([this] { return !ReadLines(ServerOutput(_serverStarts)).empty(); }, kStartLimit)) {
+            PrintLogs();
             throw std::runtime_error(std::format("the test GlazeWM server did not listen on port {} within {} s (logs in {})", _port, kStartLimit.count(), _work.string()));
         }
+        Log("server_listening", std::format("pid={} port={} start={} after_ms={}", _server->Id(), _port, _serverStarts, MillisecondsSince(started)));
     }
 
     void RunningBar::PushFocus(size_t index) {
         if (!_server.has_value()) {
             throw std::logic_error("the test GlazeWM server is stopped");
         }
-        const std::string pushed = std::format("pushed focus {}", index);
-        const size_t      before = static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed));
+        const std::string pushed  = std::format("pushed focus {}", index);
+        const size_t      before  = static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed));
+        const auto        started = std::chrono::steady_clock::now();
         _server->WriteLine(std::format("focus {}", index));
         if (!Eventually([&] { return static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed)) > before; }, kStartLimit)) {
+            PrintLogs();
             throw std::runtime_error(std::format("the test GlazeWM server did not push focus {} within {} s (logs in {})", index, kStartLimit.count(), _work.string()));
         }
+        Log("focus_pushed", std::format("index={} after_ms={}", index, MillisecondsSince(started)));
     }
 
     std::filesystem::path RunningBar::ServerOutput(std::uint32_t start) const {

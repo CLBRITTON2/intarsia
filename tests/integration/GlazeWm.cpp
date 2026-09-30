@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -102,9 +103,11 @@ TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
     integration::RunningBar bar("reconnect", kConfig, kStyle);
     bar.StopServer();
     EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=disconnected").empty(); }, std::chrono::seconds(5)));
+    integration::Log("bar_logged", std::format("text=event=disconnected lines={}", bar.LogLines("event=disconnected").size()));
 
     bar.StartServer();
     EXPECT_TRUE(integration::Eventually([&bar] { return bar.LogLines("event=connected").size() == 2; }, std::chrono::seconds(15)));
+    integration::Log("bar_logged", std::format("text=event=connected lines={}", bar.LogLines("event=connected").size()));
     EXPECT_THAT(bar.CommandsFromSweep(),
                 ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace", "command toggle-tiling-direction"));
 }
@@ -122,6 +125,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
         },
         std::chrono::seconds(5)))
         << "the first window's item never drew in the focused color";
+    integration::Log("focused_color_found", std::format("color=#{:06x} mean_column={:.1f}", kFocusedColor, firstColumn.value_or(-1)));
 
     bar.PushFocus(1);
     std::optional<double> secondColumn;
@@ -132,4 +136,5 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
         },
         std::chrono::seconds(5)))
         << "the focused color stayed at column " << firstColumn.value_or(-1) << ", now " << secondColumn.value_or(-1);
+    integration::Log("focused_color_found", std::format("color=#{:06x} mean_column={:.1f}", kFocusedColor, secondColumn.value_or(-1)));
 }
