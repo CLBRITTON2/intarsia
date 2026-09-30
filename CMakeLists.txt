@@ -200,7 +200,9 @@ if(BUILD_TESTING)
   # Winsock, BCrypt and CryptoAPI play the far end of a loopback connection in the WebSocket and peer tests.
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_WINDOWS_CONFIG="${CMAKE_SOURCE_DIR}/config/windows/config.lua"
-                                                     INTARSIA_GLAZEWM_CONFIG="${CMAKE_SOURCE_DIR}/config/glazewm/config.lua")
+                                                     INTARSIA_GLAZEWM_CONFIG="${CMAKE_SOURCE_DIR}/config/glazewm/config.lua"
+                                                     INTARSIA_PIPE_HOLDER="$<TARGET_FILE:test_pipe_holder>")
+  add_dependencies(intarsia_gtests test_pipe_holder)
   if(INTARSIA_PRECOMPILE_HEADERS)
     target_precompile_headers(intarsia_gtests PRIVATE ${INTARSIA_PRECOMPILED_HEADERS} <gmock/gmock.h> <gtest/gtest.h>)
   endif()
@@ -222,6 +224,12 @@ if(BUILD_TESTING)
   set_target_properties(integration_argv_recorder PROPERTIES OUTPUT_NAME argv_recorder)
   target_compile_definitions(integration_argv_recorder PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_compile_options(integration_argv_recorder PRIVATE /W4 /WX /permissive- /utf-8)
+
+  # The command the process tests capture to keep its output pipe open from outside its job.
+  add_executable(test_pipe_holder tests/support/PipeHolder.cpp)
+  set_target_properties(test_pipe_holder PROPERTIES OUTPUT_NAME pipe_holder)
+  target_compile_definitions(test_pipe_holder PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_compile_options(test_pipe_holder PRIVATE /W4 /WX /permissive- /utf-8)
 
   # The soak tests' IPC server (scripts/soak.ps1), named glazewm.exe because the bar's peer check requires it.
   add_executable(test_glazewm_server tests/support/GlazeWmServer.cpp)

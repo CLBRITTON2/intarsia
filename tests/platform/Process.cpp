@@ -10,6 +10,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -57,6 +58,37 @@ namespace {
     auto CommandErrorWith(std::string_view text) {
         return testing::ThrowsMessage<CommandError>(testing::HasSubstr(std::string(text)));
     }
+
+    // A process outside any job CaptureOutput makes, killed when this goes.
+    class OutsideProcess {
+      public:
+        OutsideProcess() {
+            const std::wstring  program = Ping().program.wstring();
+            std::wstring        line    = L"ping -n 60 127.0.0.1";
+            STARTUPINFOW        startup{.cb = sizeof(STARTUPINFOW)};
+            PROCESS_INFORMATION started{};
+            if (!CreateProcessW(program.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &started)) {
+                throw std::runtime_error("could not start the outside process");
+            }
+            _process = UniqueHandle(started.hProcess);
+            CloseHandle(started.hThread);
+            _id = started.dwProcessId;
+        }
+        ~OutsideProcess() {
+            TerminateProcess(_process.get(), 1);
+            WaitForSingleObject(_process.get(), INFINITE);
+        }
+        OutsideProcess(const OutsideProcess&)            = delete;
+        OutsideProcess& operator=(const OutsideProcess&) = delete;
+
+        DWORD           Id() const {
+            return _id;
+        }
+
+      private:
+        UniqueHandle _process;
+        DWORD        _id = 0;
+    };
 
     constexpr std::wstring_view kStubName = L"intarsia-path-stub";
 
@@ -130,6 +162,23 @@ TEST(Process, CaptureOutputStopsWhenCancelled) {
     const UniqueHandle cancel = NeverSignaled();
     SetEvent(cancel.get());
     EXPECT_THAT([&cancel] { return CaptureOutput(Ping(), std::chrono::seconds(10), 1024, cancel.get()); }, CommandErrorWith("cancelled"));
+}
+
+// The job cannot kill a process outside it, so only the timeout ends the read of a pipe such a process holds open.
+TEST(Process, CaptureOutputEndsAtItsTimeoutWhileAProcessOutsideTheJobHoldsItsOutput) {
+    std::future<std::string> captured;
+    std::future_status       status = std::future_status::timeout;
+    {
+        const OutsideProcess holder;
+        captured = std::async(std::launch::async, [&holder] {
+            return CaptureOutput(Command{.program = INTARSIA_PIPE_HOLDER, .arguments = {std::to_wstring(holder.Id())}}, std::chrono::milliseconds(300), 1024,
+                                 NeverSignaled().get());
+        });
+        status   = captured.wait_for(std::chrono::seconds(10));
+    }
+    // The holder is gone by now, so a read that ignored the timeout has ended too and get cannot hang.
+    EXPECT_EQ(status, std::future_status::ready);
+    EXPECT_THAT([&captured] { return captured.get(); }, CommandErrorWith("did not finish within 300ms"));
 }
 
 TEST(Process, CaptureOutputFailsPastTheOutputCap) {

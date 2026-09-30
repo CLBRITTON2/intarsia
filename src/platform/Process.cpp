@@ -17,6 +17,7 @@
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -112,6 +113,7 @@ namespace {
 
     struct Watchdog {
         HANDLE            job;
+        HANDLE            stopped; // manual reset, ends the read even while a process outside the job holds the pipe
         std::atomic<Stop> stop;
     };
 
@@ -120,6 +122,7 @@ namespace {
         auto* watchdog = static_cast<Watchdog*>(context);
         watchdog->stop.store(result == WAIT_TIMEOUT ? Stop::TimedOut : Stop::Cancelled);
         TerminateJobObject(watchdog->job, kKilledExitCode);
+        SetEvent(watchdog->stopped);
     }
 
     // Disarms first and waits out a callback already running, so the Watchdog it points at is never used after this.
@@ -142,19 +145,18 @@ namespace {
         UniqueHandle write;
     };
 
-    // The write end is inheritable, for the child's stdout. The read end stays with this process.
+    // A named pipe rather than CreatePipe's, whose read end cannot be overlapped, so a read can be abandoned while a
+    // process outside the job still holds the write end. The write end is inheritable, for the child's stdout. The
+    // read end stays with this process.
     Pipe OutputPipe() {
-        SECURITY_ATTRIBUTES inheritable{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
-        HANDLE              read  = nullptr;
-        HANDLE              write = nullptr;
-        if (!CreatePipe(&read, &write, &inheritable, 0)) {
-            ThrowLastError("CreatePipe(command output)");
-        }
-        Pipe pipe{.read = UniqueHandle(read), .write = UniqueHandle(write)};
-        if (!SetHandleInformation(pipe.read.get(), HANDLE_FLAG_INHERIT, 0)) {
-            ThrowLastError("SetHandleInformation(command output)");
-        }
-        return pipe;
+        static std::atomic<std::uint64_t> created{0};
+        const std::wstring                name = std::format(L"\\\\.\\pipe\\intarsia-command-{}-{}", GetCurrentProcessId(), created.fetch_add(1));
+        UniqueHandle                      read = OwnHandle(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                                                            PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, 4096, 0, nullptr),
+                                                           "CreateNamedPipeW(command output)");
+        SECURITY_ATTRIBUTES               inheritable{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
+        UniqueHandle write = OwnHandle(CreateFileW(name.c_str(), GENERIC_WRITE, 0, &inheritable, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr), "CreateFileW(command output)");
+        return Pipe{.read = std::move(read), .write = std::move(write)};
     }
 
     UniqueHandle KillOnCloseJob() {
@@ -207,23 +209,52 @@ namespace {
         return FILETIME{.dwLowDateTime = due.LowPart, .dwHighDateTime = due.HighPart};
     }
 
-    // Everything written until every holder of the write end has closed it. Nullopt once it passes maxBytes.
-    std::optional<std::string> ReadUpTo(HANDLE pipe, size_t maxBytes) {
-        std::string            output;
-        std::array<char, 4096> chunk{};
-        while (true) {
-            DWORD read = 0;
-            if (!ReadFile(pipe, chunk.data(), static_cast<DWORD>(chunk.size()), &read, nullptr)) {
-                if (GetLastError() == ERROR_BROKEN_PIPE) {
-                    return output;
-                }
-                ThrowLastError("ReadFile(command output)");
-            }
-            if (output.size() + read > maxBytes) {
+    // Blocks until the read into chunk completes or stopped is signaled, which abandons it. The byte count read, or
+    // nullopt at the end of the pipe or on stop.
+    std::optional<DWORD> ReadChunk(HANDLE pipe, std::array<char, 4096>& chunk, HANDLE ready, HANDLE stopped) {
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = ready;
+        if (!ReadFile(pipe, chunk.data(), static_cast<DWORD>(chunk.size()), nullptr, &overlapped)) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_BROKEN_PIPE) {
                 return std::nullopt;
             }
-            output.append(chunk.data(), read);
+            if (error != ERROR_IO_PENDING) {
+                ThrowLastError("ReadFile(command output)");
+            }
         }
+        const std::array<HANDLE, 2> waits{ready, stopped};
+        const DWORD                 woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
+        if (woke == WAIT_OBJECT_0 + 1) {
+            CancelIoEx(pipe, &overlapped);
+        } else if (woke != WAIT_OBJECT_0) {
+            ThrowLastError("WaitForMultipleObjects(command output)");
+        }
+        // Waits out a cancelled read, which must finish before overlapped goes out of scope.
+        DWORD read = 0;
+        if (!GetOverlappedResult(pipe, &overlapped, &read, TRUE)) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_BROKEN_PIPE || error == ERROR_OPERATION_ABORTED) {
+                return std::nullopt;
+            }
+            ThrowLastError("GetOverlappedResult(command output)");
+        }
+        return woke == WAIT_OBJECT_0 ? std::optional<DWORD>(read) : std::nullopt;
+    }
+
+    // Everything written until every holder of the write end has closed it or stopped is signaled. Nullopt once it
+    // passes maxBytes.
+    std::optional<std::string> ReadUpTo(HANDLE pipe, size_t maxBytes, HANDLE stopped) {
+        const UniqueHandle     ready = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command output)");
+        std::string            output;
+        std::array<char, 4096> chunk{};
+        while (const std::optional<DWORD> read = ReadChunk(pipe, chunk, ready.get(), stopped)) {
+            if (output.size() + *read > maxBytes) {
+                return std::nullopt;
+            }
+            output.append(chunk.data(), *read);
+        }
+        return output;
     }
 
 } // namespace
@@ -242,7 +273,8 @@ std::string CaptureOutput(const Command& command, std::chrono::milliseconds time
         throw Win32Error("AssignProcessToJobObject", error);
     }
 
-    Watchdog                                       watchdog{.job = job.get(), .stop = Stop::None};
+    const UniqueHandle                             stopped = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command stopped)");
+    Watchdog                                       watchdog{.job = job.get(), .stopped = stopped.get(), .stop = Stop::None};
     std::unique_ptr<TP_WAIT, ThreadpoolWaitCloser> wait(CreateThreadpoolWait(StopJob, &watchdog, nullptr));
     if (wait == nullptr) {
         ThrowLastError("CreateThreadpoolWait");
@@ -253,7 +285,7 @@ std::string CaptureOutput(const Command& command, std::chrono::milliseconds time
         ThrowLastError("ResumeThread");
     }
 
-    const std::optional<std::string> output = ReadUpTo(pipe.read.get(), maxBytes);
+    const std::optional<std::string> output = ReadUpTo(pipe.read.get(), maxBytes, stopped.get());
     if (!output.has_value() && !TerminateJobObject(job.get(), kKilledExitCode)) {
         ThrowLastError("TerminateJobObject(output too long)");
     }

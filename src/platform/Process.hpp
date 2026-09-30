@@ -42,8 +42,8 @@ class CommandError : public std::runtime_error {
 
 // Runs the command with no window and no shell, blocking until it ends, and returns what it printed to stdout. The
 // command and every process it starts run in a job that is killed when the timeout passes, when cancel is signaled or
-// when this returns, so nothing it starts outlives the call. It inherits only its stdout pipe: stdin and stderr are
-// closed.
+// when this returns, so nothing it starts outlives the call, and a process outside the job that holds its stdout holds
+// the call no longer than that. It inherits only its stdout pipe: stdin and stderr are closed.
 std::string CaptureOutput(const Command& command, std::chrono::milliseconds timeout, size_t maxBytes, HANDLE cancel);
 
 // Starts commands on its own thread with ShellExecuteExW, so a UAC prompt (Task Manager needs one) never blocks the UI.
