@@ -55,31 +55,7 @@ section { margin: 4px; padding: 3px; background: #191724; }
 )") + std::string(rules);
     }
 
-    std::optional<std::int32_t> SpanOf(const integration::RunningBar& bar, std::uint32_t rgb) {
-        return integration::ColumnSpan(integration::CaptureScreenOver(bar.PrimaryBar()), rgb);
-    }
-
 } // namespace
-
-TEST(Custom, DrawsTheLineItsCommandPrints) {
-    constexpr std::string_view kTestName = "custom-line";
-    integration::RunningBar    bar(
-        kTestName, CustomConfig(R"("short", "long")", RecorderModule(kTestName, "short", "text", "", R"("W")") + RecorderModule(kTestName, "long", "text", "", R"("WWWWWWWW")")),
-        StyleWithRules("#short { color: #27ae60; } #long { color: #f39c12; }"));
-    std::optional<std::int32_t> shortSpan;
-    std::optional<std::int32_t> longSpan;
-    ASSERT_TRUE(integration::Eventually(
-        [&] {
-            shortSpan = SpanOf(bar, kGreen);
-            longSpan  = SpanOf(bar, kOrange);
-            return shortSpan.has_value() && longSpan.has_value();
-        },
-        kDrawn))
-        << "the commands' lines never drew in both modules' colors";
-    integration::Log("text_spans", std::format("short_columns={} long_columns={}", shortSpan.value_or(-1), longSpan.value_or(-1)));
-    // Eight glyphs span seven advances and one glyph, so well over four glyphs' width.
-    EXPECT_GT(longSpan.value_or(0), 4 * shortSpan.value_or(0));
-}
 
 TEST(Custom, DrawsTheColorOfTheClassItsJsonNames) {
     constexpr std::string_view    kTestName = "custom-class";

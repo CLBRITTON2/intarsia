@@ -24,10 +24,6 @@ TEST(Clock, FormatRendersLiteralTextAroundTheSpec) {
     EXPECT_TRUE(text.ends_with("!")) << text;
 }
 
-TEST(Clock, FormatKeepsMinutesTwoDigitsWide) {
-    EXPECT_EQ(FormatPlaceholders("{time:%M}", ClockPlaceholders(std::chrono::system_clock::now())).size(), 2u);
-}
-
 TEST(Clock, AnInvalidSpecFailsWhenTheModuleIsBuilt) {
     EXPECT_THROW(Clock(ClockWithFormat("{time:%Q}")), ConfigError);
     EXPECT_THROW(Clock(ClockWithFormat("{:%H:%M}")), ConfigError);

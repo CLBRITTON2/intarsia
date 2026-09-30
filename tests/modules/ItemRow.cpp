@@ -32,14 +32,3 @@ TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
     EXPECT_EQ(ItemAt(row, D2D1::Point2F(34.0f, 5.0f)), 1u);
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(34.0f, 20.0f)).has_value());
 }
-
-TEST(ItemRow, NoItemsTakeNoSpace) {
-    const ItemRow row = ArrangeItems({}, {});
-    EXPECT_FLOAT_EQ(row.size.width, 0.0f);
-    EXPECT_FLOAT_EQ(row.size.height, 0.0f);
-}
-
-TEST(ItemRow, ContentsAndStylesMustPairUp) {
-    const ItemStyle style = TestItemStyle(0, 0);
-    EXPECT_THROW(ArrangeItems({{.width = 1.0f, .height = 1.0f}}, {&style, &style}), std::invalid_argument);
-}

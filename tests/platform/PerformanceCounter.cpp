@@ -27,15 +27,10 @@ namespace {
 
 } // namespace
 
-TEST(PerformanceCounter, ARateHasNoValueAtItsFirstSample) {
+TEST(PerformanceCounter, ARateHasAValueOnlyFromALaterSample) {
     PerformanceCounter counter(L"\\Processor(_Total)\\% Processor Time");
     counter.Collect();
     EXPECT_FALSE(counter.Values().has_value());
-}
-
-TEST(PerformanceCounter, ARateHasAValueFromALaterSample) {
-    PerformanceCounter counter(L"\\Processor(_Total)\\% Processor Time");
-    counter.Collect();
     const std::vector<double> values = NextValues(counter);
     ASSERT_EQ(values.size(), 1u);
     EXPECT_GE(values[0], 0.0);

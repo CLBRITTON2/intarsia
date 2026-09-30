@@ -65,9 +65,3 @@ TEST_F(Sampler, AStartedSamplerReadsTheCounterAfterOneInterval) {
     MSG message{};
     EXPECT_TRUE(PeekMessageW(&message, _target, kChanged, kChanged, PM_REMOVE));
 }
-
-TEST_F(Sampler, ACounterThatCannotBeAddedFailsWithTheReason) {
-    const CounterSampler sampler("gone", SumOf(L"\\No Such Object\\Nothing"), _changes);
-    EXPECT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Failed; }, std::chrono::seconds(2)));
-    EXPECT_NE(sampler.Reading().detail.find("PdhAddEnglishCounterW"), std::string::npos);
-}

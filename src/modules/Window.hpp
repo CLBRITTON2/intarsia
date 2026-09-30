@@ -33,4 +33,5 @@ class Window final : public IModule {
 std::vector<Placeholder> WindowPlaceholders(std::wstring_view title);
 
 // title cut to at most maxLength UTF-16 code units, ending in an ellipsis when cut. Never splits a surrogate pair.
+// maxLength is at least 1, as the config requires.
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength);

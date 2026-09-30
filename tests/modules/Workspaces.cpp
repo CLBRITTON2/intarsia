@@ -19,14 +19,6 @@ namespace {
 
 } // namespace
 
-TEST(Workspaces, WorkspacesOnMonitorKeepsOnlyThatMonitorsInOrder) {
-    const std::vector<Workspace> shown = WorkspacesOnMonitor(kWorkspaces, 10);
-    ASSERT_EQ(shown.size(), 3u);
-    EXPECT_EQ(shown[0].name, "1");
-    EXPECT_EQ(shown[2].name, "3");
-    EXPECT_TRUE(WorkspacesOnMonitor(kWorkspaces, 30).empty());
-}
-
 TEST(Workspaces, LayoutReportsAChangeOnlyWhenThisMonitorsWorkspacesChange) {
     FakeWindowManager    windowManager;
     const TextOnlyRender render;

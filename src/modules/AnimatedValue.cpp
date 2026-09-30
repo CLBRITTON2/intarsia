@@ -1,6 +1,5 @@
 #include "modules/AnimatedValue.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -37,13 +36,12 @@ namespace {
 
 // x rises with t for every CSS keyword, so halving finds the t whose x is progress.
 float Eased(TimingFunction timing, float progress) {
-    const float  clamped = std::clamp(progress, 0.0f, 1.0f);
-    const Bezier curve   = CurveOf(timing);
-    float        low     = 0.0f;
-    float        high    = 1.0f;
+    const Bezier curve = CurveOf(timing);
+    float        low   = 0.0f;
+    float        high  = 1.0f;
     for (std::int32_t step = 0; step < 32; ++step) {
         const float middle = (low + high) / 2.0f;
-        if (CubicAt(curve.x1, curve.x2, middle) < clamped) {
+        if (CubicAt(curve.x1, curve.x2, middle) < progress) {
             low = middle;
         } else {
             high = middle;

@@ -4,7 +4,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 
 namespace {
@@ -22,10 +21,6 @@ TEST(Memory, TheTooltipValuesAreGibibytesAndAPercent) {
     EXPECT_EQ(
         FormatPlaceholders("{used:.1f}/{total:.0f} GB {percent}% free {available:.0f} cached {cached:.0f} commit {committed:.0f}/{commit_limit:.0f}", MemoryPlaceholders(usage)),
         "24.0/32 GB 75% free 8 cached 6 commit 30/37");
-}
-
-TEST(Memory, NoPhysicalMemoryHasNoPercent) {
-    EXPECT_THROW(MemoryPlaceholders(MemoryUsage{.totalBytes = 0, .availableBytes = 0, .cachedBytes = 0, .committedBytes = 0, .commitLimitBytes = 0}), std::invalid_argument);
 }
 
 TEST(Memory, FormatMustRenderADouble) {

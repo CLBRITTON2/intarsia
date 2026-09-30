@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <initializer_list>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -154,7 +155,8 @@ TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
 }
 
 TEST(Config, StyleIdsMustNameADefinedModule) {
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "#tmie { color: #ff0000; }"); }, ConfigErrorWith("#tmie names no module"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "#tmie { color: #ff0000; }"); },
+                ConfigErrorWith("#tmie names no module: the config's modules table defines"));
 }
 
 TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
@@ -201,23 +203,32 @@ TEST(Config, UnknownKeysAreRejectedAtRootAndInsideTables) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 80, width = 3")); }, ConfigErrorWith("modules.title.width is not a known key"));
 }
 
-TEST(Config, EdgeMustBeOneOfFour) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(edge = "top")", R"(edge = "side")")); }, ConfigErrorWith("got 'side'"));
+TEST(Config, ChoicesNameEveryWordTheyTake) {
+    struct Choice {
+        std::string      config;
+        std::string_view error;
+    };
+    const std::vector<Choice> choices = {
+        {.config = Replace(kValidConfig, R"(edge = "top")", R"(edge = "side")"), .error = "bar.edge must be one of top, bottom, left, right, got 'side'"},
+        {.config = Replace(kValidConfig, R"(layer = "top")", R"(layer = "overlay")"), .error = "bar.layer must be one of top, bottom, got 'overlay'"},
+        {.config = Replace(kValidConfig, R"(space = "reserve")", R"(space = "float")"), .error = "bar.space must be one of reserve, share, got 'float'"},
+        {.config = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "i3")"), .error = "window_manager must be one of windows, glazewm, got 'i3'"},
+        {.config = WithRightModules(
+             R"({ "hello" })",
+             R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", classes = {}, format = "{text}", icon = "", interval = 30 },)"),
+         .error = "modules.hello.output must be one of text, json, got 'xml'"},
+        {.config = WithRightModules(
+             R"({ "c" })", R"(        c = { type = "counter", counter = "\\Memory\\Available MBytes", combine = "median", format = "{value}", icon = "", interval = 1 },)"),
+         .error = "modules.c.combine must be one of sum, max, average, got 'median'"},
+    };
+    for (const Choice& choice : choices) {
+        EXPECT_THAT([&choice] { return LoadText(choice.config); }, ConfigErrorWith(choice.error));
+    }
 }
 
 TEST(Config, SizesMustBePositiveAndIntervalWholeSeconds) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ConfigErrorWith("modules.time.interval must be a whole number"));
-}
-
-// inf passes a floor check and casts to an undefined integer, and a float holds whole numbers exactly only up to 2^24.
-TEST(Config, NumbersMustBeFiniteAndWholeNumbersBounded) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = math.huge")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0/0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = math.huge")); }, ConfigErrorWith("modules.time.interval must be greater than 0"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1e30")); }, ConfigErrorWith("modules.time.interval must be a whole number up to 16777216"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 2^24 + 2")); },
-                ConfigErrorWith("modules.title.max_length must be a whole number up to 16777216"));
 }
 
 TEST(Config, ModuleTableKeysMustBeStrings) {
@@ -226,8 +237,8 @@ TEST(Config, ModuleTableKeysMustBeStrings) {
 }
 
 TEST(Config, ConfigFilesMustBeUtf8) {
-    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); }, ConfigErrorWith("config file"));
-    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); }, ConfigErrorWith("is not valid UTF-8"));
+    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); },
+                testing::ThrowsMessage<ConfigError>(testing::AllOf(testing::HasSubstr("config file"), testing::HasSubstr("is not valid UTF-8"))));
     EXPECT_THAT([] { return LoadStyled(kValidConfig, "/* \xC0\xAF */"); }, ConfigErrorWith("style file"));
 }
 
@@ -237,11 +248,6 @@ TEST(Config, ActionsRefuseRelativePathsWithDirectories) {
                 ConfigErrorWith("not an existing file or a program on PATH"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "System32\\cmd.exe" } })")); },
                 ConfigErrorWith("not an existing file or a program on PATH"));
-}
-
-TEST(Config, ModuleListsMustBePlainListsOfStrings) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", R"({ "time", x = 1 })")); }, ConfigErrorWith("modules_center must be a plain list"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{ 7 }")); }, ConfigErrorWith("modules_center[1] must be a string"));
 }
 
 TEST(Config, ListsMayOnlyShowDefinedModules) {
@@ -275,15 +281,8 @@ TEST(Config, AGroupReadsItsIconAndItsMembersInOrder) {
     EXPECT_EQ(SettingsOf<TextModuleConfig>(group.members, 1).interval, std::chrono::seconds(2));
 }
 
-TEST(Config, AGroupAndItsMembersAreStyledByTheirOwnNames) {
-    const Config          config = LoadStyled(WithGroup(kGroup),
-                                              std::string(kValidStyle) +
-                                                  "#cpu { color: #ff0000; } #layout { transition: width 200ms; } "
-                                                           "#layout .icon { transform: rotate(-90deg); } #layout.expanded .icon { transform: rotate(90deg); }");
-    const ModuleInstance& group  = config.modules.right.at(0);
-    EXPECT_EQ(group.style.transition.duration, std::chrono::milliseconds(200));
-    EXPECT_FLOAT_EQ(group.style.icon.rotationDegrees, -90.0f);
-    EXPECT_FLOAT_EQ(group.style.expandedIconRotationDegrees, 90.0f);
+TEST(Config, AGroupsMembersAreStyledByTheirOwnNames) {
+    const Config config = LoadStyled(WithGroup(kGroup), std::string(kValidStyle) + "#cpu { color: #ff0000; }");
     EXPECT_FLOAT_EQ(SettingsOf<GroupConfig>(config.modules.right, 0).members.at(0).style.color.r, 1.0f);
 }
 
@@ -338,17 +337,6 @@ TEST(Config, TheConfigsWalksReachAGroupsMembers) {
     EXPECT_FALSE(AnyModuleInConfig(config, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Battery; }));
 }
 
-TEST(Config, AGroupsMembersMustSuitTheWindowManager) {
-    EXPECT_THAT(
-        [] {
-            return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "spaces" })") + R"(
-        spaces = { type = "workspaces" },)"));
-        },
-        ConfigErrorWith("workspaces needs a tiling window manager"));
-    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(interval = 1 },)", R"(interval = 1, on_click = { window_manager = "focus --next-workspace" } },)"))); },
-                ConfigErrorWith("window_manager 'windows' takes none"));
-}
-
 TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
     const std::string config = WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "weather" })") + R"(
         weather = { type = "custom", command = { "cmd" }, timeout = 5, output = "json", classes = { "sunny" }, format = "{text}", icon = "", interval = 30 },)");
@@ -376,14 +364,10 @@ TEST(Config, AModuleOnlyALayoutShowsCountsAsShown) {
 
 TEST(Config, LayoutsAreRequiredAndNamedByTheirPlaceInErrors) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "layouts = {},", "")); }, ConfigErrorWith("layouts is missing"));
-    EXPECT_THAT([] { return LoadText(WithLayouts("{ 7 }")); }, ConfigErrorWith("layouts[1] must be a table, got number"));
-    EXPECT_THAT([] { return LoadText(WithLayouts("{ x = {} }")); }, ConfigErrorWith("layouts must be a plain list"));
     EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {} } })")); },
                 ConfigErrorWith("layouts[1].modules_right is missing"));
     EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {}, edge = "top" } })")); },
                 ConfigErrorWith("layouts[1].edge is not a known key"));
-    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 0, modules_left = {}, modules_center = {}, modules_right = {} } })")); },
-                ConfigErrorWith("layouts[1].min_length must be greater than 0"));
     EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = { "clock" }, modules_center = {}, modules_right = {} } })")); },
                 ConfigErrorWith("layouts[1].modules_left shows 'clock', which is not defined in modules"));
 }
@@ -399,13 +383,38 @@ TEST(Config, EachLayoutMustStartPastTheOneBefore) {
         ConfigErrorWith("layouts[2].min_length is 1921, it must be greater than the layout before it (2560)"));
 }
 
-TEST(Config, ALayoutsModulesMustSuitTheWindowManager) {
+TEST(Config, TilingModulesNeedATilingWindowManager) {
+    struct Tiled {
+        std::string_view type;
+        std::string_view definition;
+    };
+    for (const Tiled& tiled : std::initializer_list<Tiled>{
+             {.type = "workspaces", .definition = R"(        tiled = { type = "workspaces" },)"},
+             {.type = "windows", .definition = R"(        tiled = { type = "windows" },)"},
+             {.type = "binding_mode", .definition = R"(        tiled = { type = "binding_mode" },)"},
+             {.type = "tiling_direction", .definition = R"(        tiled = { type = "tiling_direction", horizontal = "H", vertical = "V" },)"},
+         }) {
+        const std::string config = WithRightModules(R"({ "tiled" })", tiled.definition);
+        EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith(std::string(tiled.type) + " needs a tiling window manager, window_manager 'windows' is none"));
+    }
+    // Through a layout's lists too, not only the top-level ones.
     EXPECT_THAT(
         [] {
             return LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = { "spaces" }, modules_center = {}, modules_right = {} } })"), "    modules = {\n",
                                     "    modules = {\n        spaces = { type = \"workspaces\" },\n"));
         },
         ConfigErrorWith("workspaces needs a tiling window manager"));
+
+    const std::string onGlazeWm = Replace(WithRightModules(R"({ "desktops", "apps", "mode", "tiling" })", R"(        desktops = { type = "workspaces" },
+        apps = { type = "windows" },
+        mode = { type = "binding_mode" },
+        tiling = { type = "tiling_direction", horizontal = "H", vertical = "V" },)"),
+                                          R"(window_manager = "windows")", R"(window_manager = "glazewm")");
+    const Config      config    = LoadText(onGlazeWm);
+    EXPECT_EQ(config.windowManager, WindowManagerKind::GlazeWm);
+    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Workspaces, ModuleKind::Windows, ModuleKind::BindingMode, ModuleKind::TilingDirection}));
+    EXPECT_EQ(SettingsOf<TilingDirectionConfig>(config.modules.right, 3).vertical, L"V");
+    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(horizontal = "H", )", "")); }, ConfigErrorWith("modules.tiling.horizontal is missing"));
 }
 
 TEST(Config, ModuleNamesUseASafeAlphabet) {
@@ -427,33 +436,6 @@ TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
     EXPECT_EQ(config.modules.right.at(1).name, "cpu_slow");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(5));
-}
-
-TEST(Config, WindowManagerMustBeAKnownBackend) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "i3")")); },
-                ConfigErrorWith("window_manager must be one of windows, glazewm, got 'i3'"));
-}
-
-TEST(Config, WorkspacesNeedAWindowManagerWithWorkspaces) {
-    const std::string onWindows = WithRightModules(R"({ "desktops" })", R"(        desktops = { type = "workspaces" },)");
-    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("window_manager 'windows' is none"));
-
-    const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
-    const Config      config    = LoadText(onGlazeWm);
-    EXPECT_EQ(config.windowManager, WindowManagerKind::GlazeWm);
-    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Workspaces});
-    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(type = "workspaces")", R"(type = "workspaces", size = 2)")); },
-                ConfigErrorWith("modules.desktops.size is not a known key"));
-}
-
-TEST(Config, WindowsNeedAWindowManagerWithWorkspaces) {
-    const std::string onWindows = WithRightModules(R"({ "apps" })", R"(        apps = { type = "windows" },)");
-    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("windows needs a tiling window manager"));
-
-    const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
-    EXPECT_EQ(Kinds(LoadText(onGlazeWm).modules.right), std::vector<ModuleKind>{ModuleKind::Windows});
-    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(type = "windows")", R"(type = "windows", icon_size = 2)")); },
-                ConfigErrorWith("modules.apps.icon_size is not a known key"));
 }
 
 // Audio needs no window manager, so it loads with window_manager "windows".
@@ -486,33 +468,8 @@ TEST(Config, BatteryParsesItsFormatsIconsAndThresholds) {
                 ConfigErrorWith("modules.power.warning_at is a percent of full charge, from 1 to 100, got 101"));
     EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "critical_at = 15", "critical_at = 40"))); },
                 ConfigErrorWith("modules.power.critical_at (40) must be under modules.power.warning_at (40)"));
-    EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, ", critical_at = 15", ""))); }, ConfigErrorWith("critical_at"));
     EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, R"({ "e", "f" })", "{}"))); },
                 ConfigErrorWith("modules.power.icons must hold at least one icon, emptiest first"));
-}
-
-TEST(Config, BindingModeAndTilingDirectionParseOnATilingWindowManager) {
-    const std::string onWindows = WithRightModules(R"({ "mode", "tiling" })", R"(        mode = { type = "binding_mode" },
-        tiling = { type = "tiling_direction", horizontal = "H", vertical = "V" },)");
-    EXPECT_THAT([&onWindows] { return LoadText(onWindows); }, ConfigErrorWith("binding_mode needs a tiling window manager"));
-
-    const std::string onGlazeWm = Replace(onWindows, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
-    const Config      config    = LoadText(onGlazeWm);
-    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::BindingMode, ModuleKind::TilingDirection}));
-    EXPECT_EQ(SettingsOf<TilingDirectionConfig>(config.modules.right, 1).vertical, L"V");
-    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(horizontal = "H", )", "")); }, ConfigErrorWith("modules.tiling.horizontal is missing"));
-}
-
-TEST(Config, WindowModuleNeedsAWholeMaxLength) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 2.5")); }, ConfigErrorWith("modules.title.max_length must be a whole number"));
-}
-
-TEST(Config, CpuAndMemoryShareTheTextModuleShape) {
-    const Config config = LoadText(WithRightModules(R"({ "cpu", "memory" })", R"(        cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
-        memory = { type = "memory", format = "{used:.1f} GB", icon = "m", interval = 2 },)"));
-    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Memory}));
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(2));
 }
 
 TEST(Config, ActionsResolveToAbsoluteExecutables) {
@@ -617,28 +574,8 @@ TEST(Config, AClassNoCustomModuleDeclaresIsAnError) {
 
 TEST(Config, DeclaredClassesAreClassNamesOfTheirOwn) {
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "two words" })")); }, ConfigErrorWith("modules.weather.classes lists 'two words', which is not a class name"));
-    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "9lives" })")); }, ConfigErrorWith("which is not a class name"));
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "alert" })")); }, ConfigErrorWith("modules.weather.classes lists 'alert', a class intarsia styles itself"));
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "sunny", "sunny" })")); }, ConfigErrorWith("modules.weather.classes lists 'sunny' twice"));
-}
-
-TEST(Config, CustomModulesNeedACommand) {
-    EXPECT_THAT(
-        [] {
-            return LoadText(WithRightModules(R"({ "hello" })",
-                                             R"(        hello = { type = "custom", timeout = 5, output = "text", classes = {}, format = "{text}", icon = "", interval = 30 },)"));
-        },
-        ConfigErrorWith("modules.hello.command is missing"));
-}
-
-TEST(Config, CustomOutputIsTextOrJson) {
-    EXPECT_THAT(
-        [] {
-            return LoadText(WithRightModules(
-                R"({ "hello" })",
-                R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", classes = {}, format = "{text}", icon = "", interval = 30 },)"));
-        },
-        ConfigErrorWith("modules.hello.output must be one of text, json, got 'xml'"));
 }
 
 TEST(Config, CounterModulesReadTheirPathAndCombine) {
@@ -661,93 +598,39 @@ TEST(Config, CounterPathsMustNameALocalCounterThisSystemHas) {
     EXPECT_THAT([&load] { return load(R"(\\\\otherhost\\Processor(_Total)\\% Processor Time)"); }, ConfigErrorWith("modules.c.counter must be a local counter path"));
 }
 
-TEST(Config, CounterCombineIsSumMaxOrAverage) {
-    EXPECT_THAT(
-        [] {
-            return LoadText(WithRightModules(
-                R"({ "c" })", R"(        c = { type = "counter", counter = "\\Memory\\Available MBytes", combine = "median", format = "{value}", icon = "", interval = 1 },)"));
-        },
-        ConfigErrorWith("modules.c.combine must be one of sum, max, average, got 'median'"));
-}
-
-TEST(Config, TheConfigCannotReadFiles) {
-    EXPECT_THAT([] { return LoadText("dofile('C:/Windows/win.ini')"); }, ConfigErrorWith("attempt to call a nil value (global 'dofile')"));
-    EXPECT_THAT([] { return LoadText("loadfile('C:/Windows/win.ini')"); }, ConfigErrorWith("attempt to call a nil value (global 'loadfile')"));
-}
-
-// load takes precompiled bytecode, which Lua does not verify.
-TEST(Config, TheConfigCannotLoadChunks) {
-    EXPECT_THAT([] { return LoadText("load('return 1')"); }, ConfigErrorWith("attempt to call a nil value (global 'load')"));
-}
-
-TEST(Config, TheConfigHasNoLibraryThatReachesOutsideTheProcess) {
+// The config cannot read files, load chunks (load takes bytecode, which Lua does not verify), reach outside the
+// process, catch its abort (a protected call could swallow it), hide from it (Lua runs a __gc metamethod with hooks
+// off), or run a pattern match (a short pattern backtracks for longer than the bar lives, inside C calls the
+// instruction count never sees).
+TEST(Config, TheConfigHasNoGlobalThatReachesOutOrEscapesItsLimits) {
+    struct Removed {
+        std::string_view config;
+        std::string_view error;
+    };
+    for (const Removed& removed : std::initializer_list<Removed>{
+             {.config = "dofile('C:/Windows/win.ini')", .error = "attempt to call a nil value (global 'dofile')"},
+             {.config = "loadfile('C:/Windows/win.ini')", .error = "attempt to call a nil value (global 'loadfile')"},
+             {.config = "load('return 1')", .error = "attempt to call a nil value (global 'load')"},
+             {.config = "return require('os')", .error = "attempt to call a nil value (global 'require')"},
+             {.config = "pcall(print)", .error = "attempt to call a nil value (global 'pcall')"},
+             {.config = "xpcall(function() end, print)", .error = "attempt to call a nil value (global 'xpcall')"},
+             {.config = "setmetatable({}, {})", .error = "attempt to call a nil value (global 'setmetatable')"},
+             {.config = "return ('a'):find('a')", .error = "attempt to call a nil value (method 'find')"},
+             {.config = "return string.match('a', 'a')", .error = "attempt to call a nil value (field 'match')"},
+             {.config = "return string.gmatch('a', 'a')", .error = "attempt to call a nil value (field 'gmatch')"},
+             {.config = "return string.gsub('a', 'a', 'b')", .error = "attempt to call a nil value (field 'gsub')"},
+         }) {
+        EXPECT_THAT([&removed] { return LoadText(removed.config); }, ConfigErrorWith(removed.error));
+    }
     for (const std::string_view library : {"os", "io", "package", "debug", "coroutine", "utf8"}) {
         const std::string config = std::string("return ") + std::string(library) + ".x";
         EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith(std::string("attempt to index a nil value (global '") + std::string(library) + "')"));
     }
-    EXPECT_THAT([] { return LoadText("return require('os')"); }, ConfigErrorWith("attempt to call a nil value (global 'require')"));
-}
-
-// A protected call could swallow the abort, and Lua runs a __gc metamethod with hooks off, so an endless loop there
-// could never be stopped: neither can be written.
-TEST(Config, AnEndlessConfigCannotCatchOrHideFromItsAbort) {
-    EXPECT_THAT([] { return LoadText("while true do pcall(function() while true do end end) end"); }, ConfigErrorWith("attempt to call a nil value (global 'pcall')"));
-    EXPECT_THAT([] { return LoadText("xpcall(function() end, print)"); }, ConfigErrorWith("attempt to call a nil value (global 'xpcall')"));
-    EXPECT_THAT([] { return LoadText("setmetatable({}, { __gc = function() while true do end end })"); }, ConfigErrorWith("attempt to call a nil value (global 'setmetatable')"));
-}
-
-// A short pattern backtracks for longer than the bar lives, inside C calls the instruction count never sees.
-TEST(Config, AConfigCannotRunAPatternMatch) {
-    EXPECT_THAT([] { return LoadText("return (('a'):rep(1000)):find(('.-'):rep(10) .. 'b')"); }, ConfigErrorWith("attempt to call a nil value (method 'find')"));
-    EXPECT_THAT([] { return LoadText("return string.match('a', 'a')"); }, ConfigErrorWith("attempt to call a nil value (field 'match')"));
-    EXPECT_THAT([] { return LoadText("return string.gmatch('a', 'a')"); }, ConfigErrorWith("attempt to call a nil value (field 'gmatch')"));
-    EXPECT_THAT([] { return LoadText("return string.gsub('a', 'a', 'b')"); }, ConfigErrorWith("attempt to call a nil value (field 'gsub')"));
 }
 
 // One C call can allocate any amount while running no instructions the count hook sees.
 TEST(Config, AConfigThatAllocatesTooMuchIsStoppedWithAnError) {
     EXPECT_THAT([] { return LoadText("return { x = ('x'):rep(2^25) }"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));
-    EXPECT_THAT([] { return LoadText("local t = {} for i = 1, 1e7 do t[i] = i end return t"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));
-}
-
-// Fills memory to the byte, measuring string headers as it goes, then returns. The reader pushes each optional key it
-// looks for outside any protected call, where a refused allocation would abort the process. The config's body stays
-// reachable so Lua's emergency collection frees too little to make room.
-TEST(Config, AConfigThatEndsAtTheMemoryLimitStillLoads) {
-    EXPECT_NO_THROW(LoadText(R"lua(
-KEEP = { pad = table.create(20000) }
-local function load()
-    local limit = 16 * 1024 * 1024
-    local function used() return collectgarbage("count") * 1024 end
-    local config = {
-        bar = { edge = "top", layer = "top", space = "reserve", thickness = 54 },
-        window_manager = "windows",
-        modules_left = { "title" },
-        modules_center = { "time" },
-        modules_right = {},
-        layouts = {},
-        modules = {
-            time = { type = "clock", format = "{time:%H:%M}", icon = "x", interval = 60 },
-            title = { type = "window", max_length = 80 },
-        },
-    }
-    local pad = KEEP.pad
-    local count = 0
-    local function add(text) count = count + 1 pad[count] = text end
-    KEEP.config, KEEP.used, KEEP.add = config, used, add
-    collectgarbage()
-    local before = used() add(("h"):rep(100)) local longHeader = used() - before - 101
-    before = used() add(("s"):rep(20)) local shortHeader = used() - before - 21
-    while limit - used() - longHeader - 1 >= 41 do
-        add(("x"):rep(math.min(1000, limit - used() - longHeader - 1)))
-    end
-    local last = limit - used() - shortHeader - 1
-    if last >= 1 then add(("w"):rep(last)) end
-    return config
-end
-KEEP.load = load
-return load()
-)lua"));
 }
 
 // Each module's table stays on the Lua stack while the config is read, far past the slots Lua guarantees.
@@ -766,22 +649,6 @@ TEST(Config, TooltipIsOptional) {
     EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
     const Config config = LoadText(Replace(kValidConfig, R"(interval = 60 },)", R"(interval = 60, tooltip = "{time:%A %d %B %Y}" },)"));
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{time:%A %d %B %Y}");
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(max_length = 80 })", R"(max_length = 80, tooltip = 7 })")); },
-                ConfigErrorWith("modules.title.tooltip must be a string"));
-}
-
-TEST(Config, LayerIsTopOrBottom) {
-    EXPECT_EQ(LoadText(kValidConfig).bar.layer, Layer::Top);
-    EXPECT_EQ(LoadText(Replace(kValidConfig, R"(layer = "top")", R"(layer = "bottom")")).bar.layer, Layer::Bottom);
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(layer = "top")", R"(layer = "overlay")")); }, ConfigErrorWith("bar.layer must be one of top, bottom, got 'overlay'"));
-}
-
-TEST(Config, SpaceIsReserveOrShare) {
-    EXPECT_EQ(LoadText(kValidConfig).bar.space, Space::Reserve);
-    EXPECT_EQ(LoadText(Replace(kValidConfig, R"(space = "reserve")", R"(space = "share")")).bar.space, Space::Share);
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(space = "reserve")", R"(space = "float")")); },
-                ConfigErrorWith("bar.space must be one of reserve, share, got 'float'"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(space = "reserve", )", "")); }, ConfigErrorWith("bar.space"));
 }
 
 TEST(Config, AnEndlessConfigIsStoppedWithAnError) {

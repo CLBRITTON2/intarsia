@@ -28,13 +28,6 @@ namespace {
 
 } // namespace
 
-TEST(CommandPoller, FirstLineDropsTheRestAndTheLineEnding) {
-    EXPECT_EQ(FirstLine("sunny 21C\r\ntooltip\r\n"), "sunny 21C");
-    EXPECT_EQ(FirstLine("unix\nsecond"), "unix");
-    EXPECT_EQ(FirstLine("no newline"), "no newline");
-    EXPECT_EQ(FirstLine(""), "");
-}
-
 TEST(CommandPoller, TextOutputIsTheFirstLine) {
     EXPECT_EQ(ParseOutput("\xF0\x9F\x8C\xA6 +74\xC2\xB0"
                           "F\r\nmore\r\n",
@@ -42,6 +35,8 @@ TEST(CommandPoller, TextOutputIsTheFirstLine) {
               Succeeded("\xF0\x9F\x8C\xA6 +74\xC2\xB0"
                         "F",
                         std::nullopt, false));
+    EXPECT_EQ(ParseOutput("unix\nsecond", CustomOutput::Text), Succeeded("unix", std::nullopt, false));
+    EXPECT_EQ(ParseOutput("", CustomOutput::Text), Succeeded("", std::nullopt, false));
 }
 
 TEST(CommandPoller, TextOutputWithControlCharactersFails) {

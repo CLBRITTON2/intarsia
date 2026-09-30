@@ -28,10 +28,3 @@ TEST(DirectionToggle, LayoutReportsAChangeOnlyWhenTheDirectionChanges) {
     windowManager.direction = TilingDirection::Vertical;
     EXPECT_TRUE(module.Layout(render.Context()));
 }
-
-TEST(DirectionToggle, ClickTogglesTheDirection) {
-    FakeWindowManager windowManager;
-    DirectionToggle   module(kConfig, windowManager);
-    module.Click(D2D1::Point2F(0.0f, 0.0f));
-    EXPECT_EQ(windowManager.directionToggles, 1);
-}

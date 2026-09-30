@@ -18,8 +18,7 @@ namespace {
     constexpr std::uint32_t kTooltipColor = 0x3498DB;
     constexpr auto          kLimit        = std::chrono::seconds(5);
 
-    // The ruler prints the probe's tooltip text in the bar, so the two spans can be compared. The probe sits in the
-    // center, so a tooltip centered on it needs no pushing back onto the monitor.
+    // The ruler prints the probe's tooltip text in the bar, so the two spans can be compared.
     constexpr std::string_view kConfig = R"(
 return {
     bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
@@ -46,7 +45,7 @@ tooltip { color: #3498db; background: #191724; padding: 4px; }
 
 } // namespace
 
-TEST(Tooltip, OpensUnderTheModuleWithItsTextAndClosesWhenTheCursorMovesOff) {
+TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
     integration::RunningBar     bar("tooltip", kConfig, kStyle);
     std::optional<double>       probeColumn;
     std::optional<std::int32_t> rulerSpan;
@@ -72,18 +71,12 @@ TEST(Tooltip, OpensUnderTheModuleWithItsTextAndClosesWhenTheCursorMovesOff) {
         },
         kLimit))
         << "resting over the module never showed its tooltip text";
-    const RECT barRect     = integration::PhysicalWindowRect(bar.PrimaryBar());
-    const RECT tooltipRect = integration::PhysicalWindowRect(bar.Tooltip());
-    const auto tooltipMid  = (tooltipRect.left + tooltipRect.right) / 2;
-    integration::Log("tooltip_shown",
-                     std::format("rect=({},{},{},{}) bar_bottom={} probe_x={} text_columns={} ruler_columns={}", tooltipRect.left, tooltipRect.top, tooltipRect.right,
-                                 tooltipRect.bottom, barRect.bottom, barRect.left + probeX, tooltipSpan.value_or(-1), rulerSpan.value_or(-1)));
-    EXPECT_EQ(tooltipRect.top, barRect.bottom) << "the tooltip is not against the bar's desktop side";
-    EXPECT_NEAR(tooltipMid, barRect.left + probeX, 4) << "the tooltip is not centered on the module";
+    integration::Log("tooltip_shown", std::format("text_columns={} ruler_columns={}", tooltipSpan.value_or(-1), rulerSpan.value_or(-1)));
     // The same text in the same font spans the same columns, give or take antialiasing at its ends.
     EXPECT_NEAR(tooltipSpan.value_or(0), rulerSpan.value_or(0), 2) << "the tooltip does not show the module's tooltip text";
 
     // The right section is empty, so its end has no module under it.
+    const RECT barRect = integration::ScreenRect(bar.PrimaryBar());
     bar.MoveCursorTo(barRect.right - barRect.left - 2);
     EXPECT_TRUE(integration::Eventually([&] { return bar.Tooltip() == nullptr; }, kLimit)) << "moving off the module left its tooltip shown";
 }

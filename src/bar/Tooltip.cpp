@@ -13,7 +13,7 @@ namespace {
 
     constexpr wchar_t kWindowClass[] = L"IntarsiaTooltip";
 
-    // Where a span of length starting at start goes to stay within low to high, pinned to low when it cannot fit.
+    // Where a span of length starting at start goes to stay within low to high. Show caps length at the monitor's.
     std::int32_t KeepWithin(std::int32_t start, std::int32_t length, std::int32_t low, std::int32_t high) {
         return std::max(low, std::min(start, high - length));
     }

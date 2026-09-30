@@ -58,18 +58,10 @@ namespace {
 
 } // namespace
 
-TEST(Process, PlainArgumentsAreLeftAsTheyAre) {
-    EXPECT_EQ(JoinArguments({L"-File", L"script.ps1"}), L"-File script.ps1");
-}
-
+// No shell parses the line, so shell metacharacters reach the program as literal arguments too.
 TEST(Process, ArgumentsSurviveTheRoundTripUnchanged) {
-    const std::vector<std::wstring> arguments{L"with space", L"", L"quote\"inside", L"trailing\\", L"C:\\Program Files\\", L"back\\\\\"quote", L"tab\there"};
-    EXPECT_EQ(RoundTrip(arguments), arguments);
-}
-
-TEST(Process, ShellMetacharactersAreJustText) {
-    // No shell parses the line, so these reach the program as literal arguments.
-    const std::vector<std::wstring> arguments{L"a&b", L"|", L"%PATH%", L"^"};
+    const std::vector<std::wstring> arguments{L"with space", L"",  L"quote\"inside", L"trailing\\", L"C:\\Program Files\\", L"back\\\\\"quote", L"tab\there",
+                                              L"a&b",        L"|", L"%PATH%",        L"^"};
     EXPECT_EQ(RoundTrip(arguments), arguments);
 }
 

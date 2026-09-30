@@ -34,9 +34,6 @@ struct CommandResult {
     bool                       operator==(const CommandResult&) const = default;
 };
 
-// The first line of text, without its line ending.
-std::string_view FirstLine(std::string_view text);
-
 // What a successful run printed, read as format says. Output is untrusted: text must be UTF-8 with no control or
 // bidirectional override characters, a tooltip may also hold line breaks, and a json class must be one of classes and
 // cannot come with alert. Anything else is a Failed result.

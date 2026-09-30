@@ -38,6 +38,15 @@ namespace {
         }
     }
 
+    // The first line of text, without its line ending.
+    std::string_view FirstLine(std::string_view text) {
+        std::string_view line = text.substr(0, text.find('\n'));
+        if (line.ends_with('\r')) {
+            line.remove_suffix(1);
+        }
+        return line;
+    }
+
     CommandResult ParseText(std::string_view output) {
         const std::string_view line = FirstLine(output);
         RequireDrawable(line, "output", L"");
@@ -104,14 +113,6 @@ namespace {
     }
 
 } // namespace
-
-std::string_view FirstLine(std::string_view text) {
-    std::string_view line = text.substr(0, text.find('\n'));
-    if (line.ends_with('\r')) {
-        line.remove_suffix(1);
-    }
-    return line;
-}
 
 CommandResult ParseOutput(std::string_view output, CustomOutput format, const std::vector<std::string>& classes) {
     try {

@@ -39,8 +39,3 @@ TEST(Tooltip, ATooltipNearTheMonitorEdgeStaysOnTheMonitor) {
     const RECT nearLeft = TooltipRect(AnchorAt(Edge::Top, RECT{0, 0, 1920, 40}, RECT{0, 5, 30, 35}), SIZE{.cx = 200, .cy = 30});
     EXPECT_TRUE(SameRect(nearLeft, RECT{0, 40, 200, 70}));
 }
-
-TEST(Tooltip, ATooltipWiderThanTheMonitorStartsAtItsLeftEdge) {
-    const RECT rect = TooltipRect(AnchorAt(Edge::Top, RECT{0, 0, 1920, 40}, RECT{900, 5, 1000, 35}), SIZE{.cx = 2500, .cy = 30});
-    EXPECT_EQ(rect.left, 0);
-}

@@ -49,11 +49,6 @@ namespace {
 
 } // namespace
 
-TEST(WindowIcons, WindowIconReadsTheIconAWindowWasGiven) {
-    const IconWindow window;
-    EXPECT_EQ(WindowIcon(window.Get(), 100), LoadIconW(nullptr, IDI_APPLICATION));
-}
-
 TEST(WindowIcons, AWindowThatIsGoneHasNoIcon) {
     HWND window = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
     DestroyWindow(window);

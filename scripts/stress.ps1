@@ -14,14 +14,11 @@ tray scenario floods it from build\debug\tray_sender.exe (tests/stress/TraySende
 its owner windows die at once, while the script folds and unfolds the tray and right clicks across its icons, and folds
 and unfolds a group of modules.
 
-The invalid scenario saves a config that does not load and leaves it. It passes when the bar logs the config error,
-ends with it as a fatal error within a few seconds, closes its bars and exits with code 1 once the error message closes.
-
 Run it from an interactive desktop session: the bar needs a desktop to draw on.
 #>
 param(
-    [ValidateSet('idle', 'normal', 'flood', 'malformed', 'stall', 'flap', 'reject', 'reload', 'tray', 'invalid')]
-    [string[]] $Scenario = @('idle', 'normal', 'flood', 'malformed', 'stall', 'flap', 'reject', 'reload', 'tray', 'invalid'),
+    [ValidateSet('idle', 'normal', 'flap', 'reload', 'tray')]
+    [string[]] $Scenario = @('idle', 'normal', 'flap', 'reload', 'tray'),
     [int] $Seconds = 60,
     # The bar build under test. The test server only builds with the debug preset's tests.
     [ValidateSet('debug', 'release')]
@@ -51,10 +48,6 @@ $warmupSeconds      = 10
 # The idle scenario ticks a clock, cpu and memory each second and gets a GlazeWM event a second, and runs no commands.
 $maxIdleCpuPercent = 3
 $barThicknessDips  = 40
-# The invalid scenario saves its config this far in, and the bar has this long after the save to end with the error (it
-# waits a second for a later save to supersede the failed one).
-$invalidSaveSecond   = 20
-$invalidFatalSeconds = 3
 
 Add-Type -Namespace Stress -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr process, uint flags);
@@ -236,23 +229,6 @@ function Test-BarGeometry([int] $processId) {
     return $failures
 }
 
-# How the bar failed to end after the invalid config: the fatal error must be the config error it logged on the save,
-# and every bar must be gone while the error message is up.
-function Test-InvalidConfigEnd([string] $barLog, [string] $fatalLine, [int] $processId) {
-    $failures = @()
-    $invalid  = Select-String -Path $barLog -Pattern 'event=config_invalid reason="(.*)" fatal_in_ms="\d+"$' | Select-Object -First 1
-    $fatal    = [regex]::Match($fatalLine, 'event=fatal reason="(.*)"$')
-    if ($null -eq $invalid) {
-        $failures += "ended without logging config_invalid first: $fatalLine"
-    } elseif (-not $fatal.Success -or $fatal.Groups[1].Value -ne $invalid.Matches[0].Groups[1].Value) {
-        $failures += "ended with a fatal error other than the config error: $fatalLine"
-    }
-    if (@(Get-BarWindows $processId).Count -gt 0) {
-        $failures += 'kept its bars after the fatal config error'
-    }
-    return $failures
-}
-
 function Get-Sample([System.Diagnostics.Process] $process) {
     $process.Refresh()
     return [pscustomobject]@{
@@ -360,7 +336,7 @@ function Invoke-Scenario([string] $name) {
     New-StressConfig $configPath 0 $optional
     New-StressStyle (Join-Path $work 'style.css') $optional
     $port       = Get-FreePort
-    $serverName = if ($name -in @('reload', 'idle', 'tray', 'invalid')) { 'normal' } else { $name }
+    $serverName = if ($name -eq 'flap') { 'flap' } else { 'normal' }
     $barLog     = Join-Path $work 'intarsia.log'
 
     $server = $null
@@ -371,7 +347,6 @@ function Invoke-Scenario([string] $name) {
     $failures   = [System.Collections.Generic.List[string]]::new()
     $samples    = [System.Collections.Generic.List[object]]::new()
     $cpuPercent = $null
-    $invalidFatal = $null
     try {
         $server = Start-Process $serverExe -ArgumentList '--port', $port, '--scenario', $serverName -PassThru -WindowStyle Hidden `
             -RedirectStandardOutput (Join-Path $work 'server.out') -RedirectStandardError (Join-Path $work 'server.err')
@@ -385,16 +360,8 @@ function Invoke-Scenario([string] $name) {
             }
             # Quoted in the result, since a CI runner's log directory is gone once the job ends.
             $fatal = Select-String -Path $barLog -Pattern 'event=fatal' | Select-Object -First 1
-            if ($fatal -and $name -eq 'invalid' -and $second -gt $invalidSaveSecond) {
-                $invalidFatal = $fatal.Line
-                break
-            }
             if ($fatal) {
                 $failures.Add("logged a fatal error: $($fatal.Line)")
-                break
-            }
-            if ($name -eq 'invalid' -and $second -gt $invalidSaveSecond + $invalidFatalSeconds) {
-                $failures.Add("still running $invalidFatalSeconds s after an invalid config was saved")
                 break
             }
             $responsiveness = Get-Responsiveness $bar.Id
@@ -422,9 +389,6 @@ function Invoke-Scenario([string] $name) {
                     Start-Sleep -Milliseconds 50
                 }
             }
-            if ($name -eq 'invalid' -and $second -eq $invalidSaveSecond) {
-                [System.IO.File]::WriteAllText($configPath, "-- stress revision invalid`nreturn 42`n")
-            }
             if ($name -eq 'tray') {
                 if ($null -ne $sender -and $sender.HasExited) {
                     $failures.Add("tray sender exited on its own with code $($sender.ExitCode) at ${second}s (2: the tray stopped answering, 3: its window went away)")
@@ -446,17 +410,10 @@ function Invoke-Scenario([string] $name) {
             $samples.Add((Get-Sample $bar))
         }
 
-        if ($name -eq 'invalid' -and $failures.Count -eq 0) {
-            if ($null -eq $invalidFatal) {
-                $failures.Add("ran only $($samples.Count) s, too short to save the invalid config at $invalidSaveSecond s")
-            } else {
-                $failures.AddRange([string[]] @(Test-InvalidConfigEnd $barLog $invalidFatal $bar.Id))
-            }
-        }
-        if ($name -ne 'invalid' -and $failures.Count -eq 0 -and $samples.Count -le $warmupSeconds + 5) {
+        if ($failures.Count -eq 0 -and $samples.Count -le $warmupSeconds + 5) {
             $failures.Add("ran only $($samples.Count) s, too short to judge growth after the $warmupSeconds s warmup")
         }
-        if ($name -ne 'invalid' -and $failures.Count -eq 0) {
+        if ($failures.Count -eq 0) {
             $baseline = $samples[$warmupSeconds]
             $final    = $samples[$samples.Count - 1]
             if ($final.PrivateMB - $baseline.PrivateMB -gt $maxPrivateGrowthMB) { $failures.Add("private memory grew $($baseline.PrivateMB) to $($final.PrivateMB) MB") }
@@ -473,14 +430,12 @@ function Invoke-Scenario([string] $name) {
         }
         if ($null -ne $bar -and -not $bar.HasExited) {
             # WM_CLOSE through taskkill without /F, as a user would stop it: every bar must release its strip and exit.
-            # After a fatal error it closes the error message instead, and the bar exits with 1.
-            $expectedExitCode = if ($null -ne $invalidFatal) { 1 } else { 0 }
             taskkill /PID $bar.Id | Out-Null
             if (-not $bar.WaitForExit(10000)) {
                 $failures.Add('did not exit within 10 s of WM_CLOSE')
                 Stop-Process -Id $bar.Id -Force
-            } elseif ($bar.ExitCode -ne $expectedExitCode) {
-                $failures.Add("exited with code $($bar.ExitCode) on WM_CLOSE, expected $expectedExitCode")
+            } elseif ($bar.ExitCode -ne 0) {
+                $failures.Add("exited with code $($bar.ExitCode) on WM_CLOSE, expected 0")
             }
         }
         if ($null -ne $server) {

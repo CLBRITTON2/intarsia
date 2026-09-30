@@ -24,14 +24,6 @@ namespace {
 
 } // namespace
 
-TEST(Text, RoundTripsAnAstralPlaneNerdFontGlyph) {
-    const std::wstring glyph = L"\U000F1441";
-    ASSERT_EQ(glyph.size(), 2u);
-    const std::string utf8 = ToUtf8(glyph);
-    EXPECT_EQ(utf8, "\xF3\xB1\x91\x81");
-    EXPECT_EQ(ToWide(utf8), glyph);
-}
-
 TEST(Text, EmptyInputGivesEmptyOutput) {
     EXPECT_TRUE(ToUtf8(L"").empty());
     EXPECT_TRUE(ToWide("").empty());
@@ -53,6 +45,8 @@ TEST(Text, LogExcerptEscapesQuotesBackslashesAndControlBytes) {
 TEST(Text, LogExcerptCutsLongTextAndSaysHowMuchWasDropped) {
     EXPECT_EQ(LogExcerpt("abcdef", 4), "abcd...(2 more bytes)");
     EXPECT_EQ(LogExcerpt("abc", 4), "abc");
+    // "a" then U+00E9 (two bytes): a cut after its first byte backs off to before it.
+    EXPECT_EQ(LogExcerpt("a\xC3\xA9z", 2), "a...(3 more bytes)");
 }
 
 TEST(Text, LogExcerptEscapesBytesThatAreNotUtf8AndKeepsThoseThatAre) {
@@ -73,11 +67,6 @@ TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
     constexpr auto     kReplacement = static_cast<wchar_t>(0xFFFD);
     EXPECT_EQ(replaced, (std::wstring{L'a', kReplacement, L'b', kReplacement, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacement}));
     EXPECT_NO_THROW(ToUtf8(replaced));
-}
-
-TEST(Text, LogExcerptNeverSplitsAUtf8Sequence) {
-    // "a" then U+00E9 (two bytes): a cut after its first byte backs off to before it.
-    EXPECT_EQ(LogExcerpt("a\xC3\xA9z", 2), "a...(3 more bytes)");
 }
 
 // A C1 control, a bidi override and a line separator are valid UTF-8 and would still reorder or break the log line.

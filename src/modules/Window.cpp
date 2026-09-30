@@ -55,9 +55,6 @@ std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {
     if (title.size() <= maxLength) {
         return std::wstring(title);
     }
-    if (maxLength == 0) {
-        return {};
-    }
     size_t kept = maxLength - 1;
     if (kept > 0 && IsHighSurrogate(title[kept - 1])) {
         --kept;

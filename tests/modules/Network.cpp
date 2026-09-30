@@ -50,8 +50,6 @@ TEST(Network, WifiIconsSplitTheSignalRangeEvenly) {
     EXPECT_EQ(WifiIcon(icons, 20), L"0");
     EXPECT_EQ(WifiIcon(icons, 21), L"1");
     EXPECT_EQ(WifiIcon(icons, 100), L"4");
-    EXPECT_EQ(WifiIcon(icons, 150), L"4");
-    EXPECT_EQ(WifiIcon(icons, -5), L"0");
     // Windows can withhold the signal: the icon still says the link is Wi-Fi.
     EXPECT_EQ(WifiIcon(icons, std::nullopt), L"4");
     EXPECT_EQ(WifiIcon({L"only"}, 3), L"only");

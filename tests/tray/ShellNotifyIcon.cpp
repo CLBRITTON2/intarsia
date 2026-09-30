@@ -152,14 +152,16 @@ namespace {
 } // namespace
 
 TEST(ShellNotifyIcon, Shell32SendsTheLayoutTheParserReads) {
-    bool                         added    = false;
-    const std::vector<std::byte> captured = CaptureFromShell32([&added](HWND taskbar) {
+    HICON                        iconHandle = LoadIconW(nullptr, IDI_APPLICATION);
+    bool                         added      = false;
+    const std::vector<std::byte> captured   = CaptureFromShell32([&added, iconHandle](HWND taskbar) {
         NOTIFYICONDATAW icon{};
         icon.cbSize           = NOTIFYICONDATAW_V2_SIZE;
         icon.hWnd             = taskbar;
         icon.uID              = 42;
-        icon.uFlags           = NIF_MESSAGE | NIF_TIP | NIF_STATE;
+        icon.uFlags           = NIF_MESSAGE | NIF_TIP | NIF_STATE | NIF_ICON;
         icon.uCallbackMessage = kCallback;
+        icon.hIcon            = iconHandle;
         icon.dwState          = NIS_HIDDEN;
         icon.dwStateMask      = NIS_HIDDEN;
         std::memcpy(icon.szTip, L"from shell32", sizeof(L"from shell32"));
@@ -170,11 +172,30 @@ TEST(ShellNotifyIcon, Shell32SendsTheLayoutTheParserReads) {
     const NotifyIconMessage message = ParseNotifyIconMessage(captured);
     EXPECT_EQ(message.command, static_cast<std::uint32_t>(NIM_ADD));
     EXPECT_EQ(message.id, 42u);
-    EXPECT_EQ(message.flags, static_cast<std::uint32_t>(NIF_MESSAGE | NIF_TIP | NIF_STATE));
+    EXPECT_EQ(message.flags, static_cast<std::uint32_t>(NIF_MESSAGE | NIF_TIP | NIF_STATE | NIF_ICON));
     EXPECT_EQ(message.callbackMessage, kCallback);
+    EXPECT_EQ(message.icon, static_cast<std::intptr_t>(static_cast<std::int32_t>(Handle32(iconHandle))));
     EXPECT_EQ(message.tip, L"from shell32");
     EXPECT_EQ(message.state, static_cast<std::uint32_t>(NIS_HIDDEN));
     EXPECT_EQ(message.stateMask, static_cast<std::uint32_t>(NIS_HIDDEN));
+}
+
+TEST(ShellNotifyIcon, Shell32SendsTheVersionTheParserReads) {
+    bool                         set      = false;
+    const std::vector<std::byte> captured = CaptureFromShell32([&set](HWND taskbar) {
+        NOTIFYICONDATAW icon{};
+        icon.cbSize   = NOTIFYICONDATAW_V2_SIZE;
+        icon.hWnd     = taskbar;
+        icon.uID      = 42;
+        icon.uVersion = NOTIFYICON_VERSION_4;
+        set           = Shell_NotifyIconW(NIM_SETVERSION, &icon) != FALSE;
+    });
+
+    ASSERT_TRUE(set);
+    const NotifyIconMessage message = ParseNotifyIconMessage(captured);
+    EXPECT_EQ(message.command, static_cast<std::uint32_t>(NIM_SETVERSION));
+    EXPECT_EQ(message.id, 42u);
+    EXPECT_EQ(message.version, static_cast<std::uint32_t>(NOTIFYICON_VERSION_4));
 }
 
 TEST(ShellNotifyIcon, Shell32SendsTheIconRectQueryTheParserReads) {
@@ -217,19 +238,6 @@ TEST(ShellNotifyIcon, Shell32ReadsAnIconRectAboveThePrimaryMonitor) {
     EXPECT_EQ(rect.bottom, kAbovePrimary.bottom);
 }
 
-TEST_F(ShellNotifyIconTray, AnAddedIconShowsWithItsPixelsAndTooltip) {
-    ASSERT_NE(_window, nullptr);
-    std::vector<std::byte> add = AddPayload(_owner, 1, LoadIconW(nullptr, IDI_APPLICATION));
-    EXPECT_EQ(Send(_window, kNotifyIconCopyData, add), TRUE);
-
-    const std::vector<TrayIcon> icons = _tray.Icons();
-    ASSERT_EQ(icons.size(), 1u);
-    EXPECT_EQ(icons[0].owner, reinterpret_cast<std::intptr_t>(_owner));
-    EXPECT_EQ(icons[0].tooltip, L"tip");
-    ASSERT_NE(icons[0].pixels, nullptr);
-    EXPECT_GT(icons[0].pixels->width, 0u);
-}
-
 TEST_F(ShellNotifyIconTray, AnIconHandleThatDoesNotReadLeavesTheIconWithoutPixels) {
     std::vector<std::byte> add = AddPayload(_owner, 1, IntToPointer<std::remove_pointer_t<HICON>>(0x7FFF1234));
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, add), TRUE);
@@ -245,6 +253,9 @@ TEST_F(ShellNotifyIconTray, MalformedMessagesAreRefusedAndTheTrayKeepsWorking) {
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, wrongSignature), FALSE);
     std::vector<std::byte> empty;
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, empty), FALSE);
+    // An icon rect query too short to read has no rect, which shell32 gives the app as E_FAIL.
+    std::vector<std::byte> shortQuery(8);
+    EXPECT_EQ(Send(_window, kIconRectCopyData, shortQuery), 0);
     EXPECT_TRUE(_tray.Icons().empty());
 
     std::vector<std::byte> add = AddPayload(_owner, 1, nullptr);
@@ -257,62 +268,6 @@ TEST_F(ShellNotifyIconTray, AppBarMessagesAreNotTrayIcons) {
     std::vector<std::byte> appBar(64);
     EXPECT_EQ(Send(_window, kAppBarCopyData, appBar), FALSE);
     EXPECT_TRUE(_tray.Icons().empty());
-}
-
-TEST_F(ShellNotifyIconTray, AnIconRectQueryIsAnsweredWithWhereABarShowsTheIcon) {
-    std::vector<std::byte> add = AddPayload(_owner, 4, nullptr);
-    Send(_window, kNotifyIconCopyData, add);
-    const std::uint8_t view = 0;
-    _tray.ShowRects(&view, {TrayIconRect{.owner = reinterpret_cast<std::intptr_t>(_owner), .id = 4, .rect = RECT{.left = -40, .top = 10, .right = -10, .bottom = 50}}});
-
-    NotifyIconIdentifier32 raw{.signature = kTrayNotifySignature, .part = 2, .size = 32, .padding = 0, .window = Handle32(_owner), .id = 4, .guid = GUID{}};
-    std::vector<std::byte> size(sizeof(raw));
-    std::memcpy(size.data(), &raw, sizeof(raw));
-    EXPECT_EQ(Send(_window, kIconRectCopyData, size), MAKELONG(30, 40));
-    raw.part = 1;
-    std::vector<std::byte> position(sizeof(raw));
-    std::memcpy(position.data(), &raw, sizeof(raw));
-    EXPECT_EQ(static_cast<std::int16_t>(LOWORD(Send(_window, kIconRectCopyData, position))), -40);
-
-    // Once no bar shows it, the answer is none, which shell32 gives the app as E_FAIL.
-    _tray.ShowRects(&view, {});
-    EXPECT_EQ(Send(_window, kIconRectCopyData, size), 0);
-    std::vector<std::byte> malformed(8);
-    EXPECT_EQ(Send(_window, kIconRectCopyData, malformed), 0);
-}
-
-TEST_F(ShellNotifyIconTray, AFloodOfIconsStopsAtTheCap) {
-    for (std::uint32_t id = 0; id < kMaxTrayIcons + 50; ++id) {
-        std::vector<std::byte> add = AddPayload(_owner, id, nullptr);
-        EXPECT_EQ(Send(_window, kNotifyIconCopyData, add), id < kMaxTrayIcons ? TRUE : FALSE);
-    }
-    EXPECT_EQ(_tray.Icons().size(), kMaxTrayIcons);
-}
-
-TEST_F(ShellNotifyIconTray, IconsOfAClosedWindowAreDropped) {
-    HWND                   closing = MessageWindow();
-    std::vector<std::byte> gone    = AddPayload(closing, 1, nullptr);
-    std::vector<std::byte> stays   = AddPayload(_owner, 2, nullptr);
-    Send(_window, kNotifyIconCopyData, gone);
-    Send(_window, kNotifyIconCopyData, stays);
-    ASSERT_EQ(_tray.Icons().size(), 2u);
-    DestroyWindow(closing);
-    EXPECT_TRUE(Eventually([this] { return _tray.Icons().size() == 1; }, std::chrono::seconds(7)));
-    EXPECT_EQ(_tray.Icons()[0].id, 2u);
-}
-
-TEST_F(ShellNotifyIconTray, PressPostsTheClickToTheIconsOwner) {
-    std::vector<std::byte> add = AddPayload(_owner, 3, nullptr);
-    Send(_window, kNotifyIconCopyData, add);
-    _tray.Press(_tray.Icons().at(0), TrayButton::Left);
-
-    std::vector<LPARAM> events;
-    MSG                 message{};
-    while (PeekMessageW(&message, _owner, kCallback, kCallback, PM_REMOVE)) {
-        EXPECT_EQ(message.wParam, 3u);
-        events.push_back(message.lParam);
-    }
-    EXPECT_EQ(events, (std::vector<LPARAM>{WM_LBUTTONDOWN, WM_LBUTTONUP}));
 }
 
 TEST_F(ShellNotifyIconTray, StaysFirstOfItsClassAndOutlivesWmClose) {

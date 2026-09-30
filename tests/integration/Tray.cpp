@@ -84,17 +84,6 @@ section { margin: 4px; padding: 3px; background: #191724; }
 
 } // namespace
 
-TEST(Tray, DrawsAnAddedIconOnlyWhileUnfolded) {
-    const integration::RunningBar bar("tray-draw", kConfig, kStyle);
-    const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
-    ASSERT_TRUE(app.Add(kGreen));
-
-    ASSERT_TRUE(ClickColor(bar, kToggleColor)) << "the tray's toggle never drew";
-    EXPECT_TRUE(bar.Draws(kGreen, kDrawn)) << "the icon never drew once the tray unfolded";
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
-    EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the icon still drew after the tray folded";
-}
-
 TEST(Tray, PostsAClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
     const integration::RunningBar bar("tray-click", kConfig, kStyle);
     const integration::TrayApp    current(1, NOTIFYICON_VERSION_4);

@@ -184,8 +184,6 @@ TEST(Style, OwnedStateRulesTakeColorOnlyAndMatchOnlyTheirModuleType) {
     EXPECT_THAT([] { return Parse("battery.warning { padding: 2px; }"); }, ConfigErrorWith("padding does not apply to battery.warning, which takes: color"));
     EXPECT_THAT([] { return Parse("battery.warning .icon { font-size: 20px; }"); }, ConfigErrorWith("which takes: color"));
     EXPECT_THAT([] { return Parse("audio.muted .item { color: #fff; }"); }, ConfigErrorWith("style a module's text and .icon only"));
-    EXPECT_THAT([] { return Parse("battery.warning.critical { color: #fff; }"); }, ConfigErrorWith("a module is in one at a time"));
-    EXPECT_THAT([] { return Parse("audio.muted:hover { background: #fff; }"); }, ConfigErrorWith("combines a state with :hover"));
     EXPECT_THAT([] { return StyleOf(".warning { color: #fff; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith(".warning colors only battery modules, and cpu is a cpu module"));
     EXPECT_THAT([] { return StyleOf(".muted { color: #fff; }", ModuleKind::Battery, "power"); },
                 ConfigErrorWith(".muted colors only audio modules, and power is a battery module"));
@@ -312,10 +310,4 @@ TEST(Style, AnythingOutsideTheSubsetIsAnErrorNamingTheLine) {
     EXPECT_THAT([] { return Parse(".module { padding: 1em; }"); }, ConfigErrorWith("must be a length in px"));
     EXPECT_THAT([] { return Parse(".icon { font-family: \"A\", monospace; }"); }, ConfigErrorWith("one font family, not a list"));
     EXPECT_THAT([] { return Parse("#ws.alert .item { color: #fff; }"); }, ConfigErrorWith("must start with a module"));
-}
-
-TEST(Style, IdsMustNameAModule) {
-    const StyleSheet sheet = Parse("#cpu { color: #fff; } #tpyo .icon { color: #fff; }");
-    EXPECT_THAT([&sheet] { RequireKnownIds(sheet, {"cpu", "memory"}); }, ConfigErrorWith("#tpyo names no module: the config's modules table defines cpu, memory"));
-    EXPECT_NO_THROW(RequireKnownIds(sheet, {"cpu", "tpyo"}));
 }

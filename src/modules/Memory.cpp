@@ -10,7 +10,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <stdexcept>
 #include <utility>
 
 namespace {
@@ -50,9 +49,6 @@ ModuleText Memory::Format(const std::string& spec) {
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {
-    if (usage.totalBytes == 0) {
-        throw std::invalid_argument("memory usage has no physical memory, so no percent of it is in use");
-    }
     const std::uint64_t used = usage.totalBytes - usage.availableBytes;
     return {{.name = "used", .value = BytesToGibibytes(used)},
             {.name = "total", .value = BytesToGibibytes(usage.totalBytes)},

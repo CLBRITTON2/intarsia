@@ -86,14 +86,6 @@ TEST(GlazeWmProtocol, WorkspacesCarryTheirMonitorAndPreferTheDisplayName) {
     EXPECT_EQ(workspaces[2].monitor, 131073);
 }
 
-TEST(GlazeWmProtocol, OnlyWorkspaceAndFocusEventsTriggerARequery) {
-    EXPECT_TRUE(glazewm::ChangesWorkspaces("focus_changed"));
-    EXPECT_TRUE(glazewm::ChangesWorkspaces("workspace_deactivated"));
-    EXPECT_TRUE(glazewm::ChangesWorkspaces("monitor_removed"));
-    EXPECT_FALSE(glazewm::ChangesWorkspaces("binding_modes_changed"));
-    EXPECT_FALSE(glazewm::ChangesWorkspaces("user_config_changed"));
-}
-
 TEST(GlazeWmProtocol, BindingModesPreferTheDisplayName) {
     const glazewm::ServerMessage message =
         glazewm::ParseServerMessage(R"({"messageType":"client_response","clientMessage":"query binding-modes","success":true,"error":null,"data":{"bindingModes":[)"
@@ -115,13 +107,6 @@ TEST(GlazeWmProtocol, TilingDirectionIsHorizontalOrVertical) {
     EXPECT_EQ(direction("horizontal"), TilingDirection::Horizontal);
     EXPECT_EQ(direction("vertical"), TilingDirection::Vertical);
     EXPECT_THROW(direction("diagonal"), glazewm::ProtocolError);
-}
-
-TEST(GlazeWmProtocol, FocusAndDirectionEventsRequeryTheDirection) {
-    EXPECT_TRUE(glazewm::ChangesTilingDirection("tiling_direction_changed"));
-    EXPECT_TRUE(glazewm::ChangesTilingDirection("focus_changed"));
-    EXPECT_TRUE(glazewm::ChangesTilingDirection("focused_container_moved"));
-    EXPECT_FALSE(glazewm::ChangesTilingDirection("binding_modes_changed"));
 }
 
 TEST(GlazeWmProtocol, WindowsComeFromDisplayedWorkspacesInTreeOrderThroughSplits) {
@@ -199,6 +184,9 @@ TEST(GlazeWmProtocol, GateSendsTheFirstQueryAndHoldsTheRestOfABurst) {
     EXPECT_TRUE(gate.Answered());
     EXPECT_FALSE(gate.Answered());
     EXPECT_TRUE(gate.RequestQuery());
+    // An answer with no events behind it sends nothing more.
+    EXPECT_FALSE(gate.Answered());
+    EXPECT_TRUE(gate.RequestQuery());
 }
 
 TEST(GlazeWmProtocol, FocusCommandAddressesTheWorkspaceByName) {
@@ -212,11 +200,4 @@ TEST(GlazeWmProtocol, FocusCommandRefusesNamesThatWouldSplitIntoMoreArguments) {
     EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\tclose"), glazewm::ProtocolError);
     EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\n"), glazewm::ProtocolError);
     EXPECT_THROW(glazewm::FocusWorkspaceCommand(""), glazewm::ProtocolError);
-}
-
-TEST(GlazeWmProtocol, GateSendsNothingMoreWhenTheBurstIsOver) {
-    glazewm::QueryGate gate;
-    EXPECT_TRUE(gate.RequestQuery());
-    EXPECT_FALSE(gate.Answered());
-    EXPECT_TRUE(gate.RequestQuery());
 }

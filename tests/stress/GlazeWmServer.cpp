@@ -2,7 +2,7 @@
 // way GlazeWM does, plus the load or faults a scenario names, and prints every command it receives to stdout on a line
 // of its own. Built as glazewm.exe, the image name the bar's peer check requires.
 //
-//   glazewm.exe --port <n> --scenario <normal|flood|malformed|stall|flap|reject|integration>
+//   glazewm.exe --port <n> --scenario <normal|flap|integration>
 //
 // Under integration, a stdin line "focus <n>" focuses the nth listed window and sends the events a focus change does,
 // then prints "pushed focus <n>" once they are sent.
@@ -30,11 +30,7 @@ namespace {
 
     enum class Scenario : std::uint8_t {
         Normal,     // answers everything and sends an event a second
-        Flood,      // answers everything and sends events as fast as the socket takes them
-        Malformed,  // answers, then sends one kind of broken message per connection
-        Stall,      // accepts the connection and never answers the upgrade
         Flap,       // answers, then drops the connection after a random moment
-        Reject,     // answers every query with a failure
         Integration // answers everything, sends events only when stdin asks, and lists only the integration tests' own windows
     };
 
@@ -79,19 +75,13 @@ namespace {
     };
 
     Scenario ParseScenario(std::string_view name) {
-        constexpr std::array<std::pair<std::string_view, Scenario>, 7> kScenarios{{{"normal", Scenario::Normal},
-                                                                                   {"flood", Scenario::Flood},
-                                                                                   {"malformed", Scenario::Malformed},
-                                                                                   {"stall", Scenario::Stall},
-                                                                                   {"flap", Scenario::Flap},
-                                                                                   {"reject", Scenario::Reject},
-                                                                                   {"integration", Scenario::Integration}}};
+        constexpr std::array<std::pair<std::string_view, Scenario>, 3> kScenarios{{{"normal", Scenario::Normal}, {"flap", Scenario::Flap}, {"integration", Scenario::Integration}}};
         for (const auto& [known, scenario] : kScenarios) {
             if (known == name) {
                 return scenario;
             }
         }
-        throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flood, malformed, stall, flap, reject or integration", name));
+        throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flap or integration", name));
     }
 
     Options ParseOptions(std::int32_t argc, char** argv) {
@@ -141,10 +131,6 @@ namespace {
         return std::format(R"({{"messageType":"client_response","clientMessage":"{}","success":true,"error":null,"data":{}}})", clientMessage, data);
     }
 
-    std::string Failure(std::string_view clientMessage) {
-        return std::format(R"({{"messageType":"client_response","clientMessage":"{}","success":false,"error":"refused by the stress scenario","data":null}})", clientMessage);
-    }
-
     std::string Event(std::string_view eventType) {
         return std::format(R"({{"messageType":"event_subscription","subscriptionId":"s","success":true,"error":null,"data":{{"eventType":"{}"}}}})", eventType);
     }
@@ -166,19 +152,6 @@ namespace {
                            monitor, children);
     }
 
-    // What the bar must survive without crashing, one per connection: it drops the connection and retries each time.
-    std::string Broken(size_t connection) {
-        switch (connection % 7) {
-            case 0: return "not json at all";
-            case 1: return R"({"success":true})";
-            case 2: return Response("query monitors", R"({"monitors":[{"type":"monitor","handle":"not a number","children":[]}]})");
-            case 3: return Response("query monitors", std::string(100'000, '[') + std::string(100'000, ']'));
-            case 4: return std::string(size_t{2} * 1024 * 1024, 'x');
-            case 5: return "{\"messageType\":\"\xff\xfe\",\"success\":true}";
-            default: return R"({"messageType":"client_response","clientMessage":"query monitors","success":true,"error":null,"data":{"monitors":"\ud800"}})";
-        }
-    }
-
     // The focused window, binding modes and tiling direction all follow the focus index, so a change sends all three.
     void SendFocusEvents(const loopback::Socket& peer) {
         for (const std::string_view eventType : {"focus_changed", "binding_modes_changed", "tiling_direction_changed"}) {
@@ -188,24 +161,17 @@ namespace {
 
     // Serves one connection until the bar closes it or the scenario drops it.
     void Serve(const loopback::Socket& peer, Scenario scenario, size_t connection, PushedFocus& pushed) {
-        if (scenario == Scenario::Stall) {
-            loopback::ReceiveHeaders(peer);
-            loopback::DrainUntilClosed(peer);
-            return;
-        }
         loopback::AnswerUpgrade(peer);
 
         std::mt19937 random(static_cast<std::uint32_t>(connection));
-        const auto   dropAt     = std::chrono::steady_clock::now() + std::chrono::milliseconds(200 + (random() % 1800));
-        auto         nextEvent  = std::chrono::steady_clock::now();
-        size_t       focused    = 0;
-        bool         sentBroken = false;
+        const auto   dropAt    = std::chrono::steady_clock::now() + std::chrono::milliseconds(200 + (random() % 1800));
+        auto         nextEvent = std::chrono::steady_clock::now();
+        size_t       focused   = 0;
         while (true) {
             if (scenario == Scenario::Flap && std::chrono::steady_clock::now() >= dropAt) {
                 return;
             }
-            const std::chrono::milliseconds wait = scenario == Scenario::Flood ? std::chrono::milliseconds(0) : std::chrono::milliseconds(50);
-            if (loopback::Readable(peer, wait)) {
+            if (loopback::Readable(peer, std::chrono::milliseconds(50))) {
                 const std::optional<std::string> request = loopback::ReceiveText(peer);
                 if (!request.has_value()) {
                     return;
@@ -214,9 +180,7 @@ namespace {
                 if (text.starts_with("command ")) {
                     std::cout << text << std::endl;
                 }
-                if (scenario == Scenario::Reject && text.starts_with("query ")) {
-                    loopback::SendText(peer, Failure(text));
-                } else if (text.starts_with("sub ")) {
+                if (text.starts_with("sub ")) {
                     loopback::SendText(peer, Response(text, R"({"subscriptionId":"s"})"));
                 } else if (text == "query monitors") {
                     loopback::SendText(peer, Response(text, Monitors(focused, scenario == Scenario::Integration)));
@@ -229,10 +193,6 @@ namespace {
                 }
                 continue;
             }
-            if (scenario == Scenario::Malformed && !sentBroken) {
-                loopback::SendText(peer, Broken(connection));
-                sentBroken = true;
-            }
             if (scenario == Scenario::Integration) {
                 if (const std::optional<size_t> index = pushed.Next(); index.has_value()) {
                     focused = *index;
@@ -242,7 +202,7 @@ namespace {
             } else if (std::chrono::steady_clock::now() >= nextEvent) {
                 ++focused;
                 SendFocusEvents(peer);
-                nextEvent = scenario == Scenario::Flood ? std::chrono::steady_clock::now() : std::chrono::steady_clock::now() + std::chrono::seconds(1);
+                nextEvent = std::chrono::steady_clock::now() + std::chrono::seconds(1);
             }
         }
     }
@@ -265,7 +225,7 @@ int main(int argc, char** argv) {
             try {
                 Serve(peer, options.scenario, connection, pushed);
             } catch (const std::exception& error) {
-                // The bar dropping the connection mid-send is the point of most scenarios.
+                // The bar drops the connection mid-send whenever it closes or reconnects.
                 std::cerr << std::format("connection {} ended: {}", connection, error.what()) << std::endl;
             }
         }

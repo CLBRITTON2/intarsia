@@ -13,15 +13,10 @@ namespace {
 
 } // namespace
 
-TEST(Ticks, WaitsAFullIntervalOnABoundary) {
-    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'000), std::chrono::seconds(60)), std::chrono::milliseconds(60'000));
-}
-
-TEST(Ticks, WaitsUntilTheNextBoundaryJustAfterOne) {
-    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'001), std::chrono::seconds(60)), std::chrono::milliseconds(59'999));
-}
-
 TEST(Ticks, AlignsToEachInterval) {
+    // On a boundary the wait is a full interval.
+    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'000), std::chrono::seconds(60)), std::chrono::milliseconds(60'000));
+    EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'001), std::chrono::seconds(60)), std::chrono::milliseconds(59'999));
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(1'250), std::chrono::seconds(1)), std::chrono::milliseconds(750));
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(3'599'000), std::chrono::seconds(3600)), std::chrono::milliseconds(1'000));
 }

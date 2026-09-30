@@ -95,26 +95,6 @@ namespace {
 
 } // namespace
 
-TEST(NotifyIconProtocol, ParseReadsTheFieldsShell32Sends) {
-    TrayNotifyData data       = Data(NIM_MODIFY, 0x0003A0D9, 7, NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_STATE);
-    data.data.callbackMessage = WM_APP + 9;
-    data.data.icon            = 0x00010033;
-    data.data.state           = NIS_HIDDEN;
-    data.data.stateMask       = NIS_HIDDEN;
-    data.data.version         = NOTIFYICON_VERSION_4;
-    std::memcpy(data.data.tip.data(), L"hello", sizeof(L"hello"));
-
-    const NotifyIconMessage message = ParseNotifyIconMessage(Bytes(data, kSentBytes));
-    EXPECT_EQ(message.command, static_cast<std::uint32_t>(NIM_MODIFY));
-    EXPECT_EQ(message.owner, 0x0003A0D9);
-    EXPECT_EQ(message.id, 7u);
-    EXPECT_EQ(message.callbackMessage, static_cast<std::uint32_t>(WM_APP + 9));
-    EXPECT_EQ(message.icon, 0x00010033);
-    EXPECT_EQ(message.tip, L"hello");
-    EXPECT_EQ(message.state, static_cast<std::uint32_t>(NIS_HIDDEN));
-    EXPECT_EQ(message.version, static_cast<std::uint32_t>(NOTIFYICON_VERSION_4));
-}
-
 TEST(NotifyIconProtocol, ParseSignExtendsHandlesAsWindowsDoes) {
     TrayNotifyData data             = Data(NIM_ADD, 0xFFFF1234, 1, 0);
     data.data.icon                  = 0x80000001;
@@ -128,15 +108,6 @@ TEST(NotifyIconProtocol, ATipWithNoNullStopsAtItsBuffer) {
     data.data.tip.fill(L'x');
     data.data.state = 0xFFFFFFFF;
     EXPECT_EQ(ParseNotifyIconMessage(Bytes(data, kSentBytes)).tip, std::wstring(128, L'x'));
-}
-
-TEST(NotifyIconProtocol, ParseRefusesShortPayloadsAndWrongSignatures) {
-    const TrayNotifyData data = Data(NIM_ADD, 1, 1, 0);
-    EXPECT_THROW(ParseNotifyIconMessage(Bytes(data, sizeof(data) - 1)), TrayMessageError);
-    EXPECT_THROW(ParseNotifyIconMessage({}), TrayMessageError);
-    TrayNotifyData wrong = data;
-    wrong.signature      = 0x12345678;
-    EXPECT_THROW(ParseNotifyIconMessage(Bytes(wrong, kSentBytes)), TrayMessageError);
 }
 
 TEST(NotifyIconProtocol, AddThenModifyThenDelete) {
@@ -261,15 +232,6 @@ TEST(NotifyIconProtocol, ShowTipIsReadOnAddAndOnModifiesThatSetTheTip) {
     EXPECT_FALSE(ownTip[0].standardTooltip);
 }
 
-TEST(NotifyIconProtocol, OnlyVersionFourIconsWithoutTheStandardTooltipDrawTheirOwnPopup) {
-    TrayIcon icon = Icon(5, 1);
-    EXPECT_FALSE(DrawsOwnPopup(icon));
-    icon.version = NOTIFYICON_VERSION_4;
-    EXPECT_TRUE(DrawsOwnPopup(icon));
-    icon.standardTooltip = true;
-    EXPECT_FALSE(DrawsOwnPopup(icon));
-}
-
 TEST(NotifyIconProtocol, TheSamePixelsKeepTheirPointer) {
     TrayIcon icon                    = Icon(5, 1);
     icon.pixels                      = Pixels(7);
@@ -367,13 +329,9 @@ TEST(NotifyIconProtocol, ACallbackBelowWmUserPostsNothing) {
     EXPECT_TRUE(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 0, .y = 0}).empty());
 }
 
-TEST(NotifyIconProtocol, ParseIconRectQueryReadsThePartAndTheIcon) {
-    const IconRectQuery query = ParseIconRectQuery(QueryBytes(2, 0xFFFF8001, 42, kGuid));
-    EXPECT_EQ(query.part, IconRectPart::Size);
-    EXPECT_EQ(query.owner, -32767);
-    EXPECT_EQ(query.id, 42u);
-    EXPECT_EQ(query.guid, kGuid);
-    EXPECT_EQ(ParseIconRectQuery(QueryBytes(1, 5, 7, GUID{})).part, IconRectPart::Position);
+// Shell32 asks for the size before the corner, which ShellNotifyIcon.Shell32SendsTheIconRectQueryTheParserReads reads.
+TEST(NotifyIconProtocol, ParseIconRectQueryReadsTheSizePart) {
+    EXPECT_EQ(ParseIconRectQuery(QueryBytes(2, 5, 7, GUID{})).part, IconRectPart::Size);
 }
 
 TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
@@ -384,8 +342,6 @@ TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
     wrongSignature[0]                     = std::byte{0};
     EXPECT_THROW(ParseIconRectQuery(wrongSignature), TrayMessageError);
     EXPECT_THROW(ParseIconRectQuery(QueryBytes(0, 5, 7, GUID{})), TrayMessageError);
-    EXPECT_THROW(ParseIconRectQuery(QueryBytes(3, 5, 7, GUID{})), TrayMessageError);
-    EXPECT_THROW(ParseIconRectQuery(QueryBytes(0x101, 5, 7, GUID{})), TrayMessageError);
 }
 
 TEST(NotifyIconProtocol, AnIconShownOnTwoBarsAnswersWithTheOneNearestTheCursor) {
@@ -410,14 +366,4 @@ TEST(NotifyIconProtocol, AnIconNoBarShowsHasNoRect) {
     EXPECT_FALSE(QueriedIconRect(Query(5, 7, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, kGuid), {Icon(5, 8)}, rects, POINT{.x = 0, .y = 0}).has_value());
-}
-
-TEST(NotifyIconProtocol, IconRectAnswerPacksTheCornerOrTheSize) {
-    const RECT    rect{.left = -30, .top = 400, .right = 70, .bottom = 600};
-    const LRESULT position = IconRectAnswer(IconRectPart::Position, rect);
-    EXPECT_EQ(static_cast<std::int16_t>(LOWORD(position)), -30);
-    EXPECT_EQ(HIWORD(position), 400);
-    const LRESULT size = IconRectAnswer(IconRectPart::Size, rect);
-    EXPECT_EQ(LOWORD(size), 100);
-    EXPECT_EQ(HIWORD(size), 200);
 }

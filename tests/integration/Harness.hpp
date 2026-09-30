@@ -104,8 +104,7 @@ namespace integration {
         std::vector<std::uint32_t> pixels;
     };
 
-    // The window's screen rect in the physical pixels the bar draws, whatever this process's DPI awareness.
-    RECT PhysicalWindowRect(HWND window);
+    RECT ScreenRect(HWND window);
     // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
     Capture CaptureScreenOver(HWND window);
     size_t  CountPixels(const Capture& capture, std::uint32_t rgb);

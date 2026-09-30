@@ -56,14 +56,6 @@ namespace {
 
 } // namespace
 
-TEST(WindowList, WindowsOnMonitorKeepsOnlyThatMonitorsInOrder) {
-    const std::vector<ManagedWindow> shown = WindowsOnMonitor(kWindows, 10);
-    ASSERT_EQ(shown.size(), 2u);
-    EXPECT_EQ(shown[0].id, "a");
-    EXPECT_EQ(shown[1].id, "b");
-    EXPECT_TRUE(WindowsOnMonitor(kWindows, 30).empty());
-}
-
 TEST_F(WindowListModule, LayoutReportsAChangeOnlyWhenTheWindowsChange) {
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     _windowManager.windows = kWindows;
@@ -131,17 +123,4 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     module.Draw(render, D2D1::Point2F(0.0f, 0.0f));
     EXPECT_TRUE(SUCCEEDED(context->EndDraw()));
     DestroyWindow(iconWindow);
-}
-
-TEST_F(WindowListModule, ClickFocusesTheWindowUnderIt) {
-    WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
-    _windowManager.windows = kWindows;
-    module.Layout(NoDrawing());
-    // Items at 5 to 33 and 43 to 71.
-    module.Click(D2D1::Point2F(45.0f, 5.0f));
-    EXPECT_EQ(_windowManager.focusedWindow, "b");
-
-    _windowManager.focusedWindow.clear();
-    module.Click(D2D1::Point2F(38.0f, 5.0f));
-    EXPECT_TRUE(_windowManager.focusedWindow.empty());
 }

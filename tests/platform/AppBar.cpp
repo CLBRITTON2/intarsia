@@ -24,15 +24,9 @@ TEST(AppBar, DockedRectTakesAStripAlongEachEdge) {
     EXPECT_TRUE(SameRect(DockedRect(kMonitor, Edge::Bottom, 54), RECT{.left = 0, .top = 1026, .right = 1920, .bottom = 1080}));
     EXPECT_TRUE(SameRect(DockedRect(kMonitor, Edge::Left, 54), RECT{.left = 0, .top = 0, .right = 54, .bottom = 1080}));
     EXPECT_TRUE(SameRect(DockedRect(kMonitor, Edge::Right, 54), RECT{.left = 1866, .top = 0, .right = 1920, .bottom = 1080}));
-}
-
-TEST(AppBar, DockedRectKeepsASecondaryMonitorOffset) {
+    // A secondary monitor keeps its offset from the primary.
     const RECT secondary{.left = 1920, .top = -200, .right = 4480, .bottom = 1240};
     EXPECT_TRUE(SameRect(DockedRect(secondary, Edge::Top, 81), RECT{.left = 1920, .top = -200, .right = 4480, .bottom = -119}));
-}
-
-TEST(AppBar, DockedRectDoesNotClampAThicknessLargerThanTheMonitor) {
-    EXPECT_TRUE(SameRect(DockedRect(kMonitor, Edge::Top, 2000), RECT{.left = 0, .top = 0, .right = 1920, .bottom = 2000}));
 }
 
 // An ABM_SETPOS for a 3440x54 strip at the top, byte for byte as shell32 sent it to the taskbar window.

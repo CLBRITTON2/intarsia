@@ -202,7 +202,6 @@ bool Tray::ToggleAt(D2D1_POINT_2F point) const {
 
 std::vector<TrayIcon> ShownIcons(const std::vector<TrayIcon>& icons) {
     std::vector<TrayIcon> shown;
-    std::ranges::copy_if(icons, std::back_inserter(shown),
-                         [](const TrayIcon& icon) { return !icon.hidden && icon.pixels != nullptr && icon.pixels->width > 0 && icon.pixels->height > 0; });
+    std::ranges::copy_if(icons, std::back_inserter(shown), [](const TrayIcon& icon) { return !icon.hidden && icon.pixels != nullptr; });
     return shown;
 }

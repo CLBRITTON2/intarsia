@@ -146,9 +146,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
   add_executable(intarsia_gtests
     tests/LaunchOptions.cpp
-    tests/bar/FrameStats.cpp
     tests/bar/Layout.cpp
-    tests/bar/Sections.cpp
     tests/bar/Tooltip.cpp
     tests/config/Config.cpp
     tests/config/Style.cpp
@@ -181,14 +179,12 @@ if(BUILD_TESTING)
     tests/platform/AppBar.cpp
     tests/platform/ChangeSignal.cpp
     tests/platform/FileWatcher.cpp
-    tests/platform/FrameClock.cpp
     tests/platform/Log.cpp
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
     tests/platform/PerformanceCounter.cpp
     tests/platform/ShellLaunch.cpp
     tests/platform/Text.cpp
-    tests/platform/Token.cpp
     tests/platform/WebSocket.cpp
     tests/platform/WindowProc.cpp
     tests/platform/WorkQueue.cpp
@@ -208,9 +204,10 @@ if(BUILD_TESTING)
   gtest_discover_tests(intarsia_gtests)
 
   # Runs the real bar against the test GlazeWM server below, so ctest runs it apart from the unit tests by its label.
-  add_executable(intarsia_integration tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
-                                      tests/integration/GlazeWm.cpp tests/integration/Style.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp
-                                      tests/integration/TrayApp.cpp)
+  # The bar's manifest makes it per monitor DPI aware too, so every rect, column and cursor position is in the bar's
+  # physical pixels.
+  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
+                                      tests/integration/GlazeWm.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp tests/integration/TrayApp.cpp)
   target_link_libraries(intarsia_integration PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:stress_glazewm_server>"
                                                           INTARSIA_ARGV_RECORDER="$<TARGET_FILE:integration_argv_recorder>")

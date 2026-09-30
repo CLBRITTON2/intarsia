@@ -344,21 +344,21 @@ namespace integration {
     }
 
     SavedCursor::SavedCursor() : _position{} {
-        if (!GetPhysicalCursorPos(&_position)) {
-            ThrowLastError("GetPhysicalCursorPos");
+        if (!GetCursorPos(&_position)) {
+            ThrowLastError("GetCursorPos");
         }
     }
 
     SavedCursor::~SavedCursor() {
-        if (!SetPhysicalCursorPos(_position.x, _position.y)) {
+        if (!SetCursorPos(_position.x, _position.y)) {
             Log("cursor_restore_failed", std::format("x={} y={} error={}", _position.x, _position.y, GetLastError()));
         }
     }
 
     void PlaceCursor(HWND bar, std::int32_t x) {
-        const RECT rect = PhysicalWindowRect(bar);
-        if (!SetPhysicalCursorPos(rect.left + x, (rect.top + rect.bottom) / 2)) {
-            ThrowLastError(std::format("SetPhysicalCursorPos(bar column {})", x));
+        const RECT rect = ScreenRect(bar);
+        if (!SetCursorPos(rect.left + x, (rect.top + rect.bottom) / 2)) {
+            ThrowLastError(std::format("SetCursorPos(bar column {})", x));
         }
     }
 
@@ -374,19 +374,16 @@ namespace integration {
         return nullptr;
     }
 
-    RECT PhysicalWindowRect(HWND window) {
-        DPI_AWARENESS_CONTEXT previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        RECT                  rect{};
-        const BOOL            found = GetWindowRect(window, &rect);
-        SetThreadDpiAwarenessContext(previous);
-        if (!found) {
+    RECT ScreenRect(HWND window) {
+        RECT rect{};
+        if (!GetWindowRect(window, &rect)) {
             ThrowLastError("GetWindowRect");
         }
         return rect;
     }
 
     Capture CaptureScreenOver(HWND window) {
-        const RECT rect = PhysicalWindowRect(window);
+        const RECT rect = ScreenRect(window);
         Capture    capture{.width = rect.right - rect.left, .height = rect.bottom - rect.top, .pixels = {}};
         capture.pixels.resize(static_cast<size_t>(capture.width) * static_cast<size_t>(capture.height));
 

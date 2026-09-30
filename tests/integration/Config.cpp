@@ -50,13 +50,10 @@ divider { width: 12px; height: 60%; }
 
     // The primary monitor's width in DIPs, as the bar measures it against min_length.
     float PrimaryLengthDips() {
-        DPI_AWARENESS_CONTEXT previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        HMONITOR              primary  = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
-        MONITORINFO           info{};
-        info.cbSize      = sizeof(info);
-        const BOOL found = GetMonitorInfoW(primary, &info);
-        SetThreadDpiAwarenessContext(previous);
-        if (!found) {
+        HMONITOR    primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO info{};
+        info.cbSize = sizeof(info);
+        if (!GetMonitorInfoW(primary, &info)) {
             ThrowLastError("GetMonitorInfoW(primary)");
         }
         UINT dpiX = 0;

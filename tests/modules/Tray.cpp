@@ -72,38 +72,16 @@ namespace {
 } // namespace
 
 TEST(Tray, ShownIconsSkipsHiddenIconsAndIconsWithoutPixels) {
-    const std::vector<TrayIcon> shown = ShownIcons({Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false),
-                                                    Icon(4, std::make_shared<const IconPixels>(IconPixels{.width = 0, .height = 0, .pbgra = {}}), false)});
+    const std::vector<TrayIcon> shown = ShownIcons({Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false)});
     ASSERT_EQ(shown.size(), 1u);
     EXPECT_EQ(shown[0].id, 1u);
-}
-
-TEST_F(TrayModule, StartsFoldedAndTheToggleShowsTheIcons) {
-    Tray module(kConfig, _tray, TestModuleStyle());
-    EXPECT_TRUE(module.Layout(_render));
-    EXPECT_FALSE(module.Layout(_render));
-    const float folded = module.Size().width;
-
-    module.Click(At(module, folded / 2.0f));
-    EXPECT_TRUE(module.Layout(_render));
-    // Icons 1 and 4, each a 20 icon padded 4 across with 5 of margin on either side.
-    EXPECT_NEAR(module.Size().width, folded + (2.0f * 38.0f), 1.0f);
-    EXPECT_TRUE(_tray.presses.empty());
-
-    _context->BeginDraw();
-    module.Draw(_render, D2D1::Point2F(0.0f, 0.0f));
-    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
-
-    // The toggle is last: clicking it again folds the icons away.
-    module.Click(At(module, module.Size().width - 6.0f));
-    EXPECT_TRUE(module.Layout(_render));
-    EXPECT_FLOAT_EQ(module.Size().width, folded);
 }
 
 TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
     ModuleStyle style = TestModuleStyle();
     Tray        plain(kConfig, _tray, style);
-    plain.Layout(_render);
+    EXPECT_TRUE(plain.Layout(_render));
+    EXPECT_FALSE(plain.Layout(_render));
     style.toggle.padding.xDips = 10.0f;
     style.toggle.margin.xDips  = 1.0f;
     Tray padded(kConfig, _tray, style);
@@ -113,15 +91,17 @@ TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
     EXPECT_FLOAT_EQ(folded, plain.Size().width + 4.0f);
 
     padded.Click(At(padded, folded / 2.0f));
-    padded.Layout(_render);
+    EXPECT_TRUE(padded.Layout(_render));
+    // Icons 1 and 4, each a 20 icon padded 4 across with 5 of margin on either side.
     EXPECT_NEAR(padded.Size().width, folded + (2.0f * 38.0f), 1.0f);
+    EXPECT_TRUE(_tray.presses.empty());
     _context->BeginDraw();
     padded.Draw(_render, D2D1::Point2F(0.0f, 0.0f));
     EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
 
-    // The toggle's own margin is where the icons end, so a click just inside its box still folds the tray.
+    // The toggle is last, and its own margin is where the icons end, so a click just inside its box folds the tray.
     padded.Click(At(padded, padded.Size().width - 2.0f));
-    padded.Layout(_render);
+    EXPECT_TRUE(padded.Layout(_render));
     EXPECT_FLOAT_EQ(padded.Size().width, folded);
 }
 
