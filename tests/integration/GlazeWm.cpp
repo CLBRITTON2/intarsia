@@ -120,11 +120,17 @@ TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
 
 TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosing) {
     integration::RunningBar bar("disconnect", kWorkspacesConfig, kAlertStyle);
-    ASSERT_TRUE(integration::Eventually([&bar] { return integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), kTextColor) > 0; }, std::chrono::seconds(5)))
-        << "the connected workspaces never drew in the text color";
-    const size_t connectedPixels = integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), kAlertColor);
+    // Until its first connection's answers arrive, the bar draws "not connected yet" in the alert color too.
+    size_t connectedPixels = 0;
+    ASSERT_TRUE(integration::Eventually(
+        [&] {
+            const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
+            connectedPixels                    = integration::CountPixels(capture, kAlertColor);
+            return integration::CountPixels(capture, kTextColor) > 0 && connectedPixels == 0;
+        },
+        std::chrono::seconds(5)))
+        << "the connected workspaces never drew in the text color alone, " << connectedPixels << " alert pixels";
     integration::Log("pixels_counted", std::format("color=#{:06x} count={} while=connected", kAlertColor, connectedPixels));
-    EXPECT_EQ(connectedPixels, 0U);
 
     bar.StopServer();
     size_t alertPixels = 0;

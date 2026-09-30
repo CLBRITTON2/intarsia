@@ -40,7 +40,8 @@ pwsh -File scripts/integration.ps1
 ```
 
 This runs the real bar against a test GlazeWM IPC server and judges it only by what it does outside its process, such
-as the commands the server receives for clicks along the bar, the colors it draws and the messages a tray app gets.
+as the commands the server receives for clicks along the bar, the colors it draws before and after a config or style
+save, its exit code and the messages a tray app gets.
 `tests/integration/` holds the harness and the cases. Each step prints a line: the processes started, every command a
 sweep of clicks sent, pushed events, tray messages sent and received, pixels found, the bar's exit code, and then the
 bar's log. Run it from an interactive desktop session.

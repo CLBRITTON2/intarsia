@@ -48,28 +48,12 @@ section { margin: 4px; padding: 3px; background: #191724; }
     // The tray drops the icons of closed owners every 5 s.
     constexpr auto kSwept = std::chrono::seconds(7);
 
-    size_t         PixelsOf(const integration::RunningBar& bar, std::uint32_t rgb) {
-        return integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), rgb);
-    }
-
-    bool Draws(const integration::RunningBar& bar, std::uint32_t rgb, std::chrono::milliseconds limit) {
-        const bool drawn = integration::Eventually([&] { return PixelsOf(bar, rgb) > 0; }, limit);
-        integration::Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, PixelsOf(bar, rgb)));
-        return drawn;
-    }
-
-    bool StopsDrawing(const integration::RunningBar& bar, std::uint32_t rgb, std::chrono::milliseconds limit) {
-        const bool gone = integration::Eventually([&] { return PixelsOf(bar, rgb) == 0; }, limit);
-        integration::Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, PixelsOf(bar, rgb)));
-        return gone;
-    }
-
     // Clicks the middle of the pixels drawn in rgb. False when none are drawn within kDrawn.
     bool ClickColor(const integration::RunningBar& bar, std::uint32_t rgb) {
         std::optional<double> column;
         if (!integration::Eventually(
                 [&] {
-                    column = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), rgb);
+                    column = bar.ColumnOf(rgb);
                     return column.has_value();
                 },
                 kDrawn)) {
@@ -106,9 +90,9 @@ TEST(Tray, DrawsAnAddedIconOnlyWhileUnfolded) {
     ASSERT_TRUE(app.Add(kGreen));
 
     ASSERT_TRUE(ClickColor(bar, kToggleColor)) << "the tray's toggle never drew";
-    EXPECT_TRUE(Draws(bar, kGreen, kDrawn)) << "the icon never drew once the tray unfolded";
+    EXPECT_TRUE(bar.Draws(kGreen, kDrawn)) << "the icon never drew once the tray unfolded";
     ASSERT_TRUE(ClickColor(bar, kToggleColor));
-    EXPECT_TRUE(StopsDrawing(bar, kGreen, kDrawn)) << "the icon still drew after the tray folded";
+    EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the icon still drew after the tray folded";
 }
 
 TEST(Tray, PostsAClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
@@ -138,7 +122,7 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
     std::optional<double> column;
     ASSERT_TRUE(integration::Eventually(
         [&] {
-            column = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kGreen);
+            column = bar.ColumnOf(kGreen);
             return column.has_value() && app.IconRect().has_value();
         },
         kDrawn))
@@ -161,11 +145,11 @@ TEST(Tray, DrawsTheNewPixelsOfAModifiedIcon) {
     const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
     ASSERT_TRUE(ClickColor(bar, kToggleColor));
-    ASSERT_TRUE(Draws(bar, kGreen, kDrawn));
+    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     ASSERT_TRUE(app.Modify(kOrange));
-    EXPECT_TRUE(Draws(bar, kOrange, kDrawn)) << "the modified icon's new color never drew";
-    EXPECT_TRUE(StopsDrawing(bar, kGreen, kDrawn)) << "the icon's old color still drew";
+    EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the modified icon's new color never drew";
+    EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the icon's old color still drew";
 }
 
 TEST(Tray, RemovesADeletedIcon) {
@@ -173,10 +157,10 @@ TEST(Tray, RemovesADeletedIcon) {
     const integration::TrayApp    app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
     ASSERT_TRUE(ClickColor(bar, kToggleColor));
-    ASSERT_TRUE(Draws(bar, kGreen, kDrawn));
+    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     ASSERT_TRUE(app.Delete());
-    EXPECT_TRUE(StopsDrawing(bar, kGreen, kDrawn)) << "the deleted icon still drew";
+    EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the deleted icon still drew";
 }
 
 TEST(Tray, RemovesTheIconOfAClosedOwner) {
@@ -184,8 +168,8 @@ TEST(Tray, RemovesTheIconOfAClosedOwner) {
     integration::TrayApp          app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
     ASSERT_TRUE(ClickColor(bar, kToggleColor));
-    ASSERT_TRUE(Draws(bar, kGreen, kDrawn));
+    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     app.CloseOwner();
-    EXPECT_TRUE(StopsDrawing(bar, kGreen, kSwept)) << "the icon of a closed owner still drew";
+    EXPECT_TRUE(bar.StopsDrawing(kGreen, kSwept)) << "the icon of a closed owner still drew";
 }

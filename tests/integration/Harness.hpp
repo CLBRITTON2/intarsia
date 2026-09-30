@@ -98,7 +98,7 @@ namespace integration {
     class RunningBar {
       public:
         RunningBar(std::string_view testName, std::string_view config, std::string_view style);
-        // Closes the bar as a user would and records a test failure unless it exits 0.
+        // Closes the bar unless the test already has, and records a test failure unless it exits 0.
         ~RunningBar();
         RunningBar(const RunningBar&)            = delete;
         RunningBar& operator=(const RunningBar&) = delete;
@@ -106,6 +106,13 @@ namespace integration {
         HWND        PrimaryBar() const;
         // Clicks the primary bar at column x of its middle row and logs it.
         void ClickAt(std::int32_t x) const;
+        // Each is nullopt while the primary bar has no window, as between the bars a reload replaces and their new
+        // ones.
+        std::optional<size_t> PixelsOf(std::uint32_t rgb) const;
+        std::optional<double> ColumnOf(std::uint32_t rgb) const;
+        // Each waits until the primary bar draws some pixel in rgb, or none, within limit and logs the count.
+        bool Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const;
+        bool StopsDrawing(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         // Every command the server has received so far, across its restarts.
         std::vector<std::string> Commands() const;
         // Commands sent after a sweep of clicks along the primary bar, with repeats folded. Waits until the stream
@@ -117,6 +124,12 @@ namespace integration {
         void                     StartServer();
         // Has the server focus its indexth listed window and waits until it has sent the bar the events for it.
         void PushFocus(size_t index);
+        // Each writes over its file in one save, as an editor does, which the running bar reloads.
+        void SaveConfig(std::string_view config) const;
+        void SaveStyle(std::string_view style) const;
+        // Closes the bar as a user would, posting WM_CLOSE to its message box too after a fatal error. Its exit code,
+        // or nullopt when it still ran after the limit and was killed.
+        std::optional<std::uint32_t> Close();
 
       private:
         // Sweeps once, logs each command it sent with how many clicks sent it, and returns them all.

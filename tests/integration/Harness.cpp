@@ -135,6 +135,10 @@ namespace integration {
             return line.substr(kPrefix.size());
         }
 
+        void LogPixelCount(std::uint32_t rgb, const std::optional<size_t>& count) {
+            Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, count.has_value() ? std::to_string(*count) : std::string("no_bar")));
+        }
+
     } // namespace
 
     void Log(std::string_view event, std::string_view fields) {
@@ -438,16 +442,11 @@ namespace integration {
     RunningBar::~RunningBar() {
         try {
             if (_bar.has_value()) {
-                const auto                         closing = std::chrono::steady_clock::now();
-                const std::optional<std::uint32_t> code    = _bar->Close(kExitLimit);
+                const std::optional<std::uint32_t> code = Close();
                 if (!code.has_value()) {
-                    Log("bar_still_running", std::format("pid={} after_ms={}", _bar->Id(), MillisecondsSince(closing)));
                     ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
-                } else {
-                    Log("bar_exited", std::format("pid={} code={} after_ms={}", _bar->Id(), *code, MillisecondsSince(closing)));
-                    if (*code != 0) {
-                        ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
-                    }
+                } else if (*code != 0) {
+                    ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
                 }
             }
             PrintLogs();
@@ -468,7 +467,7 @@ namespace integration {
 
     HWND RunningBar::PrimaryBar() const {
         if (!_bar.has_value()) {
-            throw std::logic_error("the bar was never started");
+            throw std::logic_error("the bar is closed");
         }
         return PrimaryBarWindow(_bar->Id());
     }
@@ -476,6 +475,46 @@ namespace integration {
     void RunningBar::ClickAt(std::int32_t x) const {
         SendClick(PrimaryBar(), x);
         Log("click", std::format("x={}", x));
+    }
+
+    std::optional<size_t> RunningBar::PixelsOf(std::uint32_t rgb) const {
+        HWND window = PrimaryBar();
+        if (window == nullptr) {
+            return std::nullopt;
+        }
+        return CountPixels(CaptureScreenOver(window), rgb);
+    }
+
+    std::optional<double> RunningBar::ColumnOf(std::uint32_t rgb) const {
+        HWND window = PrimaryBar();
+        if (window == nullptr) {
+            return std::nullopt;
+        }
+        return MeanColumn(CaptureScreenOver(window), rgb);
+    }
+
+    bool RunningBar::Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const {
+        std::optional<size_t> count;
+        const bool            drawn = Eventually(
+            [&] {
+                count = PixelsOf(rgb);
+                return count.value_or(0) > 0;
+            },
+            limit);
+        LogPixelCount(rgb, count);
+        return drawn;
+    }
+
+    bool RunningBar::StopsDrawing(std::uint32_t rgb, std::chrono::milliseconds limit) const {
+        std::optional<size_t> count;
+        const bool            gone = Eventually(
+            [&] {
+                count = PixelsOf(rgb);
+                return count == size_t{0};
+            },
+            limit);
+        LogPixelCount(rgb, count);
+        return gone;
     }
 
     std::vector<std::string> RunningBar::Commands() const {
@@ -555,6 +594,33 @@ namespace integration {
             throw std::runtime_error(std::format("the test GlazeWM server did not push focus {} within {} s (logs in {})", index, kStartLimit.count(), _work.string()));
         }
         Log("focus_pushed", std::format("index={} after_ms={}", index, MillisecondsSince(started)));
+    }
+
+    void RunningBar::SaveConfig(std::string_view config) const {
+        WriteText(_work / "config.lua", config);
+        Log("file_saved", "file=config.lua");
+    }
+
+    void RunningBar::SaveStyle(std::string_view style) const {
+        WriteText(_work / "style.css", style);
+        Log("file_saved", "file=style.css");
+    }
+
+    // The child is killed with its job when it is reset still running.
+    std::optional<std::uint32_t> RunningBar::Close() {
+        if (!_bar.has_value()) {
+            throw std::logic_error("the bar is closed");
+        }
+        const std::uint32_t                pid     = _bar->Id();
+        const auto                         closing = std::chrono::steady_clock::now();
+        const std::optional<std::uint32_t> code    = _bar->Close(kExitLimit);
+        _bar.reset();
+        if (code.has_value()) {
+            Log("bar_exited", std::format("pid={} code={} after_ms={}", pid, *code, MillisecondsSince(closing)));
+        } else {
+            Log("bar_still_running", std::format("pid={} after_ms={}", pid, MillisecondsSince(closing)));
+        }
+        return code;
     }
 
     std::filesystem::path RunningBar::ServerOutput(std::uint32_t start) const {
