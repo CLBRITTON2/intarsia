@@ -3,14 +3,21 @@
 // of its own. Built as glazewm.exe, the image name the bar's peer check requires.
 //
 //   glazewm.exe --port <n> --scenario <normal|flood|malformed|stall|flap|reject|integration>
+//
+// Under integration, a stdin line "focus <n>" focuses the nth listed window and sends the events a focus change does,
+// then prints "pushed focus <n>" once they are sent.
 
 #include "../platform/Loopback.hpp"
 
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
+#include <deque>
 #include <format>
+#include <functional>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <random>
 #include <stdexcept>
@@ -28,8 +35,43 @@ namespace {
         Stall,      // accepts the connection and never answers the upgrade
         Flap,       // answers, then drops the connection after a random moment
         Reject,     // answers every query with a failure
-        Integration // answers everything, sends no events, and lists only the integration tests' own windows
+        Integration // answers everything, sends events only when stdin asks, and lists only the integration tests' own windows
     };
+
+    // Focus changes read from stdin, waiting for a connection to send them on.
+    class PushedFocus {
+      public:
+        void Add(size_t index) {
+            const std::scoped_lock lock(_mutex);
+            _pending.push_back(index);
+        }
+
+        std::optional<size_t> Next() {
+            const std::scoped_lock lock(_mutex);
+            if (_pending.empty()) {
+                return std::nullopt;
+            }
+            const size_t index = _pending.front();
+            _pending.pop_front();
+            return index;
+        }
+
+      private:
+        std::mutex         _mutex;
+        std::deque<size_t> _pending;
+    };
+
+    void ReadPushedFocus(PushedFocus& pushed) {
+        constexpr std::string_view kFocus = "focus ";
+        std::string                line;
+        while (std::getline(std::cin, line)) {
+            if (!line.starts_with(kFocus)) {
+                std::cerr << std::format("unknown stdin line '{}', use focus <n>", line) << std::endl;
+                std::exit(1);
+            }
+            pushed.Add(std::stoul(line.substr(kFocus.size())));
+        }
+    }
 
     struct Options {
         std::uint16_t port;
@@ -137,8 +179,15 @@ namespace {
         }
     }
 
+    // The focused window, binding modes and tiling direction all follow the focus index, so a change sends all three.
+    void SendFocusEvents(const loopback::Socket& peer) {
+        for (const std::string_view eventType : {"focus_changed", "binding_modes_changed", "tiling_direction_changed"}) {
+            loopback::SendText(peer, Event(eventType));
+        }
+    }
+
     // Serves one connection until the bar closes it or the scenario drops it.
-    void Serve(const loopback::Socket& peer, Scenario scenario, size_t connection) {
+    void Serve(const loopback::Socket& peer, Scenario scenario, size_t connection, PushedFocus& pushed) {
         if (scenario == Scenario::Stall) {
             loopback::ReceiveHeaders(peer);
             loopback::DrainUntilClosed(peer);
@@ -184,11 +233,15 @@ namespace {
                 loopback::SendText(peer, Broken(connection));
                 sentBroken = true;
             }
-            if (scenario != Scenario::Integration && std::chrono::steady_clock::now() >= nextEvent) {
-                ++focused;
-                for (const std::string_view eventType : {"focus_changed", "binding_modes_changed", "tiling_direction_changed"}) {
-                    loopback::SendText(peer, Event(eventType));
+            if (scenario == Scenario::Integration) {
+                if (const std::optional<size_t> index = pushed.Next(); index.has_value()) {
+                    focused = *index;
+                    SendFocusEvents(peer);
+                    std::cout << std::format("pushed focus {}", focused) << std::endl;
                 }
+            } else if (std::chrono::steady_clock::now() >= nextEvent) {
+                ++focused;
+                SendFocusEvents(peer);
                 nextEvent = scenario == Scenario::Flood ? std::chrono::steady_clock::now() : std::chrono::steady_clock::now() + std::chrono::seconds(1);
             }
         }
@@ -202,10 +255,15 @@ int main(int argc, char** argv) {
         const loopback::Winsock winsock;
         const loopback::Socket  listener = loopback::ListenOn(options.port);
         std::cout << std::format("listening on 127.0.0.1:{}", options.port) << std::endl;
+        PushedFocus pushed;
+        if (options.scenario == Scenario::Integration) {
+            // Ends with the process, blocked in getline while stdin stays open.
+            std::thread(ReadPushedFocus, std::ref(pushed)).detach();
+        }
         for (size_t connection = 0;; ++connection) {
             const loopback::Socket peer = loopback::Accept(listener);
             try {
-                Serve(peer, options.scenario, connection);
+                Serve(peer, options.scenario, connection, pushed);
             } catch (const std::exception& error) {
                 // The bar dropping the connection mid-send is the point of most scenarios.
                 std::cerr << std::format("connection {} ended: {}", connection, error.what()) << std::endl;

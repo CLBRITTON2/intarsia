@@ -4,6 +4,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -47,6 +49,43 @@ section { margin: 4px; padding: 3px; background: #191724; }
         return "command focus --container-id " + std::string(id);
     }
 
+    constexpr std::string_view kWindowsConfig = R"(
+return {
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    window_manager = "glazewm",
+    modules_left = { "apps" },
+    modules_center = {},
+    modules_right = {},
+    layouts = {},
+    modules = { apps = { type = "windows" } },
+}
+)";
+
+    constexpr std::uint32_t    kFocusedColor = 0x2E86C1;
+
+    constexpr std::string_view kFocusedStyle = R"(
+* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
+section { margin: 4px; padding: 3px; background: #191724; }
+.item { padding: 2px 6px; margin: 0 1px; }
+.item.focused { background: #2e86c1; }
+)";
+
+    // The mean column of the pixels in rgb, or nullopt when there are none.
+    std::optional<double> MeanColumn(const integration::Capture& capture, std::uint32_t rgb) {
+        double sum   = 0;
+        size_t count = 0;
+        for (size_t index = 0; index < capture.pixels.size(); ++index) {
+            if (capture.pixels[index] == rgb) {
+                sum += static_cast<double>(index % static_cast<size_t>(capture.width));
+                ++count;
+            }
+        }
+        if (count == 0) {
+            return std::nullopt;
+        }
+        return sum / static_cast<double>(count);
+    }
+
 } // namespace
 
 TEST(GlazeWm, ClicksAlongTheBarSendEachItemsCommandInOrder) {
@@ -68,4 +107,29 @@ TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
     EXPECT_TRUE(integration::Eventually([&bar] { return bar.LogLines("event=connected").size() == 2; }, std::chrono::seconds(15)));
     EXPECT_THAT(bar.CommandsFromSweep(),
                 ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace", "command toggle-tiling-direction"));
+}
+
+TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
+    const integration::TestWindow first(L" 1");
+    const integration::TestWindow second(L" 2");
+    integration::RunningBar       bar("focus", kWindowsConfig, kFocusedStyle);
+
+    std::optional<double>         firstColumn;
+    ASSERT_TRUE(integration::Eventually(
+        [&] {
+            firstColumn = MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
+            return firstColumn.has_value();
+        },
+        std::chrono::seconds(5)))
+        << "the first window's item never drew in the focused color";
+
+    bar.PushFocus(1);
+    std::optional<double> secondColumn;
+    EXPECT_TRUE(integration::Eventually(
+        [&] {
+            secondColumn = MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
+            return firstColumn.has_value() && secondColumn.has_value() && *secondColumn > *firstColumn;
+        },
+        std::chrono::seconds(5)))
+        << "the focused color stayed at column " << firstColumn.value_or(-1) << ", now " << secondColumn.value_or(-1);
 }

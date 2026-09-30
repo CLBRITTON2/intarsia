@@ -129,11 +129,23 @@ namespace integration {
         }
         const UniqueHandle  output = InheritableFile(stdoutPath);
         const UniqueHandle  errors = InheritableFile(stderrPath);
+        SECURITY_ATTRIBUTES inherit{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
+        HANDLE              readEnd  = nullptr;
+        HANDLE              writeEnd = nullptr;
+        if (!CreatePipe(&readEnd, &writeEnd, &inherit, 0)) {
+            ThrowLastError("CreatePipe(child stdin)");
+        }
+        const UniqueHandle input(readEnd);
+        _input = UniqueHandle(writeEnd);
+        // Only the child's end is inherited, so the pipe reaches end of file once this side closes.
+        if (!SetHandleInformation(_input.get(), HANDLE_FLAG_INHERIT, 0)) {
+            ThrowLastError("SetHandleInformation(child stdin)");
+        }
         STARTUPINFOW        startup{};
         PROCESS_INFORMATION started{};
         startup.cb         = sizeof(startup);
         startup.dwFlags    = STARTF_USESTDHANDLES;
-        startup.hStdInput  = nullptr;
+        startup.hStdInput  = input.get();
         startup.hStdOutput = output.get();
         startup.hStdError  = errors.get();
         if (!CreateProcessW(program.c_str(), commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &started)) {
@@ -176,6 +188,14 @@ namespace integration {
         if (Running()) {
             TerminateProcess(_process.get(), 1);
             WaitForSingleObject(_process.get(), INFINITE);
+        }
+    }
+
+    void ChildProcess::WriteLine(std::string_view line) const {
+        const std::string text    = std::string(line) + "\n";
+        DWORD             written = 0;
+        if (!WriteFile(_input.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) || written != text.size()) {
+            ThrowLastError(std::format("WriteFile(child stdin, '{}')", line));
         }
     }
 
@@ -427,6 +447,18 @@ namespace integration {
                         ServerOutput(_serverStarts), _work / std::format("server-{}.err", _serverStarts));
         if (!Eventually([this] { return !ReadLines(ServerOutput(_serverStarts)).empty(); }, kStartLimit)) {
             throw std::runtime_error(std::format("the test GlazeWM server did not listen on port {} within {} s (logs in {})", _port, kStartLimit.count(), _work.string()));
+        }
+    }
+
+    void RunningBar::PushFocus(size_t index) {
+        if (!_server.has_value()) {
+            throw std::logic_error("the test GlazeWM server is stopped");
+        }
+        const std::string pushed = std::format("pushed focus {}", index);
+        const size_t      before = static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed));
+        _server->WriteLine(std::format("focus {}", index));
+        if (!Eventually([&] { return static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed)) > before; }, kStartLimit)) {
+            throw std::runtime_error(std::format("the test GlazeWM server did not push focus {} within {} s (logs in {})", index, kStartLimit.count(), _work.string()));
         }
     }
 

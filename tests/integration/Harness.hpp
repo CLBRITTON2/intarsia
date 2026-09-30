@@ -20,7 +20,8 @@ namespace integration {
     // The test server lists only windows whose title starts with this (tests/stress/GlazeWmServer.cpp).
     inline constexpr std::wstring_view kWindowTitle = L"intarsia integration";
 
-    // A child process with stdout and stderr in files, killed with its job if the test ends without closing it.
+    // A child process with stdin on a pipe and stdout and stderr in files, killed with its job if the test ends without
+    // closing it.
     class ChildProcess {
       public:
         ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
@@ -32,9 +33,11 @@ namespace integration {
         // then waits for it to exit. The exit code, or nullopt when it is still running after limit.
         std::optional<std::uint32_t> Close(std::chrono::milliseconds limit) const;
         void                         Kill() const;
+        void                         WriteLine(std::string_view line) const;
 
       private:
         UniqueHandle  _job;
+        UniqueHandle  _input;
         UniqueHandle  _process;
         std::uint32_t _id;
     };
@@ -100,6 +103,8 @@ namespace integration {
         std::vector<std::string> LogLines(std::string_view text) const;
         void                     StopServer();
         void                     StartServer();
+        // Has the server focus its indexth listed window and waits until it has sent the bar the events for it.
+        void PushFocus(size_t index);
 
       private:
         std::filesystem::path       ServerOutput(std::uint32_t start) const;
