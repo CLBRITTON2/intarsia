@@ -25,16 +25,23 @@ class Workspaces final : public IModule {
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     void        Click(D2D1_POINT_2F point) override;
     bool        Hover(std::optional<D2D1_POINT_2F> point) override;
+    // 0 while an item fades, so the bar draws every display frame until the fades end.
+    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     // None: the module has no config table, and a left click focuses the workspace under it.
     const ModuleActions& Actions() const override;
     // While disconnected, why: the window manager's status detail. Nothing while connected.
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    HoveredItem     _hovered;
-    IWindowManager& _windowManager;
-    std::intptr_t   _monitor;
-    ModuleStyle     _style;
+    // Layout's work before the fades follow it.
+    bool                          LayOutItems(const RenderContext& render);
+    std::vector<const ItemStyle*> ItemStyles() const;
+
+    HoveredItem                   _hovered;
+    ItemFades                     _fades;
+    IWindowManager&               _windowManager;
+    std::intptr_t                 _monitor;
+    ModuleStyle                   _style;
     // What the items show, once laid out, so an unchanged list lays out nothing.
     std::vector<Workspace> _shown;
     std::wstring           _disconnectedText;

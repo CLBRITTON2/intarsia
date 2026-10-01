@@ -31,7 +31,8 @@ class Tray final : public IModule {
     // Tells the tray where the icons the box's edge fully uncovers are on screen.
     void Place(const ModulePlacement& placement) override;
     void Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    // 0 while unfolding, folding or turning, so the bar draws every display frame until the transitions end.
+    // 0 while unfolding, folding, turning or fading an item, so the bar draws every display frame until the transitions
+    // end.
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     void                         Click(D2D1_POINT_2F point) override;
     void                         RightClick(D2D1_POINT_2F point) override;
@@ -63,11 +64,14 @@ class Tray final : public IModule {
     // The shown icon under point, or null over the toggle or between items.
     const Slot* SlotAt(D2D1_POINT_2F point) const;
     bool        ToggleAt(D2D1_POINT_2F point) const;
+    // Layout's work before the fades follow it.
+    bool                          LayOutItems(const RenderContext& render);
+    std::vector<const ItemStyle*> ItemStyles() const;
 
-    TrayConfig  _config;
-    ITray&      _tray;
-    ModuleStyle _style;
-    Fold        _fold;
+    TrayConfig                    _config;
+    ITray&                        _tray;
+    ModuleStyle                   _style;
+    Fold                          _fold;
     // What the last layout read of them, so drawing and hit tests agree with one frame.
     float             _revealShown = 0.0f;
     float             _angleShown  = 0.0f;
@@ -76,6 +80,7 @@ class Tray final : public IModule {
     // Every icon then the toggle, as if fully unfolded.
     ItemRow                   _row = EmptyItemRow();
     HoveredItem               _hovered;
+    ItemFades                 _fades;
     std::vector<TrayIconRect> _placed; // as last handed to the tray
     std::optional<TrayIcon>   _popup;  // the icon whose app's popup is open
     bool                      _laidOut = false;

@@ -125,6 +125,9 @@ struct ItemStyle {
     // The item under the cursor, from .item:hover rules.
     D2D1_COLOR_F hoverColor;
     D2D1_COLOR_F hoverBackground;
+    // How the item fades into this style's colors, from the hover or another state.
+    Transition backgroundTransition;
+    Transition colorTransition;
 };
 
 // The thumb a menu draws beside its entries while they overflow its box, from menu .scrollbar.
@@ -172,8 +175,9 @@ struct ClassColors {
 // One module's style, cascaded from every style.css rule that matches it.
 struct ModuleStyle {
     BoxStyle     box;
-    Spacing      margin; // around the box, which it shrinks across the bar and spaces from its neighbours along it
-    D2D1_COLOR_F hover;  // the box's background under the cursor
+    Spacing      margin;               // around the box, which it shrinks across the bar and spaces from its neighbours along it
+    D2D1_COLOR_F hover;                // the box's background under the cursor
+    Transition   backgroundTransition; // between the background and the hover
     D2D1_COLOR_F color;
     D2D1_COLOR_F alertColor; // text in a state that needs attention, such as a failed command
     // A battery discharging at or under warning_at (.warning) and critical_at (.critical).

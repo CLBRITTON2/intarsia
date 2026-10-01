@@ -7,6 +7,7 @@
 #include "bar/Sections.hpp"
 #include "bar/Tooltip.hpp"
 #include "config/Config.hpp"
+#include "modules/AnimatedValue.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
 #include "platform/AppBar.hpp"
@@ -66,7 +67,8 @@ class Bar {
     // Render, drawing only when some module's content changed: an unchanged frame costs a present for nothing.
     void Refresh();
 
-    // Draws the modules as last laid out, for a change of colors alone, such as the hover moving.
+    // Draws the modules as last laid out, for a change of colors alone, such as the hover moving, then schedules the
+    // next change, so a fade the change started runs on the frame clock.
     void Redraw();
 
     // True once drawing failed because the graphics device was lost. The bar draws nothing more.
@@ -118,10 +120,13 @@ class Bar {
     HitBox                   PlaceInRoom(const ModuleEntry& entry, float start, float length) const;
     std::vector<PlacedEntry> PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const;
     void                     DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
-    // The module's box (its background, or its hover under the cursor), then the module.
+    // The module's box (its background, or fading to its hover under the cursor), then the module.
     void DrawModule(const HitBox& box, const ModuleStyle& style);
-    // The group's box, its hover over the toggle's span alone under the cursor, the toggle, then its members.
+    // The group's box, its hover fading in over the toggle's span alone under the cursor, the toggle, then its members.
     void DrawGroup(const PlacedEntry& placed);
+    // Fades every box toward its fill for where the cursor now is.
+    void FollowPointer();
+    bool BoxFading() const;
     void ScheduleNextChange();
     // Stops drawing and posts to control, once.
     void ReportDeviceLost(const DeviceLostError& error);
@@ -180,6 +185,7 @@ class Bar {
     std::unique_ptr<MenuLister>                           _lister; // posts to the window, so it stops before the window goes
     std::unique_ptr<BrushCache>                           _brushes;
     std::unordered_map<const ModuleStyle*, RenderContext> _contexts; // by the style of the entry it belongs to
+    std::unordered_map<const IModule*, ColorFade>         _boxFades; // every module's box fill, members included
     Microsoft::WRL::ComPtr<IDWriteTextFormat>             _textFormat;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.

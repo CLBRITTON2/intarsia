@@ -221,7 +221,53 @@ namespace {
         }
     }
 
+    float SnapCoordinate(float pixelsPerDip, float offset, float dips) {
+        return (std::round((dips + offset) * pixelsPerDip) / pixelsPerDip) - offset;
+    }
+
+    float SnapLength(float pixelsPerDip, float dips) {
+        return std::round(dips * pixelsPerDip) / pixelsPerDip;
+    }
+
+    BorderSide SnapSide(float pixelsPerDip, const BorderSide& side) {
+        if (side.widthDips <= 0.0f) {
+            return side;
+        }
+        // The small allowance keeps a width that is whole pixels in float error from losing one.
+        const float pixels = std::max(std::floor((side.widthDips * pixelsPerDip) + 0.001f), 1.0f);
+        return BorderSide{.widthDips = pixels / pixelsPerDip, .color = side.color};
+    }
+
 } // namespace
+
+PixelGrid PixelGridOf(ID2D1DeviceContext* context) {
+    float dpiX = 0.0f;
+    float dpiY = 0.0f;
+    context->GetDpi(&dpiX, &dpiY);
+    D2D1_MATRIX_3X2_F transform{};
+    context->GetTransform(&transform);
+    return PixelGrid{.pixelsPerDip = dpiX / 96.0f, .offsetX = transform._31, .offsetY = transform._32};
+}
+
+D2D1_RECT_F SnapRect(const PixelGrid& grid, const D2D1_RECT_F& rect) {
+    return D2D1::RectF(SnapCoordinate(grid.pixelsPerDip, grid.offsetX, rect.left), SnapCoordinate(grid.pixelsPerDip, grid.offsetY, rect.top),
+                       SnapCoordinate(grid.pixelsPerDip, grid.offsetX, rect.right), SnapCoordinate(grid.pixelsPerDip, grid.offsetY, rect.bottom));
+}
+
+BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
+    const float pixelsPerDip = grid.pixelsPerDip;
+    BoxStyle    snapped      = style;
+    snapped.border           = Border{.top    = SnapSide(pixelsPerDip, style.border.top),
+                                      .right  = SnapSide(pixelsPerDip, style.border.right),
+                                      .bottom = SnapSide(pixelsPerDip, style.border.bottom),
+                                      .left   = SnapSide(pixelsPerDip, style.border.left)};
+    for (InsetShadow& shadow : snapped.shadows) {
+        shadow.xDips      = SnapLength(pixelsPerDip, shadow.xDips);
+        shadow.yDips      = SnapLength(pixelsPerDip, shadow.yDips);
+        shadow.spreadDips = SnapLength(pixelsPerDip, shadow.spreadDips);
+    }
+    return snapped;
+}
 
 Insets ContentInsets(const BoxStyle& style) {
     return Insets{.left   = style.padding.xDips + style.border.left.widthDips,
@@ -230,16 +276,19 @@ Insets ContentInsets(const BoxStyle& style) {
                   .bottom = style.padding.yDips + style.border.bottom.widthDips};
 }
 
-void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& box, const BoxStyle& style, const D2D1_COLOR_F& fill) {
+void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& bounds, const BoxStyle& style, const D2D1_COLOR_F& fill) {
+    const PixelGrid   grid = PixelGridOf(context);
+    const D2D1_RECT_F box  = SnapRect(grid, bounds);
     // An empty module's box has no length, and its inset border would draw inside out.
     if (IsEmpty(box)) {
         return;
     }
-    const float radius = std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f);
+    const BoxStyle lines  = SnapLines(grid, style);
+    const float    radius = std::min(lines.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f);
     if (fill.a > 0.0f) {
         context->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brushes.Get(fill));
     }
-    const Border&     border = style.border;
+    const Border&     border = lines.border;
     const D2D1_SIZE_F corner = D2D1::SizeF(radius, radius);
     const Figure      outer{.rect = box, .radii = {.topLeft = corner, .topRight = corner, .bottomRight = corner, .bottomLeft = corner}};
     // CSS's inner edge: each corner's radius less the widths of the two sides that meet there.
@@ -249,8 +298,8 @@ void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F
                                  .topRight    = Shrink(corner, border.right.widthDips, border.top.widthDips),
                                  .bottomRight = Shrink(corner, border.right.widthDips, border.bottom.widthDips),
                                  .bottomLeft  = Shrink(corner, border.left.widthDips, border.bottom.widthDips)}};
-    if (!style.shadows.empty() && !IsEmpty(inner.rect)) {
-        DrawShadows(context, brushes, FactoryOf(context).Get(), inner, style.shadows);
+    if (!lines.shadows.empty() && !IsEmpty(inner.rect)) {
+        DrawShadows(context, brushes, FactoryOf(context).Get(), inner, lines.shadows);
     }
     DrawBorder(context, brushes, outer, inner, border);
 }

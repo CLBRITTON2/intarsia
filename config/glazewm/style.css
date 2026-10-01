@@ -22,8 +22,10 @@
  *   group             a group's box, which holds its toggle and, unfolded, its members, each styled by its own name,
  *                     and whose :hover lights the toggle alone
  *
- * transition is none, or a property, a duration in ms or s and a timing function (linear, ease, ease-in, ease-out,
- * ease-in-out), and transform is none or rotate(<n>deg). Only a tray or a group takes them.
+ * transition is none, or a comma list of a property, a duration in ms or s and a timing function (linear, ease,
+ * ease-in, ease-out, ease-in-out). A module's box fades its background into its :hover, and an .item its background
+ * and color into its :hover or a new state such as .focused. Only a tray or a group takes width, an .icon's transform
+ * (none or rotate(<n>deg)) and its transition.
  *
  * Lengths are px. padding and margin take one length, or two: above and below, then left and right. A more specific
  * selector wins, and a later rule wins a tie, as in any CSS.

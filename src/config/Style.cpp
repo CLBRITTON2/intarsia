@@ -308,14 +308,14 @@ namespace {
         return std::chrono::milliseconds(static_cast<std::int64_t>(milliseconds ? *value : *value * 1000.0f));
     }
 
-    // none, or a property, a duration and an optional timing function (ease when left out, as in CSS).
+    constexpr std::string_view kTransitionForm =
+        "must be none, or transitions separated by commas, each a property, a duration and a timing function, as width 400ms ease-out, background 150ms ease";
+
+    // A property, a duration and an optional timing function (ease when left out, as in CSS).
     TransitionValue ReadTransitionValue(std::string_view text) {
-        if (text == "none") {
-            return TransitionValue{.property = {}, .transition = kNoTransition};
-        }
         const std::vector<std::string_view> parts = SplitOutside(text, kSpace);
         if (parts.size() != 2 && parts.size() != 3) {
-            throw std::invalid_argument("must be none, or a property, a duration and a timing function, as width 400ms ease-out");
+            throw std::invalid_argument(std::string(kTransitionForm));
         }
         TimingFunction timing = TimingFunction::Ease;
         if (parts.size() == 3) {
@@ -328,8 +328,35 @@ namespace {
         return TransitionValue{.property = parts[0], .transition = Transition{.duration = ReadDuration(parts[1]), .timing = timing}};
     }
 
-    Transition ReadTransition(std::string_view text) {
-        return ReadTransitionValue(text).transition;
+    std::vector<TransitionValue> ReadTransitionValues(std::string_view text) {
+        if (text == "none") {
+            return {};
+        }
+        std::vector<TransitionValue> values;
+        for (const std::string_view entry : SplitOutside(text, ",")) {
+            values.push_back(ReadTransitionValue(entry));
+        }
+        // Splitting drops empty entries, so a stray comma shows only in the count.
+        if (values.empty() || std::cmp_not_equal(std::ranges::count(text, ','), values.size() - 1)) {
+            throw std::invalid_argument(std::string(kTransitionForm));
+        }
+        return values;
+    }
+
+    // The transition a list gives property, the last one naming it as in CSS, or none.
+    Transition TransitionOf(std::string_view text, std::string_view property) {
+        Transition found = kNoTransition;
+        for (const TransitionValue& value : ReadTransitionValues(text)) {
+            if (value.property == property) {
+                found = value.transition;
+            }
+        }
+        return found;
+    }
+
+    // A reader of one property's transition, for Cascaded::Read.
+    auto TransitionReader(std::string_view property) {
+        return [property](std::string_view text) { return TransitionOf(text, property); };
     }
 
     // none, or rotate(<degrees>deg).
@@ -397,7 +424,7 @@ namespace {
             case ValueKind::Spacing: ReadSpacing(value); return;
             case ValueKind::Family: ReadFamily(value); return;
             case ValueKind::Weight: ReadWeight(value); return;
-            case ValueKind::Transition: ReadTransitionValue(value); return;
+            case ValueKind::Transition: ReadTransitionValues(value); return;
             case ValueKind::Rotation: ReadRotation(value); return;
             case ValueKind::Shadows: ReadShadows(value); return;
         }
@@ -705,7 +732,11 @@ namespace {
                 if (selector.compounds.back().hover) {
                     return {"color", "background"};
                 }
-                return {"color", "background", "font-weight", "padding", "margin", "border-radius", "box-shadow"};
+                allowed = {"color", "background", "font-weight", "padding", "margin", "border-radius", "box-shadow"};
+                if (selector.target == StyleTarget::Item) {
+                    allowed.emplace_back("transition");
+                }
+                return allowed;
             case StyleTarget::Module: {
                 const Compound& compound = selector.compounds.front();
                 if (compound.hover) {
@@ -828,12 +859,24 @@ namespace {
         return variables;
     }
 
-    // Each target animates one property: a tray's or group's box its width as it unfolds, an icon its rotation.
-    void RequireTransitionedProperty(StyleTarget target, std::string_view value) {
-        const std::string_view animated = ReadTransitionValue(value).property;
-        const std::string_view expected = target == StyleTarget::Icon ? "transform" : "width";
-        if (!animated.empty() && animated != expected) {
-            throw std::invalid_argument(std::format("animates {} here, not {}, as transition: {} 300ms ease", expected, animated, expected));
+    // A module's box animates its background and, a tray's or group's, its width as it unfolds, an icon its rotation and
+    // an item its colors.
+    std::vector<std::string_view> AnimatedProperties(StyleTarget target) {
+        if (target == StyleTarget::Icon) {
+            return {"transform"};
+        }
+        if (target == StyleTarget::Item) {
+            return {"background", "color"};
+        }
+        return {"background", "width"};
+    }
+
+    void RequireTransitionedProperties(StyleTarget target, std::string_view value) {
+        const std::vector<std::string_view> animated = AnimatedProperties(target);
+        for (const TransitionValue& transition : ReadTransitionValues(value)) {
+            if (std::ranges::find(animated, transition.property) == animated.end()) {
+                throw std::invalid_argument(std::format("animates {} here, not {}, as transition: {} 300ms ease", JoinNames(animated), transition.property, animated.front()));
+            }
         }
     }
 
@@ -856,7 +899,7 @@ namespace {
                 for (const Declaration& longhand : ExpandShorthand(declaration)) {
                     CheckValue(*KindOf(longhand.property), longhand.value);
                     if (longhand.property == "transition") {
-                        RequireTransitionedProperty(selector.target, longhand.value);
+                        RequireTransitionedProperties(selector.target, longhand.value);
                     }
                     checked.push_back(longhand);
                 }
@@ -956,15 +999,17 @@ namespace {
         const Cascaded                      hover(sheet, target, &owner, &hovered);
         const D2D1_COLOR_F                  itemColor  = cascaded.Color("color", color);
         const D2D1_COLOR_F                  background = cascaded.Color("background", kTransparent);
-        return ItemStyle{.color           = itemColor,
-                         .background      = background,
-                         .weight          = cascaded.Read("font-weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
-                         .padding         = cascaded.Space("padding", kNoSpace),
-                         .margin          = cascaded.Space("margin", kNoSpace),
-                         .radiusDips      = cascaded.Length("border-radius", 0.0f),
-                         .shadows         = cascaded.Read("box-shadow", ReadShadows, std::vector<InsetShadow>{}),
-                         .hoverColor      = hover.Color("color", itemColor),
-                         .hoverBackground = hover.Color("background", background)};
+        return ItemStyle{.color                = itemColor,
+                         .background           = background,
+                         .weight               = cascaded.Read("font-weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
+                         .padding              = cascaded.Space("padding", kNoSpace),
+                         .margin               = cascaded.Space("margin", kNoSpace),
+                         .radiusDips           = cascaded.Length("border-radius", 0.0f),
+                         .shadows              = cascaded.Read("box-shadow", ReadShadows, std::vector<InsetShadow>{}),
+                         .hoverColor           = hover.Color("color", itemColor),
+                         .hoverBackground      = hover.Color("background", background),
+                         .backgroundTransition = cascaded.Read("transition", TransitionReader("background"), kNoTransition),
+                         .colorTransition      = cascaded.Read("transition", TransitionReader("color"), kNoTransition)};
     }
 
     std::string_view TypeName(ModuleKind kind) {
@@ -1071,11 +1116,14 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
     const Cascaded         iconRules(sheet, StyleTarget::Icon, &normal, &icon);
     const Cascaded         expandedIconRules(sheet, StyleTarget::Icon, &expanded, &icon);
     if (kind != ModuleKind::Tray && kind != ModuleKind::Group) {
-        for (const auto& [rules, property] :
-             {std::pair{&box, "transition"}, std::pair{&iconRules, "transform"}, std::pair{&iconRules, "transition"}, std::pair{&expandedIconRules, "transform"}}) {
+        for (const auto& [rules, property] : {std::pair{&iconRules, "transform"}, std::pair{&iconRules, "transition"}, std::pair{&expandedIconRules, "transform"}}) {
             if (const Declaration* declaration = rules->Find(property)) {
                 throw StyleError(sheet.source, declaration->line, std::format("{} animates a tray or group as it unfolds, and {} is a {} module", property, name, type));
             }
+        }
+        const Declaration* transition = box.Find("transition");
+        if (transition != nullptr && std::ranges::any_of(ReadTransitionValues(transition->value), [](const TransitionValue& value) { return value.property == "width"; })) {
+            throw StyleError(sheet.source, transition->line, std::format("transition: width animates a tray or group as it unfolds, and {} is a {} module", name, type));
         }
     }
     RequireOwnStates(sheet, kind, type, name);
@@ -1088,6 +1136,7 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
     return ModuleStyle{.box                         = boxStyle,
                        .margin                      = box.Space("margin", kNoSpace),
                        .hover                       = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
+                       .backgroundTransition        = box.Read("transition", TransitionReader("background"), kNoTransition),
                        .color                       = color,
                        .alertColor                  = Cascaded(sheet, StyleTarget::Module, &alerted, nullptr).Color("color", color),
                        .warning                     = ReadStateColors(sheet, type, name, "warning", color),
@@ -1099,13 +1148,13 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
                                                        .color           = iconRules.Color("color", color),
                                                        .gapDips         = iconRules.Length("margin-right", 0.0f),
                                                        .rotationDegrees = rotation,
-                                                       .transition      = iconRules.Read("transition", ReadTransition, kNoTransition)},
+                                                       .transition      = iconRules.Read("transition", TransitionReader("transform"), kNoTransition)},
                        .item                        = ReadItem(sheet, StyleTarget::Item, normal, "", color),
                        .focused                     = ReadItem(sheet, StyleTarget::Item, normal, "focused", color),
                        .occupied                    = ReadItem(sheet, StyleTarget::Item, normal, "occupied", color),
                        .empty                       = ReadItem(sheet, StyleTarget::Item, normal, "empty", color),
                        .toggle                      = ReadItem(sheet, StyleTarget::Item, normal, "toggle", color),
-                       .transition                  = box.Read("transition", ReadTransition, kNoTransition),
+                       .transition                  = box.Read("transition", TransitionReader("width"), kNoTransition),
                        .expandedIconRotationDegrees = expandedIconRules.Read("transform", ReadRotation, rotation)};
 }
 

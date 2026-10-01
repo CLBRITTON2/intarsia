@@ -73,3 +73,32 @@ float AnimatedValue::Value(std::chrono::steady_clock::time_point now) const {
 bool AnimatedValue::Running(std::chrono::steady_clock::time_point now) const {
     return _duration.count() > 0 && now - _start < _duration;
 }
+
+ColorFade::ColorFade(const D2D1_COLOR_F& color) : _from(color), _to(color) {}
+
+void ColorFade::Retarget(const D2D1_COLOR_F& target, const Transition& transition, std::chrono::steady_clock::time_point now) {
+    if (target.r == _to.r && target.g == _to.g && target.b == _to.b && target.a == _to.a) {
+        return;
+    }
+    _from     = Color(now);
+    _to       = target;
+    _progress = AnimatedValue(0.0f);
+    _progress.Retarget(1.0f, transition, now);
+}
+
+D2D1_COLOR_F ColorFade::Color(std::chrono::steady_clock::time_point now) const {
+    return MixColors(_from, _to, _progress.Value(now));
+}
+
+bool ColorFade::Running(std::chrono::steady_clock::time_point now) const {
+    return _progress.Running(now);
+}
+
+D2D1_COLOR_F MixColors(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second, float share) {
+    const float alpha = first.a + ((second.a - first.a) * share);
+    if (alpha <= 0.0f) {
+        return D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    const auto channel = [&](float from, float to) { return ((from * first.a) + (((to * second.a) - (from * first.a)) * share)) / alpha; };
+    return D2D1::ColorF(channel(first.r, second.r), channel(first.g, second.g), channel(first.b, second.b), alpha);
+}

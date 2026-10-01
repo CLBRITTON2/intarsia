@@ -49,8 +49,8 @@ namespace {
             _render            = _text.Context();
             _render.context    = _context.Get();
             _render.brushes    = _brushes.get();
-            _render.foreground = _brushes->Get(D2D1::ColorF(0xFFFFFF));
-            _render.accent     = _brushes->Get(D2D1::ColorF(0x00FFFF));
+            _render.foreground = _brushes->Keep(D2D1::ColorF(0xFFFFFF));
+            _render.accent     = _brushes->Keep(D2D1::ColorF(0x00FFFF));
             _tray.icons        = {Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false), Icon(4, Pixels(), false)};
         }
 

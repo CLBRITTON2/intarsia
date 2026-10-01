@@ -27,11 +27,14 @@ class WindowList final : public IModule {
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     void        Click(D2D1_POINT_2F point) override;
     bool        Hover(std::optional<D2D1_POINT_2F> point) override;
+    // 0 while an item fades, so the bar draws every display frame until the fades end.
+    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     // None: the module has no config table, and a left click focuses the window under it.
     const ModuleActions& Actions() const override;
 
   private:
     HoveredItem _hovered;
+    ItemFades   _fades;
     // One shown window. The bitmap is made from pixels on this bar's device, and is null while the icon is unknown.
     struct Slot {
         ManagedWindow                       window;
@@ -39,13 +42,16 @@ class WindowList final : public IModule {
         Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
     };
 
-    const ItemStyle&  StyleOf(const Slot& slot) const;
+    const ItemStyle& StyleOf(const Slot& slot) const;
+    // Layout's work before the fades follow it.
+    bool                          LayOutItems(const RenderContext& render);
+    std::vector<const ItemStyle*> ItemStyles() const;
 
-    IWindowManager&   _windowManager;
-    WindowIcons&      _icons;
-    std::intptr_t     _monitor;
-    ModuleStyle       _style;
-    std::vector<Slot> _slots;
-    ItemRow           _row     = EmptyItemRow();
-    bool              _laidOut = false;
+    IWindowManager&               _windowManager;
+    WindowIcons&                  _icons;
+    std::intptr_t                 _monitor;
+    ModuleStyle                   _style;
+    std::vector<Slot>             _slots;
+    ItemRow                       _row     = EmptyItemRow();
+    bool                          _laidOut = false;
 };

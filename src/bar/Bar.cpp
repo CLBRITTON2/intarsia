@@ -68,6 +68,21 @@ namespace {
         return D2D1::RectF(std::max(first.left, second.left), std::max(first.top, second.top), std::min(first.right, second.right), std::min(first.bottom, second.bottom));
     }
 
+    // What a module's box is filled with: its background, or its hover under the cursor. A group's hover lights its
+    // toggle alone, over the group's background, so a group's fill is the toggle's and clear at rest.
+    D2D1_COLOR_F BoxFill(const ModuleEntry& entry, bool pointed) {
+        if (pointed) {
+            return entry.style.hover;
+        }
+        return entry.group != nullptr ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f) : entry.style.box.background;
+    }
+
+    std::unordered_map<const IModule*, ColorFade> RestingBoxFades(const Sections<ModuleEntry>& modules) {
+        std::unordered_map<const IModule*, ColorFade> fades;
+        ForEachEntry(modules, [&fades](const ModuleEntry& entry) { fades.emplace(entry.module.get(), ColorFade(BoxFill(entry, false))); });
+        return fades;
+    }
+
     std::optional<std::uint32_t> EarliestChange(const Sections<ModuleEntry>& modules) {
         std::optional<std::uint32_t> earliest;
         ForEachEntry(modules, [&earliest](const ModuleEntry& entry) {
@@ -205,7 +220,8 @@ void Bar::Build(HINSTANCE instance) {
     _surface = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     _brushes = std::make_unique<BrushCache>(_surface->Context());
     BuildContexts();
-    _tooltip = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
+    _boxFades = RestingBoxFades(_modules);
+    _tooltip  = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
     _menu =
         std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _state, *_tooltip, [this](const DeviceLostError& error) { ReportDeviceLost(error); });
     _lister = std::make_unique<MenuLister>(_window, kMenuListed);
@@ -263,15 +279,19 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
                 Refresh();
             }
             return 0;
-        case kAnimationFrame:
-            Refresh();
+        case kAnimationFrame: {
+            // A frame drawn just before a transition's end shows it short of its end, so the clock stops only after a
+            // frame drawn once nothing ran.
+            const bool settled = !_animating;
+            Render();
             // Only after drawing: GetMessage takes posted messages before input, so a frame posted while the bar drew
             // would starve clicks until the animation ended.
             _frames->Acknowledge();
-            if (!_animating || _deviceLost) {
+            if ((settled && !_animating) || _deviceLost) {
                 _frames->Stop();
             }
             return 0;
+        }
         case kFrameClockFailed: _frames->RethrowFailure(); return 0;
         case kMenuListed: ShowMenu(); return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
@@ -283,6 +303,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             }
             _pointed = nullptr;
             _cursor  = std::nullopt;
+            FollowPointer();
             _tooltip->Hide();
             // Draws the box that was under the cursor without its hover.
             Redraw();
@@ -340,7 +361,7 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
     std::vector<StateBrushes> classes;
     classes.reserve(style.classes.size());
     for (const ClassColors& declared : style.classes) {
-        classes.push_back(StateBrushes{.text = _brushes->Get(declared.colors.text), .icon = _brushes->Get(declared.colors.icon)});
+        classes.push_back(StateBrushes{.text = _brushes->Keep(declared.colors.text), .icon = _brushes->Keep(declared.colors.icon)});
     }
     return RenderContext{.context      = _surface->Context(),
                          .dwrite       = _graphics.dwrite.Get(),
@@ -348,12 +369,12 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .iconFont     = style.icon.font.c_str(),
                          .iconSizeDips = style.icon.sizeDips,
                          .iconGapDips  = style.icon.gapDips,
-                         .foreground   = _brushes->Get(style.color),
-                         .accent       = _brushes->Get(style.icon.color),
-                         .alert        = _brushes->Get(style.alertColor),
-                         .warning      = {.text = _brushes->Get(style.warning.text), .icon = _brushes->Get(style.warning.icon)},
-                         .critical     = {.text = _brushes->Get(style.critical.text), .icon = _brushes->Get(style.critical.icon)},
-                         .muted        = {.text = _brushes->Get(style.muted.text), .icon = _brushes->Get(style.muted.icon)},
+                         .foreground   = _brushes->Keep(style.color),
+                         .accent       = _brushes->Keep(style.icon.color),
+                         .alert        = _brushes->Keep(style.alertColor),
+                         .warning      = {.text = _brushes->Keep(style.warning.text), .icon = _brushes->Keep(style.warning.icon)},
+                         .critical     = {.text = _brushes->Keep(style.critical.text), .icon = _brushes->Keep(style.critical.icon)},
+                         .muted        = {.text = _brushes->Keep(style.muted.text), .icon = _brushes->Keep(style.muted.icon)},
                          .classes      = std::move(classes),
                          .brushes      = _brushes.get(),
                          .axis         = _axis,
@@ -421,7 +442,11 @@ void Bar::Redraw() {
     }
     try {
         Draw();
-    } catch (const DeviceLostError& error) { ReportDeviceLost(error); }
+    } catch (const DeviceLostError& error) {
+        ReportDeviceLost(error);
+        return;
+    }
+    ScheduleNextChange();
 }
 
 bool Bar::LayOutModules() {
@@ -552,7 +577,7 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
 }
 
 void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
-    DrawBox(_surface->Context(), *_brushes, box.bounds, style.box, box.module == _pointed ? style.hover : style.box.background);
+    DrawBox(_surface->Context(), *_brushes, box.bounds, style.box, _boxFades.at(box.module).Color(std::chrono::steady_clock::now()));
     box.module->Draw(ContextFor(style), box.contentOrigin);
 }
 
@@ -560,8 +585,10 @@ void Bar::DrawGroup(const PlacedEntry& placed) {
     ID2D1DeviceContext* context = _surface->Context();
     const ModuleStyle&  style   = placed.entry->style;
     DrawBox(context, *_brushes, placed.box.bounds, style.box, style.box.background);
-    if (placed.box.module == _pointed) {
-        DrawBox(context, *_brushes, placed.toggle, style.box, style.hover);
+    // The toggle's box at rest is the group's own, drawn once already with its border and shadows.
+    const D2D1_COLOR_F toggle = _boxFades.at(placed.box.module).Color(std::chrono::steady_clock::now());
+    if (toggle.a > 0.0f) {
+        DrawBox(context, *_brushes, placed.toggle, style.box, toggle);
     }
     placed.box.module->Draw(ContextFor(style), placed.box.contentOrigin);
     context->PushAxisAlignedClip(placed.shown, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -633,8 +660,20 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
     }
 }
 
+void Bar::FollowPointer() {
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    ForEachEntry(_modules, [this, now](const ModuleEntry& entry) {
+        _boxFades.at(entry.module.get()).Retarget(BoxFill(entry, entry.module.get() == _pointed), entry.style.backgroundTransition, now);
+    });
+}
+
+bool Bar::BoxFading() const {
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    return std::ranges::any_of(_boxFades, [now](const auto& fade) { return fade.second.Running(now); });
+}
+
 void Bar::ScheduleNextChange() {
-    const std::optional<std::uint32_t> wait = EarliestChange(_modules);
+    const std::optional<std::uint32_t> wait = BoxFading() ? std::optional<std::uint32_t>(0u) : EarliestChange(_modules);
     _animating                              = wait == 0u;
     if (!_animating && _animationFrames.has_value()) {
         LogAnimationFrames(*_animationFrames, _placement.monitorRect);
@@ -674,6 +713,7 @@ bool Bar::Point(POINT client) {
     if (module != nullptr) {
         module->Hover(ContentPoint(client, *box));
     }
+    FollowPointer();
     RestartHover();
     return true;
 }

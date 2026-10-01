@@ -158,6 +158,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
   add_executable(intarsia_gtests
     tests/LaunchOptions.cpp
+    tests/bar/Box.cpp
     tests/bar/Layout.cpp
     tests/bar/Menu.cpp
     tests/bar/MenuLister.cpp

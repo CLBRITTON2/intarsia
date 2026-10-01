@@ -30,6 +30,12 @@ Tray::~Tray() {
 }
 
 bool Tray::Layout(const RenderContext& render) {
+    const bool changed = LayOutItems(render);
+    _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
+    return changed;
+}
+
+bool Tray::LayOutItems(const RenderContext& render) {
     const FoldPosition position = _fold.At(std::chrono::steady_clock::now());
     const float        reveal   = position.reveal;
     bool               changed  = !_laidOut || reveal != _revealShown || position.angleDegrees != _angleShown;
@@ -68,10 +74,14 @@ bool Tray::Layout(const RenderContext& render) {
     const float              icon = _style.icon.sizeDips;
     std::vector<D2D1_SIZE_F> contents(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon});
     contents.push_back(_toggle.size);
+    _row = ArrangeItems(contents, ItemStyles(), render.axis);
+    return changed;
+}
+
+std::vector<const ItemStyle*> Tray::ItemStyles() const {
     std::vector<const ItemStyle*> styles(_slots.size(), &_style.item);
     styles.push_back(&_style.toggle);
-    _row = ArrangeItems(contents, styles, render.axis);
-    return changed;
+    return styles;
 }
 
 D2D1_SIZE_F Tray::Size() const {
@@ -93,14 +103,15 @@ void Tray::Place(const ModulePlacement& placement) {
 }
 
 void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    const ItemStyle& style = _style.item;
-    const float      icon  = _style.icon.sizeDips;
+    const ItemStyle&                            style = _style.item;
+    const float                                 icon  = _style.icon.sizeDips;
+    const std::chrono::steady_clock::time_point now   = std::chrono::steady_clock::now();
     if (_revealShown > 0.0f) {
         // The icons stay where the unfolded row puts them, and the box's edge uncovers them.
         const D2D1_SIZE_F revealed = MainCrossSize(_row.axis, RevealedLength(), CrossLength(_row.size, _row.axis));
         render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + revealed.width, origin.y + revealed.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (size_t index = 0; index < _slots.size(); ++index) {
-            DrawItemBackground(render, _row.boxes[index], style, _hovered.Is(index), origin);
+            DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), origin);
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(_slots[index].bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
         }
@@ -110,12 +121,13 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle&    toggleStyle = _style.toggle;
     const size_t        toggle      = _slots.size();
     const D2D1_POINT_2F shifted     = MovedAlong(origin, -ToggleShift(), _row.axis);
-    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _hovered.Is(toggle), shifted);
+    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _fades.Background(toggle, now), shifted);
     DrawTurnedIconText(render, ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted), _toggle, _angleShown, render.accent, render.foreground);
 }
 
 std::optional<std::uint32_t> Tray::MillisecondsUntilChange() const {
-    if (_fold.Running(std::chrono::steady_clock::now())) {
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    if (_fold.Running(now) || _fades.Running(now)) {
         return 0;
     }
     return std::nullopt;
@@ -151,6 +163,7 @@ bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
     if (slot != nullptr) {
         _tray.Move(slot->icon);
     }
+    _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
     return changed;
 }
 

@@ -362,19 +362,45 @@ TEST(Style, AGroupTakesTheTraysTransitionsAndUnfoldedIconRotation) {
     EXPECT_FLOAT_EQ(group.expandedIconRotationDegrees, 90.0f);
 }
 
+TEST(Style, AnyModuleAndItemFadesItsColors) {
+    const ModuleStyle style = StyleOf(".module { transition: background 150ms; } #ws .item { transition: background 100ms linear, color 200ms ease-in; } "
+                                      "#ws .item.focused { transition: color 50ms; }",
+                                      ModuleKind::Workspaces, "ws");
+    EXPECT_EQ(style.backgroundTransition.duration, std::chrono::milliseconds(150));
+    EXPECT_EQ(style.transition.duration, std::chrono::milliseconds(0));
+    EXPECT_EQ(style.item.backgroundTransition.duration, std::chrono::milliseconds(100));
+    EXPECT_EQ(style.item.backgroundTransition.timing, TimingFunction::Linear);
+    EXPECT_EQ(style.item.colorTransition.duration, std::chrono::milliseconds(200));
+    EXPECT_EQ(style.item.colorTransition.timing, TimingFunction::EaseIn);
+    // A later transition replaces the whole list, as in CSS, so the focused item fades no background.
+    EXPECT_EQ(style.focused.colorTransition.duration, std::chrono::milliseconds(50));
+    EXPECT_EQ(style.focused.backgroundTransition.duration, std::chrono::milliseconds(0));
+}
+
+TEST(Style, ATrayTakesItsWidthAndBackgroundTransitionsFromOneList) {
+    const ModuleStyle tray = StyleOf("tray { transition: width 400ms ease-out, background 100ms; }", ModuleKind::Tray, "icons");
+    EXPECT_EQ(tray.transition.duration, std::chrono::milliseconds(400));
+    EXPECT_EQ(tray.transition.timing, TimingFunction::EaseOut);
+    EXPECT_EQ(tray.backgroundTransition.duration, std::chrono::milliseconds(100));
+}
+
 TEST(Style, TransitionsAndRotationsAreATraysOrGroupsOnly) {
-    EXPECT_THAT([] { return StyleOf("cpu { transition: width 1s; }", ModuleKind::Cpu, "cpu"); },
-                ConfigErrorWith("transition animates a tray or group as it unfolds, and cpu is a cpu module"));
+    EXPECT_THAT([] { return StyleOf("cpu { transition: background 1s, width 1s; }", ModuleKind::Cpu, "cpu"); },
+                ConfigErrorWith("transition: width animates a tray or group as it unfolds, and cpu is a cpu module"));
     EXPECT_THAT([] { return StyleOf(".icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray or group"));
     EXPECT_THAT([] { return StyleOf(".expanded .icon { transform: rotate(10deg); }", ModuleKind::Clock, "time"); }, ConfigErrorWith("transform animates a tray or group"));
 }
 
 TEST(Style, TransitionsAndRotationsAreCheckedAsTheyParse) {
-    EXPECT_THAT([] { return Parse("tray { transition: color 1s; }"); }, ConfigErrorWith("animates width here, not color"));
+    EXPECT_THAT([] { return Parse("tray { transition: color 1s; }"); }, ConfigErrorWith("animates background, width here, not color"));
     EXPECT_THAT([] { return Parse("tray .icon { transition: width 1s; }"); }, ConfigErrorWith("animates transform here, not width"));
+    EXPECT_THAT([] { return Parse(".item { transition: background 1s, width 1s; }"); }, ConfigErrorWith("animates background, color here, not width"));
+    EXPECT_THAT([] { return Parse("menu .item { transition: color 1s; }"); }, ConfigErrorWith("transition does not apply to menu .item"));
+    EXPECT_THAT([] { return Parse(".module:hover { transition: background 1s; }"); }, ConfigErrorWith("transition does not apply to .module:hover"));
     EXPECT_THAT([] { return Parse("tray { transition: width fast; }"); }, ConfigErrorWith("duration in ms or s"));
     EXPECT_THAT([] { return Parse("tray { transition: width 1s bouncy; }"); }, ConfigErrorWith("timing function 'bouncy'"));
-    EXPECT_THAT([] { return Parse("tray { transition: width; }"); }, ConfigErrorWith("must be none, or a property"));
+    EXPECT_THAT([] { return Parse("tray { transition: width; }"); }, ConfigErrorWith("must be none, or transitions separated by commas"));
+    EXPECT_THAT([] { return Parse("tray { transition: width 1s,; }"); }, ConfigErrorWith("must be none, or transitions separated by commas"));
     EXPECT_THAT([] { return Parse("tray .icon { transform: scale(2); }"); }, ConfigErrorWith("rotate(180deg)"));
     EXPECT_THAT([] { return Parse("tray.expanded { background: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's or group's .icon only"));
     EXPECT_THAT([] { return Parse("group.expanded .item { color: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's or group's .icon only"));

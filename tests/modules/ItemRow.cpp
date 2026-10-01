@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -51,6 +52,40 @@ TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(25.0f, 5.0f)).has_value());
     EXPECT_EQ(ItemAt(row, D2D1::Point2F(34.0f, 5.0f)), 1u);
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(34.0f, 20.0f)).has_value());
+}
+
+TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
+    ItemStyle style                                   = TestItemStyle(0x000000, 0x000000);
+    style.hoverBackground                             = D2D1::ColorF(0xFFFFFF);
+    style.backgroundTransition                        = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    HoveredItem                                 hovered;
+    ItemFades                                   fades;
+    fades.Follow({&style}, hovered, start);
+    EXPECT_FALSE(fades.Running(start));
+
+    EXPECT_TRUE(hovered.Set(0));
+    fades.Follow({&style, &style}, hovered, start);
+    EXPECT_TRUE(fades.Running(start));
+    EXPECT_NEAR(fades.Background(0, start + std::chrono::milliseconds(50)).r, 0.5f, 0.001f);
+    // The text has no transition of its own, so it takes the hover's at once.
+    EXPECT_FLOAT_EQ(fades.Text(0, start).r, 1.0f);
+    EXPECT_FLOAT_EQ(fades.Background(1, start).r, 0.0f);
+    EXPECT_FALSE(fades.Running(start + std::chrono::milliseconds(100)));
+}
+
+TEST(ItemRow, ItemFadesFadeAnItemIntoANewStatesColors) {
+    const ItemStyle rest                              = TestItemStyle(0x000000, 0x000000);
+    ItemStyle       focused                           = TestItemStyle(0xFFFFFF, 0xFFFFFF);
+    focused.colorTransition                           = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    const HoveredItem                           hovered;
+    ItemFades                                   fades;
+    fades.Follow({&rest}, hovered, start);
+    // The target's transition applies, as in CSS: the focused style's color fades and its background does not.
+    fades.Follow({&focused}, hovered, start);
+    EXPECT_NEAR(fades.Text(0, start + std::chrono::milliseconds(50)).r, 0.5f, 0.001f);
+    EXPECT_FLOAT_EQ(fades.Background(0, start).r, 1.0f);
 }
 
 TEST(ItemRow, HoveredItemReportsOnlyAChangeOfItem) {

@@ -2,8 +2,9 @@
 
 #include "render/Icon.hpp"
 
-#include <cstdint>
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
 #include <ranges>
 #include <utility>
 
@@ -11,6 +12,12 @@ WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONIT
     _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
 
 bool WindowList::Layout(const RenderContext& render) {
+    const bool changed = LayOutItems(render);
+    _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
+    return changed;
+}
+
+bool WindowList::LayOutItems(const RenderContext& render) {
     const std::vector<ManagedWindow>               shown = OnMonitor(_windowManager.Windows(), _monitor);
     std::vector<std::shared_ptr<const IconPixels>> pixels;
     pixels.reserve(shown.size());
@@ -33,13 +40,8 @@ bool WindowList::Layout(const RenderContext& render) {
     _slots   = std::move(slots);
     _laidOut = true;
 
-    const float                   icon = _style.icon.sizeDips;
-    std::vector<const ItemStyle*> styles;
-    styles.reserve(_slots.size());
-    for (const Slot& slot : _slots) {
-        styles.push_back(&StyleOf(slot));
-    }
-    _row = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), styles, render.axis);
+    const float icon = _style.icon.sizeDips;
+    _row             = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), ItemStyles(), render.axis);
     return true;
 }
 
@@ -48,11 +50,12 @@ D2D1_SIZE_F WindowList::Size() const {
 }
 
 void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    const float icon = _style.icon.sizeDips;
+    const float                                 icon = _style.icon.sizeDips;
+    const std::chrono::steady_clock::time_point now  = std::chrono::steady_clock::now();
     for (size_t index = 0; index < _slots.size(); ++index) {
         const Slot&      slot  = _slots[index];
         const ItemStyle& style = StyleOf(slot);
-        DrawItemBackground(render, _row.boxes[index], style, _hovered.Is(index), origin);
+        DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), origin);
         if (slot.bitmap != nullptr) {
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
@@ -64,8 +67,26 @@ const ItemStyle& WindowList::StyleOf(const Slot& slot) const {
     return slot.window.focused ? _style.focused : _style.item;
 }
 
+std::vector<const ItemStyle*> WindowList::ItemStyles() const {
+    std::vector<const ItemStyle*> styles;
+    styles.reserve(_slots.size());
+    for (const Slot& slot : _slots) {
+        styles.push_back(&StyleOf(slot));
+    }
+    return styles;
+}
+
+std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
+    if (_fades.Running(std::chrono::steady_clock::now())) {
+        return 0;
+    }
+    return std::nullopt;
+}
+
 bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {
-    return _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
+    const bool changed = _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
+    _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
+    return changed;
 }
 
 void WindowList::Click(D2D1_POINT_2F point) {
