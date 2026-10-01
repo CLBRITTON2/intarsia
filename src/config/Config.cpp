@@ -2,6 +2,8 @@
 
 #include "config/Style.hpp"
 #include "platform/Errors.hpp"
+#include "platform/Handle.hpp"
+#include "platform/KnownFolder.hpp"
 #include "platform/PerformanceCounter.hpp"
 #include "platform/Text.hpp"
 
@@ -30,7 +32,7 @@
 
 namespace {
 
-    using LuaState = std::unique_ptr<lua_State, decltype(&lua_close)>;
+    using LuaState = UniqueReleased<lua_State*, &lua_close>;
 
     // Reads one Lua table with raw access only: a metamethod raising an error outside lua_pcall hits Lua's panic handler,
     // which aborts the process.
@@ -721,10 +723,7 @@ namespace {
 } // namespace
 
 std::filesystem::path DefaultConfigPath() {
-    PWSTR profile = nullptr;
-    ThrowIfFailed(SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &profile), "SHGetKnownFolderPath(FOLDERID_Profile)");
-    const std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)> owned(profile, &CoTaskMemFree);
-    return std::filesystem::path(owned.get()) / L".config" / L"intarsia" / L"config.lua";
+    return KnownFolderPath(FOLDERID_Profile, "FOLDERID_Profile") / L".config" / L"intarsia" / L"config.lua";
 }
 
 std::filesystem::path StylePath(const std::filesystem::path& configPath) {
@@ -737,7 +736,7 @@ Config LoadConfig(const std::filesystem::path& path) {
 
     // Declared before the state, whose close frees through the limited allocator.
     LuaLimits      limits{.allocate = nullptr, .allocateData = nullptr, .usedBytes = 0, .limitBytes = kMaxConfigBytes, .runaway = false};
-    const LuaState lua(luaL_newstate(), &lua_close);
+    const LuaState lua(luaL_newstate());
     if (lua == nullptr) {
         throw ConfigError("luaL_newstate failed to allocate a Lua state");
     }

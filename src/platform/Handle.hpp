@@ -4,14 +4,22 @@
 
 #include <memory>
 #include <string_view>
+#include <type_traits>
 
-struct HandleCloser {
-    void operator()(HANDLE handle) const {
-        CloseHandle(handle);
+// A deleter that hands the pointer to Free and drops its result, as every C API's release function is called.
+template <auto Free>
+struct ReleaseWith {
+    template <typename Pointer>
+    void operator()(Pointer pointer) const {
+        static_cast<void>(Free(pointer));
     }
 };
 
-using UniqueHandle = std::unique_ptr<void, HandleCloser>;
+// Owns a handle or pointer of type Handle, released through Free.
+template <typename Handle, auto Free>
+using UniqueReleased = std::unique_ptr<std::remove_pointer_t<Handle>, ReleaseWith<Free>>;
+
+using UniqueHandle = UniqueReleased<HANDLE, &CloseHandle>;
 
 // Takes ownership of a handle a Win32 call returned, throwing with that call's last error when it is null or
 // INVALID_HANDLE_VALUE (CreateFileW fails with the latter, most other creators with null).

@@ -1,6 +1,8 @@
 #pragma once
 
 // Before winhttp.h, which declares WINHTTP_CONNECTION_INFO only when the socket address types are defined.
+#include "platform/Handle.hpp"
+
 #include <winsock2.h>
 
 #include <windows.h>
@@ -34,12 +36,7 @@ class WebSocket {
     void Close();
 
   private:
-    struct InternetCloser {
-        void operator()(HINTERNET handle) const {
-            WinHttpCloseHandle(handle);
-        }
-    };
-    using UniqueInternet = std::unique_ptr<void, InternetCloser>;
+    using UniqueInternet = UniqueReleased<HINTERNET, &WinHttpCloseHandle>;
 
     UniqueInternet _session;
     UniqueInternet _connection;

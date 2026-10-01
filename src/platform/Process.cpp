@@ -16,7 +16,6 @@
 #include <memory>
 #include <ranges>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -134,12 +133,6 @@ namespace {
         }
     };
 
-    struct AttributeListDeleter {
-        void operator()(LPPROC_THREAD_ATTRIBUTE_LIST list) const {
-            DeleteProcThreadAttributeList(list);
-        }
-    };
-
     struct Pipe {
         UniqueHandle read;
         UniqueHandle write;
@@ -180,8 +173,8 @@ namespace {
         if (!InitializeProcThreadAttributeList(list, 1, 0, &size)) {
             ThrowLastError("InitializeProcThreadAttributeList");
         }
-        const std::unique_ptr<std::remove_pointer_t<LPPROC_THREAD_ATTRIBUTE_LIST>, AttributeListDeleter> owned(list);
-        HANDLE                                                                                           inherited = output;
+        const UniqueReleased<LPPROC_THREAD_ATTRIBUTE_LIST, &DeleteProcThreadAttributeList> owned(list);
+        HANDLE                                                                             inherited = output;
         if (!UpdateProcThreadAttribute(list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, static_cast<void*>(&inherited), sizeof(inherited), nullptr, nullptr)) {
             ThrowLastError("UpdateProcThreadAttribute(handle list)");
         }

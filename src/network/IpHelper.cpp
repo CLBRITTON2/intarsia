@@ -1,6 +1,7 @@
 #include "network/IpHelper.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Handle.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
@@ -61,7 +62,7 @@ namespace {
     std::wstring FirstIpv4(NET_IFINDEX index) {
         PMIB_UNICASTIPADDRESS_TABLE raw = nullptr;
         ThrowIfWin32Failed(GetUnicastIpAddressTable(AF_INET, &raw), "GetUnicastIpAddressTable");
-        const std::unique_ptr<MIB_UNICASTIPADDRESS_TABLE, decltype(&FreeMibTable)> table(raw, &FreeMibTable);
+        const UniqueReleased<PMIB_UNICASTIPADDRESS_TABLE, &FreeMibTable> table(raw);
         for (ULONG row = 0; row < table->NumEntries; ++row) {
             const MIB_UNICASTIPADDRESS_ROW& address = table->Table[row];
             if (address.InterfaceIndex != index || address.DadState != IpDadStatePreferred) {
@@ -96,8 +97,8 @@ namespace {
             DWORD                       size       = 0;
             ThrowIfWin32Failed(WlanQueryInterface(_handle, &interfaceGuid, wlan_intf_opcode_current_connection, nullptr, &size, reinterpret_cast<void**>(&attributes), nullptr),
                                "WlanQueryInterface(current_connection)");
-            const std::unique_ptr<WLAN_CONNECTION_ATTRIBUTES, decltype(&WlanFreeMemory)> owned(attributes, &WlanFreeMemory);
-            const DOT11_SSID&                                                            ssid = owned->wlanAssociationAttributes.dot11Ssid;
+            const UniqueReleased<PWLAN_CONNECTION_ATTRIBUTES, &WlanFreeMemory> owned(attributes);
+            const DOT11_SSID&                                                  ssid = owned->wlanAssociationAttributes.dot11Ssid;
             // Anyone nearby can name a network, so its name is drawn only once it is safe to.
             std::wstring name = DrawableText(std::string_view(reinterpret_cast<const char*>(ssid.ucSSID), std::min<ULONG>(ssid.uSSIDLength, DOT11_SSID_MAX_LENGTH)));
             return {std::move(name), static_cast<std::int32_t>(owned->wlanAssociationAttributes.wlanSignalQuality)};

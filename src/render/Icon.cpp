@@ -1,6 +1,7 @@
 #include "render/Icon.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Handle.hpp"
 #include "render/Graphics.hpp"
 
 #include <d2d1_1.h>
@@ -9,19 +10,12 @@
 #include <cstdint>
 #include <format>
 #include <memory>
-#include <type_traits>
 
 using Microsoft::WRL::ComPtr;
 
 namespace {
 
-    struct BitmapDeleter {
-        void operator()(HBITMAP bitmap) const {
-            DeleteObject(bitmap);
-        }
-    };
-
-    using UniqueBitmap = std::unique_ptr<std::remove_pointer_t<HBITMAP>, BitmapDeleter>;
+    using UniqueBitmap = UniqueReleased<HBITMAP, &DeleteObject>;
 
     struct IconSize {
         std::uint32_t width;

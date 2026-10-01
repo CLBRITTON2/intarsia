@@ -28,20 +28,14 @@ namespace {
     // GUID_DEVICE_BATTERY from poclass.h, which only DEFINE_GUID declares and no import library defines.
     constexpr GUID kBatteryInterface{0x72631e54, 0x78a4, 0x11d0, {0xbc, 0xf7, 0x00, 0xaa, 0x00, 0xb7, 0xb3, 0x2a}};
 
-    struct DeviceListCloser {
-        void operator()(HDEVINFO devices) const {
-            SetupDiDestroyDeviceInfoList(devices);
-        }
-    };
-
     // The device path of every battery interface present, such as a laptop's one or two packs.
     std::vector<std::wstring> BatteryPaths() {
         HDEVINFO raw = SetupDiGetClassDevsW(&kBatteryInterface, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
         if (raw == INVALID_HANDLE_VALUE) {
             ThrowLastError("SetupDiGetClassDevsW(battery)");
         }
-        const std::unique_ptr<void, DeviceListCloser> devices(raw);
-        std::vector<std::wstring>                     paths;
+        const UniqueReleased<HDEVINFO, &SetupDiDestroyDeviceInfoList> devices(raw);
+        std::vector<std::wstring>                                     paths;
         for (DWORD index = 0;; ++index) {
             SP_DEVICE_INTERFACE_DATA device{};
             device.cbSize = sizeof(device);
@@ -118,10 +112,6 @@ namespace {
     }
 
 } // namespace
-
-void PowerNotificationCloser::operator()(HPOWERNOTIFY notification) const {
-    PowerSettingUnregisterNotification(notification);
-}
 
 PowerStatus::PowerStatus(ChangeSignal& changes) :
     _changes(changes), _wakeEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(battery wake)")),

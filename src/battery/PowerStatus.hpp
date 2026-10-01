@@ -7,17 +7,15 @@
 
 #include <windows.h>
 
+#include <powrprof.h>
+
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
 
-struct PowerNotificationCloser {
-    void operator()(HPOWERNOTIFY notification) const;
-};
-
-using UniquePowerNotification = std::unique_ptr<void, PowerNotificationCloser>;
+using UniquePowerNotification = UniqueReleased<HPOWERNOTIFY, &PowerSettingUnregisterNotification>;
 
 // The battery state through GetSystemPowerStatus (charge, power source, time left) and the battery drivers' IOCTLs
 // (health). A worker thread samples when Windows reports a change of power source or charge, and every 10 s for the

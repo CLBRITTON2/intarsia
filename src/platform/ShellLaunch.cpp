@@ -46,10 +46,10 @@ namespace {
         ComApartment& operator=(const ComApartment&) = delete;
     };
 
-    using Bstr = std::unique_ptr<OLECHAR, decltype(&SysFreeString)>;
+    using Bstr = UniqueReleased<BSTR, &SysFreeString>;
 
     Bstr MakeBstr(const std::wstring& text) {
-        Bstr made(SysAllocStringLen(text.data(), static_cast<UINT>(text.size())), &SysFreeString);
+        Bstr made(SysAllocStringLen(text.data(), static_cast<UINT>(text.size())));
         if (made == nullptr) {
             ThrowIfFailed(E_OUTOFMEMORY, "SysAllocStringLen");
         }

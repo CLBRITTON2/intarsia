@@ -1,6 +1,7 @@
 #include "LaunchOptions.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Handle.hpp"
 #include "platform/Text.hpp"
 
 #include <shellapi.h>
@@ -56,8 +57,8 @@ std::vector<std::wstring> CommandLineArguments() {
     if (raw == nullptr) {
         ThrowLastError("CommandLineToArgvW");
     }
-    const std::unique_ptr<LPWSTR, decltype(&LocalFree)> owned(raw, &LocalFree);
-    std::vector<std::wstring>                           arguments;
+    const UniqueReleased<HLOCAL, &LocalFree> owned(static_cast<HLOCAL>(raw));
+    std::vector<std::wstring>                arguments;
     for (std::int32_t index = 1; index < count; ++index) {
         arguments.emplace_back(raw[index]);
     }

@@ -1,6 +1,7 @@
 #include "platform/Log.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/KnownFolder.hpp"
 #include "platform/Text.hpp"
 
 #include <windows.h>
@@ -156,10 +157,7 @@ void Log(LogLevel level, std::string_view component, std::string_view event, std
 }
 
 std::filesystem::path DefaultLogPath() {
-    PWSTR local = nullptr;
-    ThrowIfFailed(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local), "SHGetKnownFolderPath(FOLDERID_LocalAppData)");
-    const std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)> owned(local, &CoTaskMemFree);
-    return std::filesystem::path(owned.get()) / L"intarsia" / L"intarsia.log";
+    return KnownFolderPath(FOLDERID_LocalAppData, "FOLDERID_LocalAppData") / L"intarsia" / L"intarsia.log";
 }
 
 void LogToFile(const std::filesystem::path& path) {

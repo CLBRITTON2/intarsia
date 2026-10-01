@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/ChangeSignal.hpp"
+#include "platform/Handle.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>
@@ -9,7 +10,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 // Backend for running without a window manager. Follows the foreground window and its title through WinEvent hooks,
@@ -49,12 +49,7 @@ class Native final : public IWindowManager {
         ActiveInstance& operator=(const ActiveInstance&) = delete;
     };
 
-    struct Unhook {
-        void operator()(HWINEVENTHOOK hook) const {
-            UnhookWinEvent(hook);
-        }
-    };
-    using UniqueHook = std::unique_ptr<std::remove_pointer_t<HWINEVENTHOOK>, Unhook>;
+    using UniqueHook = UniqueReleased<HWINEVENTHOOK, &UnhookWinEvent>;
 
     static UniqueHook    HookEvent(std::uint32_t event, std::uint32_t process, std::uint32_t thread);
     static UniqueHook    HookTitleChanges(HWND window);

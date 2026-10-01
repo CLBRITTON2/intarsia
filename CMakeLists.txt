@@ -92,6 +92,7 @@ add_library(intarsia_core STATIC
   src/platform/FileWatcher.cpp
   src/platform/FrameClock.cpp
   src/platform/Handle.cpp
+  src/platform/KnownFolder.cpp
   src/platform/Log.cpp
   src/platform/PeerProcess.cpp
   src/platform/PerformanceCounter.cpp
@@ -186,6 +187,7 @@ if(BUILD_TESTING)
     tests/platform/AppBar.cpp
     tests/platform/ChangeSignal.cpp
     tests/platform/FileWatcher.cpp
+    tests/platform/KnownFolder.cpp
     tests/platform/Log.cpp
     tests/platform/Process.cpp
     tests/platform/PeerProcess.cpp
