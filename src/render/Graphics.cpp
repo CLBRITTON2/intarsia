@@ -26,7 +26,7 @@ namespace {
         MONITORINFOEXW info{};
         info.cbSize = sizeof(info);
         if (!GetMonitorInfoW(monitor, &info)) {
-            ThrowLastError("GetMonitorInfoW");
+            throw MonitorGoneError("GetMonitorInfoW found no monitor for a display's handle");
         }
         return info.szDevice;
     }
@@ -35,7 +35,7 @@ namespace {
         DEVMODEW mode{};
         mode.dmSize = sizeof(mode);
         if (!EnumDisplaySettingsW(display.c_str(), ENUM_CURRENT_SETTINGS, &mode)) {
-            throw std::runtime_error(std::format("EnumDisplaySettingsW found no current mode for display {}", ToUtf8(display)));
+            throw MonitorGoneError(std::format("EnumDisplaySettingsW found no current mode for display {}", ToUtf8(display)));
         }
         return mode.dmDisplayFrequency;
     }
@@ -75,7 +75,7 @@ MonitorOutput OutputForMonitor(HMONITOR monitor) {
         ComPtr<IDXGIAdapter1> adapter;
         const HRESULT         adapterFound = factory->EnumAdapters1(adapterIndex, &adapter);
         if (adapterFound == DXGI_ERROR_NOT_FOUND) {
-            throw std::runtime_error(std::format("no graphics adapter lists display {} as an output", ToUtf8(display)));
+            throw MonitorGoneError(std::format("no graphics adapter lists display {} as an output", ToUtf8(display)));
         }
         ThrowIfFailed(adapterFound, "IDXGIFactory1::EnumAdapters1");
         for (std::uint32_t outputIndex = 0;; ++outputIndex) {

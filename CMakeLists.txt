@@ -207,6 +207,7 @@ if(BUILD_TESTING)
     tests/platform/WebSocket.cpp
     tests/platform/WindowProc.cpp
     tests/platform/WorkQueue.cpp
+    tests/render/Graphics.cpp
     tests/render/Icon.cpp
     tests/render/Surface.cpp
     tests/tray/NotifyIconProtocol.cpp

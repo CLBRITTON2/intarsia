@@ -83,12 +83,15 @@ namespace {
         MONITORINFO info{};
         info.cbSize = sizeof(info);
         if (!GetMonitorInfoW(monitor, &info)) {
-            ThrowLastError("GetMonitorInfoW");
+            throw MonitorGoneError("GetMonitorInfoW found no monitor for a listed handle");
         }
 
-        std::uint32_t dpiX = 0;
-        std::uint32_t dpiY = 0;
-        ThrowIfFailed(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY), "GetDpiForMonitor");
+        std::uint32_t dpiX     = 0;
+        std::uint32_t dpiY     = 0;
+        const HRESULT dpiFound = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+        if (FAILED(dpiFound)) {
+            throw MonitorGoneError(std::format("GetDpiForMonitor failed with 0x{:08X} for a listed handle", static_cast<std::uint32_t>(dpiFound)));
+        }
         return BarPlacement{.monitor = monitor, .monitorRect = info.rcMonitor, .dpi = dpiX};
     }
 
@@ -104,6 +107,13 @@ namespace {
             placements.push_back(PlacementForMonitor(monitor));
         }
         return placements;
+    }
+
+    // A monitor that goes while it is read has changed too.
+    bool MonitorsDiffer(const std::vector<BarPlacement>& placements) {
+        try {
+            return PlacementsForAllMonitors() != placements;
+        } catch (const MonitorGoneError&) { return true; }
     }
 
     // Receives the worker threads' messages and survives the bars being rebuilt. A hidden top-level window rather than a
@@ -127,7 +137,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
     Menu::RegisterWindowClass(_instance);
-    CreateBars(PlacementsForAllMonitors());
+    CreateBars();
 }
 
 App::~App() {
@@ -208,9 +218,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
     }
 }
 
-void App::CreateBars(std::vector<BarPlacement> placements) {
-    _placements = std::move(placements);
+void App::CreateBars() {
     try {
+        _placements = PlacementsForAllMonitors();
         for (const BarPlacement& placement : _placements) {
             _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                                   ModuleSources{.windowManager   = *_windowManager,
@@ -229,7 +239,8 @@ void App::CreateBars(std::vector<BarPlacement> placements) {
             }
         }
     } catch (const DeviceLostError& error) {
-        // Lost while a bar was being built rather than while it drew: the same recovery, and it had drawn nothing.
+        // Lost, or a monitor gone, while a bar was being built rather than while it drew: the same recovery, and it had
+        // drawn nothing.
         _bars.clear();
         _deviceRetry = std::min(_deviceRetry * 2, kLongestDeviceRetry);
         Log(LogLevel::Warning, "app", "recovering_device", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
@@ -267,7 +278,7 @@ void App::ReloadConfig() {
     MatchSourcesToConfig();
     // A pending device recovery builds the bars from this config once it has a device.
     if (!_recovering) {
-        CreateBars(PlacementsForAllMonitors());
+        CreateBars();
     }
 }
 
@@ -303,13 +314,12 @@ void App::RebuildBarsIfMonitorsChanged() {
     if (_recovering) {
         return;
     }
-    std::vector<BarPlacement> placements = PlacementsForAllMonitors();
-    if (placements == _placements) {
+    if (!MonitorsDiffer(_placements)) {
         return;
     }
-    Log(LogLevel::Info, "app", "monitors_changed", {{.key = "from", .value = std::to_string(_placements.size())}, {.key = "to", .value = std::to_string(placements.size())}});
+    Log(LogLevel::Info, "app", "monitors_changed", {{.key = "from", .value = std::to_string(_placements.size())}});
     _bars.clear();
-    CreateBars(std::move(placements));
+    CreateBars();
 }
 
 // Every bar reports the same loss, so reports that arrive after the bars were destroyed find no lost bar and do nothing.
@@ -344,5 +354,5 @@ void App::RecreateDevice() {
         return;
     }
     _recovering = false;
-    CreateBars(PlacementsForAllMonitors());
+    CreateBars();
 }

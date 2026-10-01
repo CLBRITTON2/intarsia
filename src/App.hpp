@@ -43,9 +43,10 @@ class App {
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    void                    CreateBars(std::vector<BarPlacement> placements);
-    void                    HandleConfigChanged();
-    void                    ReloadConfig();
+    // One bar for each monitor present.
+    void CreateBars();
+    void HandleConfigChanged();
+    void ReloadConfig();
     // Creates each data source the config shows a module for and there is none of yet, and destroys those it shows
     // none for.
     void        MatchSourcesToConfig();

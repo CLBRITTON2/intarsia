@@ -244,15 +244,18 @@ namespace {
             }
         }
         const std::array<HANDLE, 2> waits{ready, stopped};
-        const DWORD                 woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
-        if (woke == WAIT_OBJECT_0 + 1) {
+        const DWORD                 woke      = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
+        const DWORD                 waitError = woke == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+        if (woke != WAIT_OBJECT_0) {
             CancelIoEx(pipe, &overlapped);
-        } else if (woke != WAIT_OBJECT_0) {
-            ThrowLastError("WaitForMultipleObjects(command output)");
         }
-        // Waits out a cancelled read, which must finish before overlapped goes out of scope.
-        DWORD read = 0;
-        if (!GetOverlappedResult(pipe, &overlapped, &read, TRUE)) {
+        // Waits out a cancelled read, which must finish before overlapped and chunk go out of scope, a failed wait included.
+        DWORD      read     = 0;
+        const BOOL finished = GetOverlappedResult(pipe, &overlapped, &read, TRUE);
+        if (waitError != ERROR_SUCCESS) {
+            throw Win32Error("WaitForMultipleObjects(command output)", HRESULT_FROM_WIN32(waitError));
+        }
+        if (!finished) {
             const DWORD error = GetLastError();
             if (error == ERROR_BROKEN_PIPE || error == ERROR_OPERATION_ABORTED) {
                 return std::nullopt;

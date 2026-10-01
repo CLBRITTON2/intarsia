@@ -3,7 +3,9 @@
 #include "platform/Errors.hpp"
 
 #include <array>
+#include <cstdint>
 #include <exception>
+#include <format>
 #include <utility>
 
 FrameClock::FrameClock(HWND target, std::uint32_t frameMessage, std::uint32_t failedMessage, Microsoft::WRL::ComPtr<IDXGIOutput> output) :
@@ -42,7 +44,11 @@ void FrameClock::Run(HANDLE stopEvent) {
             if (woke != WAIT_OBJECT_0 + 1) {
                 ThrowLastError("WaitForMultipleObjects(frame)");
             }
-            ThrowIfFailed(_output->WaitForVBlank(), "IDXGIOutput::WaitForVBlank");
+            // The output is the wait's only input, so its failure means the monitor went.
+            const HRESULT waited = _output->WaitForVBlank();
+            if (FAILED(waited)) {
+                throw MonitorGoneError(std::format("IDXGIOutput::WaitForVBlank failed with 0x{:08X}", static_cast<std::uint32_t>(waited)));
+            }
             if (!_pending.exchange(true) && !PostMessageW(_target, _frameMessage, 0, 0)) {
                 ThrowLastError("PostMessageW(frame)");
             }

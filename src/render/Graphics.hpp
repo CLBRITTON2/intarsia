@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/Errors.hpp"
+
 #include <d2d1_1.h>
 #include <d3d11.h>
 #include <dcomp.h>
@@ -9,7 +11,6 @@
 #include <wrl/client.h>
 
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -33,15 +34,8 @@ struct MonitorOutput {
 };
 
 // The DXGI output showing monitor, read from a new factory so a monitor attached since the device was made is listed.
-// Throws std::runtime_error when no adapter lists the monitor.
+// Throws MonitorGoneError when the monitor is gone or no adapter lists it.
 MonitorOutput OutputForMonitor(HMONITOR monitor);
-
-// The graphics device is gone (driver update, driver crash, GPU removed) and nothing made from it works again. Only
-// App can recover, by creating a new device and everything drawn with it.
-class DeviceLostError : public std::runtime_error {
-  public:
-    using std::runtime_error::runtime_error;
-};
 
 // ThrowIfFailed, except that the results meaning the device is lost throw DeviceLostError.
 void                                         ThrowIfDeviceFailed(HRESULT result, std::string_view call);
