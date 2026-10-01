@@ -317,6 +317,29 @@ TEST(Style, BoxShadowsAreInsetAndKeepTheirOrder) {
     EXPECT_THAT([] { return Parse(".item:hover { box-shadow: inset 0 1px #000; }"); }, ConfigErrorWith("box-shadow does not apply to .item:hover"));
 }
 
+TEST(Style, SectionsTooltipsAndMenusTakeTheSystemsBlurAndNothingElseDoes) {
+    const StyleConfig bar = ResolveBarStyle(Parse(std::string(kBar) + "section { backdrop-filter: blur; } menu { backdrop-filter: blur; backdrop-filter: none; }"));
+    const Backdrop    none{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
+    EXPECT_EQ(bar.section.backdrop, (Backdrop{.blur = true, .brightness = 1.0f, .saturation = 1.0f}));
+    EXPECT_EQ(bar.tooltip.backdrop, none);
+    EXPECT_EQ(bar.menu.backdrop, none);
+    EXPECT_THAT([] { return Parse("tooltip { backdrop-filter: blur(20px); }"); }, ConfigErrorWith("must be none, or blur"));
+    EXPECT_THAT([] { return Parse(".module { backdrop-filter: blur; }"); }, ConfigErrorWith("backdrop-filter does not apply to .module"));
+}
+
+TEST(Style, BrightnessAndSaturateToneTheBlurOnceEachInEitherOrder) {
+    const StyleConfig bar =
+        ResolveBarStyle(Parse(std::string(kBar) + "section { backdrop-filter: blur saturate(180%) brightness( 0.4 ); } tooltip { backdrop-filter: blur brightness(40%); }"));
+    EXPECT_EQ(bar.section.backdrop, (Backdrop{.blur = true, .brightness = 0.4f, .saturation = 1.8f}));
+    EXPECT_FLOAT_EQ(bar.tooltip.backdrop.brightness, 0.4f);
+    EXPECT_FLOAT_EQ(bar.tooltip.backdrop.saturation, 1.0f);
+    EXPECT_THAT([] { return Parse("section { backdrop-filter: brightness(0.4); }"); }, ConfigErrorWith("must be none, or blur"));
+    EXPECT_THAT([] { return Parse("section { backdrop-filter: blur brightness(0.4) brightness(0.5); }"); }, ConfigErrorWith("once each"));
+    EXPECT_THAT([] { return Parse("section { backdrop-filter: blur contrast(2); }"); }, ConfigErrorWith("once each"));
+    EXPECT_THAT([] { return Parse("section { backdrop-filter: blur saturate(-1); }"); },
+                ConfigErrorWith("has saturate(-1), whose amount must be a number or percentage of 0 or more"));
+}
+
 TEST(Style, ModulesTakeNoSize) {
     EXPECT_THAT([] { return Parse(".module { width: 3px; }"); }, ConfigErrorWith("width does not apply to .module"));
     EXPECT_THAT([] { return Parse(".module { height: 50%; }"); }, ConfigErrorWith("is not a property intarsia draws"));

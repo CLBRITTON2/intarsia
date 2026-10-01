@@ -113,7 +113,8 @@ namespace {
         Weight,
         Transition,
         Rotation,
-        Shadows
+        Shadows,
+        Backdrop
     };
 
     struct PropertyKind {
@@ -121,7 +122,7 @@ namespace {
         ValueKind        kind;
     };
 
-    constexpr std::array<PropertyKind, 31> kProperties{{
+    constexpr std::array<PropertyKind, 32> kProperties{{
         {.property = "color", .kind = ValueKind::Color},
         {.property = "background", .kind = ValueKind::Color},
         {.property = "border-top-width", .kind = ValueKind::Length},
@@ -145,6 +146,7 @@ namespace {
         {.property = "transform", .kind = ValueKind::Rotation},
         {.property = "max-width", .kind = ValueKind::PositiveLength},
         {.property = "max-height", .kind = ValueKind::PositiveLength},
+        {.property = "backdrop-filter", .kind = ValueKind::Backdrop},
         // Shorthands, expanded into the longhands above as they are read.
         {.property = "border", .kind = ValueKind::Color},
         {.property = "border-top", .kind = ValueKind::Color},
@@ -416,6 +418,49 @@ namespace {
         return shadows;
     }
 
+    constexpr std::string_view kBackdropForm = "must be none, or blur (the system's, whose radius is its own) then optionally brightness() and saturate() once each, "
+                                               "as blur brightness(0.4) saturate(180%)";
+
+    constexpr Backdrop         kNoBackdrop{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
+
+    // The amount of name(<n>) or name(<n>%), or none when text is not that function.
+    std::optional<float> FilterAmount(std::string_view text, std::string_view name) {
+        if (!text.starts_with(name) || !text.substr(name.size()).starts_with('(') || !text.ends_with(')')) {
+            return std::nullopt;
+        }
+        const std::string_view     inside  = Trim(text.substr(name.size() + 1, text.size() - name.size() - 2));
+        const bool                 percent = inside.ends_with('%');
+        const std::optional<float> amount  = ParseNumber(percent ? inside.substr(0, inside.size() - 1) : inside);
+        if (!amount.has_value() || *amount < 0.0f) {
+            throw std::invalid_argument(std::format("has {}, whose amount must be a number or percentage of 0 or more, as {}(0.4) or {}(40%)", text, name, name));
+        }
+        return percent ? *amount / 100.0f : *amount;
+    }
+
+    Backdrop ReadBackdrop(std::string_view text) {
+        if (text == "none") {
+            return kNoBackdrop;
+        }
+        const std::vector<std::string_view> parts = SplitOutside(text, kSpace);
+        if (parts.empty() || parts[0] != "blur") {
+            throw std::invalid_argument(std::string(kBackdropForm));
+        }
+        std::optional<float> brightness;
+        std::optional<float> saturation;
+        for (size_t index = 1; index < parts.size(); ++index) {
+            const std::optional<float> brightnessAmount = FilterAmount(parts[index], "brightness");
+            const std::optional<float> saturationAmount = FilterAmount(parts[index], "saturate");
+            if (brightnessAmount.has_value() && !brightness.has_value()) {
+                brightness = brightnessAmount;
+            } else if (saturationAmount.has_value() && !saturation.has_value()) {
+                saturation = saturationAmount;
+            } else {
+                throw std::invalid_argument(std::string(kBackdropForm));
+            }
+        }
+        return Backdrop{.blur = true, .brightness = brightness.value_or(1.0f), .saturation = saturation.value_or(1.0f)};
+    }
+
     void CheckValue(ValueKind kind, std::string_view value) {
         switch (kind) {
             case ValueKind::Color: ReadColor(value); return;
@@ -427,6 +472,7 @@ namespace {
             case ValueKind::Transition: ReadTransitionValues(value); return;
             case ValueKind::Rotation: ReadRotation(value); return;
             case ValueKind::Shadows: ReadShadows(value); return;
+            case ValueKind::Backdrop: ReadBackdrop(value); return;
         }
         throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(kind)));
     }
@@ -706,15 +752,15 @@ namespace {
             case StyleTarget::Bar: return {"font-family", "font-size", "color"};
             case StyleTarget::Section:
                 allowed.assign(kBox.begin(), kBox.end());
-                allowed.emplace_back("margin");
+                allowed.insert(allowed.end(), {"margin", "backdrop-filter"});
                 return allowed;
             case StyleTarget::Tooltip:
                 allowed.assign(kBox.begin(), kBox.end());
-                allowed.emplace_back("color");
+                allowed.insert(allowed.end(), {"color", "backdrop-filter"});
                 return allowed;
             case StyleTarget::Menu:
                 allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"color", "max-width", "max-height"});
+                allowed.insert(allowed.end(), {"color", "backdrop-filter", "max-width", "max-height"});
                 return allowed;
             case StyleTarget::MenuScrollbar: return {"width", "background", "border-radius", "margin"};
             case StyleTarget::Icon:
@@ -1089,18 +1135,19 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     return StyleConfig{.font         = ReadFamily(Required(bar, "font-family", "\"Segoe UI\"").value),
                        .fontSizeDips = ReadPositiveLength(Required(bar, "font-size", "14px").value),
                        .color        = color,
-                       .section      = {.box = ReadBox(section), .margin = section.Space("margin", kNoSpace)},
-                       .tooltip      = {.box = ReadBox(tooltip), .color = tooltip.Color("color", color)},
-                       .menu         = {.box           = ReadBox(menu),
-                                        .color         = menuColor,
-                                        .maxWidthDips  = menu.Read("max-width", readCap, std::nullopt),
-                                        .maxHeightDips = menu.Read("max-height", readCap, std::nullopt),
-                                        .item          = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "", menuColor),
-                                        .active        = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "active", menuColor),
-                                        .scrollbar     = {.widthDips  = scrollbar.Read("width", ReadPositiveLength, 0.0f),
-                                                          .background = scrollbar.Color("background", kTransparent),
-                                                          .radiusDips = scrollbar.Length("border-radius", 0.0f),
-                                                          .margin     = scrollbar.Space("margin", kNoSpace)}}};
+                       .section = {.box = ReadBox(section), .margin = section.Space("margin", kNoSpace), .backdrop = section.Read("backdrop-filter", ReadBackdrop, kNoBackdrop)},
+                       .tooltip = {.box = ReadBox(tooltip), .color = tooltip.Color("color", color), .backdrop = tooltip.Read("backdrop-filter", ReadBackdrop, kNoBackdrop)},
+                       .menu    = {.box           = ReadBox(menu),
+                                   .color         = menuColor,
+                                   .backdrop      = menu.Read("backdrop-filter", ReadBackdrop, kNoBackdrop),
+                                   .maxWidthDips  = menu.Read("max-width", readCap, std::nullopt),
+                                   .maxHeightDips = menu.Read("max-height", readCap, std::nullopt),
+                                   .item          = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "", menuColor),
+                                   .active        = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "active", menuColor),
+                                   .scrollbar     = {.widthDips  = scrollbar.Read("width", ReadPositiveLength, 0.0f),
+                                                     .background = scrollbar.Color("background", kTransparent),
+                                                     .radiusDips = scrollbar.Length("border-radius", 0.0f),
+                                                     .margin     = scrollbar.Space("margin", kNoSpace)}}};
 }
 
 ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes) {

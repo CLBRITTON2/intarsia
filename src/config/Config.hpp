@@ -77,15 +77,26 @@ struct BoxStyle {
     std::vector<InsetShadow> shadows; // the first on top, as CSS stacks them
 };
 
+// backdrop-filter: what shows through a box's background. Blur is the system's own, whose radius it alone sets, and
+// shows nothing while the system's transparency effects are off. brightness() and saturate() tone it as CSS's filters.
+struct Backdrop {
+    bool  blur;       // none shows nothing behind the background
+    float brightness; // 0 is black, 1 leaves the blur as it is
+    float saturation; // 0 is grey, 1 leaves the blur as it is
+    bool  operator==(const Backdrop&) const = default;
+};
+
 // The box behind each non-empty section (left, center, right).
 struct SectionStyle {
     BoxStyle box;
     Spacing  margin; // between the bar's edges and the sections
+    Backdrop backdrop;
 };
 
 struct TooltipStyle {
     BoxStyle     box;
     D2D1_COLOR_F color;
+    Backdrop     backdrop;
 };
 
 // CSS's timing functions, each a cubic Bézier from (0, 0) to (1, 1).
@@ -143,6 +154,7 @@ struct ScrollbarStyle {
 struct MenuStyle {
     BoxStyle             box;
     D2D1_COLOR_F         color;
+    Backdrop             backdrop;
     std::optional<float> maxWidthDips;  // of the whole box, which never outgrows its monitor either
     std::optional<float> maxHeightDips; // the entries scroll past it
     ItemStyle            item;

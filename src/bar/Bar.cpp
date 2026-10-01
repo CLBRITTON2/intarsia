@@ -514,6 +514,7 @@ void Bar::Draw() {
     DrawSection(placed.left, layout.left);
     DrawSection(placed.center, layout.center);
     DrawSection(placed.right, layout.right);
+    _surface->ShowBackdrops(SectionBackdrops({&layout.left, &layout.center, &layout.right}), _config.style.section.backdrop);
     const std::chrono::steady_clock::time_point presenting = std::chrono::steady_clock::now();
     _surface->EndDrawAndPresent();
     _presented = true;
@@ -598,17 +599,30 @@ void Bar::DrawGroup(const PlacedEntry& placed) {
     context->PopAxisAlignedClip();
 }
 
+D2D1_RECT_F Bar::SectionBounds(const SectionLayout& layout) const {
+    const float margin    = CrossOf(_config.style.section.margin, _axis);
+    const float thickness = CrossLength(_surface->Context()->GetSize(), _axis);
+    return MainCrossRect(_axis, layout.start, layout.length, margin, thickness - (2.0f * margin));
+}
+
+std::vector<D2D1_ROUNDED_RECT> Bar::SectionBackdrops(const std::vector<const SectionLayout*>& layouts) const {
+    std::vector<D2D1_RECT_F> sections;
+    for (const SectionLayout* layout : layouts) {
+        if (layout->length > 0.0f) {
+            sections.push_back(SectionBounds(*layout));
+        }
+    }
+    const SectionStyle& style = _config.style.section;
+    return BackdropOutlines(style.backdrop, PixelGridOf(_surface->Context()), sections, style.box);
+}
+
 // The section's box, then each module.
 void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout) {
     if (layout.length <= 0.0f) {
         return;
     }
-    ID2D1DeviceContext* context   = _surface->Context();
-    const SectionStyle& style     = _config.style.section;
-    const float         margin    = CrossOf(style.margin, _axis);
-    const float         thickness = CrossLength(context->GetSize(), _axis);
-    const D2D1_RECT_F   section   = MainCrossRect(_axis, layout.start, layout.length, margin, thickness - (2.0f * margin));
-    DrawBox(context, *_brushes, section, style.box, style.box.background);
+    const BoxStyle& box = _config.style.section.box;
+    DrawBox(_surface->Context(), *_brushes, SectionBounds(layout), box, box.background);
 
     for (const PlacedEntry& placed : entries) {
         if (placed.entry->group != nullptr) {

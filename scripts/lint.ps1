@@ -94,7 +94,9 @@ $freeGb   = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB
 $jobs     = [Math]::Max(1, [Math]::Min([Environment]::ProcessorCount, [Math]::Floor($freeGb / 2 / $gbPerUnit)))
 Write-Host "clang-tidy running $jobs at once ($([Math]::Round($freeGb, 1)) GB free)"
 $results  = $units | ForEach-Object -ThrottleLimit $jobs -Parallel {
-    $output = & $using:clangTidy -p $using:buildDir --quiet $_ 2>&1
+    # DirectXMath (through C++/WinRT's numerics) includes clang's cpuid.h under clang, and VS's clang tools ship no
+    # clang builtin headers.
+    $output = & $using:clangTidy -p $using:buildDir --quiet --extra-arg=-D_XM_NO_INTRINSICS_ $_ 2>&1
     [pscustomobject]@{
         Unit     = $_
         ExitCode = $LASTEXITCODE

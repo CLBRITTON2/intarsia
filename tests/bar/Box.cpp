@@ -47,6 +47,18 @@ TEST(Box, SnapLinesKeepsAWidthOfWholePixels) {
     EXPECT_FLOAT_EQ(snapped.border.top.widthDips, 1.0f);
 }
 
+TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSide) {
+    BoxStyle style   = Lined(Border{.top = Side(0.0f), .right = Side(0.0f), .bottom = Side(0.0f), .left = Side(0.0f)}, {});
+    style.radiusDips = 12.0f;
+    const std::vector<D2D1_RECT_F>       boxes{D2D1::RectF(10.3f, 0.0f, 60.0f, 16.0f), D2D1::RectF(70.0f, 0.0f, 200.0f, 40.0f)};
+    const std::vector<D2D1_ROUNDED_RECT> outlines = BackdropOutlines({.blur = true, .brightness = 1.0f, .saturation = 1.0f}, kFractionalScale, boxes, style);
+    ASSERT_EQ(outlines.size(), 2u);
+    EXPECT_FLOAT_EQ(outlines[0].rect.left, 10.4f);
+    EXPECT_FLOAT_EQ(outlines[0].radiusX, 8.0f);
+    EXPECT_FLOAT_EQ(outlines[1].radiusY, 12.0f);
+    EXPECT_TRUE(BackdropOutlines({.blur = false, .brightness = 1.0f, .saturation = 1.0f}, kFractionalScale, boxes, style).empty());
+}
+
 TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
     const InsetShadow shadow{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 14.0f, .spreadDips = -6.0f, .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.1f)};
     const BoxStyle    snapped = SnapLines(kFractionalScale, Lined(Border{.top = Side(0.0f), .right = Side(0.0f), .bottom = Side(0.0f), .left = Side(0.0f)}, {shadow}));

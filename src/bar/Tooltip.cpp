@@ -89,10 +89,12 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
 
     ID2D1DeviceContext* context = _surface->Context();
     const D2D1_SIZE_F   area    = context->GetSize();
+    const D2D1_RECT_F   box     = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    DrawBox(context, *_brushes, D2D1::RectF(0, 0, area.width, area.height), style, style.background);
+    DrawBox(context, *_brushes, box, style, style.background);
     context->DrawTextLayout(D2D1::Point2F(insets.left, insets.top), layout.Get(), _brushes->Get(_config.style.tooltip.color));
+    _surface->ShowBackdrops(BackdropOutlines(_config.style.tooltip.backdrop, PixelGridOf(context), {box}, style), _config.style.tooltip.backdrop);
     _surface->EndDrawAndPresent();
 
     const RECT rect = TooltipRect(anchor, size);

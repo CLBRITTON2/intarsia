@@ -276,17 +276,36 @@ Insets ContentInsets(const BoxStyle& style) {
                   .bottom = style.padding.yDips + style.border.bottom.widthDips};
 }
 
+D2D1_ROUNDED_RECT SnappedOutline(const PixelGrid& grid, const D2D1_RECT_F& bounds, const BoxStyle& style) {
+    const D2D1_RECT_F box    = SnapRect(grid, bounds);
+    const float       radius = std::max(std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f), 0.0f);
+    return D2D1::RoundedRect(box, radius, radius);
+}
+
+std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style) {
+    std::vector<D2D1_ROUNDED_RECT> outlines;
+    if (!backdrop.blur) {
+        return outlines;
+    }
+    outlines.reserve(boxes.size());
+    for (const D2D1_RECT_F& box : boxes) {
+        outlines.push_back(SnappedOutline(grid, box, style));
+    }
+    return outlines;
+}
+
 void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& bounds, const BoxStyle& style, const D2D1_COLOR_F& fill) {
-    const PixelGrid   grid = PixelGridOf(context);
-    const D2D1_RECT_F box  = SnapRect(grid, bounds);
+    const PixelGrid         grid    = PixelGridOf(context);
+    const D2D1_ROUNDED_RECT outline = SnappedOutline(grid, bounds, style);
+    const D2D1_RECT_F&      box     = outline.rect;
     // An empty module's box has no length, and its inset border would draw inside out.
     if (IsEmpty(box)) {
         return;
     }
     const BoxStyle lines  = SnapLines(grid, style);
-    const float    radius = std::min(lines.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f);
+    const float    radius = outline.radiusX;
     if (fill.a > 0.0f) {
-        context->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brushes.Get(fill));
+        context->FillRoundedRectangle(outline, brushes.Get(fill));
     }
     const Border&     border = lines.border;
     const D2D1_SIZE_F corner = D2D1::SizeF(radius, radius);

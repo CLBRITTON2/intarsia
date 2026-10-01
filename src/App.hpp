@@ -13,6 +13,7 @@
 #include "platform/FileWatcher.hpp"
 #include "platform/Process.hpp"
 #include "platform/WindowProc.hpp"
+#include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 #include "wm/IWindowManager.hpp"
@@ -63,6 +64,8 @@ class App {
     std::wstring          _trayClass;
     // Bars hold a reference to the config, so it is replaced only after they are destroyed.
     std::unique_ptr<Config> _config;
+    // Outlives every compositor the graphics devices hold.
+    CompositionThread _compositionThread;
     // Replaced when the device is lost, after the bars that draw with it are destroyed.
     GraphicsDevice            _graphics;
     std::chrono::milliseconds _deviceRetry;

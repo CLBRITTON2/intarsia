@@ -3,12 +3,15 @@
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
+#include "render/Composition.hpp"
 
+#include <dxgi1_3.h>
 #include <windows.h>
 
 #include <cstdint>
 #include <cmath>
 #include <format>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -62,7 +65,7 @@ GraphicsDevice CreateGraphicsDevice() {
 
     ThrowIfFailed(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(device.dwrite.GetAddressOf())), "DWriteCreateFactory");
 
-    ThrowIfFailed(DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&device.composition)), "DCompositionCreateDevice");
+    device.composition = std::make_shared<CompositionDevice>(CreateCompositionDevice(device.d2d.Get()));
 
     return device;
 }

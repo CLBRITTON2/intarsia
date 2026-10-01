@@ -3,6 +3,7 @@
 #include "../wm/FakeWindowManager.hpp"
 #include "TestStyle.hpp"
 #include "render/BrushCache.hpp"
+#include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
 #include "support/MessageWindow.hpp"
 
@@ -88,6 +89,7 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     SendMessageW(iconWindow.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
     _windowManager.windows = {{.id = "a", .handle = reinterpret_cast<std::intptr_t>(iconWindow.Get()), .focused = true, .monitor = 10}};
 
+    const CompositionThread                    compositionThread;
     const GraphicsDevice                       graphics = CreateGraphicsDevice();
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
     ASSERT_TRUE(SUCCEEDED(graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &context)));

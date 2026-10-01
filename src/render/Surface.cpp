@@ -1,12 +1,104 @@
 #include "render/Surface.hpp"
 
+#include "render/Composition.hpp"
+
+#include <dwmapi.h>
+#include <windows.ui.composition.interop.h>
+#include <winrt/Windows.Foundation.Numerics.h>
+#include <winrt/Windows.Graphics.DirectX.h>
+#include <winrt/Windows.Graphics.h>
+#include <winrt/Windows.UI.Composition.Desktop.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <optional>
+#include <vector>
+
 using Microsoft::WRL::ComPtr;
 
-Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t width, std::uint32_t height, std::uint32_t dpi) {
+namespace composition = winrt::Windows::UI::Composition;
+namespace interop     = ABI::Windows::UI::Composition;
+
+namespace {
+
+    // A backdrop's sprite, the mask surface that rounds it, and the box both were last placed for, none before the first.
+    struct BackdropVisual {
+        composition::SpriteVisual              sprite;
+        composition::CompositionDrawingSurface mask;
+        std::optional<D2D1_ROUNDED_RECT>       box;
+    };
+
+    bool SameBox(const D2D1_ROUNDED_RECT& first, const D2D1_ROUNDED_RECT& second) {
+        return first.rect.left == second.rect.left && first.rect.top == second.rect.top && first.rect.right == second.rect.right && first.rect.bottom == second.rect.bottom &&
+            first.radiusX == second.radiusX && first.radiusY == second.radiusY;
+    }
+
+    std::int32_t ToPixels(float dips, std::uint32_t dpi) {
+        return static_cast<std::int32_t>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
+    }
+
+    winrt::Windows::Graphics::SizeInt32 PixelSize(const D2D1_RECT_F& rect, std::uint32_t dpi) {
+        return {.Width = ToPixels(rect.right, dpi) - ToPixels(rect.left, dpi), .Height = ToPixels(rect.bottom, dpi) - ToPixels(rect.top, dpi)};
+    }
+
+    // Opaque inside box and clear outside it, drawn as DrawBox fills a box so the two edges antialias alike.
+    void DrawMask(const composition::CompositionDrawingSurface& mask, const D2D1_ROUNDED_RECT& box, std::uint32_t dpi) {
+        const auto                 surface = mask.as<interop::ICompositionDrawingSurfaceInterop>();
+        ComPtr<ID2D1DeviceContext> context;
+        POINT                      offset{};
+        ThrowIfDeviceFailed(surface->BeginDraw(nullptr, IID_PPV_ARGS(&context), &offset), "ICompositionDrawingSurfaceInterop::BeginDraw");
+        const auto pixelsPerInch = static_cast<float>(dpi);
+        context->SetDpi(pixelsPerInch, pixelsPerInch);
+        // The surface may be one part of a larger one, which offset (in pixels) places it in.
+        context->SetTransform(
+            D2D1::Matrix3x2F::Translation(PixelsToDips(static_cast<float>(offset.x), dpi) - box.rect.left, PixelsToDips(static_cast<float>(offset.y), dpi) - box.rect.top));
+        context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+        context->FillRoundedRectangle(box, CreateBrush(context.Get(), D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f)).Get());
+        ThrowIfDeviceFailed(surface->EndDraw(), "ICompositionDrawingSurfaceInterop::EndDraw");
+    }
+
+    BackdropVisual CreateBackdrop(const CompositionDevice& device, const composition::CompositionEffectFactory& factory) {
+        BackdropVisual                            backdrop{.sprite = device.compositor.CreateSpriteVisual(),
+                                                           .mask =
+                                    device.graphics.CreateDrawingSurface2({.Width = 0, .Height = 0}, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
+                                                                                                     winrt::Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied),
+                                                           .box = std::nullopt};
+        const composition::CompositionEffectBrush brush = factory.CreateBrush();
+        brush.SetSourceParameter(L"backdrop", device.compositor.CreateHostBackdropBrush());
+        brush.SetSourceParameter(L"mask", device.compositor.CreateSurfaceBrush(backdrop.mask));
+        backdrop.sprite.Brush(brush);
+        return backdrop;
+    }
+
+    void PlaceBackdrop(BackdropVisual& backdrop, const D2D1_ROUNDED_RECT& box, std::uint32_t dpi) {
+        const winrt::Windows::Graphics::SizeInt32 size = PixelSize(box.rect, dpi);
+        backdrop.box                                   = box;
+        backdrop.sprite.Offset({static_cast<float>(ToPixels(box.rect.left, dpi)), static_cast<float>(ToPixels(box.rect.top, dpi)), 0.0f});
+        backdrop.sprite.Size({static_cast<float>(std::max(size.Width, 0)), static_cast<float>(std::max(size.Height, 0))});
+        if (size.Width <= 0 || size.Height <= 0) {
+            return;
+        }
+        backdrop.mask.Resize(size);
+        DrawMask(backdrop.mask, box, dpi);
+    }
+
+} // namespace
+
+// The window's visuals from the bottom: the backdrops, then the swap chain's content. The backdrops' brushes come from
+// factory, made for tone, none before the first.
+struct SurfaceVisuals {
+    composition::Desktop::DesktopWindowTarget target{nullptr};
+    composition::ContainerVisual              backdropLayer{nullptr};
+    composition::SpriteVisual                 content{nullptr};
+    std::vector<BackdropVisual>               backdrops{};
+    composition::CompositionEffectFactory     factory{nullptr};
+    std::optional<Backdrop>                   tone{};
+};
+
+Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t width, std::uint32_t height, std::uint32_t dpi) :
+    _composition(graphics.composition), _dpi(dpi), _visuals(std::make_unique<SurfaceVisuals>()) {
     ThrowIfDeviceFailed(graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &_context), "ID2D1Device::CreateDeviceContext");
-    ThrowIfDeviceFailed(graphics.composition->CreateTargetForHwnd(window, TRUE, &_compositionTarget), "IDCompositionDevice::CreateTargetForHwnd");
-    ThrowIfDeviceFailed(graphics.composition->CreateVisual(&_visual), "IDCompositionDevice::CreateVisual");
-    ThrowIfDeviceFailed(_compositionTarget->SetRoot(_visual.Get()), "IDCompositionTarget::SetRoot");
 
     DXGI_SWAP_CHAIN_DESC1 description{};
     description.Width            = width;
@@ -19,10 +111,38 @@ Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t widt
     description.AlphaMode        = DXGI_ALPHA_MODE_PREMULTIPLIED;
     ThrowIfDeviceFailed(graphics.dxgiFactory->CreateSwapChainForComposition(graphics.d3d.Get(), &description, nullptr, &_swapChain),
                         "IDXGIFactory2::CreateSwapChainForComposition");
-    ThrowIfDeviceFailed(_visual->SetContent(_swapChain.Get()), "IDCompositionVisual::SetContent");
-    ThrowIfDeviceFailed(graphics.composition->Commit(), "IDCompositionDevice::Commit");
+
+    // A host backdrop brush draws nothing in a window that has not asked for it.
+    const BOOL hostBackdrop = TRUE;
+    ThrowIfFailed(DwmSetWindowAttribute(window, DWMWA_USE_HOSTBACKDROPBRUSH, &hostBackdrop, sizeof(hostBackdrop)), "DwmSetWindowAttribute(DWMWA_USE_HOSTBACKDROPBRUSH)");
+
+    Composing("Surface", [this, window, width, height] {
+        const composition::Compositor& compositor = _composition->compositor;
+        ThrowIfDeviceFailed(compositor.as<interop::Desktop::ICompositorDesktopInterop>()->CreateDesktopWindowTarget(
+                                window, TRUE, reinterpret_cast<interop::Desktop::IDesktopWindowTarget**>(winrt::put_abi(_visuals->target))),
+                            "ICompositorDesktopInterop::CreateDesktopWindowTarget");
+        composition::ICompositionSurface swapChainSurface{nullptr};
+        ThrowIfDeviceFailed(compositor.as<interop::ICompositorInterop>()->CreateCompositionSurfaceForSwapChain(
+                                _swapChain.Get(), reinterpret_cast<interop::ICompositionSurface**>(winrt::put_abi(swapChainSurface))),
+                            "ICompositorInterop::CreateCompositionSurfaceForSwapChain");
+        const composition::CompositionSurfaceBrush contentBrush = compositor.CreateSurfaceBrush(swapChainSurface);
+        // Drawn at its own size from the top left, never stretched while a resize settles.
+        contentBrush.Stretch(composition::CompositionStretch::None);
+        contentBrush.HorizontalAlignmentRatio(0.0f);
+        contentBrush.VerticalAlignmentRatio(0.0f);
+        _visuals->content = compositor.CreateSpriteVisual();
+        _visuals->content.Brush(contentBrush);
+        _visuals->content.Size({static_cast<float>(width), static_cast<float>(height)});
+        _visuals->backdropLayer                 = compositor.CreateContainerVisual();
+        const composition::ContainerVisual root = compositor.CreateContainerVisual();
+        root.Children().InsertAtTop(_visuals->backdropLayer);
+        root.Children().InsertAtTop(_visuals->content);
+        _visuals->target.Root(root);
+    });
     BindRenderTarget(dpi);
 }
+
+Surface::~Surface() = default;
 
 ID2D1DeviceContext* Surface::Context() const {
     return _context.Get();
@@ -32,6 +152,14 @@ void Surface::Resize(std::uint32_t width, std::uint32_t height, std::uint32_t dp
     // ResizeBuffers fails while D2D still holds a bitmap over the old back buffer.
     _context->SetTarget(nullptr);
     ThrowIfDeviceFailed(_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0), "IDXGISwapChain1::ResizeBuffers");
+    Composing("Surface::Resize", [this, width, height] { _visuals->content.Size({static_cast<float>(width), static_cast<float>(height)}); });
+    if (dpi != _dpi) {
+        // The same DIPs land on other pixels, so the next ShowBackdrops places every backdrop again.
+        for (BackdropVisual& backdrop : _visuals->backdrops) {
+            backdrop.box = std::nullopt;
+        }
+    }
+    _dpi = dpi;
     BindRenderTarget(dpi);
 }
 
@@ -40,6 +168,33 @@ void Surface::EndDrawAndPresent() {
     // Frames are paced by the bar's frame clock. A present that waited for the refresh here would hold the UI thread
     // past the clock's next tick, and the frame it would have drawn is dropped.
     ThrowIfDeviceFailed(_swapChain->Present(0, 0), "IDXGISwapChain1::Present");
+}
+
+void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop) {
+    Composing("Surface::ShowBackdrops", [this, &boxes, &backdrop] {
+        std::vector<BackdropVisual>& backdrops = _visuals->backdrops;
+        const bool                   retoned   = _visuals->tone != backdrop;
+        // A new tone takes new brushes, so every backdrop is made again.
+        while (!backdrops.empty() && (retoned || backdrops.size() > boxes.size())) {
+            _visuals->backdropLayer.Children().Remove(backdrops.back().sprite);
+            backdrops.pop_back();
+        }
+        if (!boxes.empty() && retoned) {
+            _visuals->factory = CreateBackdropFactory(*_composition, backdrop);
+            _visuals->tone    = backdrop;
+        }
+        while (backdrops.size() < boxes.size()) {
+            backdrops.push_back(CreateBackdrop(*_composition, _visuals->factory));
+            _visuals->backdropLayer.Children().InsertAtTop(backdrops.back().sprite);
+        }
+        // Only a box that moved or changed size redraws its mask, so a bar at rest makes no composition change.
+        for (size_t index = 0; index < boxes.size(); ++index) {
+            const std::optional<D2D1_ROUNDED_RECT>& placed = backdrops[index].box;
+            if (!placed.has_value() || !SameBox(*placed, boxes[index])) {
+                PlaceBackdrop(backdrops[index], boxes[index], _dpi);
+            }
+        }
+    });
 }
 
 void Surface::BindRenderTarget(std::uint32_t dpi) {

@@ -119,7 +119,10 @@ class Bar {
     HitBox                   PlaceBox(const ModuleEntry& entry, float start, float length) const;
     HitBox                   PlaceInRoom(const ModuleEntry& entry, float start, float length) const;
     std::vector<PlacedEntry> PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const;
-    void                     DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
+    // The section's box, inside the bar's margin.
+    D2D1_RECT_F                    SectionBounds(const SectionLayout& layout) const;
+    std::vector<D2D1_ROUNDED_RECT> SectionBackdrops(const std::vector<const SectionLayout*>& layouts) const;
+    void                           DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
     // The module's box (its background, or fading to its hover under the cursor), then the module.
     void DrawModule(const HitBox& box, const ModuleStyle& style);
     // The group's box, its hover fading in over the toggle's span alone under the cursor, the toggle, then its members.

@@ -4,6 +4,7 @@
 #include "TestStyle.hpp"
 #include "TextOnlyRender.hpp"
 #include "render/BrushCache.hpp"
+#include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
 
 #include <gtest/gtest.h>
@@ -60,6 +61,7 @@ namespace {
             return D2D1::Point2F(x, module.Size().height / 2.0f);
         }
 
+        CompositionThread                          _compositionThread;
         GraphicsDevice                             _graphics;
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
         Microsoft::WRL::ComPtr<ID2D1Bitmap1>       _target;

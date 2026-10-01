@@ -43,6 +43,22 @@ struct MenuScroll {
     float       offsetDips;  // how far the rows have moved up, 0 at the top
 };
 
+// A menu's rows placed down its box and stretched to the widest, and the window that holds them.
+struct MenuLayout {
+    std::vector<MenuRow> rows;
+    SIZE                 size;   // the window, in pixels, never larger than its monitor
+    MenuScroll           scroll; // at the top
+    D2D1_RECT_F          gutter; // beside the viewport, where the track takes clicks
+    D2D1_RECT_F          track;
+};
+
+// The widest row's text may lay out in a menu on monitor before its ellipsis, capped by style's max-width.
+float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& monitor, std::uint32_t dpi);
+
+// rows, each sized to its text with its box at the origin, stacked inside style's box. Past max-height or the monitor's
+// height the window stops growing, the rows scroll and the scroll bar takes its gutter.
+MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitor, std::uint32_t dpi);
+
 // scroll at offsetDips, kept between the top and the offset that brings the last row to the viewport's bottom.
 MenuScroll ScrolledTo(const MenuScroll& scroll, float offsetDips);
 

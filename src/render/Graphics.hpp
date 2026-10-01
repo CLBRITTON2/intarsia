@@ -4,27 +4,31 @@
 
 #include <d2d1_1.h>
 #include <d3d11.h>
-#include <dcomp.h>
 #include <dwrite.h>
 #include <dxgi1_2.h>
 #include <windows.h>
 #include <wrl/client.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 
-// Shared by every bar: one D3D device feeds all swap chains and one DComp device commits all visuals.
+// Holds C++/WinRT types, which only render/ sources include (render/Composition.hpp).
+struct CompositionDevice;
+
+// Shared by every bar: one D3D device feeds all swap chains and one compositor holds all visuals.
 struct GraphicsDevice {
-    Microsoft::WRL::ComPtr<ID3D11Device>        d3d;
-    Microsoft::WRL::ComPtr<IDXGIFactory2>       dxgiFactory;
-    Microsoft::WRL::ComPtr<ID2D1Factory1>       d2dFactory;
-    Microsoft::WRL::ComPtr<ID2D1Device>         d2d;
-    Microsoft::WRL::ComPtr<IDWriteFactory>      dwrite;
-    Microsoft::WRL::ComPtr<IDCompositionDevice> composition;
+    Microsoft::WRL::ComPtr<ID3D11Device>   d3d;
+    Microsoft::WRL::ComPtr<IDXGIFactory2>  dxgiFactory;
+    Microsoft::WRL::ComPtr<ID2D1Factory1>  d2dFactory;
+    Microsoft::WRL::ComPtr<ID2D1Device>    d2d;
+    Microsoft::WRL::ComPtr<IDWriteFactory> dwrite;
+    std::shared_ptr<CompositionDevice>     composition;
 };
 
-// Logs the adapter it renders on, which may not be the one showing a given monitor.
+// Logs the adapter it renders on, which may not be the one showing a given monitor. Needs a CompositionThread on the
+// calling thread.
 GraphicsDevice CreateGraphicsDevice();
 
 struct MonitorOutput {

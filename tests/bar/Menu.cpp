@@ -19,7 +19,30 @@ namespace {
 
     const D2D1_RECT_F kTrack = D2D1::RectF(106, 4, 110, 104);
 
-    D2D1_RECT_F       ThumbOrFail(const MenuScroll& scroll) {
+    constexpr RECT    kMonitor{.left = 0, .top = 0, .right = 1920, .bottom = 1080};
+
+    // A 4 DIP padded box of rows 2 DIPs apart vertically and 3 DIPs in from its sides, with no scroll bar.
+    MenuStyle PaddedMenu() {
+        MenuStyle style{};
+        style.box.padding  = Spacing{.yDips = 4, .xDips = 4};
+        style.item.margin  = Spacing{.yDips = 2, .xDips = 3};
+        style.item.padding = Spacing{.yDips = 1, .xDips = 5};
+        return style;
+    }
+
+    // A row as LayOutRow measures it: sized to its text, at the origin.
+    MenuRow MeasuredRow(float width, const ItemStyle& style, std::optional<size_t> entry) {
+        return MenuRow{.text = nullptr, .box = D2D1::RectF(0, 0, width, 20), .textOrigin = D2D1::Point2F(0, 0), .style = &style, .entry = entry};
+    }
+
+    void ExpectRect(const D2D1_RECT_F& actual, const D2D1_RECT_F& expected) {
+        EXPECT_FLOAT_EQ(actual.left, expected.left);
+        EXPECT_FLOAT_EQ(actual.top, expected.top);
+        EXPECT_FLOAT_EQ(actual.right, expected.right);
+        EXPECT_FLOAT_EQ(actual.bottom, expected.bottom);
+    }
+
+    D2D1_RECT_F ThumbOrFail(const MenuScroll& scroll) {
         const std::optional<D2D1_RECT_F> thumb = ThumbRect(scroll, kTrack);
         if (!thumb.has_value()) {
             ADD_FAILURE() << "no thumb";
@@ -52,7 +75,6 @@ TEST(Menu, AFailuresRowCannotBePicked) {
 }
 
 TEST(Menu, AnEntrysTooltipGoesUnderItsRowOrAboveItNearTheMonitorsBottom) {
-    constexpr RECT kMonitor{.left = 0, .top = 0, .right = 1920, .bottom = 1080};
     constexpr SIZE kSize{.cx = 100, .cy = 30};
     const RECT     below = TooltipRect(RowTooltipAnchor(RECT{.left = 1600, .top = 300, .right = 1800, .bottom = 320}, kMonitor, 96), kSize);
     EXPECT_EQ(below.left, 1650);
@@ -114,4 +136,50 @@ TEST(Menu, DraggingTheThumbScrollsInProportion) {
     EXPECT_FLOAT_EQ(ScrolledToThumb(ScrollAt(0), kTrack, 4.0f + 37.5f).offsetDips, 150.0f);
     EXPECT_FLOAT_EQ(ScrolledToThumb(ScrollAt(0), kTrack, 200.0f).offsetDips, 300.0f);
     EXPECT_FLOAT_EQ(ScrolledToThumb(ScrollAt(150), kTrack, -50.0f).offsetDips, 0.0f);
+}
+
+TEST(Menu, RowsStackInsideTheBoxAndStretchToTheWidest) {
+    const MenuStyle  style  = PaddedMenu();
+    const MenuLayout layout = LayOutMenu({MeasuredRow(50, style.item, 0), MeasuredRow(80, style.item, 1)}, style, kMonitor, 96);
+    ASSERT_EQ(layout.rows.size(), 2u);
+    ExpectRect(layout.rows[0].box, D2D1::RectF(7, 6, 87, 26));
+    ExpectRect(layout.rows[1].box, D2D1::RectF(7, 30, 87, 50));
+    EXPECT_FLOAT_EQ(layout.rows[1].textOrigin.x, 12.0f);
+    EXPECT_FLOAT_EQ(layout.rows[1].textOrigin.y, 31.0f);
+    EXPECT_EQ(layout.size.cx, 94);
+    EXPECT_EQ(layout.size.cy, 56);
+    ExpectRect(layout.scroll.viewport, D2D1::RectF(4, 4, 90, 52));
+    EXPECT_FLOAT_EQ(layout.scroll.contentDips, 48.0f);
+    EXPECT_EQ(ThumbRect(layout.scroll, layout.track), std::nullopt);
+}
+
+TEST(Menu, RowsPastMaxHeightScrollBesideTheScrollBar) {
+    MenuStyle style         = PaddedMenu();
+    style.maxHeightDips     = 40.0f;
+    style.scrollbar         = ScrollbarStyle{.widthDips = 4, .background = {}, .radiusDips = 0, .margin = Spacing{.yDips = 2, .xDips = 1}};
+    const MenuLayout layout = LayOutMenu({MeasuredRow(50, style.item, 0), MeasuredRow(80, style.item, 1)}, style, kMonitor, 96);
+    EXPECT_EQ(layout.size.cx, 100);
+    EXPECT_EQ(layout.size.cy, 40);
+    ExpectRect(layout.scroll.viewport, D2D1::RectF(4, 4, 90, 36));
+    ExpectRect(layout.gutter, D2D1::RectF(90, 4, 96, 36));
+    ExpectRect(layout.track, D2D1::RectF(91, 6, 95, 34));
+    EXPECT_NE(ThumbRect(layout.scroll, layout.track), std::nullopt);
+}
+
+TEST(Menu, AMenuNeverOutgrowsItsMonitor) {
+    const MenuStyle  style  = PaddedMenu();
+    const MenuLayout layout = LayOutMenu({MeasuredRow(50, style.item, 0), MeasuredRow(80, style.item, 1)}, style, RECT{.left = 0, .top = 0, .right = 60, .bottom = 30}, 96);
+    EXPECT_EQ(layout.size.cx, 60);
+    EXPECT_EQ(layout.size.cy, 30);
+}
+
+TEST(Menu, RowTextIsCutAtTheNarrowerOfMaxWidthAndTheMonitor) {
+    MenuStyle style    = PaddedMenu();
+    style.maxWidthDips = 300.0f;
+    style.scrollbar    = ScrollbarStyle{.widthDips = 4, .background = {}, .radiusDips = 0, .margin = Spacing{.yDips = 2, .xDips = 1}};
+    // Less the gutter, the box's padding and the row's margin and padding, on both sides.
+    EXPECT_FLOAT_EQ(MenuTextWidth(style, style.item, kMonitor, 96), 270.0f);
+    EXPECT_FLOAT_EQ(MenuTextWidth(style, style.item, RECT{.left = 0, .top = 0, .right = 200, .bottom = 1080}, 96), 170.0f);
+    // A 200 pixel monitor at 150% is 133 DIPs wide.
+    EXPECT_NEAR(MenuTextWidth(style, style.item, RECT{.left = 0, .top = 0, .right = 200, .bottom = 1080}, 144), 103.333f, 0.001f);
 }
