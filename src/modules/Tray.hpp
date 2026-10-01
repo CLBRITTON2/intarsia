@@ -74,10 +74,11 @@ class Tray final : public IModule {
     std::vector<Slot> _slots; // as last laid out with any icon in sight
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.
-    ItemRow                 _row = EmptyItemRow();
-    HoveredItem             _hovered;
-    std::optional<TrayIcon> _popup; // the icon whose app's popup is open
-    bool                    _laidOut = false;
+    ItemRow                   _row = EmptyItemRow();
+    HoveredItem               _hovered;
+    std::vector<TrayIconRect> _placed; // as last handed to the tray
+    std::optional<TrayIcon>   _popup;  // the icon whose app's popup is open
+    bool                      _laidOut = false;
 };
 
 // The icons a tray shows: those with pixels that their app has not hidden.

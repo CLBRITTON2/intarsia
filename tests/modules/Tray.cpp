@@ -273,6 +273,21 @@ TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
     EXPECT_TRUE(_tray.rects.empty());
 }
 
+TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
+    const ModulePlacement placement{.window = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 96};
+    Tray                  module(kConfig, _tray, TestModuleStyle());
+    module.Layout(_render);
+    module.Click(At(module, module.Size().width / 2.0f));
+    module.Layout(_render);
+    module.Place(placement);
+    ASSERT_FALSE(_tray.rects.empty());
+    const size_t calls = _tray.showCalls;
+    module.Place(placement);
+    EXPECT_EQ(_tray.showCalls, calls);
+    module.Place(ModulePlacement{.window = placement.window, .contentOrigin = D2D1::Point2F(120.0f, 4.0f), .dpi = 96});
+    EXPECT_EQ(_tray.showCalls, calls + 1);
+}
+
 TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     Tray module(kConfig, _tray, TestModuleStyle());
     module.Layout(_render);

@@ -204,6 +204,7 @@ void Bar::Build(HINSTANCE instance) {
     }
     _surface = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     _brushes = std::make_unique<BrushCache>(_surface->Context());
+    BuildContexts();
     _tooltip = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
     _menu =
         std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _state, *_tooltip, [this](const DeviceLostError& error) { ReportDeviceLost(error); });
@@ -245,6 +246,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             // CreateWindowExW and Dock send sizes before the constructor has built the surface.
             if (_surface != nullptr && !_deviceLost && LOWORD(lParam) != 0 && HIWORD(lParam) != 0) {
                 _surface->Resize(LOWORD(lParam), HIWORD(lParam), _placement.dpi);
+                BuildContexts();
                 Render();
             }
             return 0;
@@ -358,6 +360,15 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, _axis))};
 }
 
+void Bar::BuildContexts() {
+    _contexts.clear();
+    ForEachEntry(_modules, [this](const ModuleEntry& entry) { _contexts.emplace(&entry.style, ModuleContext(entry.style)); });
+}
+
+const RenderContext& Bar::ContextFor(const ModuleStyle& style) const {
+    return _contexts.at(&style);
+}
+
 // A module box spans the bar's thickness less the sections' margin and insets on both sides.
 float Bar::BoxCrossLength() const {
     const SectionStyle& section   = _config.style.section;
@@ -416,7 +427,7 @@ void Bar::Redraw() {
 bool Bar::LayOutModules() {
     bool changed = false;
     // Every module lays out, so none is left holding stale content.
-    ForEachEntry(_modules, [this, &changed](const ModuleEntry& entry) { changed = entry.module->Layout(ModuleContext(entry.style)) || changed; });
+    ForEachEntry(_modules, [this, &changed](const ModuleEntry& entry) { changed = entry.module->Layout(ContextFor(entry.style)) || changed; });
     return changed;
 }
 
@@ -542,7 +553,7 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
 
 void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
     DrawBox(_surface->Context(), *_brushes, box.bounds, style.box, box.module == _pointed ? style.hover : style.box.background);
-    box.module->Draw(ModuleContext(style), box.contentOrigin);
+    box.module->Draw(ContextFor(style), box.contentOrigin);
 }
 
 void Bar::DrawGroup(const PlacedEntry& placed) {
@@ -552,7 +563,7 @@ void Bar::DrawGroup(const PlacedEntry& placed) {
     if (placed.box.module == _pointed) {
         DrawBox(context, *_brushes, placed.toggle, style.box, style.hover);
     }
-    placed.box.module->Draw(ModuleContext(style), placed.box.contentOrigin);
+    placed.box.module->Draw(ContextFor(style), placed.box.contentOrigin);
     context->PushAxisAlignedClip(placed.shown, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t member = 0; member < placed.members.size(); ++member) {
         DrawModule(placed.members[member], placed.entry->members[member].style);

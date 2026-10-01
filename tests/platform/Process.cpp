@@ -166,21 +166,25 @@ TEST(Process, CaptureOutputStopsWhenCancelled) {
     EXPECT_THAT([&cancel] { return CaptureOutput(Ping(), std::chrono::seconds(10), 1024, cancel.get()); }, CommandErrorWith("cancelled"));
 }
 
-// The job cannot kill a process outside it, so only the timeout ends the read of a pipe such a process holds open.
-TEST(Process, CaptureOutputEndsAtItsTimeoutWhileAProcessOutsideTheJobHoldsItsOutput) {
+// The job cannot kill a process outside it, so the read of a pipe such a process holds open ends with the job.
+TEST(Process, CaptureOutputEndsWhenItsCommandExitsWhileAProcessOutsideTheJobHoldsItsOutput) {
     std::future<std::string> captured;
     std::future_status       status = std::future_status::timeout;
     {
         const OutsideProcess holder;
         captured = std::async(std::launch::async, [&holder] {
-            return CaptureOutput(Command{.program = INTARSIA_PIPE_HOLDER, .arguments = {std::to_wstring(holder.Id())}}, std::chrono::milliseconds(300), 1024,
-                                 NeverSignaled().get());
+            return CaptureOutput(Command{.program = INTARSIA_PIPE_HOLDER, .arguments = {std::to_wstring(holder.Id())}}, std::chrono::seconds(10), 1024, NeverSignaled().get());
         });
-        status   = captured.wait_for(std::chrono::seconds(10));
+        status   = captured.wait_for(std::chrono::seconds(5));
     }
-    // The holder is gone by now, so a read that ignored the timeout has ended too and get cannot hang.
+    // The holder is gone by now, so a read that waited for the pipe to close has ended too and get cannot hang.
     EXPECT_EQ(status, std::future_status::ready);
-    EXPECT_THAT([&captured] { return captured.get(); }, CommandErrorWith("did not finish within 300ms"));
+    EXPECT_EQ(captured.get(), "");
+}
+
+// A process the command starts is in its job, so its output still counts after the command exits.
+TEST(Process, CaptureOutputWaitsForWhatTheCommandStarted) {
+    EXPECT_EQ(CaptureOutput(Cmd({L"/c", L"start /b cmd /c ping -n 2 127.0.0.1 ^>nul ^& echo late"}), std::chrono::seconds(10), 1024, NeverSignaled().get()), "late\r\n");
 }
 
 TEST(Process, CaptureOutputFailsPastTheOutputCap) {
@@ -224,6 +228,20 @@ TEST(Process, RunOrFailureShowsAWin32ErrorAsCouldNotRun) {
     const RunFailure&                           failure = std::get<RunFailure>(result);
     EXPECT_EQ(failure.reason, "could not run");
     EXPECT_THAT(failure.detail, testing::HasSubstr("CreateProcessW"));
+}
+
+TEST(Process, StreamLinesEndsWhenItsCommandExitsWhileAProcessOutsideTheJobHoldsItsOutput) {
+    std::future<std::uint32_t> streamed;
+    std::future_status         status = std::future_status::timeout;
+    {
+        const OutsideProcess holder;
+        streamed = std::async(std::launch::async, [&holder] {
+            return StreamLines(Command{.program = INTARSIA_PIPE_HOLDER, .arguments = {std::to_wstring(holder.Id())}}, 1024, NeverSignaled().get(), [](std::string_view) {});
+        });
+        status   = streamed.wait_for(std::chrono::seconds(10));
+    }
+    EXPECT_EQ(status, std::future_status::ready);
+    EXPECT_EQ(streamed.get(), 0u);
 }
 
 TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {

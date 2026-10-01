@@ -17,6 +17,10 @@ namespace {
         return first.owner == second.owner && first.id == second.id;
     }
 
+    bool SamePlace(const TrayIconRect& first, const TrayIconRect& second) {
+        return first.owner == second.owner && first.id == second.id && EqualRect(&first.rect, &second.rect) != FALSE;
+    }
+
 } // namespace
 
 Tray::Tray(TrayConfig config, ITray& tray, ModuleStyle style) : _config(std::move(config)), _tray(tray), _style(std::move(style)), _fold(_style), _toggle(EmptyIconText()) {}
@@ -33,22 +37,29 @@ bool Tray::Layout(const RenderContext& render) {
     _angleShown                 = position.angleDegrees;
 
     // Folded, the icons wait out of sight as last shown, so unfolding uploads only those that are new or redrawn since.
+    const size_t count = _slots.size();
     if (reveal > 0.0f) {
         const std::vector<TrayIcon> shown = ShownIcons(_tray.Icons());
-        changed                           = changed || shown.size() != _slots.size();
-        std::vector<Slot> slots;
-        slots.reserve(shown.size());
-        for (size_t index = 0; index < shown.size(); ++index) {
-            // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
-            const auto kept   = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.icon.pixels == shown[index].pixels; });
-            auto       bitmap = kept != _slots.end() ? kept->bitmap : CreateIconBitmap(render.context, *shown[index].pixels);
-            // changed is already true when the counts differ, so _slots[index] is only read while it exists.
-            changed = changed || _slots[index].icon.pixels != shown[index].pixels;
-            slots.push_back(Slot{.icon = shown[index], .bitmap = std::move(bitmap)});
+        if (!std::ranges::equal(shown, _slots, {}, {}, &Slot::icon)) {
+            changed = changed || shown.size() != _slots.size();
+            std::vector<Slot> slots;
+            slots.reserve(shown.size());
+            for (size_t index = 0; index < shown.size(); ++index) {
+                // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
+                const auto kept   = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.icon.pixels == shown[index].pixels; });
+                auto       bitmap = kept != _slots.end() ? kept->bitmap : CreateIconBitmap(render.context, *shown[index].pixels);
+                // changed is already true when the counts differ, so _slots[index] is only read while it exists.
+                changed = changed || _slots[index].icon.pixels != shown[index].pixels;
+                slots.push_back(Slot{.icon = shown[index], .bitmap = std::move(bitmap)});
+            }
+            _slots = std::move(slots);
         }
-        _slots = std::move(slots);
     }
 
+    // Every icon is the same size, so the row only moves when their count does.
+    if (_laidOut && _slots.size() == count) {
+        return changed;
+    }
     if (!_laidOut) {
         _toggle = LayOutIconText(render, _config.icon, L"");
     }
@@ -75,7 +86,10 @@ void Tray::Place(const ModulePlacement& placement) {
         const D2D1_RECT_F& box = _row.boxes[index];
         rects.push_back(TrayIconRect{.owner = _slots[index].icon.owner, .id = _slots[index].icon.id, .rect = DipsToScreen(placement.window, Offset(box, origin), placement.dpi)});
     }
-    _tray.ShowRects(this, std::move(rects));
+    if (!std::ranges::equal(rects, _placed, SamePlace)) {
+        _placed = rects;
+        _tray.ShowRects(this, std::move(rects));
+    }
 }
 
 void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {

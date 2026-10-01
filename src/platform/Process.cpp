@@ -12,6 +12,7 @@
 
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -118,9 +119,14 @@ namespace {
         Cancelled
     };
 
+    // What each packet on a run's completion port comes from.
+    constexpr ULONG_PTR kPipeKey = 1;
+    constexpr ULONG_PTR kJobKey  = 2;
+    constexpr ULONG_PTR kStopKey = 3;
+
     struct Watchdog {
         HANDLE            job;
-        HANDLE            stopped; // manual reset, ends the read even while a process outside the job holds the pipe
+        HANDLE            port; // the stop ends the read there even while a process outside the job holds the pipe
         std::atomic<Stop> stop;
     };
 
@@ -129,7 +135,7 @@ namespace {
         auto* watchdog = static_cast<Watchdog*>(context);
         watchdog->stop.store(result == WAIT_TIMEOUT ? Stop::TimedOut : Stop::Cancelled);
         TerminateJobObject(watchdog->job, kKilledExitCode);
-        SetEvent(watchdog->stopped);
+        PostQueuedCompletionStatus(watchdog->port, 0, kStopKey, nullptr);
     }
 
     // Disarms first and waits out a callback already running, so the Watchdog it points at is never used after this.
@@ -189,6 +195,20 @@ namespace {
         return job;
     }
 
+    // One port for the pipe's reads and the job's messages, which says when no process is left in the job.
+    // Associated before any process is in the job, so none of its messages is missed.
+    UniqueHandle OutputPort(HANDLE pipe, HANDLE job) {
+        UniqueHandle port = OwnHandle(CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 1), "CreateIoCompletionPort(command output)");
+        if (CreateIoCompletionPort(pipe, port.get(), kPipeKey, 0) == nullptr) {
+            ThrowLastError("CreateIoCompletionPort(command output pipe)");
+        }
+        JOBOBJECT_ASSOCIATE_COMPLETION_PORT association{.CompletionKey = std::bit_cast<PVOID>(kJobKey), .CompletionPort = port.get()};
+        if (!SetInformationJobObject(job, JobObjectAssociateCompletionPortInformation, &association, sizeof(association))) {
+            ThrowLastError("SetInformationJobObject(completion port)");
+        }
+        return port;
+    }
+
     // Suspended, so it is in the job before it can start anything. The handle list keeps every other inheritable handle
     // in this process out of the child.
     PROCESS_INFORMATION StartSuspended(const Command& command, HANDLE output) {
@@ -229,49 +249,78 @@ namespace {
         return FILETIME{.dwLowDateTime = due.LowPart, .dwHighDateTime = due.HighPart};
     }
 
-    // Blocks until the read into chunk completes or stopped is signaled, which abandons it. The byte count read, or
-    // nullopt at the end of the pipe or on stop.
-    std::optional<DWORD> ReadChunk(HANDLE pipe, std::array<char, 4096>& chunk, HANDLE ready, HANDLE stopped) {
-        OVERLAPPED overlapped{};
-        overlapped.hEvent = ready;
-        if (!ReadFile(pipe, chunk.data(), static_cast<DWORD>(chunk.size()), nullptr, &overlapped)) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE) {
-                return std::nullopt;
-            }
-            if (error != ERROR_IO_PENDING) {
-                ThrowLastError("ReadFile(command output)");
-            }
-        }
-        const std::array<HANDLE, 2> waits{ready, stopped};
-        const DWORD                 woke      = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE);
-        const DWORD                 waitError = woke == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
-        if (woke != WAIT_OBJECT_0) {
-            CancelIoEx(pipe, &overlapped);
-        }
-        // Waits out a cancelled read, which must finish before overlapped and chunk go out of scope, a failed wait included.
-        DWORD      read     = 0;
-        const BOOL finished = GetOverlappedResult(pipe, &overlapped, &read, TRUE);
-        if (waitError != ERROR_SUCCESS) {
-            throw Win32Error("WaitForMultipleObjects(command output)", HRESULT_FROM_WIN32(waitError));
-        }
-        if (!finished) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE || error == ERROR_OPERATION_ABORTED) {
-                return std::nullopt;
-            }
-            ThrowLastError("GetOverlappedResult(command output)");
-        }
-        return woke == WAIT_OBJECT_0 ? std::optional<DWORD>(read) : std::nullopt;
-    }
+    // Reads a run's output through its port, where the job emptying and the watchdog's stop also arrive, so the read
+    // ends even while a process outside the job holds the pipe open. The port's only consumer.
+    class OutputReader {
+      public:
+        OutputReader(HANDLE pipe, HANDLE port) : _pipe(pipe), _port(port) {}
 
-    // Everything written until every holder of the write end has closed it or stopped is signaled. Nullopt once it
-    // passes maxBytes.
-    std::optional<std::string> ReadUpTo(HANDLE pipe, size_t maxBytes, HANDLE stopped) {
-        const UniqueHandle     ready = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command output)");
+        // The byte count read into chunk, or nullopt at the end of the output or once stopped. Once the job is empty,
+        // only what the pipe already holds is read.
+        std::optional<DWORD> Read(std::array<char, 4096>& chunk) {
+            OVERLAPPED overlapped{};
+            if (!ReadFile(_pipe, chunk.data(), static_cast<DWORD>(chunk.size()), nullptr, &overlapped)) {
+                const DWORD error = GetLastError();
+                if (error == ERROR_BROKEN_PIPE) {
+                    return std::nullopt;
+                }
+                if (error != ERROR_IO_PENDING) {
+                    ThrowLastError("ReadFile(command output)");
+                }
+                if (_ended || _stopped) {
+                    CancelIoEx(_pipe, &overlapped);
+                }
+            }
+            // The read's own packet must arrive before overlapped and chunk go out of scope, even a read that completed
+            // at once, since its packet is queued too.
+            while (true) {
+                DWORD       bytes     = 0;
+                ULONG_PTR   key       = 0;
+                OVERLAPPED* completed = nullptr;
+                const BOOL  succeeded = GetQueuedCompletionStatus(_port, &bytes, &key, &completed, INFINITE);
+                const DWORD error     = succeeded ? ERROR_SUCCESS : GetLastError();
+                if (completed == nullptr && !succeeded) {
+                    CancelIoEx(_pipe, &overlapped);
+                    DWORD read = 0;
+                    GetOverlappedResult(_pipe, &overlapped, &read, TRUE);
+                    throw Win32Error("GetQueuedCompletionStatus(command output)", HRESULT_FROM_WIN32(error));
+                }
+                if (key == kPipeKey) {
+                    if (succeeded) {
+                        return _stopped ? std::nullopt : std::optional<DWORD>(bytes);
+                    }
+                    if (error == ERROR_BROKEN_PIPE || error == ERROR_OPERATION_ABORTED) {
+                        return std::nullopt;
+                    }
+                    throw Win32Error("ReadFile(command output)", HRESULT_FROM_WIN32(error));
+                }
+                if (key == kStopKey) {
+                    _stopped = true;
+                    CancelIoEx(_pipe, &overlapped);
+                } else if (key == kJobKey && bytes == JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO) {
+                    // A read the pipe already had data for completes rather than cancels, so nothing printed is lost.
+                    _ended = true;
+                    CancelIoEx(_pipe, &overlapped);
+                }
+            }
+        }
+
+        bool Stopped() const {
+            return _stopped;
+        }
+
+      private:
+        HANDLE _pipe;
+        HANDLE _port;
+        bool   _ended   = false;
+        bool   _stopped = false;
+    };
+
+    // Everything read until the output ends or stops. Nullopt once it passes maxBytes.
+    std::optional<std::string> ReadUpTo(OutputReader& reader, size_t maxBytes) {
         std::string            output;
         std::array<char, 4096> chunk{};
-        while (const std::optional<DWORD> read = ReadChunk(pipe, chunk, ready.get(), stopped)) {
+        while (const std::optional<DWORD> read = reader.Read(chunk)) {
             if (output.size() + *read > maxBytes) {
                 return std::nullopt;
             }
@@ -281,12 +330,11 @@ namespace {
     }
 
     // Calls onLine with each line, without its line ending, as it completes, and with a last one the output ends
-    // without a line ending unless stopped is signaled. False once a line passes maxLineBytes.
-    bool ReadLines(HANDLE pipe, size_t maxLineBytes, HANDLE stopped, const std::function<void(std::string_view)>& onLine) {
-        const UniqueHandle     ready = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command output)");
+    // without a line ending unless stopped. False once a line passes maxLineBytes.
+    bool ReadLines(OutputReader& reader, size_t maxLineBytes, const std::function<void(std::string_view)>& onLine) {
         std::string            line;
         std::array<char, 4096> chunk{};
-        while (const std::optional<DWORD> read = ReadChunk(pipe, chunk, ready.get(), stopped)) {
+        while (const std::optional<DWORD> read = reader.Read(chunk)) {
             std::string_view rest(chunk.data(), *read);
             for (size_t end = rest.find('\n'); end != std::string_view::npos; end = rest.find('\n')) {
                 line.append(rest.substr(0, end));
@@ -305,7 +353,7 @@ namespace {
                 return false;
             }
         }
-        if (!line.empty() && WaitForSingleObject(stopped, 0) != WAIT_OBJECT_0) {
+        if (!line.empty() && !reader.Stopped()) {
             onLine(line);
         }
         return true;
@@ -317,13 +365,13 @@ namespace {
     };
 
     // One run of a command, suspended until it is in a kill-on-close job, with its stdout on a pipe only this process
-    // reads. The watchdog kills the job when cancel is signaled or the timeout, if any, passes. Whatever is left of the
-    // run dies with this.
+    // reads. The watchdog kills the job when cancel is signaled or the timeout, if any, passes. The output ends once
+    // the job is empty, or the pipe closes. Whatever is left of the run dies with this.
     class CommandRun {
       public:
         CommandRun(const Command& command, HANDLE cancel, std::optional<std::chrono::milliseconds> timeout) :
-            _pipe(OutputPipe()), _job(KillOnCloseJob()), _stopped(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command stopped)")),
-            _watchdog{.job = _job.get(), .stopped = _stopped.get(), .stop = Stop::None}, _wait(CreateThreadpoolWait(StopJob, &_watchdog, nullptr)) {
+            _pipe(OutputPipe()), _job(KillOnCloseJob()), _port(OutputPort(_pipe.read.get(), _job.get())), _watchdog{.job = _job.get(), .port = _port.get(), .stop = Stop::None},
+            _wait(CreateThreadpoolWait(StopJob, &_watchdog, nullptr)) {
             if (_wait == nullptr) {
                 ThrowLastError("CreateThreadpoolWait");
             }
@@ -347,16 +395,11 @@ namespace {
                 ThrowLastError("ResumeThread");
             }
         }
-        CommandRun(const CommandRun&)            = delete;
-        CommandRun& operator=(const CommandRun&) = delete;
+        CommandRun(const CommandRun&)             = delete;
+        CommandRun&  operator=(const CommandRun&) = delete;
 
-        HANDLE      Output() const {
-            return _pipe.read.get();
-        }
-
-        // Signaled once the watchdog has killed the job.
-        HANDLE Stopped() const {
-            return _stopped.get();
+        OutputReader Reader() const {
+            return OutputReader(_pipe.read.get(), _port.get());
         }
 
         void Kill(std::string_view reason) const {
@@ -381,10 +424,10 @@ namespace {
       private:
         Pipe         _pipe;
         UniqueHandle _job;
-        UniqueHandle _stopped;
+        UniqueHandle _port;
         Watchdog     _watchdog;
         UniqueHandle _process;
-        // Declared last so it is disarmed before the Watchdog it points at goes.
+        // Declared last so it is disarmed before the Watchdog it points at, and the port it posts to, go.
         std::unique_ptr<TP_WAIT, ThreadpoolWaitCloser> _wait;
     };
 
@@ -392,7 +435,8 @@ namespace {
 
 std::string CaptureOutput(const Command& command, std::chrono::milliseconds timeout, size_t maxBytes, HANDLE cancel) {
     CommandRun                       run(command, cancel, timeout);
-    const std::optional<std::string> output = ReadUpTo(run.Output(), maxBytes, run.Stopped());
+    OutputReader                     reader = run.Reader();
+    const std::optional<std::string> output = ReadUpTo(reader, maxBytes);
     if (!output.has_value()) {
         run.Kill("output too long");
     }
@@ -412,8 +456,9 @@ std::string CaptureOutput(const Command& command, std::chrono::milliseconds time
 }
 
 std::uint32_t StreamLines(const Command& command, size_t maxLineBytes, HANDLE cancel, const std::function<void(std::string_view)>& onLine) {
-    CommandRun run(command, cancel, std::nullopt);
-    const bool fits = ReadLines(run.Output(), maxLineBytes, run.Stopped(), onLine);
+    CommandRun   run(command, cancel, std::nullopt);
+    OutputReader reader = run.Reader();
+    const bool   fits   = ReadLines(reader, maxLineBytes, onLine);
     if (!fits) {
         run.Kill("line too long");
     }

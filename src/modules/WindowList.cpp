@@ -4,24 +4,31 @@
 
 #include <cstdint>
 #include <algorithm>
+#include <ranges>
 #include <utility>
 
 WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONITOR monitor, ModuleStyle style) :
     _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
 
 bool WindowList::Layout(const RenderContext& render) {
-    const std::vector<ManagedWindow> shown   = OnMonitor(_windowManager.Windows(), _monitor);
-    bool                             changed = !_laidOut || shown.size() != _slots.size();
-    std::vector<Slot>                slots;
+    const std::vector<ManagedWindow>               shown = OnMonitor(_windowManager.Windows(), _monitor);
+    std::vector<std::shared_ptr<const IconPixels>> pixels;
+    pixels.reserve(shown.size());
+    for (const ManagedWindow& window : shown) {
+        pixels.push_back(_icons.For(window.handle));
+    }
+    const auto same = [&](size_t index) { return _slots[index].window == shown[index] && _slots[index].pixels == pixels[index]; };
+    if (_laidOut && shown.size() == _slots.size() && std::ranges::all_of(std::views::iota(size_t{0}, shown.size()), same)) {
+        return false;
+    }
+
+    std::vector<Slot> slots;
     slots.reserve(shown.size());
     for (size_t index = 0; index < shown.size(); ++index) {
-        std::shared_ptr<const IconPixels> pixels = _icons.For(shown[index].handle);
         // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
-        const auto kept   = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.window.handle == shown[index].handle && slot.pixels == pixels; });
-        auto       bitmap = kept != _slots.end() ? kept->bitmap : (pixels != nullptr && pixels->width > 0 ? CreateIconBitmap(render.context, *pixels) : nullptr);
-        // changed is already true when the counts differ, so _slots[index] is only read while it exists.
-        changed = changed || !(_slots[index].window == shown[index]) || _slots[index].pixels != pixels;
-        slots.push_back(Slot{.window = shown[index], .pixels = std::move(pixels), .bitmap = std::move(bitmap)});
+        const auto kept = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.window.handle == shown[index].handle && slot.pixels == pixels[index]; });
+        auto bitmap     = kept != _slots.end() ? kept->bitmap : (pixels[index] != nullptr && pixels[index]->width > 0 ? CreateIconBitmap(render.context, *pixels[index]) : nullptr);
+        slots.push_back(Slot{.window = shown[index], .pixels = pixels[index], .bitmap = std::move(bitmap)});
     }
     _slots   = std::move(slots);
     _laidOut = true;
@@ -33,7 +40,7 @@ bool WindowList::Layout(const RenderContext& render) {
         styles.push_back(&StyleOf(slot));
     }
     _row = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), styles, render.axis);
-    return changed;
+    return true;
 }
 
 D2D1_SIZE_F WindowList::Size() const {

@@ -19,6 +19,7 @@ class FakeTray final : public ITray {
     std::vector<std::uint32_t> opened; // the id of each icon whose popup opened
     std::vector<std::uint32_t> closed;
     std::vector<TrayIconRect>  rects; // the last a view showed
+    size_t                     showCalls = 0;
 
     std::vector<TrayIcon>      Icons() const override {
         return icons;
@@ -42,5 +43,6 @@ class FakeTray final : public ITray {
 
     void ShowRects(const void* /*view*/, std::vector<TrayIconRect> shown) override {
         rects = std::move(shown);
+        ++showCalls;
     }
 };

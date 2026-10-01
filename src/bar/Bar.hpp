@@ -24,6 +24,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 enum class ModuleInput : std::uint8_t {
@@ -87,7 +88,10 @@ class Bar {
     void PlaceInZOrder(HWND insertAfter);
     // What a module lays out and draws with: the bar's fonts and the module's own colors.
     RenderContext ModuleContext(const ModuleStyle& style) const;
-    float         BoxCrossLength() const;
+    // Every module's context, made again whenever the surface's size changes, since each spans the bar's thickness.
+    void                 BuildContexts();
+    const RenderContext& ContextFor(const ModuleStyle& style) const;
+    float                BoxCrossLength() const;
     // Whether any module's content changed.
     bool LayOutModules();
     // A group's length takes in the revealed share of its members'.
@@ -170,12 +174,13 @@ class Bar {
     std::optional<MenuOwner>    _menuOwner; // null once any other input came after the menu's
 
     // Null until the constructor has docked the window and knows its size.
-    std::unique_ptr<Surface>                  _surface;
-    std::unique_ptr<Tooltip>                  _tooltip;
-    std::unique_ptr<Menu>                     _menu;
-    std::unique_ptr<MenuLister>               _lister; // posts to the window, so it stops before the window goes
-    std::unique_ptr<BrushCache>               _brushes;
-    Microsoft::WRL::ComPtr<IDWriteTextFormat> _textFormat;
+    std::unique_ptr<Surface>                              _surface;
+    std::unique_ptr<Tooltip>                              _tooltip;
+    std::unique_ptr<Menu>                                 _menu;
+    std::unique_ptr<MenuLister>                           _lister; // posts to the window, so it stops before the window goes
+    std::unique_ptr<BrushCache>                           _brushes;
+    std::unordered_map<const ModuleStyle*, RenderContext> _contexts; // by the style of the entry it belongs to
+    Microsoft::WRL::ComPtr<IDWriteTextFormat>             _textFormat;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.
     HWND _window;
