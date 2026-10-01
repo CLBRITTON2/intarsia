@@ -27,7 +27,9 @@
 #include <ranges>
 #include <sstream>
 #include <string_view>
+#include <stdexcept>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -226,9 +228,14 @@ namespace {
         {{.name = "windows", .value = WindowManagerKind::Windows}, {.name = "glazewm", .value = WindowManagerKind::GlazeWm}}};
     constexpr std::array<Keyword<Edge>, 4> kEdges{
         {{.name = "top", .value = Edge::Top}, {.name = "bottom", .value = Edge::Bottom}, {.name = "left", .value = Edge::Left}, {.name = "right", .value = Edge::Right}}};
-    constexpr std::array<Keyword<Layer>, 2>          kLayers{{{.name = "top", .value = Layer::Top}, {.name = "bottom", .value = Layer::Bottom}}};
-    constexpr std::array<Keyword<Space>, 2>          kSpaces{{{.name = "reserve", .value = Space::Reserve}, {.name = "share", .value = Space::Share}}};
-    constexpr std::array<Keyword<CustomOutput>, 2>   kCustomOutputs{{{.name = "text", .value = CustomOutput::Text}, {.name = "json", .value = CustomOutput::Json}}};
+    constexpr std::array<Keyword<Layer>, 2>        kLayers{{{.name = "top", .value = Layer::Top}, {.name = "bottom", .value = Layer::Bottom}}};
+    constexpr std::array<Keyword<Space>, 2>        kSpaces{{{.name = "reserve", .value = Space::Reserve}, {.name = "share", .value = Space::Share}}};
+    constexpr std::array<Keyword<CustomOutput>, 2> kCustomOutputs{{{.name = "text", .value = CustomOutput::Text}, {.name = "json", .value = CustomOutput::Json}}};
+    enum class CustomRun : std::uint8_t {
+        Interval,
+        Continuous
+    };
+    constexpr std::array<Keyword<CustomRun>, 2>      kCustomRuns{{{.name = "interval", .value = CustomRun::Interval}, {.name = "continuous", .value = CustomRun::Continuous}}};
     constexpr std::array<Keyword<CounterCombine>, 3> kCounterCombines{
         {{.name = "sum", .value = CounterCombine::Sum}, {.name = "max", .value = CounterCombine::Max}, {.name = "average", .value = CounterCombine::Average}}};
     constexpr std::array<Keyword<AudioFlow>, 2> kAudioFlows{{{.name = "output", .value = AudioFlow::Output}, {.name = "input", .value = AudioFlow::Input}}};
@@ -524,10 +531,22 @@ namespace {
         return classes;
     }
 
+    std::variant<IntervalRun, ContinuousRun> ReadCustomRun(const TableReader& module) {
+        switch (ParseKeyword(module, "run", kCustomRuns)) {
+            case CustomRun::Interval: return IntervalRun{.timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout"))};
+            case CustomRun::Continuous:
+                if (module.Has("timeout")) {
+                    throw module.Error(std::format("{} applies only to run = \"interval\": a continuous command runs until it exits", module.KeyPath("timeout")));
+                }
+                return ContinuousRun{};
+        }
+        throw std::invalid_argument(std::format("unknown custom run in {}", module.KeyPath("run")));
+    }
+
     CustomConfig ReadCustomConfig(const TableReader& module) {
-        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "output", "classes", "format", "icon", "interval"}));
+        module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "run", "timeout", "output", "classes", "format", "icon", "interval"}));
         return CustomConfig{.command = ReadCommand(module, "command"),
-                            .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")),
+                            .run     = ReadCustomRun(module),
                             .output  = ParseKeyword(module, "output", kCustomOutputs),
                             .classes = ReadCustomClasses(module, "classes"),
                             .text    = ReadTextFields(module)};

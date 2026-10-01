@@ -20,6 +20,11 @@ namespace {
     // Far more than one line on a bar needs. Output past it fails the run instead of growing without bound.
     constexpr size_t kMaxOutputBytes = size_t{64} * 1024;
 
+    CommandResult    Failure(std::string text, std::string detail) {
+        return CommandResult{
+               .outcome = CommandOutcome::Failed, .text = std::move(text), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = std::move(detail)};
+    }
+
     // Output that fails its run. The message never quotes the output, so it is always safe to draw and log.
     class OutputError : public std::runtime_error {
       public:
@@ -120,15 +125,13 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format, const st
             case CustomOutput::Text: return ParseText(output);
             case CustomOutput::Json: return ParseJson(output, classes);
         }
-    } catch (const OutputError& error) {
-        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
-    }
+    } catch (const OutputError& error) { return Failure(error.what(), error.what()); }
     throw std::invalid_argument(std::format("unknown custom output {}", static_cast<std::int32_t>(format)));
 }
 
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :
-    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _timeout(config.timeout), _output(config.output), _classes(config.classes),
-    _changes(changes), _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}},
+    _name(std::move(name)), _command(config.command), _interval(config.text.interval), _run(config.run), _output(config.output), _classes(config.classes), _changes(changes),
+    _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}},
     _thread("command poller", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 CommandResult CommandPoller::Result() const {
@@ -137,34 +140,68 @@ CommandResult CommandPoller::Result() const {
 }
 
 void CommandPoller::Run(HANDLE stopEvent) {
+    if (const auto* interval = std::get_if<IntervalRun>(&_run)) {
+        RunEveryInterval(stopEvent, interval->timeout);
+    } else {
+        RunContinuously(stopEvent);
+    }
+}
+
+void CommandPoller::RunEveryInterval(HANDLE stopEvent, std::chrono::seconds timeout) {
     while (true) {
         const auto          started = std::chrono::steady_clock::now();
-        const CommandResult result  = RunOnce(stopEvent);
+        const CommandResult result  = RunOnce(stopEvent, timeout);
         // A run the destructor cut short says nothing about the command.
         if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) {
             return;
         }
         Publish(result);
-        const auto wait = std::max(std::chrono::duration_cast<std::chrono::milliseconds>(started + _interval - std::chrono::steady_clock::now()), std::chrono::milliseconds(0));
-        if (WaitForSingleObject(stopEvent, static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0) {
+        if (StoppedWaiting(stopEvent, started)) {
             return;
         }
     }
 }
 
+void CommandPoller::RunContinuously(HANDLE stopEvent) {
+    while (true) {
+        const CommandResult ended = StreamOnce(stopEvent);
+        if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) {
+            return;
+        }
+        Publish(ended);
+        if (StoppedWaiting(stopEvent, std::chrono::steady_clock::now())) {
+            return;
+        }
+    }
+}
+
+bool CommandPoller::StoppedWaiting(HANDLE stopEvent, std::chrono::steady_clock::time_point started) const {
+    const auto wait = std::max(std::chrono::duration_cast<std::chrono::milliseconds>(started + _interval - std::chrono::steady_clock::now()), std::chrono::milliseconds(0));
+    return WaitForSingleObject(stopEvent, static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0;
+}
+
 // Runs on the poller thread, so every failure becomes a result instead of an exception.
-CommandResult CommandPoller::RunOnce(HANDLE stopEvent) const {
+CommandResult CommandPoller::RunOnce(HANDLE stopEvent, std::chrono::seconds timeout) const {
     std::string output;
     try {
-        output = CaptureOutput(_command, _timeout, kMaxOutputBytes, stopEvent);
-    } catch (const CommandError& error) {
-        return CommandResult{.outcome = CommandOutcome::Failed, .text = error.what(), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
-    } catch (const Win32Error& error) {
-        return CommandResult{
-            .outcome = CommandOutcome::Failed, .text = "could not run", .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = error.what()};
+        output = CaptureOutput(_command, timeout, kMaxOutputBytes, stopEvent);
+    } catch (const CommandError& error) { return Failure(error.what(), error.what()); } catch (const Win32Error& error) {
+        return Failure("could not run", error.what());
     }
     // Parsed here so the UI thread only ever meets text it can draw.
     return ParseOutput(output, _output, _classes);
+}
+
+// Publishes each line as it comes and returns how the command ended, which is always a failure: a continuous command
+// is expected to keep running.
+CommandResult CommandPoller::StreamOnce(HANDLE stopEvent) {
+    try {
+        const std::uint32_t exitCode = StreamLines(_command, kMaxOutputBytes, stopEvent, [this](std::string_view line) { Publish(ParseOutput(line, _output, _classes)); });
+        const std::string   reason   = std::format("exited with code {}", exitCode);
+        return Failure(reason, reason);
+    } catch (const CommandError& error) { return Failure(error.what(), error.what()); } catch (const Win32Error& error) {
+        return Failure("could not run", error.what());
+    }
 }
 
 // Posts and logs only on a change, so a command that keeps failing the same way logs once.

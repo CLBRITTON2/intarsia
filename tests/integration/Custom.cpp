@@ -22,7 +22,7 @@ namespace {
     // directory. printed is a Lua expression.
     std::string RecorderModule(std::string_view testName, std::string_view name, std::string_view output, std::string_view classes, std::string_view printed) {
         const std::filesystem::path record = integration::WorkDirectoryPath(testName) / std::format("{}.txt", name);
-        return std::format(R"({} = {{ type = "custom", command = {{ {}, {}, {} }}, timeout = 5, output = "{}", classes = {{ {} }}, format = "{{text}}", icon = "",
+        return std::format(R"({} = {{ type = "custom", command = {{ {}, {}, {} }}, run = "interval", timeout = 5, output = "{}", classes = {{ {} }}, format = "{{text}}", icon = "",
                   interval = 30 }},)",
                            name, integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring())), integration::LuaString(ToUtf8(record.wstring())), printed, output,
                            classes);
@@ -66,10 +66,10 @@ TEST(Custom, DrawsTheColorOfTheClassItsJsonNames) {
 }
 
 TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
-    const integration::RunningBar bar("custom-fails",
-                                      CustomConfig(R"("probe")", R"(probe = { type = "custom", command = { "cmd", "/c", "exit 3" }, timeout = 5, output = "text", classes = {},
+    const integration::RunningBar bar(
+        "custom-fails", CustomConfig(R"("probe")", R"(probe = { type = "custom", command = { "cmd", "/c", "exit 3" }, run = "interval", timeout = 5, output = "text", classes = {},
                   format = "{text}", icon = "", interval = 30 },)"),
-                                      StyleWithRules(""));
+        StyleWithRules(""));
     EXPECT_TRUE(bar.Draws(kRed, kDrawn)) << "the failing command never drew the alert color";
     EXPECT_FALSE(bar.LogLines("event=command_failed").empty()) << "the bar logged no command_failed";
 }

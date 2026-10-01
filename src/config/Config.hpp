@@ -249,11 +249,20 @@ enum class CustomOutput : std::uint8_t {
     Json  // one object: text, and optionally tooltip and alert
 };
 
-// A program run every interval, whose output is shown through format.
+// run = "interval": the command runs every interval, and it and everything it started are killed after timeout.
+struct IntervalRun {
+    std::chrono::seconds timeout;
+};
+
+// run = "continuous": the command keeps running, each line it prints replaces the shown value, and it starts again
+// interval after it exits.
+struct ContinuousRun {};
+
+// A program whose output is shown through format.
 struct CustomConfig {
-    Command              command;
-    std::chrono::seconds timeout; // the command and everything it started are killed after this long
-    CustomOutput         output;
+    Command                                  command;
+    std::variant<IntervalRun, ContinuousRun> run;
+    CustomOutput                             output;
     // What the json output's "class" may name, each drawn in the module's .name colors. Output naming any other fails.
     std::vector<std::string> classes;
     TextModuleConfig         text;

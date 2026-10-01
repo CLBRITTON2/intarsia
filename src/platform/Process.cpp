@@ -13,8 +13,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <ranges>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -252,45 +256,124 @@ namespace {
         return output;
     }
 
+    // Calls onLine with each line, without its line ending, as it completes, and with a last one the output ends
+    // without a line ending unless stopped is signaled. False once a line passes maxLineBytes.
+    bool ReadLines(HANDLE pipe, size_t maxLineBytes, HANDLE stopped, const std::function<void(std::string_view)>& onLine) {
+        const UniqueHandle     ready = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command output)");
+        std::string            line;
+        std::array<char, 4096> chunk{};
+        while (const std::optional<DWORD> read = ReadChunk(pipe, chunk, ready.get(), stopped)) {
+            std::string_view rest(chunk.data(), *read);
+            for (size_t end = rest.find('\n'); end != std::string_view::npos; end = rest.find('\n')) {
+                line.append(rest.substr(0, end));
+                if (line.size() > maxLineBytes) {
+                    return false;
+                }
+                if (line.ends_with('\r')) {
+                    line.pop_back();
+                }
+                onLine(line);
+                line.clear();
+                rest.remove_prefix(end + 1);
+            }
+            line.append(rest);
+            if (line.size() > maxLineBytes) {
+                return false;
+            }
+        }
+        if (!line.empty() && WaitForSingleObject(stopped, 0) != WAIT_OBJECT_0) {
+            onLine(line);
+        }
+        return true;
+    }
+
+    struct CommandEnd {
+        Stop          stop;
+        std::uint32_t exitCode;
+    };
+
+    // One run of a command, suspended until it is in a kill-on-close job, with its stdout on a pipe only this process
+    // reads. The watchdog kills the job when cancel is signaled or the timeout, if any, passes. Whatever is left of the
+    // run dies with this.
+    class CommandRun {
+      public:
+        CommandRun(const Command& command, HANDLE cancel, std::optional<std::chrono::milliseconds> timeout) :
+            _pipe(OutputPipe()), _job(KillOnCloseJob()), _stopped(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command stopped)")),
+            _watchdog{.job = _job.get(), .stopped = _stopped.get(), .stop = Stop::None}, _wait(CreateThreadpoolWait(StopJob, &_watchdog, nullptr)) {
+            if (_wait == nullptr) {
+                ThrowLastError("CreateThreadpoolWait");
+            }
+            const PROCESS_INFORMATION started = StartSuspended(command, _pipe.write.get());
+            _process.reset(started.hProcess);
+            const UniqueHandle thread(started.hThread);
+            // Only the child's copy of the write end is left, so the read ends once the child and whatever it started exit.
+            _pipe.write.reset();
+            if (!AssignProcessToJobObject(_job.get(), _process.get())) {
+                const HRESULT error = HRESULT_FROM_WIN32(GetLastError());
+                TerminateProcess(_process.get(), kKilledExitCode);
+                throw Win32Error("AssignProcessToJobObject", error);
+            }
+            if (timeout.has_value()) {
+                FILETIME due = RelativeDueTime(*timeout);
+                SetThreadpoolWait(_wait.get(), cancel, &due);
+            } else {
+                SetThreadpoolWait(_wait.get(), cancel, nullptr);
+            }
+            if (ResumeThread(thread.get()) == static_cast<DWORD>(-1)) {
+                ThrowLastError("ResumeThread");
+            }
+        }
+        CommandRun(const CommandRun&)            = delete;
+        CommandRun& operator=(const CommandRun&) = delete;
+
+        HANDLE      Output() const {
+            return _pipe.read.get();
+        }
+
+        // Signaled once the watchdog has killed the job.
+        HANDLE Stopped() const {
+            return _stopped.get();
+        }
+
+        void Kill(std::string_view reason) const {
+            if (!TerminateJobObject(_job.get(), kKilledExitCode)) {
+                ThrowLastError(std::format("TerminateJobObject({})", reason));
+            }
+        }
+
+        // Waits for the command to exit, which the watchdog bounds by the timeout and cancel, then disarms it.
+        CommandEnd Finish() {
+            if (WaitForSingleObject(_process.get(), INFINITE) != WAIT_OBJECT_0) {
+                ThrowLastError("WaitForSingleObject(command)");
+            }
+            _wait.reset();
+            DWORD exitCode = 0;
+            if (!GetExitCodeProcess(_process.get(), &exitCode)) {
+                ThrowLastError("GetExitCodeProcess");
+            }
+            return CommandEnd{.stop = _watchdog.stop.load(), .exitCode = exitCode};
+        }
+
+      private:
+        Pipe         _pipe;
+        UniqueHandle _job;
+        UniqueHandle _stopped;
+        Watchdog     _watchdog;
+        UniqueHandle _process;
+        // Declared last so it is disarmed before the Watchdog it points at goes.
+        std::unique_ptr<TP_WAIT, ThreadpoolWaitCloser> _wait;
+    };
+
 } // namespace
 
 std::string CaptureOutput(const Command& command, std::chrono::milliseconds timeout, size_t maxBytes, HANDLE cancel) {
-    Pipe                      pipe    = OutputPipe();
-    const UniqueHandle        job     = KillOnCloseJob();
-    const PROCESS_INFORMATION started = StartSuspended(command, pipe.write.get());
-    const UniqueHandle        process(started.hProcess);
-    const UniqueHandle        thread(started.hThread);
-    // Only the child's copy of the write end is left, so the read ends once the child and whatever it started exit.
-    pipe.write.reset();
-    if (!AssignProcessToJobObject(job.get(), process.get())) {
-        const HRESULT error = HRESULT_FROM_WIN32(GetLastError());
-        TerminateProcess(process.get(), kKilledExitCode);
-        throw Win32Error("AssignProcessToJobObject", error);
+    CommandRun                       run(command, cancel, timeout);
+    const std::optional<std::string> output = ReadUpTo(run.Output(), maxBytes, run.Stopped());
+    if (!output.has_value()) {
+        run.Kill("output too long");
     }
-
-    const UniqueHandle                             stopped = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(command stopped)");
-    Watchdog                                       watchdog{.job = job.get(), .stopped = stopped.get(), .stop = Stop::None};
-    std::unique_ptr<TP_WAIT, ThreadpoolWaitCloser> wait(CreateThreadpoolWait(StopJob, &watchdog, nullptr));
-    if (wait == nullptr) {
-        ThrowLastError("CreateThreadpoolWait");
-    }
-    FILETIME due = RelativeDueTime(timeout);
-    SetThreadpoolWait(wait.get(), cancel, &due);
-    if (ResumeThread(thread.get()) == static_cast<DWORD>(-1)) {
-        ThrowLastError("ResumeThread");
-    }
-
-    const std::optional<std::string> output = ReadUpTo(pipe.read.get(), maxBytes, stopped.get());
-    if (!output.has_value() && !TerminateJobObject(job.get(), kKilledExitCode)) {
-        ThrowLastError("TerminateJobObject(output too long)");
-    }
-    // The watchdog is still armed, so this wait ends by the timeout at the latest.
-    if (WaitForSingleObject(process.get(), INFINITE) != WAIT_OBJECT_0) {
-        ThrowLastError("WaitForSingleObject(command)");
-    }
-    wait.reset();
-
-    switch (watchdog.stop.load()) {
+    const CommandEnd end = run.Finish();
+    switch (end.stop) {
         case Stop::Cancelled: throw CommandError("cancelled");
         case Stop::TimedOut: throw CommandError(std::format("did not finish within {}", timeout));
         case Stop::None: break;
@@ -298,14 +381,28 @@ std::string CaptureOutput(const Command& command, std::chrono::milliseconds time
     if (!output.has_value()) {
         throw CommandError(std::format("printed more than {} bytes", maxBytes));
     }
-    DWORD exitCode = 0;
-    if (!GetExitCodeProcess(process.get(), &exitCode)) {
-        ThrowLastError("GetExitCodeProcess");
-    }
-    if (exitCode != 0) {
-        throw CommandError(std::format("exited with code {}", exitCode));
+    if (end.exitCode != 0) {
+        throw CommandError(std::format("exited with code {}", end.exitCode));
     }
     return *output;
+}
+
+std::uint32_t StreamLines(const Command& command, size_t maxLineBytes, HANDLE cancel, const std::function<void(std::string_view)>& onLine) {
+    CommandRun run(command, cancel, std::nullopt);
+    const bool fits = ReadLines(run.Output(), maxLineBytes, run.Stopped(), onLine);
+    if (!fits) {
+        run.Kill("line too long");
+    }
+    const CommandEnd end = run.Finish();
+    switch (end.stop) {
+        case Stop::Cancelled: throw CommandError("cancelled");
+        case Stop::TimedOut: throw std::logic_error("a streamed command has no timeout to pass");
+        case Stop::None: break;
+    }
+    if (!fits) {
+        throw CommandError(std::format("printed a line longer than {} bytes", maxLineBytes));
+    }
+    return end.exitCode;
 }
 
 std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program) {

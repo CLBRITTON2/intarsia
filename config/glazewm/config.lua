@@ -149,9 +149,11 @@ return {
         --     tooltip = "{title}", -- the whole title
         -- },
         --
-        -- A custom module runs its command every interval and shows what it printed. The command follows the same
-        -- rules as on_click, runs with no window, and is killed with everything it started after timeout seconds.
-        -- output = "text" shows the first line. output = "json" reads one object, { "text": "...", "tooltip": "...",
+        -- A custom module runs its command and shows what it printed. The command follows the same rules as
+        -- on_click and runs with no window. run = "interval" runs it every interval and kills it with everything it
+        -- started after timeout seconds. run = "continuous" takes no timeout: the command keeps running, each line it
+        -- prints replaces the shown value, and when it exits its exit code shows as an alert and it starts again
+        -- interval seconds later. output = "text" shows the first line. output = "json" reads one object, { "text": "...", "tooltip": "...",
         -- "alert": true, "class": "..." }, where only text is required, tooltip may span lines, alert draws the text
         -- in the module's .alert color, and class draws it in the color style.css gives that class, as
         -- #weather.rain. A class must be one the module's classes list, and style.css may style only those.
@@ -161,6 +163,7 @@ return {
         --     type = "custom",
         --     -- Absolute, so another curl.exe earlier on PATH is never picked instead.
         --     command = { "C:\\Windows\\System32\\curl.exe", "--silent", "--fail", "https://wttr.in/?format=%c%t" },
+        --     run = "interval",
         --     timeout = 10,
         --     output = "text",
         --     classes = {}, -- the classes a JSON output may name

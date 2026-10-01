@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 enum class CommandOutcome : std::uint8_t {
@@ -37,8 +38,9 @@ struct CommandResult {
 // cannot come with alert. Anything else is a Failed result.
 CommandResult ParseOutput(std::string_view output, CustomOutput format, const std::vector<std::string>& classes);
 
-// Runs a custom module's command on its own thread, first at once and then every interval, keeping the latest result
-// and notifying changes whenever it changes.
+// Runs a custom module's command on its own thread as its run says, keeping the latest result and notifying changes
+// whenever it changes: an interval command at once and then every interval, a continuous one at once and again interval
+// after each exit, every line it prints becoming the latest result.
 class CommandPoller {
   public:
     CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes);
@@ -48,19 +50,24 @@ class CommandPoller {
     CommandResult  Result() const;
 
   private:
-    void                     Run(HANDLE stopEvent);
-    CommandResult            RunOnce(HANDLE stopEvent) const;
-    void                     Publish(const CommandResult& result);
+    void          Run(HANDLE stopEvent);
+    void          RunEveryInterval(HANDLE stopEvent, std::chrono::seconds timeout);
+    void          RunContinuously(HANDLE stopEvent);
+    CommandResult RunOnce(HANDLE stopEvent, std::chrono::seconds timeout) const;
+    CommandResult StreamOnce(HANDLE stopEvent);
+    // True when stopEvent is signaled before the rest of the interval since started passes.
+    bool                                     StoppedWaiting(HANDLE stopEvent, std::chrono::steady_clock::time_point started) const;
+    void                                     Publish(const CommandResult& result);
 
-    std::string              _name;
-    Command                  _command;
-    std::chrono::seconds     _interval;
-    std::chrono::seconds     _timeout;
-    CustomOutput             _output;
-    std::vector<std::string> _classes;
-    ChangeSignal&            _changes;
-    mutable std::mutex       _mutex;
-    CommandResult            _result;
+    std::string                              _name;
+    Command                                  _command;
+    std::chrono::seconds                     _interval;
+    std::variant<IntervalRun, ContinuousRun> _run;
+    CustomOutput                             _output;
+    std::vector<std::string>                 _classes;
+    ChangeSignal&                            _changes;
+    mutable std::mutex                       _mutex;
+    CommandResult                            _result;
     // Declared last so every member above exists before the thread starts. Destruction kills a run in progress rather
     // than waiting for it.
     StoppableThread _thread;

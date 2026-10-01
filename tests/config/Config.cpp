@@ -215,7 +215,7 @@ TEST(Config, ChoicesNameEveryWordTheyTake) {
         {.config = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "i3")"), .error = "window_manager must be one of windows, glazewm, got 'i3'"},
         {.config = WithRightModules(
              R"({ "hello" })",
-             R"(        hello = { type = "custom", command = { "cmd" }, timeout = 5, output = "xml", classes = {}, format = "{text}", icon = "", interval = 30 },)"),
+             R"(        hello = { type = "custom", command = { "cmd" }, run = "interval", timeout = 5, output = "xml", classes = {}, format = "{text}", icon = "", interval = 30 },)"),
          .error = "modules.hello.output must be one of text, json, got 'xml'"},
         {.config = WithRightModules(
              R"({ "c" })", R"(        c = { type = "counter", counter = "\\Memory\\Available MBytes", combine = "median", format = "{value}", icon = "", interval = 1 },)"),
@@ -339,7 +339,7 @@ TEST(Config, TheConfigsWalksReachAGroupsMembers) {
 
 TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
     const std::string config = WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "weather" })") + R"(
-        weather = { type = "custom", command = { "cmd" }, timeout = 5, output = "json", classes = { "sunny" }, format = "{text}", icon = "", interval = 30 },)");
+        weather = { type = "custom", command = { "cmd" }, run = "interval", timeout = 5, output = "json", classes = { "sunny" }, format = "{text}", icon = "", interval = 30 },)");
     EXPECT_NO_THROW(LoadStyled(config, std::string(kValidStyle) + "#weather.sunny { color: #ff0000; }"));
 }
 
@@ -527,14 +527,41 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
 TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
     const Config        config = LoadText(WithRightModules(
         R"({ "hello" })",
-        R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, timeout = 5, output = "json", classes = { "sunny", "rain" }, format = "{text}", icon = "", interval = 30 },)"));
+        R"(        hello = { type = "custom", command = { "cmd", "/c", "echo hi" }, run = "interval", timeout = 5, output = "json", classes = { "sunny", "rain" }, format = "{text}", icon = "", interval = 30 },)"));
     const CustomConfig& custom = SettingsOf<CustomConfig>(config.modules.right, 0);
     EXPECT_EQ(custom.command.program.filename(), L"cmd.exe");
     EXPECT_EQ(custom.command.arguments, (std::vector<std::wstring>{L"/c", L"echo hi"}));
-    EXPECT_EQ(custom.timeout, std::chrono::seconds(5));
+    const auto* run = std::get_if<IntervalRun>(&custom.run);
+    if (run == nullptr) {
+        FAIL() << "run = \"interval\" did not read as an interval run";
+    }
+    EXPECT_EQ(run->timeout, std::chrono::seconds(5));
     EXPECT_EQ(custom.output, CustomOutput::Json);
     EXPECT_EQ(custom.classes, (std::vector<std::string>{"sunny", "rain"}));
     EXPECT_EQ(custom.text.interval, std::chrono::seconds(30));
+}
+
+namespace {
+
+    std::string WithCustomRun(std::string_view run) {
+        return WithRightModules(
+            R"({ "hello" })",
+            std::format(R"(        hello = {{ type = "custom", command = {{ "cmd" }}, {} output = "text", classes = {{}}, format = "{{text}}", icon = "", interval = 30 }},)",
+                        run));
+    }
+
+} // namespace
+
+TEST(Config, ContinuousCustomModulesTakeNoTimeout) {
+    const Config config = LoadText(WithCustomRun(R"(run = "continuous",)"));
+    EXPECT_TRUE(std::holds_alternative<ContinuousRun>(SettingsOf<CustomConfig>(config.modules.right, 0).run));
+    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "continuous", timeout = 5,)")); }, ConfigErrorWith("applies only to run = \"interval\""));
+}
+
+TEST(Config, CustomModulesNeedARun) {
+    EXPECT_THAT([] { return LoadText(WithCustomRun("timeout = 5,")); }, ConfigErrorWith("run"));
+    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "forever", timeout = 5,)")); }, ConfigErrorWith("run"));
+    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "interval",)")); }, ConfigErrorWith("timeout"));
 }
 
 namespace {
@@ -543,7 +570,7 @@ namespace {
         return WithRightModules(
             R"({ "weather" })",
             std::format(
-                R"(        weather = {{ type = "custom", command = {{ "cmd" }}, timeout = 5, output = "json", classes = {}, format = "{{text}}", icon = "", interval = 30 }},)",
+                R"(        weather = {{ type = "custom", command = {{ "cmd" }}, run = "interval", timeout = 5, output = "json", classes = {}, format = "{{text}}", icon = "", interval = 30 }},)",
                 classes));
     }
 

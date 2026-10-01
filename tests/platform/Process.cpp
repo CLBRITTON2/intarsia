@@ -186,6 +186,33 @@ TEST(Process, CaptureOutputFailsPastTheOutputCap) {
                 CommandErrorWith("printed more than 100 bytes"));
 }
 
+TEST(Process, StreamLinesDeliversEachLineAndReturnsTheExitCode) {
+    std::vector<std::string> lines;
+    const std::uint32_t      exitCode =
+        StreamLines(Cmd({L"/c", L"echo one& echo two& exit 4"}), 1024, NeverSignaled().get(), [&lines](std::string_view line) { lines.emplace_back(line); });
+    EXPECT_EQ(lines, (std::vector<std::string>{"one", "two"}));
+    EXPECT_EQ(exitCode, 4u);
+}
+
+TEST(Process, StreamLinesDeliversALastLineWithNoLineEnding) {
+    std::vector<std::string> lines;
+    StreamLines(Cmd({L"/c", L"set /p =partial<nul"}), 1024, NeverSignaled().get(), [&lines](std::string_view line) { lines.emplace_back(line); });
+    EXPECT_EQ(lines, (std::vector<std::string>{"partial"}));
+}
+
+TEST(Process, StreamLinesFailsPastTheLineCap) {
+    EXPECT_THAT([] { return StreamLines(Cmd({L"/c", L"echo 0123456789abcdef"}), 8, NeverSignaled().get(), [](std::string_view) {}); },
+                CommandErrorWith("printed a line longer than 8 bytes"));
+}
+
+TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {
+    const UniqueHandle cancel  = NeverSignaled();
+    const auto         started = std::chrono::steady_clock::now();
+    EXPECT_THAT([&cancel] { return StreamLines(Cmd({L"/c", L"echo up& ping -n 60 127.0.0.1"}), 1024, cancel.get(), [&cancel](std::string_view) { SetEvent(cancel.get()); }); },
+                CommandErrorWith("cancelled"));
+    EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(30));
+}
+
 TEST(Process, MissingProgramsDoNotResolve) {
     EXPECT_FALSE(ResolveProgram(L"intarsia-no-such-program").has_value());
     EXPECT_FALSE(ResolveProgram(L"C:\\intarsia\\no-such-program.exe").has_value());

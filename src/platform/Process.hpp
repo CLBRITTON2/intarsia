@@ -5,7 +5,9 @@
 #include <windows.h>
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -45,6 +47,11 @@ class CommandError : public std::runtime_error {
 // when this returns, so nothing it starts outlives the call, and a process outside the job that holds its stdout holds
 // the call no longer than that. It inherits only its stdout pipe: stdin and stderr are closed.
 std::string CaptureOutput(const Command& command, std::chrono::milliseconds timeout, size_t maxBytes, HANDLE cancel);
+
+// Runs the command as CaptureOutput does but with no timeout, calling onLine on this thread with each line it prints
+// (without "\n" or "\r\n") as the line completes, and returns its exit code. Throws CommandError when cancel is
+// signaled or a line passes maxLineBytes, and the job dies either way.
+std::uint32_t StreamLines(const Command& command, size_t maxLineBytes, HANDLE cancel, const std::function<void(std::string_view)>& onLine);
 
 // Starts commands on its own thread with ShellExecuteExW, so a UAC prompt (Task Manager needs one) never blocks the UI.
 class Launcher {

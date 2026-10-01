@@ -270,7 +270,7 @@ function Get-Sample([System.Diagnostics.Process] $process, [System.Diagnostics.S
 # A custom module running command every second. Each argument is written into a Lua string as it is.
 function Format-CustomModule([string[]] $command, [int] $timeout, [string] $output) {
     $arguments = ($command | ForEach-Object { "`"$_`"" }) -join ', '
-    return "{ type = `"custom`", command = { $arguments }, timeout = $timeout, output = `"$output`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
+    return "{ type = `"custom`", command = { $arguments }, run = `"interval`", timeout = $timeout, output = `"$output`", classes = {}, format = `"{text}`", icon = `"`", interval = 1 }"
 }
 
 # A config with every GlazeWM module and a clock, cpu and memory ticking each second (cpu and memory in the stats group,
