@@ -110,6 +110,7 @@ class Bar {
     };
 
     HitBox                   PlaceBox(const ModuleEntry& entry, float start, float length) const;
+    HitBox                   PlaceInRoom(const ModuleEntry& entry, float start, float length) const;
     std::vector<PlacedEntry> PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const;
     void                     DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
     // The module's box (its background, or its hover under the cursor), then the module.

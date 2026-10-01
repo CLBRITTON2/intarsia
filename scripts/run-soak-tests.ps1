@@ -301,13 +301,12 @@ function New-SoakConfig([string] $path, [int] $revision, [string[]] $optional) {
 return {
     bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
     window_manager = "glazewm",
-    modules_left = { "stats", "workspaces", "divider", "mode", "apps", "title" },
+    modules_left = { "stats", "workspaces", "mode", "apps", "title" },
     modules_center = { "clock" },
     modules_right = { $rightList },
     layouts = {},
     modules = {
         workspaces = { type = "workspaces" },
-        divider = { type = "divider" },
         mode = { type = "binding_mode" },
         apps = { type = "windows" },
         title = { type = "window", max_length = 60, tooltip = "{title}" },
@@ -326,18 +325,17 @@ $definitions
 }
 
 # The idle scenario's modules without a window manager: the foreground window's title, a clock, and cpu and memory in
-# the stats group, and the divider, which the style names too.
+# the stats group.
 function New-RetitleConfig([string] $path) {
     $config = @"
 return {
     bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
     window_manager = "windows",
-    modules_left = { "stats", "divider", "title" },
+    modules_left = { "stats", "title" },
     modules_center = { "clock" },
     modules_right = {},
     layouts = {},
     modules = {
-        divider = { type = "divider" },
         title = { type = "window", max_length = 60, tooltip = "{title}" },
         clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1 },
         stats = { type = "group", icon = ">", modules = { "cpu", "memory" } },
@@ -349,23 +347,23 @@ return {
     [System.IO.File]::WriteAllText($path, $config)
 }
 
-# A style that draws every box the bar has: sections, module boxes with hover, items in every state, a divider, and
-# a tray that animates as it unfolds when the config shows one (an #id naming no module stops the bar).
+# A style that draws every box the bar has: sections, module boxes with hover, items in every state, a border on one
+# side, inset shadows, and a tray that animates as it unfolds when the config shows one (an #id naming no module stops
+# the bar).
 function New-SoakStyle([string] $path, [string[]] $optional) {
     $style = @'
 :root { --foreground: #e0def4; --border: rgba(110, 106, 134, 0.25); }
 * { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
-section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; }
+section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18); }
 tooltip { padding: 6px; background: #1f1d2e; border: 1px solid var(--border); border-radius: 10px; }
 .module { padding: 0 8px; border-radius: 8px; }
 .module:hover { background: rgba(64, 61, 82, 0.8); }
 .icon { font-size: 16px; margin-right: 6px; color: #c4a7e7; }
 .alert { color: #eb6f92; }
 .item { padding: 2px 6px; margin: 0 1px; border-radius: 8px; }
-.item.focused { color: #191724; background: #9ccfd8; font-weight: bold; }
+.item.focused { color: #191724; background: #9ccfd8; font-weight: bold; box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), inset 0 -1px 1px rgba(0, 0, 0, 0.25); }
 .item.empty { color: #908caa; }
-#divider { width: 1px; height: 60%; color: var(--border); }
-#stats { transition: width 300ms ease-out; }
+#stats { border-right: 1px solid var(--border); transition: width 300ms ease-out; }
 #stats .icon { transition: transform 200ms ease; }
 #stats.expanded .icon { transform: rotate(90deg); }
 '@

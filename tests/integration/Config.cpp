@@ -29,7 +29,7 @@ return {{
     modules_center = {{}},
     modules_right = {{ {} }},
     layouts = {{}},
-    modules = {{ mark = {{ type = "divider" }} }},
+    modules = {{ mark = {{ type = "clock", format = "WWWW", icon = "", interval = 60 }} }},
 }}
 )",
                            left, right);
@@ -44,7 +44,7 @@ return {{
         return std::string(R"(
 * { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
 section { margin: 4px; padding: 3px; background: #191724; }
-divider { width: 12px; height: 60%; }
+module { padding: 4px 8px; }
 )") + std::string(rules);
     }
 
@@ -76,7 +76,11 @@ return {{
         {{ min_length = {}, modules_left = {{ "reached" }}, modules_center = {{}}, modules_right = {{}} }},
         {{ min_length = {}, modules_left = {{ "beyond" }}, modules_center = {{}}, modules_right = {{}} }},
     }},
-    modules = {{ low = {{ type = "divider" }}, reached = {{ type = "divider" }}, beyond = {{ type = "divider" }} }},
+    modules = {{
+        low = {{ type = "clock", format = "WWWW", icon = "", interval = 60 }},
+        reached = {{ type = "clock", format = "WWWW", icon = "", interval = 60 }},
+        beyond = {{ type = "clock", format = "WWWW", icon = "", interval = 60 }},
+    }},
 }}
 )",
                            reachedLength, reachedLength + 1);
@@ -85,7 +89,7 @@ return {{
 } // namespace
 
 TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
-    integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { color: #27ae60; }"));
+    integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { background: #27ae60; }"));
     std::optional<double>   left;
     ASSERT_TRUE(integration::Eventually(
         [&] {
@@ -113,16 +117,16 @@ TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
 }
 
 TEST(Config, DrawsTheColorOfASavedStyle) {
-    const integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { color: #27ae60; }"));
+    const integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { background: #27ae60; }"));
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the module never drew in the first style's color";
 
-    bar.SaveStyle(StyleWithRules("#mark { color: #f39c12; }"));
+    bar.SaveStyle(StyleWithRules("#mark { background: #f39c12; }"));
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the saved style's color never drew";
     EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the first style's color still drew";
 }
 
 TEST(Config, EndsWithExitCode1AfterAnInvalidSave) {
-    integration::RunningBar bar("config-invalid", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { color: #27ae60; }"));
+    integration::RunningBar bar("config-invalid", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { background: #27ae60; }"));
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     bar.SaveConfig(OneModuleConfig(R"("mark", "missing")", ""));
@@ -138,7 +142,7 @@ TEST(Config, ShowsTheLastLayoutTheMonitorsLengthReaches) {
     const float                   length  = PrimaryLengthDips();
     const auto                    reached = static_cast<std::uint32_t>(std::floor(length));
     const integration::RunningBar bar("config-layouts", LayoutsConfig(reached),
-                                      StyleWithRules("#low { color: #27ae60; } #reached { color: #f39c12; } #beyond { color: #2e86c1; }"));
+                                      StyleWithRules("#low { background: #27ae60; } #reached { background: #f39c12; } #beyond { background: #2e86c1; }"));
     integration::Log("layouts", std::format("primary_length_dips={:.2f} reached_min_length={} beyond_min_length={}", length, reached, reached + 1));
 
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the layout the monitor reaches never drew";

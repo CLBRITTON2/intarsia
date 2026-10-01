@@ -8,7 +8,6 @@
 #include "modules/Custom.hpp"
 #include "modules/Battery.hpp"
 #include "modules/DirectionToggle.hpp"
-#include "modules/Divider.hpp"
 #include "modules/Memory.hpp"
 #include "modules/Network.hpp"
 #include "modules/Tray.hpp"
@@ -51,7 +50,6 @@ namespace {
             case ModuleKind::Windows: return std::make_unique<WindowList>(sources.windowManager, RequireSource(sources.windowIcons, instance), sources.monitor, instance.style);
             case ModuleKind::BindingMode: return std::make_unique<BindingModes>(sources.windowManager, instance.style);
             case ModuleKind::TilingDirection: return std::make_unique<DirectionToggle>(RequireSettings<TilingDirectionConfig>(instance), sources.windowManager);
-            case ModuleKind::Divider: return std::make_unique<Divider>(instance.style);
             case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
             case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
             case ModuleKind::Audio: {

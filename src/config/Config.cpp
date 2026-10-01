@@ -273,8 +273,7 @@ namespace {
             case ModuleKind::Battery: return ReadBatteryConfig(module);
             case ModuleKind::Workspaces:
             case ModuleKind::Windows:
-            case ModuleKind::BindingMode:
-            case ModuleKind::Divider: module.RejectUnknownKeys({"type"}); return std::monostate{};
+            case ModuleKind::BindingMode: module.RejectUnknownKeys({"type"}); return std::monostate{};
             case ModuleKind::TilingDirection:
                 module.RejectUnknownKeys({"type", "horizontal", "vertical"});
                 return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};

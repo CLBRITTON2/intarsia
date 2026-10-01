@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -257,22 +258,76 @@ TEST(Style, MenuRulesCapTheMenuAndStyleItsScrollBar) {
 TEST(Style, BorderShorthandSetsWidthAndColor) {
     const StyleSheet  sheet = Parse(std::string(kBar) + "section { border: 1px solid rgba(110, 106, 134, 0.25); border-radius: 14px; margin: 5px; padding: 4px; }");
     const StyleConfig bar   = ResolveBarStyle(sheet);
-    EXPECT_FLOAT_EQ(bar.section.box.borderWidthDips, 1.0f);
-    EXPECT_EQ(Rgba(bar.section.box.borderColor), (std::array<std::int32_t, 4>{110, 106, 134, 64}));
+    for (const BorderSide& side : {bar.section.box.border.top, bar.section.box.border.right, bar.section.box.border.bottom, bar.section.box.border.left}) {
+        EXPECT_FLOAT_EQ(side.widthDips, 1.0f);
+        EXPECT_EQ(Rgba(side.color), (std::array<std::int32_t, 4>{110, 106, 134, 64}));
+    }
     EXPECT_FLOAT_EQ(bar.section.margin.yDips, 5.0f);
     EXPECT_FLOAT_EQ(bar.section.box.padding.xDips, 4.0f);
-    EXPECT_FLOAT_EQ(ResolveBarStyle(Parse(std::string(kBar) + "section { border: 1px solid #fff; border: none; }")).section.box.borderWidthDips, 0.0f);
+    EXPECT_FLOAT_EQ(ResolveBarStyle(Parse(std::string(kBar) + "section { border: 1px solid #fff; border: none; }")).section.box.border.left.widthDips, 0.0f);
     EXPECT_THAT([] { return Parse("section { border: 1px dashed #fff; }"); }, ConfigErrorWith("must be none, or a width, solid and a color"));
 }
 
-TEST(Style, DividersTakeAWidthAndAShareOfTheHeight) {
-    const ModuleStyle divider = StyleOf("divider { width: 1px; height: 60%; color: #ffffff; }", ModuleKind::Divider, "line");
-    EXPECT_FLOAT_EQ(divider.lineWidthDips, 1.0f);
-    EXPECT_FLOAT_EQ(divider.lineHeight, 0.6f);
-    // Nothing is built in: a divider no rule sizes draws no line, as a property left out takes CSS's initial value.
-    EXPECT_FLOAT_EQ(StyleOf("", ModuleKind::Divider, "line").lineWidthDips, 0.0f);
-    EXPECT_THAT([] { return StyleOf(".module { width: 3px; }", ModuleKind::Cpu, "cpu"); }, ConfigErrorWith("width sizes a divider's line, and cpu is a cpu module"));
-    EXPECT_THAT([] { return Parse("divider { height: 120%; }"); }, ConfigErrorWith("at most 100%"));
+TEST(Style, EachSideTakesItsOwnBorder) {
+    const Border border = StyleOf("#cpu { border: 2px solid #ffffff; border-right: 1px solid #ff0000; border-left: none; }", ModuleKind::Cpu, "cpu").box.border;
+    EXPECT_FLOAT_EQ(border.top.widthDips, 2.0f);
+    EXPECT_EQ(Rgba(border.top.color), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
+    EXPECT_FLOAT_EQ(border.right.widthDips, 1.0f);
+    EXPECT_EQ(Rgba(border.right.color), (std::array<std::int32_t, 4>{255, 0, 0, 255}));
+    EXPECT_FLOAT_EQ(border.left.widthDips, 0.0f);
+    EXPECT_FLOAT_EQ(border.bottom.widthDips, 2.0f);
+    EXPECT_EQ(Rgba(border.bottom.color), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
+    // border-bottom-color is a longhand the bar reads, not one a style writes.
+    EXPECT_THAT([] { return Parse("#cpu { border-bottom-color: #00ff00; }"); }, ConfigErrorWith("border-bottom-color does not apply to #cpu"));
+    const Border widths = StyleOf("#cpu { border-width: 3px; border-color: #0000ff; border-top: none; }", ModuleKind::Cpu, "cpu").box.border;
+    EXPECT_FLOAT_EQ(widths.top.widthDips, 0.0f);
+    EXPECT_FLOAT_EQ(widths.bottom.widthDips, 3.0f);
+    EXPECT_EQ(Rgba(widths.left.color), (std::array<std::int32_t, 4>{0, 0, 255, 255}));
+    // No border unless a rule draws one.
+    EXPECT_FLOAT_EQ(StyleOf("", ModuleKind::Cpu, "cpu").box.border.right.widthDips, 0.0f);
+}
+
+TEST(Style, BoxShadowsAreInsetAndKeepTheirOrder) {
+    const StyleSheet                sheet   = Parse(std::string(kBar) +
+                                                    "section { box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), inset -1px 0 #000000; } "
+                                                                     "workspaces .item.focused { box-shadow: inset 0 -1px 1px 2px #ff0000; }");
+    const StyleConfig               bar     = ResolveBarStyle(sheet);
+    const std::vector<InsetShadow>& shadows = bar.section.box.shadows;
+    if (shadows.size() != 2) {
+        FAIL() << "section has " << shadows.size() << " shadows, not 2";
+    }
+    EXPECT_FLOAT_EQ(shadows[0].xDips, 0.0f);
+    EXPECT_FLOAT_EQ(shadows[0].yDips, 1.0f);
+    EXPECT_FLOAT_EQ(shadows[0].blurDips, 2.0f);
+    EXPECT_FLOAT_EQ(shadows[0].spreadDips, 0.0f);
+    EXPECT_EQ(Rgba(shadows[0].color), (std::array<std::int32_t, 4>{255, 255, 255, 128}));
+    EXPECT_FLOAT_EQ(shadows[1].xDips, -1.0f);
+    EXPECT_FLOAT_EQ(shadows[1].blurDips, 0.0f);
+    const ModuleStyle workspaces = ResolveModuleStyle(sheet, bar, ModuleKind::Workspaces, "workspaces", {});
+    if (workspaces.focused.shadows.size() != 1) {
+        FAIL() << "the focused item has " << workspaces.focused.shadows.size() << " shadows, not 1";
+    }
+    EXPECT_FLOAT_EQ(workspaces.focused.shadows[0].yDips, -1.0f);
+    EXPECT_FLOAT_EQ(workspaces.focused.shadows[0].spreadDips, 2.0f);
+    EXPECT_TRUE(workspaces.item.shadows.empty());
+    EXPECT_TRUE(ResolveBarStyle(Parse(std::string(kBar) + "tooltip { box-shadow: inset 0 1px #fff; box-shadow: none; }")).tooltip.box.shadows.empty());
+    EXPECT_THAT([] { return Parse("section { box-shadow: 0 1px 2px #000; }"); }, ConfigErrorWith("every shadow starts with inset"));
+    EXPECT_THAT([] { return Parse("section { box-shadow: inset 0 1px -2px #000; }"); }, ConfigErrorWith("negative blur"));
+    EXPECT_THAT([] { return Parse("section { box-shadow: inset 1px #000; }"); }, ConfigErrorWith("must be none, or inset shadows"));
+    EXPECT_THAT([] { return Parse(".item:hover { box-shadow: inset 0 1px #000; }"); }, ConfigErrorWith("box-shadow does not apply to .item:hover"));
+}
+
+TEST(Style, ModulesTakeNoSize) {
+    EXPECT_THAT([] { return Parse(".module { width: 3px; }"); }, ConfigErrorWith("width does not apply to .module"));
+    EXPECT_THAT([] { return Parse(".module { height: 50%; }"); }, ConfigErrorWith("is not a property intarsia draws"));
+}
+
+TEST(Style, ModulesTakeAMarginButTheirHoverDoesNot) {
+    const ModuleStyle style = StyleOf(".module { margin: 1px; } #ws { margin: 6px 2px; }", ModuleKind::Workspaces, "ws");
+    EXPECT_FLOAT_EQ(style.margin.yDips, 6.0f);
+    EXPECT_FLOAT_EQ(style.margin.xDips, 2.0f);
+    EXPECT_FLOAT_EQ(StyleOf(".module { margin: 1px; }", ModuleKind::Clock, "date").margin.xDips, 1.0f);
+    EXPECT_THAT([] { return Parse("#ws:hover { margin: 1px; }"); }, ConfigErrorWith("margin does not apply to #ws:hover"));
 }
 
 TEST(Style, ATrayTakesItsTransitionsAndItsUnfoldedIconsRotation) {

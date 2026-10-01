@@ -204,8 +204,7 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     // Capped by the style and the monitor, as a command can print text of any length and up to the entry limit.
     const MenuStyle&      style         = _config.style.menu;
     const ScrollbarStyle& scrollbar     = style.scrollbar;
-    const float           insetX        = style.box.padding.xDips + style.box.borderWidthDips;
-    const float           insetY        = style.box.padding.yDips + style.box.borderWidthDips;
+    const Insets          insets        = ContentInsets(style.box);
     const float           gutter        = scrollbar.widthDips > 0.0f ? scrollbar.widthDips + (2.0f * scrollbar.margin.xDips) : 0.0f;
     const std::int32_t    monitorWidth  = anchor.monitor.right - anchor.monitor.left;
     const std::int32_t    monitorHeight = anchor.monitor.bottom - anchor.monitor.top;
@@ -213,7 +212,9 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     const float           maxWidth      = std::min(static_cast<float>(monitorWidth) * pixelsToDips, style.maxWidthDips.value_or(std::numeric_limits<float>::max()));
     const float           maxHeight     = std::min(static_cast<float>(monitorHeight) * pixelsToDips, style.maxHeightDips.value_or(std::numeric_limits<float>::max()));
     // Leaves room for the scroll bar whether or not the rows overflow, so a cut row never grows once they do.
-    const auto textWidth = [maxWidth, insetX, gutter](const ItemStyle& row) { return maxWidth - gutter - (2.0f * (insetX + row.margin.xDips + row.padding.xDips)); };
+    const auto textWidth = [maxWidth, insets, gutter](const ItemStyle& row) {
+        return maxWidth - gutter - insets.left - insets.right - (2.0f * (row.margin.xDips + row.padding.xDips));
+    };
 
     ComPtr<IDWriteInlineObject> ellipsis;
     ThrowIfFailed(_graphics.dwrite->CreateEllipsisTrimmingSign(_textFormat, &ellipsis), "IDWriteFactory::CreateEllipsisTrimmingSign(menu)");
@@ -240,21 +241,22 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     for (const MenuRow& row : rows) {
         inner = std::max(inner, row.box.right + (2.0f * row.style->margin.xDips));
     }
-    float bottom = insetY;
+    float bottom = insets.top;
     for (MenuRow& row : rows) {
         const Spacing& margin  = row.style->margin;
         const Spacing& padding = row.style->padding;
         const float    top     = bottom + margin.yDips;
-        row.box                = D2D1::RectF(insetX + margin.xDips, top, insetX + inner - margin.xDips, top + row.box.bottom);
+        row.box                = D2D1::RectF(insets.left + margin.xDips, top, insets.left + inner - margin.xDips, top + row.box.bottom);
         row.textOrigin         = D2D1::Point2F(row.box.left + padding.xDips, row.box.top + padding.yDips);
         bottom                 = row.box.bottom + margin.yDips;
     }
 
-    const float       content  = bottom - insetY;
-    const bool        overflow = content + (2.0f * insetY) > maxHeight;
-    const SIZE        size{.cx = std::min(DipsToWholePixels(inner + (2.0f * insetX) + (overflow ? gutter : 0.0f), anchor.dpi), monitorWidth),
-                           .cy = std::min(DipsToWholePixels(std::min(content + (2.0f * insetY), maxHeight), anchor.dpi), monitorHeight)};
-    const D2D1_RECT_F viewport{.left = insetX, .top = insetY, .right = insetX + inner, .bottom = (static_cast<float>(size.cy) * pixelsToDips) - insetY};
+    const float       content  = bottom - insets.top;
+    const float       height   = content + insets.top + insets.bottom;
+    const bool        overflow = height > maxHeight;
+    const SIZE        size{.cx = std::min(DipsToWholePixels(inner + insets.left + insets.right + (overflow ? gutter : 0.0f), anchor.dpi), monitorWidth),
+                           .cy = std::min(DipsToWholePixels(overflow ? maxHeight : height, anchor.dpi), monitorHeight)};
+    const D2D1_RECT_F viewport{.left = insets.left, .top = insets.top, .right = insets.left + inner, .bottom = (static_cast<float>(size.cy) * pixelsToDips) - insets.bottom};
     // A window takes one composition target at a time, so the old surface goes before the new one is made.
     ReleaseSurface();
     _entries   = std::move(entries);
@@ -323,7 +325,7 @@ void Menu::Draw() {
         }
         const ItemStyle& item        = *row.style;
         const bool       highlighted = row.entry.has_value() && row.entry == _highlight;
-        const BoxStyle box{.background = item.background, .borderColor = D2D1::ColorF(0, 0, 0, 0), .borderWidthDips = 0.0f, .radiusDips = item.radiusDips, .padding = item.padding};
+        const BoxStyle   box{.background = item.background, .border = {}, .radiusDips = item.radiusDips, .padding = item.padding, .shadows = item.shadows};
         DrawBox(context, *_brushes, row.box, box, highlighted ? item.hoverBackground : item.background);
         context->DrawTextLayout(row.textOrigin, row.text.Get(), _brushes->Get(highlighted ? item.hoverColor : item.color));
     }
@@ -332,7 +334,7 @@ void Menu::Draw() {
     const ScrollbarStyle&            scrollbar = style.scrollbar;
     const std::optional<D2D1_RECT_F> thumb     = ThumbRect(_scroll, _track);
     if (thumb.has_value() && scrollbar.widthDips > 0.0f) {
-        const BoxStyle box{.background = scrollbar.background, .borderColor = D2D1::ColorF(0, 0, 0, 0), .borderWidthDips = 0.0f, .radiusDips = scrollbar.radiusDips, .padding = {}};
+        const BoxStyle box{.background = scrollbar.background, .border = {}, .radiusDips = scrollbar.radiusDips, .padding = {}, .shadows = {}};
         DrawBox(context, *_brushes, *thumb, box, scrollbar.background);
     }
     _surface->EndDrawAndPresent();

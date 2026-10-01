@@ -1,5 +1,7 @@
 #include "modules/ItemRow.hpp"
 
+#include "bar/Box.hpp"
+
 #include <algorithm>
 #include <format>
 #include <stdexcept>
@@ -50,13 +52,9 @@ D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, 
 }
 
 void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, bool hovered, D2D1_POINT_2F origin) {
-    const D2D1_COLOR_F& fill = hovered ? style.hoverBackground : style.background;
-    if (fill.a <= 0.0f) {
-        return;
-    }
     const D2D1_RECT_F placed = D2D1::RectF(origin.x + box.left, origin.y + box.top, origin.x + box.right, origin.y + box.bottom);
-    const float       radius = std::min({style.radiusDips, (box.bottom - box.top) / 2.0f, (box.right - box.left) / 2.0f});
-    render.context->FillRoundedRectangle(D2D1::RoundedRect(placed, radius, radius), render.brushes->Get(fill));
+    const BoxStyle    boxStyle{.background = style.background, .border = {}, .radiusDips = style.radiusDips, .padding = style.padding, .shadows = style.shadows};
+    DrawBox(render.context, *render.brushes, placed, boxStyle, hovered ? style.hoverBackground : style.background);
 }
 
 const D2D1_COLOR_F& ItemColor(const ItemStyle& style, bool hovered) {

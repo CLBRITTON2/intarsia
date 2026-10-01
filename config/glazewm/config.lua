@@ -19,7 +19,7 @@ return {
     -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
     -- does not define, or a module no list or group shows, is an error. style.css styles a module by its name, as
     -- #clock.
-    modules_left = { "workspaces", "divider", "apps", "mode" },
+    modules_left = { "workspaces", "apps", "mode" },
     modules_center = {},
     modules_right = { "tray", "tiling", "net", "cpu", "memory", "volume", "battery", "clock" },
 
@@ -30,14 +30,14 @@ return {
         -- From 1600 DIPs wide, the clock moves to the center.
         {
             min_length = 1600,
-            modules_left = { "workspaces", "divider", "apps", "mode" },
+            modules_left = { "workspaces", "apps", "mode" },
             modules_center = { "clock" },
             modules_right = { "tray", "tiling", "net", "cpu", "memory", "volume", "battery" },
         },
     },
 
     -- Each module has a name you choose and a type: clock, window, workspaces, windows, binding_mode,
-    -- tiling_direction, divider, cpu, memory, audio, network, battery, tray, custom, counter or group. One type can
+    -- tiling_direction, cpu, memory, audio, network, battery, tray, custom, counter or group. One type can
     -- appear under several names with different settings, such as a second clock with its own format.
     --
     -- clock, window, cpu, memory, audio, network, battery, custom and counter take optional on_click, on_right_click,
@@ -57,8 +57,6 @@ return {
     modules = {
         -- One item per workspace on this monitor: .focused, .occupied (has windows) or .empty. Click one to focus it.
         workspaces = { type = "workspaces" },
-        -- A line between modules, sized by width and height in style.css. Each place a line appears is its own module.
-        divider = { type = "divider" },
         -- One item per window on the displayed workspace, .focused for the focused one. Click one to focus it.
         apps = { type = "windows" },
         -- One item per active binding mode, nothing while none is active.

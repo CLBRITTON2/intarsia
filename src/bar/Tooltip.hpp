@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/Config.hpp"
+#include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
 #include "render/Surface.hpp"
 
@@ -46,8 +47,6 @@ class Tooltip {
     IDWriteTextFormat*    _textFormat;
     HWND                  _window;
     // Only while shown: Show creates it at the text's size and Hide releases it.
-    std::unique_ptr<Surface>                     _surface;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _backgroundBrush;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _borderBrush;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> _foregroundBrush;
+    std::unique_ptr<Surface>    _surface;
+    std::unique_ptr<BrushCache> _brushes;
 };

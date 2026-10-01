@@ -109,11 +109,11 @@ namespace {
         Length,
         PositiveLength,
         Spacing,
-        Share,
         Family,
         Weight,
         Transition,
-        Rotation
+        Rotation,
+        Shadows
     };
 
     struct PropertyKind {
@@ -121,12 +121,19 @@ namespace {
         ValueKind        kind;
     };
 
-    constexpr std::array<PropertyKind, 19> kProperties{{
+    constexpr std::array<PropertyKind, 31> kProperties{{
         {.property = "color", .kind = ValueKind::Color},
         {.property = "background", .kind = ValueKind::Color},
-        {.property = "border-color", .kind = ValueKind::Color},
-        {.property = "border-width", .kind = ValueKind::Length},
+        {.property = "border-top-width", .kind = ValueKind::Length},
+        {.property = "border-right-width", .kind = ValueKind::Length},
+        {.property = "border-bottom-width", .kind = ValueKind::Length},
+        {.property = "border-left-width", .kind = ValueKind::Length},
+        {.property = "border-top-color", .kind = ValueKind::Color},
+        {.property = "border-right-color", .kind = ValueKind::Color},
+        {.property = "border-bottom-color", .kind = ValueKind::Color},
+        {.property = "border-left-color", .kind = ValueKind::Color},
         {.property = "border-radius", .kind = ValueKind::Length},
+        {.property = "box-shadow", .kind = ValueKind::Shadows},
         {.property = "padding", .kind = ValueKind::Spacing},
         {.property = "margin", .kind = ValueKind::Spacing},
         {.property = "margin-right", .kind = ValueKind::Length},
@@ -134,13 +141,18 @@ namespace {
         {.property = "font-size", .kind = ValueKind::PositiveLength},
         {.property = "font-weight", .kind = ValueKind::Weight},
         {.property = "width", .kind = ValueKind::PositiveLength},
-        {.property = "height", .kind = ValueKind::Share},
         {.property = "transition", .kind = ValueKind::Transition},
         {.property = "transform", .kind = ValueKind::Rotation},
         {.property = "max-width", .kind = ValueKind::PositiveLength},
         {.property = "max-height", .kind = ValueKind::PositiveLength},
         // Shorthands, expanded into the longhands above as they are read.
         {.property = "border", .kind = ValueKind::Color},
+        {.property = "border-top", .kind = ValueKind::Color},
+        {.property = "border-right", .kind = ValueKind::Color},
+        {.property = "border-bottom", .kind = ValueKind::Color},
+        {.property = "border-left", .kind = ValueKind::Color},
+        {.property = "border-width", .kind = ValueKind::Length},
+        {.property = "border-color", .kind = ValueKind::Color},
         {.property = "background-color", .kind = ValueKind::Color},
     }};
 
@@ -150,15 +162,20 @@ namespace {
     }
 
     // The value readers throw std::invalid_argument with what the value should look like. The caller adds where.
-    float ReadLength(std::string_view text) {
+    float ReadSignedLength(std::string_view text) {
         const std::optional<float> value = text == "0" ? std::optional<float>(0.0f) : text.ends_with("px") ? ParseNumber(text.substr(0, text.size() - 2)) : std::nullopt;
         if (!value.has_value()) {
             throw std::invalid_argument("must be a length in px, as 4px");
         }
-        if (*value < 0.0f) {
+        return *value;
+    }
+
+    float ReadLength(std::string_view text) {
+        const float value = ReadSignedLength(text);
+        if (value < 0.0f) {
             throw std::invalid_argument("must be 0px or more");
         }
-        return *value;
+        return value;
     }
 
     float ReadPositiveLength(std::string_view text) {
@@ -179,14 +196,6 @@ namespace {
             return Spacing{.yDips = ReadLength(lengths[0]), .xDips = ReadLength(lengths[1])};
         }
         throw std::invalid_argument("takes one length for every side, or two: above and below, then left and right, as 2px 6px");
-    }
-
-    float ReadShare(std::string_view text) {
-        const std::optional<float> percent = text.ends_with('%') ? ParseNumber(text.substr(0, text.size() - 1)) : std::nullopt;
-        if (!percent.has_value() || *percent <= 0.0f || *percent > 100.0f) {
-            throw std::invalid_argument("must be a percentage of the box's height, more than 0% and at most 100%, as 60%");
-        }
-        return *percent / 100.0f;
     }
 
     float ReadChannel(std::string_view text, float maximum) {
@@ -335,25 +344,86 @@ namespace {
         return *degrees;
     }
 
+    constexpr std::string_view kShadowForm = "must be none, or inset shadows separated by commas, each inset, an x and y offset, an optional blur and spread, and a color, "
+                                             "as inset 0 1px 2px rgba(255, 255, 255, 0.18)";
+
+    InsetShadow                ReadShadow(std::string_view text) {
+        bool                        inset = false;
+        std::vector<float>          lengths;
+        std::optional<D2D1_COLOR_F> color;
+        for (const std::string_view part : SplitOutside(text, kSpace)) {
+            if (part == "inset" && !inset) {
+                inset = true;
+            } else if (part == "0" || part.ends_with("px")) {
+                lengths.push_back(ReadSignedLength(part));
+            } else if (!color.has_value()) {
+                color = ReadColor(part);
+            } else {
+                throw std::invalid_argument(std::string(kShadowForm));
+            }
+        }
+        if (!inset) {
+            throw std::invalid_argument("draws inside the box only, so every shadow starts with inset, as inset 0 1px 2px rgba(255, 255, 255, 0.18)");
+        }
+        if (lengths.size() < 2 || lengths.size() > 4 || !color.has_value()) {
+            throw std::invalid_argument(std::string(kShadowForm));
+        }
+        const float blur = lengths.size() > 2 ? lengths[2] : 0.0f;
+        if (blur < 0.0f) {
+            throw std::invalid_argument("has a negative blur, which must be 0px or more");
+        }
+        return InsetShadow{.xDips = lengths[0], .yDips = lengths[1], .blurDips = blur, .spreadDips = lengths.size() > 3 ? lengths[3] : 0.0f, .color = *color};
+    }
+
+    std::vector<InsetShadow> ReadShadows(std::string_view text) {
+        if (text == "none") {
+            return {};
+        }
+        std::vector<InsetShadow> shadows;
+        for (const std::string_view entry : SplitOutside(text, ",")) {
+            shadows.push_back(ReadShadow(entry));
+        }
+        if (shadows.empty()) {
+            throw std::invalid_argument(std::string(kShadowForm));
+        }
+        return shadows;
+    }
+
     void CheckValue(ValueKind kind, std::string_view value) {
         switch (kind) {
             case ValueKind::Color: ReadColor(value); return;
             case ValueKind::Length: ReadLength(value); return;
             case ValueKind::PositiveLength: ReadPositiveLength(value); return;
             case ValueKind::Spacing: ReadSpacing(value); return;
-            case ValueKind::Share: ReadShare(value); return;
             case ValueKind::Family: ReadFamily(value); return;
             case ValueKind::Weight: ReadWeight(value); return;
             case ValueKind::Transition: ReadTransitionValue(value); return;
             case ValueKind::Rotation: ReadRotation(value); return;
+            case ValueKind::Shadows: ReadShadows(value); return;
         }
         throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(kind)));
     }
 
-    // border: none, or a width, solid and a color in any order, as CSS writes it.
-    std::vector<Declaration> ExpandBorder(const Declaration& border) {
+    constexpr std::array<std::string_view, 4> kSides{"top", "right", "bottom", "left"};
+
+    // One longhand per side, as border-width sets border-top-width and the other three.
+    std::vector<Declaration> ExpandSides(std::string_view part, const std::string& value, std::uint32_t line) {
+        std::vector<Declaration> sides;
+        sides.reserve(kSides.size());
+        for (const std::string_view side : kSides) {
+            sides.push_back(Declaration{.property = std::format("border-{}-{}", side, part), .value = value, .line = line});
+        }
+        return sides;
+    }
+
+    // border or border-<side>: none, or a width, solid and a color in any order, as CSS writes it.
+    std::vector<Declaration> ExpandBorder(const Declaration& border, const std::vector<std::string_view>& sides) {
+        std::vector<Declaration> longhands;
         if (border.value == "none") {
-            return {Declaration{.property = "border-width", .value = "0", .line = border.line}};
+            for (const std::string_view side : sides) {
+                longhands.push_back(Declaration{.property = std::format("border-{}-width", side), .value = "0", .line = border.line});
+            }
+            return longhands;
         }
         std::optional<std::string> width;
         std::optional<std::string> color;
@@ -370,7 +440,29 @@ namespace {
         if (!solid || !width.has_value() || !color.has_value()) {
             throw std::invalid_argument("must be none, or a width, solid and a color, as 1px solid #6e6a8640");
         }
-        return {Declaration{.property = "border-width", .value = *width, .line = border.line}, Declaration{.property = "border-color", .value = *color, .line = border.line}};
+        for (const std::string_view side : sides) {
+            longhands.push_back(Declaration{.property = std::format("border-{}-width", side), .value = *width, .line = border.line});
+            longhands.push_back(Declaration{.property = std::format("border-{}-color", side), .value = *color, .line = border.line});
+        }
+        return longhands;
+    }
+
+    std::vector<Declaration> ExpandShorthand(const Declaration& declaration) {
+        if (declaration.property == "border") {
+            return ExpandBorder(declaration, {kSides.begin(), kSides.end()});
+        }
+        for (const std::string_view side : kSides) {
+            if (declaration.property == std::format("border-{}", side)) {
+                return ExpandBorder(declaration, {side});
+            }
+        }
+        if (declaration.property == "border-width") {
+            return ExpandSides("width", declaration.value, declaration.line);
+        }
+        if (declaration.property == "border-color") {
+            return ExpandSides("color", declaration.value, declaration.line);
+        }
+        return {declaration};
     }
 
     // A menu entry's .active is matched by the menu's own selector form, so a custom module may still declare it.
@@ -580,8 +672,9 @@ namespace {
     // What each target takes. :hover takes background only and a state color only: each changes one thing, and none
     // changes a size.
     std::vector<std::string_view> AllowedProperties(const Selector& selector) {
-        constexpr std::array<std::string_view, 5> kBox{"background", "border-width", "border-color", "border-radius", "padding"};
-        std::vector<std::string_view>             allowed;
+        constexpr std::array<std::string_view, 11> kBox{"background",    "border",      "border-width",  "border-color", "border-top", "border-right",
+                                                        "border-bottom", "border-left", "border-radius", "padding",      "box-shadow"};
+        std::vector<std::string_view>              allowed;
         switch (selector.target) {
             case StyleTarget::Bar: return {"font-family", "font-size", "color"};
             case StyleTarget::Section:
@@ -612,7 +705,7 @@ namespace {
                 if (selector.compounds.back().hover) {
                     return {"color", "background"};
                 }
-                return {"color", "background", "font-weight", "padding", "margin", "border-radius"};
+                return {"color", "background", "font-weight", "padding", "margin", "border-radius", "box-shadow"};
             case StyleTarget::Module: {
                 const Compound& compound = selector.compounds.front();
                 if (compound.hover) {
@@ -622,7 +715,7 @@ namespace {
                     return {"color"};
                 }
                 allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"color", "width", "height", "transition"});
+                allowed.insert(allowed.end(), {"margin", "color", "transition"});
                 return allowed;
             }
         }
@@ -757,11 +850,10 @@ namespace {
                 if (!KindOf(declaration.property).has_value()) {
                     throw std::invalid_argument("is not a property intarsia draws");
                 }
-                const std::vector<Declaration> expanded = declaration.property == "border" ? ExpandBorder(declaration) : std::vector<Declaration>{declaration};
-                for (const Declaration& longhand : expanded) {
-                    if (std::ranges::find(allowed, longhand.property) == allowed.end()) {
-                        throw std::invalid_argument(std::format("does not apply to {}, which takes: {}", selectorText, JoinNames(allowed)));
-                    }
+                if (std::ranges::find(allowed, declaration.property) == allowed.end()) {
+                    throw std::invalid_argument(std::format("does not apply to {}, which takes: {}", selectorText, JoinNames(allowed)));
+                }
+                for (const Declaration& longhand : ExpandShorthand(declaration)) {
                     CheckValue(*KindOf(longhand.property), longhand.value);
                     if (longhand.property == "transition") {
                         RequireTransitionedProperty(selector.target, longhand.value);
@@ -843,12 +935,16 @@ namespace {
 
     constexpr Spacing kNoSpace{.yDips = 0.0f, .xDips = 0.0f};
 
-    BoxStyle          ReadBox(const Cascaded& box) {
-        return BoxStyle{.background      = box.Color("background", kTransparent),
-                                 .borderColor     = box.Color("border-color", kTransparent),
-                                 .borderWidthDips = box.Length("border-width", 0.0f),
-                                 .radiusDips      = box.Length("border-radius", 0.0f),
-                                 .padding         = box.Space("padding", kNoSpace)};
+    BorderSide        ReadSide(const Cascaded& box, std::string_view side) {
+        return BorderSide{.widthDips = box.Length(std::format("border-{}-width", side), 0.0f), .color = box.Color(std::format("border-{}-color", side), kTransparent)};
+    }
+
+    BoxStyle ReadBox(const Cascaded& box) {
+        return BoxStyle{.background = box.Color("background", kTransparent),
+                        .border     = {.top = ReadSide(box, "top"), .right = ReadSide(box, "right"), .bottom = ReadSide(box, "bottom"), .left = ReadSide(box, "left")},
+                        .radiusDips = box.Length("border-radius", 0.0f),
+                        .padding    = box.Space("padding", kNoSpace),
+                        .shadows    = box.Read("box-shadow", ReadShadows, std::vector<InsetShadow>{})};
     }
 
     // An item of owner, a module or the menu, in one state or none.
@@ -866,6 +962,7 @@ namespace {
                          .padding         = cascaded.Space("padding", kNoSpace),
                          .margin          = cascaded.Space("margin", kNoSpace),
                          .radiusDips      = cascaded.Length("border-radius", 0.0f),
+                         .shadows         = cascaded.Read("box-shadow", ReadShadows, std::vector<InsetShadow>{}),
                          .hoverColor      = hover.Color("color", itemColor),
                          .hoverBackground = hover.Color("background", background)};
     }
@@ -967,19 +1064,12 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
     const Element          hovered{.type = type, .id = name, .classes = {"module"}, .hover = true};
     const Element          alerted{.type = type, .id = name, .classes = {"module", "alert"}, .hover = false};
     const Cascaded         box(sheet, StyleTarget::Module, &normal, nullptr);
-    if (kind != ModuleKind::Divider) {
-        for (const std::string_view property : {"width", "height"}) {
-            if (const Declaration* declaration = box.Find(property)) {
-                throw StyleError(sheet.source, declaration->line, std::format("{} sizes a divider's line, and {} is a {} module", property, name, type));
-            }
-        }
-    }
-    const BoxStyle     boxStyle = ReadBox(box);
-    const D2D1_COLOR_F color    = box.Color("color", bar.color);
-    const Element      icon{.type = {}, .id = {}, .classes = {"icon"}, .hover = false};
-    const Element      expanded{.type = type, .id = name, .classes = {"module", "expanded"}, .hover = false};
-    const Cascaded     iconRules(sheet, StyleTarget::Icon, &normal, &icon);
-    const Cascaded     expandedIconRules(sheet, StyleTarget::Icon, &expanded, &icon);
+    const BoxStyle         boxStyle = ReadBox(box);
+    const D2D1_COLOR_F     color    = box.Color("color", bar.color);
+    const Element          icon{.type = {}, .id = {}, .classes = {"icon"}, .hover = false};
+    const Element          expanded{.type = type, .id = name, .classes = {"module", "expanded"}, .hover = false};
+    const Cascaded         iconRules(sheet, StyleTarget::Icon, &normal, &icon);
+    const Cascaded         expandedIconRules(sheet, StyleTarget::Icon, &expanded, &icon);
     if (kind != ModuleKind::Tray && kind != ModuleKind::Group) {
         for (const auto& [rules, property] :
              {std::pair{&box, "transition"}, std::pair{&iconRules, "transform"}, std::pair{&iconRules, "transition"}, std::pair{&expandedIconRules, "transform"}}) {
@@ -996,6 +1086,7 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
         classColors.push_back(ClassColors{.name = declared, .colors = ReadStateColors(sheet, type, name, declared, color)});
     }
     return ModuleStyle{.box                         = boxStyle,
+                       .margin                      = box.Space("margin", kNoSpace),
                        .hover                       = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
                        .color                       = color,
                        .alertColor                  = Cascaded(sheet, StyleTarget::Module, &alerted, nullptr).Color("color", color),
@@ -1014,8 +1105,6 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
                        .occupied                    = ReadItem(sheet, StyleTarget::Item, normal, "occupied", color),
                        .empty                       = ReadItem(sheet, StyleTarget::Item, normal, "empty", color),
                        .toggle                      = ReadItem(sheet, StyleTarget::Item, normal, "toggle", color),
-                       .lineWidthDips               = box.Read("width", ReadPositiveLength, 0.0f),
-                       .lineHeight                  = box.Read("height", ReadShare, 1.0f),
                        .transition                  = box.Read("transition", ReadTransition, kNoTransition),
                        .expandedIconRotationDegrees = expandedIconRules.Read("transform", ReadRotation, rotation)};
 }

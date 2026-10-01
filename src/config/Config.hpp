@@ -45,13 +45,36 @@ struct Spacing {
     float xDips;
 };
 
-// A rounded box with an optional border: a section, a module, a tooltip.
+struct BorderSide {
+    float        widthDips; // 0 for none
+    D2D1_COLOR_F color;
+};
+
+// Drawn inside the box, over its padding, so a border never moves what the box holds.
+struct Border {
+    BorderSide top;
+    BorderSide right;
+    BorderSide bottom;
+    BorderSide left;
+};
+
+// One box-shadow, always inset: the inside edge of the box's border, moved by the offset and shrunk by spread, casts
+// it onto the box blurred over blur, as CSS draws it.
+struct InsetShadow {
+    float        xDips;
+    float        yDips;
+    float        blurDips;
+    float        spreadDips; // negative grows the edge
+    D2D1_COLOR_F color;
+};
+
+// A rounded box with an optional border and inset shadows: a section, a module, a tooltip.
 struct BoxStyle {
-    D2D1_COLOR_F background;
-    D2D1_COLOR_F borderColor;
-    float        borderWidthDips; // 0 for none
-    float        radiusDips;      // at most half the box's shorter side
-    Spacing      padding;
+    D2D1_COLOR_F             background;
+    Border                   border;
+    float                    radiusDips; // at most half the box's shorter side
+    Spacing                  padding;
+    std::vector<InsetShadow> shadows; // the first on top, as CSS stacks them
 };
 
 // The box behind each non-empty section (left, center, right).
@@ -92,12 +115,13 @@ struct IconStyle {
 
 // One item's box inside a module: a workspace, a window's icon, a binding mode.
 struct ItemStyle {
-    D2D1_COLOR_F       color;
-    D2D1_COLOR_F       background;
-    DWRITE_FONT_WEIGHT weight;
-    Spacing            padding;
-    Spacing            margin; // x on each side of the box, so two items side by side are 2x apart
-    float              radiusDips;
+    D2D1_COLOR_F             color;
+    D2D1_COLOR_F             background;
+    DWRITE_FONT_WEIGHT       weight;
+    Spacing                  padding;
+    Spacing                  margin; // x on each side of the box, so two items side by side are 2x apart
+    float                    radiusDips;
+    std::vector<InsetShadow> shadows;
     // The item under the cursor, from .item:hover rules.
     D2D1_COLOR_F hoverColor;
     D2D1_COLOR_F hoverBackground;
@@ -148,7 +172,8 @@ struct ClassColors {
 // One module's style, cascaded from every style.css rule that matches it.
 struct ModuleStyle {
     BoxStyle     box;
-    D2D1_COLOR_F hover; // the box's background under the cursor
+    Spacing      margin; // around the box, which it shrinks across the bar and spaces from its neighbours along it
+    D2D1_COLOR_F hover;  // the box's background under the cursor
     D2D1_COLOR_F color;
     D2D1_COLOR_F alertColor; // text in a state that needs attention, such as a failed command
     // A battery discharging at or under warning_at (.warning) and critical_at (.critical).
@@ -165,9 +190,6 @@ struct ModuleStyle {
     ItemStyle occupied;
     ItemStyle empty;
     ItemStyle toggle; // a tray's toggle, from .item.toggle rules over its .item rules
-    // A divider's line, in its color.
-    float lineWidthDips;
-    float lineHeight; // a share of the box's length across the bar, 0 to 1
     // A tray's or group's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
     // (.expanded).
     Transition transition;
@@ -181,7 +203,6 @@ enum class ModuleKind : std::uint8_t {
     Windows,
     BindingMode,
     TilingDirection,
-    Divider,
     Cpu,
     Memory,
     Audio,
@@ -199,14 +220,13 @@ struct ModuleTypeName {
     ModuleKind       kind;
 };
 
-inline constexpr std::array<ModuleTypeName, 16> kModuleTypes{{
+inline constexpr std::array<ModuleTypeName, 15> kModuleTypes{{
     {.name = "clock", .kind = ModuleKind::Clock},
     {.name = "window", .kind = ModuleKind::Window},
     {.name = "workspaces", .kind = ModuleKind::Workspaces},
     {.name = "windows", .kind = ModuleKind::Windows},
     {.name = "binding_mode", .kind = ModuleKind::BindingMode},
     {.name = "tiling_direction", .kind = ModuleKind::TilingDirection},
-    {.name = "divider", .kind = ModuleKind::Divider},
     {.name = "cpu", .kind = ModuleKind::Cpu},
     {.name = "memory", .kind = ModuleKind::Memory},
     {.name = "audio", .kind = ModuleKind::Audio},
@@ -372,7 +392,7 @@ struct GroupConfig {
     std::vector<ModuleInstance> members; // in the order the group's modules key lists them
 };
 
-// The settings from a module's table: workspaces, windows, binding_mode and divider have none.
+// The settings from a module's table: workspaces, windows and binding_mode have none.
 using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConfig, CustomConfig, TilingDirectionConfig, AudioConfig, NetworkConfig, BatteryConfig, TrayConfig,
                                     CounterConfig, GroupConfig>;
 

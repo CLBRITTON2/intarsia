@@ -147,17 +147,15 @@ clock:hover, cpu:hover, memory:hover, audio:hover, network:hover, battery:hover,
     color: var(--muted);
 }
 
-/* A type alone ranks below .module, so .module is added to win its padding. */
-divider.module {
-    width: 1px;
-    height: 60%;
-    padding: 0 4px;
-    color: var(--border);
-}
-
-/* Window icons draw at the icon's font-size. */
+/*
+ * Window icons draw at the icon's font-size. A line opens the windows, its margin across the bar keeping it clear of
+ * the section's edges and its square corners keeping it straight.
+ */
 #apps {
     padding: 0 2px;
+    margin: 3px 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0;
 }
 
 #apps .item {

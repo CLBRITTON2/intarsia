@@ -164,15 +164,6 @@ TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
                 ConfigErrorWith("style.css:4: .module: colour is not a property"));
 }
 
-TEST(Config, DividerTakesOnlyItsType) {
-    const Config config = LoadStyled(WithRightModules(R"({ "line" })", R"(        line = { type = "divider" },)"), std::string(kValidStyle) + "#line { width: 2px; height: 50%; }");
-    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Divider});
-    EXPECT_FLOAT_EQ(config.modules.right.at(0).style.lineWidthDips, 2.0f);
-    EXPECT_FLOAT_EQ(config.modules.right.at(0).style.lineHeight, 0.5f);
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "line" })", R"(        line = { type = "divider", width = 2 },)")); },
-                ConfigErrorWith("modules.line.width is not a known key"));
-}
-
 TEST(Config, TrayTakesItsToggleIcon) {
     const Config config = LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray", icon = ">" },)"));
     EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Tray});
@@ -424,7 +415,7 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, divider, cpu, memory, audio, "
+                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
                                 "network, battery, tray, custom, counter, group"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }

@@ -35,12 +35,22 @@ namespace {
     constexpr std::uint32_t kMenuListed       = WM_APP + 4;
     constexpr UINT_PTR      kChangeTimer      = 1;
 
-    // Where a module's content starts in its box: past the padding along the bar, centered across it.
-    D2D1_POINT_2F ContentOrigin(Axis axis, const D2D1_RECT_F& box, float padding, D2D1_SIZE_F content) {
+    EndInsets               MainInsets(const BoxStyle& style, Axis axis) {
+        const Insets insets = ContentInsets(style);
+        return axis == Axis::Horizontal ? EndInsets{.start = insets.left, .end = insets.right} : EndInsets{.start = insets.top, .end = insets.bottom};
+    }
+
+    EndInsets CrossInsets(const BoxStyle& style, Axis axis) {
+        const Insets insets = ContentInsets(style);
+        return axis == Axis::Horizontal ? EndInsets{.start = insets.top, .end = insets.bottom} : EndInsets{.start = insets.left, .end = insets.right};
+    }
+
+    // Where a module's content starts in its box: past the insets along the bar, centered between them across it.
+    D2D1_POINT_2F ContentOrigin(Axis axis, const D2D1_RECT_F& box, const Insets& insets, D2D1_SIZE_F content) {
         if (axis == Axis::Horizontal) {
-            return D2D1::Point2F(box.left + padding, box.top + ((box.bottom - box.top - content.height) / 2.0f));
+            return D2D1::Point2F(box.left + insets.left, box.top + insets.top + ((box.bottom - box.top - insets.top - insets.bottom - content.height) / 2.0f));
         }
-        return D2D1::Point2F(box.left + ((box.right - box.left - content.width) / 2.0f), box.top + padding);
+        return D2D1::Point2F(box.left + insets.left + ((box.right - box.left - insets.left - insets.right - content.width) / 2.0f), box.top + insets.top);
     }
 
     // Every entry of every section, each group's members right after it.
@@ -344,15 +354,16 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .classes      = std::move(classes),
                          .brushes      = _brushes.get(),
                          .axis         = AxisOf(_config.bar.edge),
-                         .boxCrossDips = BoxCrossLength()};
+                         .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, AxisOf(_config.bar.edge)))};
 }
 
-// A module box spans the bar's thickness less the sections' margin and padding on both sides.
+// A module box spans the bar's thickness less the sections' margin and insets on both sides.
 float Bar::BoxCrossLength() const {
     const Axis          axis      = AxisOf(_config.bar.edge);
     const SectionStyle& section   = _config.style.section;
     const float         thickness = CrossLength(_surface->Context()->GetSize(), axis);
-    return thickness - (2.0f * CrossOf(section.margin, axis)) - (2.0f * CrossOf(section.box.padding, axis));
+    const EndInsets     insets    = CrossInsets(section.box, axis);
+    return thickness - (2.0f * CrossOf(section.margin, axis)) - insets.start - insets.end;
 }
 
 bool Bar::DeviceLost() const {
@@ -409,25 +420,28 @@ bool Bar::LayOutModules() {
     return changed;
 }
 
-// Each module's box along the bar: what it draws plus its padding on both sides. A module showing nothing, such as a
-// battery module with no battery, takes no room at all.
+// Each module's room along the bar: what it draws plus its insets and margin at both ends. A module showing nothing,
+// such as a battery module with no battery, takes no room at all.
 std::vector<float> Bar::BoxLengths(const std::vector<ModuleEntry>& entries) const {
+    const Axis         axis = AxisOf(_config.bar.edge);
     std::vector<float> lengths;
     lengths.reserve(entries.size());
     for (const ModuleEntry& entry : entries) {
+        const float margin = 2.0f * MainOf(entry.style.margin, axis);
         if (entry.group != nullptr) {
-            lengths.push_back(ArrangeMembers(entry, BoxLengths(entry.members)).length);
+            lengths.push_back(ArrangeMembers(entry, BoxLengths(entry.members)).length + margin);
             continue;
         }
-        const float content = MainLength(entry.module->Size(), AxisOf(_config.bar.edge));
-        lengths.push_back(content > 0.0f ? content + (2.0f * MainOf(entry.style.box.padding, AxisOf(_config.bar.edge))) : 0.0f);
+        const float     content = MainLength(entry.module->Size(), axis);
+        const EndInsets insets  = MainInsets(entry.style.box, axis);
+        lengths.push_back(content > 0.0f ? content + insets.start + insets.end + margin : 0.0f);
     }
     return lengths;
 }
 
 GroupLayout Bar::ArrangeMembers(const ModuleEntry& entry, const std::vector<float>& memberLengths) const {
     const Axis axis = AxisOf(_config.bar.edge);
-    return ArrangeGroup(MainLength(entry.module->Size(), axis), memberLengths, entry.group->Revealed(), MainOf(entry.style.box.padding, axis));
+    return ArrangeGroup(MainLength(entry.module->Size(), axis), memberLengths, entry.group->Revealed(), MainInsets(entry.style.box, axis));
 }
 
 void Bar::Draw() {
@@ -435,7 +449,7 @@ void Bar::Draw() {
     const Sections<float>       lengths{.left = BoxLengths(_modules.left), .center = BoxLengths(_modules.center), .right = BoxLengths(_modules.right)};
     const Axis                  axis    = AxisOf(_config.bar.edge);
     const SectionStyle&         section = _config.style.section;
-    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), axis), MainOf(section.margin, axis), MainOf(section.box.padding, axis));
+    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), axis), MainOf(section.margin, axis), MainInsets(section.box, axis));
     const Sections<PlacedEntry> placed{.left   = PlaceSection(_modules.left, lengths.left, layout.left),
                                        .center = PlaceSection(_modules.center, lengths.center, layout.center),
                                        .right  = PlaceSection(_modules.right, lengths.right, layout.right)};
@@ -490,13 +504,20 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
     }
 }
 
-// The entry's box from start along the bar, spanning across it as every module's box does.
+// The entry's box from start along the bar, spanning across it as every module's box does, less its margin.
 Bar::HitBox Bar::PlaceBox(const ModuleEntry& entry, float start, float length) const {
     const Axis          axis     = AxisOf(_config.bar.edge);
     const SectionStyle& style    = _config.style.section;
-    const float         boxStart = CrossOf(style.margin, axis) + CrossOf(style.box.padding, axis);
-    const D2D1_RECT_F   box      = MainCrossRect(axis, start, length, boxStart, BoxCrossLength());
-    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(axis, box, MainOf(entry.style.box.padding, axis), entry.module->Size())};
+    const float         margin   = CrossOf(entry.style.margin, axis);
+    const float         boxStart = CrossOf(style.margin, axis) + CrossInsets(style.box, axis).start + margin;
+    const D2D1_RECT_F   box      = MainCrossRect(axis, start, length, boxStart, BoxCrossLength() - (2.0f * margin));
+    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(axis, box, ContentInsets(entry.style.box), entry.module->Size())};
+}
+
+// The entry's box within the room BoxLengths gave it, past its margin at both ends.
+Bar::HitBox Bar::PlaceInRoom(const ModuleEntry& entry, float start, float length) const {
+    const float margin = MainOf(entry.style.margin, AxisOf(_config.bar.edge));
+    return PlaceBox(entry, start + margin, length - (2.0f * margin));
 }
 
 std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const {
@@ -507,15 +528,15 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
     placed.reserve(entries.size());
     for (size_t index = 0; index < entries.size(); ++index) {
         const ModuleEntry& entry = entries[index];
-        const float        start = layout.offsets[index];
-        PlacedEntry        one{.entry = &entry, .box = PlaceBox(entry, start, lengths[index]), .toggle = {}, .members = {}, .shown = {}};
+        PlacedEntry        one{.entry = &entry, .box = PlaceInRoom(entry, layout.offsets[index], lengths[index]), .toggle = {}, .members = {}, .shown = {}};
         if (entry.group != nullptr) {
+            const float              start         = layout.offsets[index] + MainOf(entry.style.margin, AxisOf(_config.bar.edge));
             const std::vector<float> memberLengths = BoxLengths(entry.members);
             const GroupLayout        group         = ArrangeMembers(entry, memberLengths);
             one.toggle                             = PlaceBox(entry, start, group.toggleLength).bounds;
             one.shown                              = PlaceBox(entry, start + group.shownStart, group.shownLength).bounds;
             for (size_t member = 0; member < entry.members.size(); ++member) {
-                one.members.push_back(PlaceBox(entry.members[member], start + group.offsets[member], memberLengths[member]));
+                one.members.push_back(PlaceInRoom(entry.members[member], start + group.offsets[member], memberLengths[member]));
             }
         }
         placed.push_back(std::move(one));
