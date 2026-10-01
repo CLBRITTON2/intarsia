@@ -4,6 +4,7 @@
 #include "TestStyle.hpp"
 #include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
+#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
@@ -40,17 +41,10 @@ namespace {
 
     class WindowListModule : public testing::Test {
       public:
-        WindowListModule() :
-            _target(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr)), _changes(_target, WM_APP + 1),
-            _icons(_changes, std::chrono::milliseconds(10000)) {}
-        ~WindowListModule() override {
-            DestroyWindow(_target);
-        }
-        WindowListModule(const WindowListModule&)            = delete;
-        WindowListModule& operator=(const WindowListModule&) = delete;
+        WindowListModule() : _changes(_target.Get(), WM_APP + 1), _icons(_changes, std::chrono::milliseconds(10000)) {}
 
       protected:
-        HWND              _target;
+        MessageWindow     _target;
         ChangeSignal      _changes;
         WindowIcons       _icons;
         FakeWindowManager _windowManager;
@@ -89,9 +83,9 @@ TEST_F(WindowListModule, SizeCoversEveryPaddedIconAndTheGapsBetween) {
 
 // The icon's pixels go up to the GPU as a bitmap and draw: a real device, a real window's icon.
 TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
-    HWND iconWindow = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
-    SendMessageW(iconWindow, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
-    _windowManager.windows = {{.id = "a", .handle = reinterpret_cast<std::intptr_t>(iconWindow), .focused = true, .monitor = 10}};
+    const MessageWindow iconWindow;
+    SendMessageW(iconWindow.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
+    _windowManager.windows = {{.id = "a", .handle = reinterpret_cast<std::intptr_t>(iconWindow.Get()), .focused = true, .monitor = 10}};
 
     const GraphicsDevice                       graphics = CreateGraphicsDevice();
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
@@ -124,5 +118,4 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     context->BeginDraw();
     module.Draw(render, D2D1::Point2F(0.0f, 0.0f));
     EXPECT_TRUE(SUCCEEDED(context->EndDraw()));
-    DestroyWindow(iconWindow);
 }

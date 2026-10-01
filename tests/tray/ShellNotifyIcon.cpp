@@ -2,6 +2,9 @@
 
 #include "platform/AppBar.hpp"
 #include "platform/Win32Cast.hpp"
+#include "support/Eventually.hpp"
+#include "support/MessageWindow.hpp"
+#include "support/TrayPayload.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 
 #include <shellapi.h>
@@ -27,24 +30,9 @@ namespace {
     constexpr std::uint32_t kFailed      = WM_APP + 2;
     constexpr std::uint32_t kCallback    = WM_APP + 9;
 
-    HWND                    MessageWindow() {
-        return CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
-    }
-
-    std::uint32_t Handle32(const void* handle) {
-        return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(handle));
-    }
-
-    std::vector<std::byte> AddPayload(HWND owner, std::uint32_t id, HICON icon) {
-        TrayNotifyData data{};
-        data.signature            = kTrayNotifySignature;
-        data.command              = NIM_ADD;
-        data.data.size            = sizeof(NotifyIconData32);
-        data.data.window          = Handle32(owner);
-        data.data.id              = id;
-        data.data.flags           = NIF_MESSAGE | NIF_TIP | (icon != nullptr ? NIF_ICON : 0);
-        data.data.callbackMessage = kCallback;
-        data.data.icon            = Handle32(icon);
+    std::vector<std::byte>  AddPayload(HWND owner, std::uint32_t id, HICON icon) {
+        TrayNotifyData data = NotifyData(NIM_ADD, Handle32(owner), id, NIF_MESSAGE | NIF_TIP | (icon != nullptr ? NIF_ICON : 0), kCallback);
+        data.data.icon      = Handle32(icon);
         std::memcpy(data.data.tip.data(), L"tip", sizeof(L"tip"));
         std::vector<std::byte> bytes(sizeof(data));
         std::memcpy(bytes.data(), &data, sizeof(data));
@@ -58,30 +46,13 @@ namespace {
         return static_cast<LRESULT>(result);
     }
 
-    bool Eventually(const std::function<bool()>& condition, std::chrono::milliseconds limit) {
-        const auto deadline = std::chrono::steady_clock::now() + limit;
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (condition()) {
-                return true;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-        return condition();
-    }
-
     class ShellNotifyIconTray : public testing::Test {
       public:
-        ShellNotifyIconTray() : _target(MessageWindow()), _owner(MessageWindow()), _changes(_target, kChanged), _tray(_changes, kTestClass, _target, kFailed) {}
-        ~ShellNotifyIconTray() override {
-            DestroyWindow(_owner);
-            DestroyWindow(_target);
-        }
-        ShellNotifyIconTray(const ShellNotifyIconTray&)            = delete;
-        ShellNotifyIconTray& operator=(const ShellNotifyIconTray&) = delete;
+        ShellNotifyIconTray() : _changes(_target.Get(), kChanged), _tray(_changes, kTestClass, _target.Get(), kFailed) {}
 
       protected:
-        HWND            _target;
-        HWND            _owner;
+        MessageWindow   _target;
+        MessageWindow   _owner;
         ChangeSignal    _changes;
         ShellNotifyIcon _tray;
         HWND            _window = FindWindowW(kTestClass, nullptr);
@@ -239,7 +210,7 @@ TEST(ShellNotifyIcon, Shell32ReadsAnIconRectAboveThePrimaryMonitor) {
 }
 
 TEST_F(ShellNotifyIconTray, AnIconHandleThatDoesNotReadLeavesTheIconWithoutPixels) {
-    std::vector<std::byte> add = AddPayload(_owner, 1, IntToPointer<std::remove_pointer_t<HICON>>(0x7FFF1234));
+    std::vector<std::byte> add = AddPayload(_owner.Get(), 1, IntToPointer<std::remove_pointer_t<HICON>>(0x7FFF1234));
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, add), TRUE);
     ASSERT_EQ(_tray.Icons().size(), 1u);
     EXPECT_EQ(_tray.Icons()[0].pixels, nullptr);
@@ -248,7 +219,7 @@ TEST_F(ShellNotifyIconTray, AnIconHandleThatDoesNotReadLeavesTheIconWithoutPixel
 TEST_F(ShellNotifyIconTray, MalformedMessagesAreRefusedAndTheTrayKeepsWorking) {
     std::vector<std::byte> tooShort(100);
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, tooShort), FALSE);
-    std::vector<std::byte> wrongSignature = AddPayload(_owner, 1, nullptr);
+    std::vector<std::byte> wrongSignature = AddPayload(_owner.Get(), 1, nullptr);
     wrongSignature[0]                     = std::byte{0};
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, wrongSignature), FALSE);
     std::vector<std::byte> empty;
@@ -258,7 +229,7 @@ TEST_F(ShellNotifyIconTray, MalformedMessagesAreRefusedAndTheTrayKeepsWorking) {
     EXPECT_EQ(Send(_window, kIconRectCopyData, shortQuery), 0);
     EXPECT_TRUE(_tray.Icons().empty());
 
-    std::vector<std::byte> add = AddPayload(_owner, 1, nullptr);
+    std::vector<std::byte> add = AddPayload(_owner.Get(), 1, nullptr);
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, add), TRUE);
     EXPECT_EQ(_tray.Icons().size(), 1u);
 }

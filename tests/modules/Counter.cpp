@@ -1,11 +1,12 @@
 #include "modules/Counter.hpp"
+#include "support/Eventually.hpp"
+#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <optional>
 #include <string>
-#include <thread>
 #include <utility>
 
 namespace {
@@ -20,16 +21,11 @@ namespace {
 
     class CounterModule : public testing::Test {
       public:
-        CounterModule() : _target(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr)), _changes(_target, kChanged) {}
-        ~CounterModule() override {
-            DestroyWindow(_target);
-        }
-        CounterModule(const CounterModule&)            = delete;
-        CounterModule& operator=(const CounterModule&) = delete;
+        CounterModule() : _changes(_target.Get(), kChanged) {}
 
       protected:
-        HWND         _target;
-        ChangeSignal _changes;
+        MessageWindow _target;
+        ChangeSignal  _changes;
     };
 
 } // namespace
@@ -50,10 +46,7 @@ TEST_F(CounterModule, AFailingCounterShowsTheReasonAsItsTooltip) {
     const CounterConfig  config = WithFormat(L"\\No Such Object\\Nothing", "{value}");
     const CounterSampler sampler("gone", config, _changes);
     Counter              module(config, sampler);
-    const auto           deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (sampler.Reading().outcome != CounterOutcome::Failed && std::chrono::steady_clock::now() < deadline) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
+    EXPECT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Failed; }, std::chrono::seconds(2)));
     const std::optional<std::wstring> tooltip = module.TooltipText();
     ASSERT_TRUE(tooltip.has_value());
     EXPECT_NE(tooltip.value_or(L"").find(L"PdhAddEnglishCounterW"), std::wstring::npos);

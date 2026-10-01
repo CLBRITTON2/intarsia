@@ -2,6 +2,7 @@
 
 #include "Harness.hpp"
 #include "platform/Errors.hpp"
+#include "support/TrayPayload.hpp"
 
 #include <shellapi.h>
 
@@ -20,11 +21,7 @@ namespace integration {
         constexpr std::uint32_t kIconSide     = 16;
         constexpr std::uint32_t kAnswerMs     = 5000;
 
-        std::uint32_t           Handle32(const void* handle) {
-            return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(handle));
-        }
-
-        LRESULT CALLBACK OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+        LRESULT CALLBACK        OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             if (message == kCallback) {
                 auto* received = reinterpret_cast<std::vector<TrayInputMessage>*>(GetWindowLongPtrW(window, GWLP_USERDATA)); // NOLINT(performance-no-int-to-ptr)
                 if (received != nullptr) {
@@ -181,19 +178,12 @@ namespace integration {
         if (rgb.has_value()) {
             icon.emplace(*rgb);
         }
-        TrayNotifyData message{};
-        message.signature            = kTrayNotifySignature;
-        message.command              = command;
-        message.data.size            = sizeof(NotifyIconData32);
-        message.data.window          = Handle32(_owner);
-        message.data.id              = _id;
-        message.data.flags           = flags;
-        message.data.callbackMessage = kCallback;
-        message.data.icon            = icon.has_value() ? Handle32(icon->Get()) : 0;
-        message.data.version         = _version;
-        LRESULT    answer            = FALSE;
-        const bool answered          = Send(kNotifyIconCopyData, &message, sizeof(message), answer);
-        const bool taken             = answered && answer != FALSE;
+        TrayNotifyData message = NotifyData(command, Handle32(_owner), _id, flags, kCallback);
+        message.data.icon      = icon.has_value() ? Handle32(icon->Get()) : 0;
+        message.data.version   = _version;
+        LRESULT    answer      = FALSE;
+        const bool answered    = Send(kNotifyIconCopyData, &message, sizeof(message), answer);
+        const bool taken       = answered && answer != FALSE;
         Log("tray_sent",
             std::format("command={} id={} version={} color={} taken={}", CommandName(command), _id, _version, rgb.has_value() ? std::format("#{:06x}", *rgb) : std::string("none"),
                         taken));

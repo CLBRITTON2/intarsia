@@ -1,4 +1,5 @@
 #include "tray/NotifyIconProtocol.hpp"
+#include "support/TrayPayload.hpp"
 
 #include <shellapi.h>
 
@@ -26,25 +27,14 @@ namespace {
     constexpr std::wstring_view kAppImage   = L"C:\\Program Files\\App\\app.exe";
     constexpr std::wstring_view kOtherImage = L"C:\\Users\\someone\\other.exe";
 
-    TrayNotifyData              Data(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags) {
-        TrayNotifyData data{};
-        data.signature   = kTrayNotifySignature;
-        data.command     = command;
-        data.data.size   = sizeof(NotifyIconData32);
-        data.data.window = owner;
-        data.data.id     = id;
-        data.data.flags  = flags;
-        return data;
-    }
-
-    std::vector<std::byte> Bytes(const TrayNotifyData& data, size_t size) {
+    std::vector<std::byte>      Bytes(const TrayNotifyData& data, size_t size) {
         std::vector<std::byte> bytes(size);
         std::memcpy(bytes.data(), &data, std::min(size, sizeof(data)));
         return bytes;
     }
 
     NotifyIconMessage Message(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags) {
-        return ParseNotifyIconMessage(Bytes(Data(command, owner, id, flags), kSentBytes));
+        return ParseNotifyIconMessage(Bytes(NotifyData(command, owner, id, flags, 0), kSentBytes));
     }
 
     std::shared_ptr<const IconPixels> Pixels(std::uint8_t value) {
@@ -96,7 +86,7 @@ namespace {
 } // namespace
 
 TEST(NotifyIconProtocol, ParseSignExtendsHandlesAsWindowsDoes) {
-    TrayNotifyData data             = Data(NIM_ADD, 0xFFFF1234, 1, 0);
+    TrayNotifyData data             = NotifyData(NIM_ADD, 0xFFFF1234, 1, 0, 0);
     data.data.icon                  = 0x80000001;
     const NotifyIconMessage message = ParseNotifyIconMessage(Bytes(data, sizeof(data)));
     EXPECT_EQ(message.owner, static_cast<std::intptr_t>(static_cast<std::int32_t>(0xFFFF1234)));
@@ -104,7 +94,7 @@ TEST(NotifyIconProtocol, ParseSignExtendsHandlesAsWindowsDoes) {
 }
 
 TEST(NotifyIconProtocol, ATipWithNoNullStopsAtItsBuffer) {
-    TrayNotifyData data = Data(NIM_ADD, 1, 1, NIF_TIP);
+    TrayNotifyData data = NotifyData(NIM_ADD, 1, 1, NIF_TIP, 0);
     data.data.tip.fill(L'x');
     data.data.state = 0xFFFFFFFF;
     EXPECT_EQ(ParseNotifyIconMessage(Bytes(data, kSentBytes)).tip, std::wstring(128, L'x'));

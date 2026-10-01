@@ -1,4 +1,5 @@
 #include "platform/ThreadFailure.hpp"
+#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
@@ -33,24 +34,22 @@ namespace {
 
 // A worker that fails again while stopping must not replace the cause the UI thread ends the process with.
 TEST(ThreadFailure, KeepsAndPostsOnlyTheFirstError) {
-    HWND          target = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
-    ThreadFailure failure(target, kFailed, "test");
+    const MessageWindow target;
+    ThreadFailure       failure(target.Get(), kFailed, "test");
 
     failure.Report(std::make_exception_ptr(std::runtime_error("first")));
     failure.Report(std::make_exception_ptr(std::runtime_error("second")));
-    EXPECT_EQ(QueuedFailures(target), 1);
+    EXPECT_EQ(QueuedFailures(target.Get()), 1);
     EXPECT_EQ(RethrownMessage(failure), "first");
-    DestroyWindow(target);
 }
 
 // Any process can post the message, so one with nothing reported behind it returns instead of throwing.
 TEST(ThreadFailure, AMessageWithNothingReportedDoesNotThrow) {
-    HWND          target = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
-    ThreadFailure failure(target, kFailed, "test");
+    const MessageWindow target;
+    ThreadFailure       failure(target.Get(), kFailed, "test");
 
     EXPECT_NO_THROW(failure.RethrowReported());
     failure.Report(std::make_exception_ptr(std::runtime_error("first")));
     EXPECT_EQ(RethrownMessage(failure), "first");
     EXPECT_NO_THROW(failure.RethrowReported());
-    DestroyWindow(target);
 }

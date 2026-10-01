@@ -1,10 +1,10 @@
 #include "modules/CounterSampler.hpp"
+#include "support/Eventually.hpp"
+#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <functional>
-#include <thread>
 #include <vector>
 
 namespace {
@@ -17,29 +17,13 @@ namespace {
                                        .text    = TextModuleConfig{.format = "{value}", .tooltip = std::nullopt, .icon = {}, .interval = std::chrono::seconds(1), .actions = {}}};
     }
 
-    bool Eventually(const std::function<bool()>& condition, std::chrono::milliseconds limit) {
-        const auto deadline = std::chrono::steady_clock::now() + limit;
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (condition()) {
-                return true;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-        return condition();
-    }
-
     class Sampler : public testing::Test {
       public:
-        Sampler() : _target(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr)), _changes(_target, kChanged) {}
-        ~Sampler() override {
-            DestroyWindow(_target);
-        }
-        Sampler(const Sampler&)            = delete;
-        Sampler& operator=(const Sampler&) = delete;
+        Sampler() : _changes(_target.Get(), kChanged) {}
 
       protected:
-        HWND         _target;
-        ChangeSignal _changes;
+        MessageWindow _target;
+        ChangeSignal  _changes;
     };
 
 } // namespace
@@ -63,5 +47,5 @@ TEST_F(Sampler, AStartedSamplerReadsTheCounterAfterOneInterval) {
     EXPECT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Sampled; }, std::chrono::seconds(3)));
     EXPECT_GE(sampler.Reading().value, 0.0);
     MSG message{};
-    EXPECT_TRUE(PeekMessageW(&message, _target, kChanged, kChanged, PM_REMOVE));
+    EXPECT_TRUE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
 }

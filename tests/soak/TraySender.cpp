@@ -7,6 +7,7 @@
 //   tray_sender.exe --class <window class the bar's tray registered, from --tray-class>
 
 #include "tray/NotifyIconProtocol.hpp"
+#include "support/TrayPayload.hpp"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -56,10 +57,6 @@ namespace {
         return argv[2];
     }
 
-    std::uint32_t Handle32(const void* handle) {
-        return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(handle));
-    }
-
     HWND FindTray(const std::wstring& windowClass) {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         while (std::chrono::steady_clock::now() < deadline) {
@@ -107,17 +104,6 @@ namespace {
         }
     }
 
-    TrayNotifyData Notify(std::uint32_t command, HWND owner, std::uint32_t id) {
-        TrayNotifyData data{};
-        data.signature            = kTrayNotifySignature;
-        data.command              = command;
-        data.data.size            = sizeof(NotifyIconData32);
-        data.data.window          = Handle32(owner);
-        data.data.id              = id;
-        data.data.callbackMessage = kCallback;
-        return data;
-    }
-
     void SetTip(TrayNotifyData& data, const std::wstring& tip) {
         std::memcpy(data.data.tip.data(), tip.data(), std::min(tip.size(), data.data.tip.size() - 1) * sizeof(wchar_t));
     }
@@ -139,7 +125,7 @@ namespace {
     // An add or an icon change, with pixels the tray has not seen. The tray reads them while the send waits, as
     // Explorer does, so the icon can go right after.
     bool SendIcon(HWND tray, HWND owner, std::uint32_t command, std::uint32_t id, std::mt19937& random) {
-        TrayNotifyData data = Notify(command, owner, id);
+        TrayNotifyData data = NotifyData(command, Handle32(owner), id, 0, kCallback);
         HICON          icon = CreateSolidIcon(static_cast<std::uint32_t>(random()));
         data.data.flags     = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         data.data.icon      = Handle32(icon);
@@ -159,21 +145,21 @@ namespace {
             case 2: return SendIcon(tray, owner, NIM_MODIFY, id, random);
             case 3:
             case 4: {
-                TrayNotifyData data = Notify(NIM_MODIFY, owner, id);
+                TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kCallback);
                 data.data.flags     = NIF_TIP | NIF_SHOWTIP;
                 SetTip(data, AppTip(random));
                 return Send(tray, owner, data);
             }
             case 5: {
-                TrayNotifyData data = Notify(NIM_MODIFY, owner, id);
+                TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kCallback);
                 data.data.flags     = NIF_STATE;
                 data.data.state     = (random() % 2) == 0 ? static_cast<std::uint32_t>(NIS_HIDDEN) : 0u;
                 data.data.stateMask = static_cast<std::uint32_t>(NIS_HIDDEN);
                 return Send(tray, owner, data);
             }
-            case 6: return Send(tray, owner, Notify(NIM_DELETE, owner, id));
+            case 6: return Send(tray, owner, NotifyData(NIM_DELETE, Handle32(owner), id, 0, kCallback));
             default: {
-                TrayNotifyData data = Notify(NIM_SETVERSION, owner, id);
+                TrayNotifyData data = NotifyData(NIM_SETVERSION, Handle32(owner), id, 0, kCallback);
                 data.data.version   = (random() % 2) == 0 ? NOTIFYICON_VERSION_4 : NOTIFYICON_VERSION;
                 return Send(tray, owner, data);
             }

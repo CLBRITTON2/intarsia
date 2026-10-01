@@ -204,6 +204,7 @@ if(BUILD_TESTING)
   )
   # Winsock, BCrypt and CryptoAPI play the far end of a loopback connection in the WebSocket and peer tests.
   target_link_libraries(intarsia_gtests PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
+  target_include_directories(intarsia_gtests PRIVATE tests)
   target_compile_definitions(intarsia_gtests PRIVATE INTARSIA_WINDOWS_CONFIG="${CMAKE_SOURCE_DIR}/config/windows/config.lua"
                                                      INTARSIA_GLAZEWM_CONFIG="${CMAKE_SOURCE_DIR}/config/glazewm/config.lua"
                                                      INTARSIA_PIPE_HOLDER="$<TARGET_FILE:test_pipe_holder>")
@@ -219,6 +220,7 @@ if(BUILD_TESTING)
   add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
                                       tests/integration/GlazeWm.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp tests/integration/TrayApp.cpp)
   target_link_libraries(intarsia_integration PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
+  target_include_directories(intarsia_integration PRIVATE tests)
   target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:test_glazewm_server>"
                                                           INTARSIA_ARGV_RECORDER="$<TARGET_FILE:integration_argv_recorder>")
   add_dependencies(intarsia_integration intarsia test_glazewm_server integration_argv_recorder)
@@ -248,6 +250,7 @@ if(BUILD_TESTING)
   add_executable(soak_tray_sender tests/soak/TraySender.cpp)
   set_target_properties(soak_tray_sender PROPERTIES OUTPUT_NAME tray_sender)
   target_link_libraries(soak_tray_sender PRIVATE intarsia_core)
+  target_include_directories(soak_tray_sender PRIVATE tests)
 
   # The soak tests' foreground window, retitled as a terminal showing progress retitles itself.
   add_executable(soak_window_sender tests/soak/WindowSender.cpp)
