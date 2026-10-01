@@ -72,8 +72,9 @@ namespace {
         // A sequence of strings such as { "clock", "cpu" }.
         std::vector<std::string> StringList(std::string_view key) const {
             PushField(key, LUA_TTABLE, "a list of strings");
-            const std::int32_t       listIndex = lua_gettop(_lua);
-            const auto               length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+            const std::int32_t listIndex = lua_gettop(_lua);
+            const auto         length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+            RequirePlainList(listIndex, key, length);
             std::vector<std::string> values;
             values.reserve(static_cast<size_t>(length));
             for (lua_Integer position = 1; position <= length; ++position) {
@@ -83,7 +84,6 @@ namespace {
                 values.push_back(StringAt(-1));
                 lua_pop(_lua, 1);
             }
-            RequirePlainList(listIndex, key, length);
             lua_pop(_lua, 1);
             return values;
         }
@@ -91,8 +91,9 @@ namespace {
         // A sequence of tables such as { { min_length = 1921 } }, each read as layouts[1] and so on.
         std::vector<TableReader> TableList(std::string_view key) const {
             PushField(key, LUA_TTABLE, "a list of tables");
-            const std::int32_t       listIndex = lua_gettop(_lua);
-            const auto               length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+            const std::int32_t listIndex = lua_gettop(_lua);
+            const auto         length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+            RequirePlainList(listIndex, key, length);
             std::vector<TableReader> entries;
             entries.reserve(static_cast<size_t>(length));
             for (lua_Integer position = 1; position <= length; ++position) {
@@ -102,7 +103,6 @@ namespace {
                 }
                 entries.emplace_back(_lua, lua_gettop(_lua), _source, std::format("{}[{}]", KeyPath(key), position));
             }
-            RequirePlainList(listIndex, key, length);
             return entries;
         }
 
@@ -436,12 +436,18 @@ namespace {
         return WindowManagerCommand{.text = std::move(text)};
     }
 
+    // on_select gets an id from command output as its last argument. cmd.exe parses its whole command line as shell
+    // syntax under rules no quoting of that id can satisfy, so an id such as "a&calc" would run calc.
     MenuAction ReadMenuAction(const TableReader& action) {
         action.RejectUnknownKeys({"menu"});
         const TableReader menu = action.Table("menu");
         menu.RejectUnknownKeys({"command", "timeout", "on_select"});
-        return MenuAction{
-            .command = ReadCommand(menu, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(menu, "timeout")), .onSelect = ReadCommand(menu, "on_select")};
+        MenuAction read{.command = ReadCommand(menu, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(menu, "timeout")), .onSelect = ReadCommand(menu, "on_select")};
+        if (SameFileName(read.onSelect.program.filename().wstring(), L"cmd.exe")) {
+            throw menu.Error(
+                std::format("{} may not run cmd.exe, which would read the picked id as shell syntax: name an .exe that takes it as an argument", menu.KeyPath("on_select")));
+        }
+        return read;
     }
 
     // { window_manager = "..." } sends the window manager a command, { menu = {...} } opens a menu, and a list starts a

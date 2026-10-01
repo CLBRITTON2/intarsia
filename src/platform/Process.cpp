@@ -5,7 +5,9 @@
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
+#include "platform/Token.hpp"
 
+#include <sddl.h>
 #include <shellapi.h>
 
 #include <array>
@@ -144,16 +146,35 @@ namespace {
         UniqueHandle write;
     };
 
+    // Only this user, at medium integrity or above, may open the pipe. Its name is predictable and it has one instance,
+    // so the default descriptor (read for everyone) lets any process take it before this one opens the write end.
+    UniqueReleased<HLOCAL, &LocalFree> OwnerOnlyDescriptor() {
+        std::vector<std::byte> user   = TokenBuffer(GetCurrentProcessToken(), TokenUser, "TokenUser");
+        LPWSTR                 rawSid = nullptr;
+        if (!ConvertSidToStringSidW(UserSid(user), &rawSid)) {
+            ThrowLastError("ConvertSidToStringSidW");
+        }
+        const UniqueReleased<HLOCAL, &LocalFree> sid(static_cast<HLOCAL>(rawSid));
+        const std::wstring                       sddl       = std::format(L"D:P(A;;GA;;;{})S:(ML;;NWNR;;;ME)", rawSid);
+        PSECURITY_DESCRIPTOR                     descriptor = nullptr;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &descriptor, nullptr)) {
+            ThrowLastError("ConvertStringSecurityDescriptorToSecurityDescriptorW(command output)");
+        }
+        return UniqueReleased<HLOCAL, &LocalFree>(static_cast<HLOCAL>(descriptor));
+    }
+
     // A named pipe rather than CreatePipe's, whose read end cannot be overlapped, so a read can be abandoned while a
     // process outside the job still holds the write end. The write end is inheritable, for the child's stdout. The
     // read end stays with this process.
     Pipe OutputPipe() {
-        static std::atomic<std::uint64_t> created{0};
-        const std::wstring                name = std::format(L"\\\\.\\pipe\\intarsia-command-{}-{}", GetCurrentProcessId(), created.fetch_add(1));
-        UniqueHandle                      read = OwnHandle(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
-                                                                            PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, 4096, 0, nullptr),
-                                                           "CreateNamedPipeW(command output)");
-        SECURITY_ATTRIBUTES               inheritable{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
+        static std::atomic<std::uint64_t>        created{0};
+        const std::wstring                       name       = std::format(L"\\\\.\\pipe\\intarsia-command-{}-{}", GetCurrentProcessId(), created.fetch_add(1));
+        const UniqueReleased<HLOCAL, &LocalFree> descriptor = OwnerOnlyDescriptor();
+        SECURITY_ATTRIBUTES                      ownerOnly{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = descriptor.get(), .bInheritHandle = FALSE};
+        UniqueHandle                             read = OwnHandle(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                                                                   PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, 4096, 0, &ownerOnly),
+                                                                  "CreateNamedPipeW(command output)");
+        SECURITY_ATTRIBUTES                      inheritable{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
         UniqueHandle write = OwnHandle(CreateFileW(name.c_str(), GENERIC_WRITE, 0, &inheritable, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr), "CreateFileW(command output)");
         return Pipe{.read = std::move(read), .write = std::move(write)};
     }

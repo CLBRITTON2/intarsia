@@ -18,6 +18,10 @@ std::vector<std::byte> TokenBuffer(HANDLE token, TOKEN_INFORMATION_CLASS kind, s
     return buffer;
 }
 
+PSID UserSid(std::vector<std::byte>& tokenUser) {
+    return reinterpret_cast<TOKEN_USER*>(tokenUser.data())->User.Sid;
+}
+
 std::uint32_t IntegrityLevel(HANDLE token) {
     std::vector<std::byte> label = TokenBuffer(token, TokenIntegrityLevel, "TokenIntegrityLevel");
     PSID                   sid   = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(label.data())->Label.Sid;

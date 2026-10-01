@@ -43,10 +43,6 @@ namespace {
         throw PeerVerificationError("GetExtendedTcpTable kept growing past its reported size");
     }
 
-    PSID UserSid(std::vector<std::byte>& tokenUser) {
-        return reinterpret_cast<TOKEN_USER*>(tokenUser.data())->User.Sid;
-    }
-
 } // namespace
 
 std::uint32_t LoopbackPeerProcess(std::uint16_t clientPort, std::uint16_t serverPort) {

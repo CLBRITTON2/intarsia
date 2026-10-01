@@ -503,14 +503,14 @@ TEST(Config, WindowManagerActionsSendTheirTextAsWritten) {
 
 TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
     const Config         config  = LoadText(Replace(kValidConfig, "interval = 60 }",
-                                                    R"(interval = 60, on_click = { menu = { command = { "cmd", "/c", "list" }, timeout = 5, on_select = { "cmd", "/c", "pick" } } } })"));
+                                                    R"(interval = 60, on_click = { menu = { command = { "cmd", "/c", "list" }, timeout = 5, on_select = { "explorer", "/select" } } } })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.click.has_value());
     const MenuAction& menu = std::get<MenuAction>(*actions.click);
     EXPECT_TRUE(menu.command.program.is_absolute());
     EXPECT_EQ(menu.command.arguments, (std::vector<std::wstring>{L"/c", L"list"}));
     EXPECT_EQ(menu.timeout, std::chrono::seconds(5));
-    EXPECT_EQ(menu.onSelect.arguments, (std::vector<std::wstring>{L"/c", L"pick"}));
+    EXPECT_EQ(menu.onSelect.arguments, (std::vector<std::wstring>{L"/select"}));
 
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5 } } })")); },
                 ConfigErrorWith("on_select"));
@@ -528,6 +528,12 @@ TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
                 Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd" } }, extra = 1 } })"));
         },
         ConfigErrorWith("modules.time.on_click.extra is not a known key"));
+    EXPECT_THAT(
+        [] {
+            return LoadText(
+                Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd", "/c", "pick" } } } })"));
+        },
+        ConfigErrorWith("modules.time.on_click.menu.on_select may not run cmd.exe"));
 }
 
 TEST(Config, WindowManagerActionsNeedAWindowManagerThatTakesCommands) {

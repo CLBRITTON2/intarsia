@@ -48,7 +48,9 @@ return {
     -- on_select = {...} } } opens a menu of what command prints, as {"items":[{"id":"work","text":"Work",
     -- "active":true,"tooltip":"..."}]} with active and tooltip optional and {"separator":true} a blank line between
     -- entries. An entry's tooltip shows beside the menu while the cursor rests on it, and picking an entry runs
-    -- on_select with the entry's id as its last argument. An id may not start with - or /.
+    -- on_select with the entry's id as its last argument. An id may not start with - or /. on_select may not be
+    -- cmd.exe, which would read the id as shell syntax, and a pwsh on_select takes -File, never -Command, for the same
+    -- reason.
     --
     -- They also take an optional tooltip: a second format for the same value, shown while the cursor rests on the
     -- module. The workspaces module shows why the window manager is disconnected, with no key needed.
