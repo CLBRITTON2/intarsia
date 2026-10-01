@@ -6,6 +6,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
+#include "platform/Win32Window.hpp"
 #include "platform/WindowProc.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 #include "wm/WindowManagerFactory.hpp"
@@ -108,19 +109,8 @@ namespace {
     // Receives the worker threads' messages and survives the bars being rebuilt. A hidden top-level window rather than a
     // message-only one, because only top-level windows get the WM_DISPLAYCHANGE broadcast.
     HWND CreateControlWindow(HINSTANCE instance, void* owner, WNDPROC procedure) {
-        WNDCLASSEXW windowClass{};
-        windowClass.cbSize        = sizeof(windowClass);
-        windowClass.lpfnWndProc   = procedure;
-        windowClass.hInstance     = instance;
-        windowClass.lpszClassName = kControlClass;
-        if (RegisterClassExW(&windowClass) == 0) {
-            ThrowLastError("RegisterClassExW(control)");
-        }
-        HWND window = CreateWindowExW(WS_EX_TOOLWINDOW, kControlClass, L"intarsia control", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, owner);
-        if (window == nullptr) {
-            ThrowLastError("CreateWindowExW(control)");
-        }
-        return window;
+        RegisterWindowClass(instance, kControlClass, procedure, nullptr, "control");
+        return CreatePopupWindow(instance, kControlClass, L"intarsia control", WS_EX_TOOLWINDOW, owner, "control");
     }
 
 } // namespace
@@ -171,17 +161,13 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
         case kDeviceLost: HandleDeviceLost(); return 0;
         case kSourcesChanged:
             if (!_redrawPending) {
-                if (SetTimer(_control.get(), kRedrawTimer, kRedrawDelayMs, nullptr) == 0) {
-                    ThrowLastError("SetTimer(redraw)");
-                }
+                StartTimer(_control.get(), kRedrawTimer, kRedrawDelayMs, "redraw");
                 _redrawPending = true;
             }
             return 0;
         case WM_DISPLAYCHANGE:
             // Setting the timer again restarts it, so the rebuild waits for the last change in a burst.
-            if (SetTimer(_control.get(), kDisplaysTimer, kDisplaysSettleMs, nullptr) == 0) {
-                ThrowLastError("SetTimer(displays)");
-            }
+            StartTimer(_control.get(), kDisplaysTimer, kDisplaysSettleMs, "displays");
             return 0;
         case WM_TIMER:
             if (wParam == kRedrawTimer) {
@@ -261,9 +247,7 @@ void App::HandleConfigChanged() {
     } catch (const ConfigError& error) {
         Log(LogLevel::Warning, "app", "config_invalid", {{.key = "reason", .value = error.what()}, {.key = "fatal_in_ms", .value = std::to_string(kConfigConfirm.count())}});
         _configError = std::current_exception();
-        if (SetTimer(_control.get(), kConfigFailedTimer, static_cast<std::uint32_t>(kConfigConfirm.count()), nullptr) == 0) {
-            ThrowLastError("SetTimer(config failed)");
-        }
+        StartTimer(_control.get(), kConfigFailedTimer, static_cast<std::uint32_t>(kConfigConfirm.count()), "config failed");
     }
 }
 
@@ -345,9 +329,7 @@ void App::HandleDeviceLost() {
 
 void App::ScheduleDeviceRetry() {
     _recovering = true;
-    if (SetTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), nullptr) == 0) {
-        ThrowLastError("SetTimer(device)");
-    }
+    StartTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), "device");
 }
 
 // Creating the device fails while no adapter is ready, which waits longer and tries again.

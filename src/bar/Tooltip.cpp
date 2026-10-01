@@ -1,6 +1,7 @@
 #include "bar/Tooltip.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Win32Window.hpp"
 
 #include <cstdint>
 #include <algorithm>
@@ -32,15 +33,6 @@ namespace {
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
-    HWND CreateTooltipWindow(HINSTANCE instance) {
-        HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, kWindowClass, L"intarsia tooltip", WS_POPUP, 0, 0, 0, 0,
-                                      nullptr, nullptr, instance, nullptr);
-        if (window == nullptr) {
-            ThrowLastError("CreateWindowExW(tooltip)");
-        }
-        return window;
-    }
-
 } // namespace
 
 RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
@@ -65,19 +57,12 @@ RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
 }
 
 void Tooltip::RegisterWindowClass(HINSTANCE instance) {
-    WNDCLASSEXW windowClass{};
-    windowClass.cbSize        = sizeof(windowClass);
-    windowClass.lpfnWndProc   = TooltipWindowProc;
-    windowClass.hInstance     = instance;
-    windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-    windowClass.lpszClassName = kWindowClass;
-    if (RegisterClassExW(&windowClass) == 0) {
-        ThrowLastError("RegisterClassExW(tooltip)");
-    }
+    ::RegisterWindowClass(instance, kWindowClass, TooltipWindowProc, LoadCursorW(nullptr, IDC_ARROW), "tooltip");
 }
 
 Tooltip::Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat) :
-    _graphics(graphics), _config(config), _textFormat(textFormat), _window(CreateTooltipWindow(instance)) {}
+    _graphics(graphics), _config(config), _textFormat(textFormat),
+    _window(CreatePopupWindow(instance, kWindowClass, L"intarsia tooltip", WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, nullptr, "tooltip")) {}
 
 Tooltip::~Tooltip() {
     DestroyWindow(_window);

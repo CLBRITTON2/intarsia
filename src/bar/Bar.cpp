@@ -6,6 +6,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
+#include "platform/Win32Window.hpp"
 #include "platform/WindowProc.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 
@@ -181,12 +182,7 @@ namespace {
 
     HWND CreateBarWindow(HINSTANCE instance, void* owner) {
         // No activation so clicking the bar never steals focus from the tiled window.
-        HWND window =
-            CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP, kWindowClass, L"intarsia", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, owner);
-        if (window == nullptr) {
-            ThrowLastError("CreateWindowExW");
-        }
-        return window;
+        return CreatePopupWindow(instance, kWindowClass, L"intarsia", WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP, owner, "bar");
     }
 
 } // namespace
@@ -196,15 +192,7 @@ bool BarPlacement::operator==(const BarPlacement& other) const {
 }
 
 void Bar::RegisterWindowClass(HINSTANCE instance) {
-    WNDCLASSEXW windowClass{};
-    windowClass.cbSize        = sizeof(windowClass);
-    windowClass.lpfnWndProc   = OwnedWindowProc<Bar>;
-    windowClass.hInstance     = instance;
-    windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-    windowClass.lpszClassName = kWindowClass;
-    if (RegisterClassExW(&windowClass) == 0) {
-        ThrowLastError("RegisterClassExW");
-    }
+    ::RegisterWindowClass(instance, kWindowClass, OwnedWindowProc<Bar>, LoadCursorW(nullptr, IDC_ARROW), "bar");
 }
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
@@ -663,9 +651,7 @@ void Bar::ScheduleNextChange() {
         }
         return;
     }
-    if (SetTimer(_window, kChangeTimer, *wait, nullptr) == 0) {
-        ThrowLastError("SetTimer");
-    }
+    StartTimer(_window, kChangeTimer, *wait, "bar change");
 }
 
 D2D1_POINT_2F Bar::ContentPoint(POINT client, const HitBox& box) const {

@@ -100,6 +100,7 @@ add_library(intarsia_core STATIC
   src/platform/StoppableThread.cpp
   src/platform/Text.cpp
   src/platform/ThreadFailure.cpp
+  src/platform/Win32Window.cpp
   src/platform/Token.cpp
   src/platform/WebSocket.cpp
   src/render/BrushCache.cpp

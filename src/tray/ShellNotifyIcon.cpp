@@ -6,6 +6,7 @@
 #include "platform/Handle.hpp"
 #include "platform/PeerProcess.hpp"
 #include "platform/Win32Cast.hpp"
+#include "platform/Win32Window.hpp"
 #include "render/Icon.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 
@@ -40,22 +41,14 @@ namespace {
     }
 
     HWND CreateTrayWindow(const std::wstring& windowClass, WNDPROC procedure, void* owner) {
-        HINSTANCE   instance = GetModuleHandleW(nullptr);
-        WNDCLASSEXW registration{};
-        registration.cbSize        = sizeof(registration);
-        registration.lpfnWndProc   = procedure;
-        registration.hInstance     = instance;
-        registration.lpszClassName = windowClass.c_str();
-        if (RegisterClassExW(&registration) == 0) {
-            ThrowLastError("RegisterClassExW(tray)");
-        }
-        HWND window = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, windowClass.c_str(), L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, instance, owner);
-        if (window == nullptr) {
-            const DWORD error = GetLastError();
+        HINSTANCE instance = GetModuleHandleW(nullptr);
+        RegisterWindowClass(instance, windowClass.c_str(), procedure, nullptr, "tray");
+        try {
+            return CreatePopupWindow(instance, windowClass.c_str(), L"", WS_EX_TOOLWINDOW | WS_EX_TOPMOST, owner, "tray");
+        } catch (const Win32Error&) {
             UnregisterClassW(windowClass.c_str(), instance);
-            throw Win32Error("CreateWindowExW(tray)", HRESULT_FROM_WIN32(error));
+            throw;
         }
-        return window;
     }
 
     // Another intarsia, or any other tray that forwards, would send the message straight back.
@@ -391,12 +384,8 @@ void ShellNotifyIcon::Run(std::promise<void>& ready) {
     }
     try {
         KeepFirst();
-        if (SetTimer(_window, kFirstTimer, kFirstEveryMs, nullptr) == 0) {
-            ThrowLastError("SetTimer(tray first)");
-        }
-        if (SetTimer(_window, kSweepTimer, kSweepEveryMs, nullptr) == 0) {
-            ThrowLastError("SetTimer(tray sweep)");
-        }
+        StartTimer(_window, kFirstTimer, kFirstEveryMs, "tray first");
+        StartTimer(_window, kSweepTimer, kSweepEveryMs, "tray sweep");
         ready.set_value();
     } catch (...) {
         DestroyWindow(_window);
