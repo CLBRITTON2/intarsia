@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <format>
 #include <map>
@@ -94,13 +95,34 @@ namespace {
         return parts;
     }
 
+    // from_chars also reads inf and nan, which every range check below would let through.
     std::optional<float> ParseNumber(std::string_view text) {
         float value             = 0.0f;
         const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
-        if (error != std::errc() || end != text.data() + text.size()) {
+        if (error != std::errc() || end != text.data() + text.size() || !std::isfinite(value)) {
             return std::nullopt;
         }
         return value;
+    }
+
+    // Splitting drops empty entries, so a stray comma shows only in the count.
+    template <typename Value, typename ReadEntry>
+    std::vector<Value> ReadCommaList(std::string_view text, std::string_view form, ReadEntry readEntry) {
+        if (text == "none") {
+            return {};
+        }
+        std::vector<Value> values;
+        for (const std::string_view entry : SplitOutside(text, ",")) {
+            values.push_back(readEntry(entry));
+        }
+        size_t separators = 0;
+        for (size_t comma = FindOutside(text, 0, ","); comma != std::string_view::npos; comma = FindOutside(text, comma + 1, ",")) {
+            ++separators;
+        }
+        if (values.empty() || separators != values.size() - 1) {
+            throw std::invalid_argument(std::string(form));
+        }
+        return values;
     }
 
     // What a declaration's value is checked and read as.
@@ -164,10 +186,16 @@ namespace {
     }
 
     // The value readers throw std::invalid_argument with what the value should look like. The caller adds where.
-    float ReadSignedLength(std::string_view text) {
+    // Far past any monitor, and small enough that every length scaled to device pixels fits the integers it is cast to.
+    constexpr float kLongestLengthDips = 10000.0f;
+
+    float           ReadSignedLength(std::string_view text) {
         const std::optional<float> value = text == "0" ? std::optional<float>(0.0f) : text.ends_with("px") ? ParseNumber(text.substr(0, text.size() - 2)) : std::nullopt;
         if (!value.has_value()) {
             throw std::invalid_argument("must be a length in px, as 4px");
+        }
+        if (std::abs(*value) > kLongestLengthDips) {
+            throw std::invalid_argument("must be a length no longer than 10000px");
         }
         return *value;
     }
@@ -304,10 +332,11 @@ namespace {
         const std::optional<float> value        = milliseconds ? ParseNumber(text.substr(0, text.size() - 2)) :
                              text.ends_with('s')                         ? ParseNumber(text.substr(0, text.size() - 1)) :
                                                                            std::nullopt;
-        if (!value.has_value() || *value < 0.0f || *value > 60000.0f) {
+        const float                scaled       = milliseconds ? value.value_or(0.0f) : value.value_or(0.0f) * 1000.0f;
+        if (!value.has_value() || scaled < 0.0f || scaled > 60000.0f) {
             throw std::invalid_argument("takes a duration in ms or s from 0 to 60s, as 400ms or 0.4s");
         }
-        return std::chrono::milliseconds(static_cast<std::int64_t>(milliseconds ? *value : *value * 1000.0f));
+        return std::chrono::milliseconds(static_cast<std::int64_t>(scaled));
     }
 
     constexpr std::string_view kTransitionForm =
@@ -331,18 +360,7 @@ namespace {
     }
 
     std::vector<TransitionValue> ReadTransitionValues(std::string_view text) {
-        if (text == "none") {
-            return {};
-        }
-        std::vector<TransitionValue> values;
-        for (const std::string_view entry : SplitOutside(text, ",")) {
-            values.push_back(ReadTransitionValue(entry));
-        }
-        // Splitting drops empty entries, so a stray comma shows only in the count.
-        if (values.empty() || std::cmp_not_equal(std::ranges::count(text, ','), values.size() - 1)) {
-            throw std::invalid_argument(std::string(kTransitionForm));
-        }
-        return values;
+        return ReadCommaList<TransitionValue>(text, kTransitionForm, ReadTransitionValue);
     }
 
     // The transition a list gives property, the last one naming it as in CSS, or none.
@@ -405,17 +423,7 @@ namespace {
     }
 
     std::vector<InsetShadow> ReadShadows(std::string_view text) {
-        if (text == "none") {
-            return {};
-        }
-        std::vector<InsetShadow> shadows;
-        for (const std::string_view entry : SplitOutside(text, ",")) {
-            shadows.push_back(ReadShadow(entry));
-        }
-        if (shadows.empty()) {
-            throw std::invalid_argument(std::string(kShadowForm));
-        }
-        return shadows;
+        return ReadCommaList<InsetShadow>(text, kShadowForm, ReadShadow);
     }
 
     constexpr std::string_view kBackdropForm = "must be none, or blur (the system's, whose radius is its own) then optionally brightness() and saturate() once each, "

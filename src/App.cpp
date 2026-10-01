@@ -242,9 +242,7 @@ void App::CreateBars() {
         // Lost, or a monitor gone, while a bar was being built rather than while it drew: the same recovery, and it had
         // drawn nothing.
         _bars.clear();
-        _deviceRetry = std::min(_deviceRetry * 2, kLongestDeviceRetry);
-        Log(LogLevel::Warning, "app", "recovering_device", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
-        ScheduleDeviceRetry();
+        RetryDeviceLater("recovering_device", error.what());
     }
 }
 
@@ -343,14 +341,22 @@ void App::ScheduleDeviceRetry() {
     StartTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), "device");
 }
 
-// Creating the device fails while no adapter is ready, which waits longer and tries again.
+void App::RetryDeviceLater(std::string_view event, std::string_view reason) {
+    _deviceRetry = std::min(_deviceRetry * 2, kLongestDeviceRetry);
+    Log(LogLevel::Warning, "app", event, {{.key = "reason", .value = std::string(reason)}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
+    ScheduleDeviceRetry();
+}
+
+// Creating the device fails while no adapter is ready, and is lost when the adapter goes again mid-creation (back to back
+// losses on re-enabling an adapter): both wait longer and try again.
 void App::RecreateDevice() {
     try {
         _graphics = CreateGraphicsDevice();
     } catch (const Win32Error& error) {
-        _deviceRetry = std::min(_deviceRetry * 2, kLongestDeviceRetry);
-        Log(LogLevel::Warning, "app", "device_unavailable", {{.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
-        ScheduleDeviceRetry();
+        RetryDeviceLater("device_unavailable", error.what());
+        return;
+    } catch (const DeviceLostError& error) {
+        RetryDeviceLater("device_unavailable", error.what());
         return;
     }
     _recovering = false;

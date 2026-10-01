@@ -314,6 +314,7 @@ TEST(Style, BoxShadowsAreInsetAndKeepTheirOrder) {
     EXPECT_THAT([] { return Parse("section { box-shadow: 0 1px 2px #000; }"); }, ConfigErrorWith("every shadow starts with inset"));
     EXPECT_THAT([] { return Parse("section { box-shadow: inset 0 1px -2px #000; }"); }, ConfigErrorWith("negative blur"));
     EXPECT_THAT([] { return Parse("section { box-shadow: inset 1px #000; }"); }, ConfigErrorWith("must be none, or inset shadows"));
+    EXPECT_THAT([] { return Parse("section { box-shadow: inset 0 1px #000,; }"); }, ConfigErrorWith("must be none, or inset shadows"));
     EXPECT_THAT([] { return Parse(".item:hover { box-shadow: inset 0 1px #000; }"); }, ConfigErrorWith("box-shadow does not apply to .item:hover"));
 }
 
@@ -428,6 +429,16 @@ TEST(Style, TransitionsAndRotationsAreCheckedAsTheyParse) {
     EXPECT_THAT([] { return Parse("tray.expanded { background: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's or group's .icon only"));
     EXPECT_THAT([] { return Parse("group.expanded .item { color: #fff; }"); }, ConfigErrorWith(".expanded styles an unfolded tray's or group's .icon only"));
     EXPECT_THAT([] { return Parse("tray.expanded .icon { color: #fff; }"); }, ConfigErrorWith("which takes: transform"));
+}
+
+TEST(Style, NumbersMustBeFiniteAndInRange) {
+    EXPECT_THAT([] { return Parse(".module { padding: infpx; }"); }, ConfigErrorWith("must be a length in px"));
+    EXPECT_THAT([] { return Parse(".module { padding: 20000px; }"); }, ConfigErrorWith("no longer than 10000px"));
+    EXPECT_THAT([] { return Parse(".item { font-weight: nan; }"); }, ConfigErrorWith("a weight from 100 to 900"));
+    EXPECT_THAT([] { return Parse("tray { transition: width nanms; }"); }, ConfigErrorWith("duration in ms or s"));
+    EXPECT_THAT([] { return Parse("tray { transition: width 60000s; }"); }, ConfigErrorWith("from 0 to 60s"));
+    EXPECT_THAT([] { return Parse("#cpu { color: rgba(nan, 0, 0, 1); }"); }, ConfigErrorWith("outside 0 to"));
+    EXPECT_THAT([] { return Parse("section { backdrop-filter: blur brightness(inf); }"); }, ConfigErrorWith("brightness(inf)"));
 }
 
 TEST(Style, CommentsAreIgnoredAndLinesStillCount) {

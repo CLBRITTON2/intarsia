@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Owns the config, the graphics devices and one bar per monitor, and rebuilds the bars when the config file changes.
@@ -54,8 +55,10 @@ class App {
     AppBarRoute AppBarRouteForTray() const;
     void        RebuildBarsIfMonitorsChanged();
     // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
-    void                  HandleDeviceLost();
-    void                  ScheduleDeviceRetry();
+    void HandleDeviceLost();
+    void ScheduleDeviceRetry();
+    // Doubles the wait, logs event with reason, and schedules the next try.
+    void                  RetryDeviceLater(std::string_view event, std::string_view reason);
     void                  RecreateDevice();
 
     HINSTANCE             _instance;
