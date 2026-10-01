@@ -3,29 +3,36 @@
 #include <algorithm>
 #include <format>
 #include <stdexcept>
+#include <utility>
 
-ItemRow ArrangeItems(const std::vector<D2D1_SIZE_F>& contents, const std::vector<const ItemStyle*>& styles) {
+ItemRow EmptyItemRow() {
+    return ItemRow{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}, .axis = Axis::Horizontal};
+}
+
+ItemRow ArrangeItems(const std::vector<D2D1_SIZE_F>& contents, const std::vector<const ItemStyle*>& styles, Axis axis) {
     if (contents.size() != styles.size()) {
         throw std::invalid_argument(std::format("{} item contents with {} styles", contents.size(), styles.size()));
     }
-    float height = 0.0f;
+    float cross = 0.0f;
     for (size_t index = 0; index < contents.size(); ++index) {
-        height = std::max(height, contents[index].height + (2.0f * styles[index]->padding.yDips) + (2.0f * styles[index]->margin.yDips));
+        cross = std::max(cross, CrossLength(contents[index], axis) + (2.0f * CrossOf(styles[index]->padding, axis)) + (2.0f * CrossOf(styles[index]->margin, axis)));
     }
-    ItemRow row{.boxes = {}, .size = {.width = 0.0f, .height = height}};
-    row.boxes.reserve(contents.size());
-    float left = 0.0f;
+    std::vector<D2D1_RECT_F> boxes;
+    boxes.reserve(contents.size());
+    float start = 0.0f;
     for (size_t index = 0; index < contents.size(); ++index) {
-        const ItemStyle& style     = *styles[index];
-        const float      boxWidth  = contents[index].width + (2.0f * style.padding.xDips);
-        const float      boxHeight = contents[index].height + (2.0f * style.padding.yDips);
-        const float      top       = (height - boxHeight) / 2.0f;
-        left += style.margin.xDips;
-        row.boxes.push_back(D2D1::RectF(left, top, left + boxWidth, top + boxHeight));
-        left += boxWidth + style.margin.xDips;
+        const ItemStyle& style    = *styles[index];
+        const float      boxMain  = MainLength(contents[index], axis) + (2.0f * MainOf(style.padding, axis));
+        const float      boxCross = CrossLength(contents[index], axis) + (2.0f * CrossOf(style.padding, axis));
+        start += MainOf(style.margin, axis);
+        boxes.push_back(MainCrossRect(axis, start, boxMain, (cross - boxCross) / 2.0f, boxCross));
+        start += boxMain + MainOf(style.margin, axis);
     }
-    row.size.width = left;
-    return row;
+    return ItemRow{.boxes = std::move(boxes), .size = MainCrossSize(axis, start, cross), .axis = axis};
+}
+
+float ItemTextInset(const ItemStyle& style, Axis axis) {
+    return CrossOf(style.padding, axis) + CrossOf(style.margin, axis);
 }
 
 std::optional<size_t> ItemAt(const ItemRow& row, D2D1_POINT_2F point) {
@@ -48,7 +55,7 @@ void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, con
         return;
     }
     const D2D1_RECT_F placed = D2D1::RectF(origin.x + box.left, origin.y + box.top, origin.x + box.right, origin.y + box.bottom);
-    const float       radius = std::min(style.radiusDips, (box.bottom - box.top) / 2.0f);
+    const float       radius = std::min({style.radiusDips, (box.bottom - box.top) / 2.0f, (box.right - box.left) / 2.0f});
     render.context->FillRoundedRectangle(D2D1::RoundedRect(placed, radius, radius), render.brushes->Get(fill));
 }
 

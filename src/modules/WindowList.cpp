@@ -32,7 +32,7 @@ bool WindowList::Layout(const RenderContext& render) {
     for (const Slot& slot : _slots) {
         styles.push_back(&StyleOf(slot));
     }
-    _row = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), styles);
+    _row = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), styles, render.axis);
     return changed;
 }
 

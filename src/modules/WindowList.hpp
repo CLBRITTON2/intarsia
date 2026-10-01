@@ -46,6 +46,6 @@ class WindowList final : public IModule {
     std::intptr_t     _monitor;
     ModuleStyle       _style;
     std::vector<Slot> _slots;
-    ItemRow           _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
+    ItemRow           _row     = EmptyItemRow();
     bool              _laidOut = false;
 };

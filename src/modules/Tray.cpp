@@ -58,19 +58,19 @@ bool Tray::Layout(const RenderContext& render) {
     contents.push_back(_toggle.size);
     std::vector<const ItemStyle*> styles(_slots.size(), &_style.item);
     styles.push_back(&_style.toggle);
-    _row = ArrangeItems(contents, styles);
+    _row = ArrangeItems(contents, styles, render.axis);
     return changed;
 }
 
 D2D1_SIZE_F Tray::Size() const {
-    return D2D1_SIZE_F{.width = _row.size.width - ToggleShift(), .height = _row.size.height};
+    return MainCrossSize(_row.axis, MainLength(_row.size, _row.axis) - ToggleShift(), CrossLength(_row.size, _row.axis));
 }
 
 void Tray::Place(const ModulePlacement& placement) {
     std::vector<TrayIconRect> rects;
-    const float               revealed = RevealedWidth();
+    const float               revealed = RevealedLength();
     const D2D1_POINT_2F       origin   = placement.contentOrigin;
-    for (size_t index = 0; index < _slots.size() && _row.boxes[index].right <= revealed; ++index) {
+    for (size_t index = 0; index < _slots.size() && MainEnd(_row.boxes[index], _row.axis) <= revealed; ++index) {
         const D2D1_RECT_F& box = _row.boxes[index];
         rects.push_back(
             TrayIconRect{.owner = _slots[index].icon.owner,
@@ -85,7 +85,8 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const float      icon  = _style.icon.sizeDips;
     if (_revealShown > 0.0f) {
         // The icons stay where the unfolded row puts them, and the box's edge uncovers them.
-        render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + RevealedWidth(), origin.y + _row.size.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        const D2D1_SIZE_F revealed = MainCrossSize(_row.axis, RevealedLength(), CrossLength(_row.size, _row.axis));
+        render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + revealed.width, origin.y + revealed.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (size_t index = 0; index < _slots.size(); ++index) {
             DrawItemBackground(render, _row.boxes[index], style, _hovered.Is(index), origin);
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
@@ -96,7 +97,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
 
     const ItemStyle&    toggleStyle = _style.toggle;
     const size_t        toggle      = _slots.size();
-    const D2D1_POINT_2F shifted     = D2D1::Point2F(origin.x - ToggleShift(), origin.y);
+    const D2D1_POINT_2F shifted     = MovedAlong(origin, -ToggleShift(), _row.axis);
     DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _hovered.Is(toggle), shifted);
     DrawTurnedIconText(render, ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted), _toggle, _angleShown, render.accent, render.foreground);
 }
@@ -173,20 +174,20 @@ std::optional<D2D1_RECT_F> Tray::TooltipItem() const {
 }
 
 // The icons end where the toggle's margin begins.
-float Tray::IconsWidth() const {
-    return _row.boxes.empty() ? 0.0f : _row.boxes.back().left - _style.toggle.margin.xDips;
+float Tray::IconsLength() const {
+    return _row.boxes.empty() ? 0.0f : MainStart(_row.boxes.back(), _row.axis) - MainOf(_style.toggle.margin, _row.axis);
 }
 
-float Tray::RevealedWidth() const {
-    return IconsWidth() * _revealShown;
+float Tray::RevealedLength() const {
+    return IconsLength() * _revealShown;
 }
 
 float Tray::ToggleShift() const {
-    return IconsWidth() - RevealedWidth();
+    return IconsLength() - RevealedLength();
 }
 
 D2D1_POINT_2F Tray::RowPoint(D2D1_POINT_2F point) const {
-    return point.x < RevealedWidth() ? point : D2D1::Point2F(point.x + ToggleShift(), point.y);
+    return MainOf(point, _row.axis) < RevealedLength() ? point : MovedAlong(point, ToggleShift(), _row.axis);
 }
 
 std::optional<size_t> Tray::ItemUnder(D2D1_POINT_2F point) const {

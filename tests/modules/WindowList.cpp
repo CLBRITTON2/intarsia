@@ -22,21 +22,22 @@ namespace {
     };
 
     RenderContext NoDrawing() {
-        return RenderContext{.context       = nullptr,
-                             .dwrite        = nullptr,
-                             .textFormat    = nullptr,
-                             .iconFont      = nullptr,
-                             .iconSizeDips  = 20.0f,
-                             .iconGapDips   = 0.0f,
-                             .foreground    = nullptr,
-                             .accent        = nullptr,
-                             .alert         = nullptr,
-                             .warning       = {.text = nullptr, .icon = nullptr},
-                             .critical      = {.text = nullptr, .icon = nullptr},
-                             .muted         = {.text = nullptr, .icon = nullptr},
-                             .classes       = {},
-                             .brushes       = nullptr,
-                             .boxHeightDips = 24.0f};
+        return RenderContext{.context      = nullptr,
+                             .dwrite       = nullptr,
+                             .textFormat   = nullptr,
+                             .iconFont     = nullptr,
+                             .iconSizeDips = 20.0f,
+                             .iconGapDips  = 0.0f,
+                             .foreground   = nullptr,
+                             .accent       = nullptr,
+                             .alert        = nullptr,
+                             .warning      = {.text = nullptr, .icon = nullptr},
+                             .critical     = {.text = nullptr, .icon = nullptr},
+                             .muted        = {.text = nullptr, .icon = nullptr},
+                             .classes      = {},
+                             .brushes      = nullptr,
+                             .axis         = Axis::Horizontal,
+                             .boxCrossDips = 24.0f};
     }
 
     class WindowListModule : public testing::Test {

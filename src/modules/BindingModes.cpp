@@ -15,10 +15,10 @@ bool BindingModes::Layout(const RenderContext& render) {
     _labels.clear();
     std::vector<D2D1_SIZE_F> contents;
     for (const std::wstring& mode : _shown) {
-        _labels.push_back(LayOutWeightedText(render, mode, _style.item.weight));
+        _labels.push_back(LayOutWeightedText(render, mode, _style.item.weight, ItemTextInset(_style.item, render.axis)));
         contents.push_back(_labels.back().size);
     }
-    _row = ArrangeItems(contents, std::vector<const ItemStyle*>(_labels.size(), &_style.item));
+    _row = ArrangeItems(contents, std::vector<const ItemStyle*>(_labels.size(), &_style.item), render.axis);
     return true;
 }
 

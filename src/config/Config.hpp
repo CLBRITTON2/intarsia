@@ -167,7 +167,7 @@ struct ModuleStyle {
     ItemStyle toggle; // a tray's toggle, from .item.toggle rules over its .item rules
     // A divider's line, in its color.
     float lineWidthDips;
-    float lineHeight; // a share of the box's height, 0 to 1
+    float lineHeight; // a share of the box's length across the bar, 0 to 1
     // A tray's or group's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
     // (.expanded).
     Transition transition;

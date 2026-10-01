@@ -108,6 +108,7 @@ add_library(intarsia_core STATIC
   src/platform/Win32Window.cpp
   src/platform/Token.cpp
   src/platform/WebSocket.cpp
+  src/render/Axis.cpp
   src/render/BrushCache.cpp
   src/render/Graphics.cpp
   src/render/Icon.cpp
@@ -176,6 +177,7 @@ if(BUILD_TESTING)
     tests/modules/CounterSampler.cpp
     tests/modules/Cpu.cpp
     tests/modules/DirectionToggle.cpp
+    tests/modules/Divider.cpp
     tests/modules/Fold.cpp
     tests/modules/IconText.cpp
     tests/modules/ItemRow.cpp

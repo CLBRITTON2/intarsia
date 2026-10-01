@@ -6,8 +6,7 @@
 #include <utility>
 
 Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleStyle style) :
-    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)), _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}},
-    _disconnected(EmptyIconText()) {}
+    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)), _row(EmptyItemRow()), _disconnected(EmptyIconText()) {}
 
 bool Workspaces::Layout(const RenderContext& render) {
     const WindowManagerStatus status           = _windowManager.Status();
@@ -27,12 +26,12 @@ bool Workspaces::Layout(const RenderContext& render) {
     std::vector<const ItemStyle*> styles;
     for (const Workspace& workspace : _shown) {
         const ItemStyle& state = WorkspaceState(workspace, _style);
-        _labels.push_back(LayOutWeightedText(render, workspace.label, state.weight));
+        _labels.push_back(LayOutWeightedText(render, workspace.label, state.weight, ItemTextInset(state, render.axis)));
         _states.push_back(state);
         contents.push_back(_labels.back().size);
         styles.push_back(&state);
     }
-    _row = ArrangeItems(contents, styles);
+    _row = ArrangeItems(contents, styles, render.axis);
     return true;
 }
 

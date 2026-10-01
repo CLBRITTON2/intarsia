@@ -30,5 +30,5 @@ class BindingModes final : public IModule {
     std::vector<std::wstring> _shown;
     bool                      _laidOut = false;
     std::vector<IconText>     _labels;
-    ItemRow                   _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
+    ItemRow                   _row = EmptyItemRow();
 };

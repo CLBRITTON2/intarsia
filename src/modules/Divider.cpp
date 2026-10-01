@@ -6,16 +6,17 @@
 Divider::Divider(ModuleStyle style) : _style(std::move(style)) {}
 
 bool Divider::Layout(const RenderContext& render) {
-    if (_laidOut && render.boxHeightDips == _boxHeightDips) {
+    if (_laidOut && render.boxCrossDips == _boxCrossDips && render.axis == _axis) {
         return false;
     }
-    _boxHeightDips = render.boxHeightDips;
-    _laidOut       = true;
+    _boxCrossDips = render.boxCrossDips;
+    _axis         = render.axis;
+    _laidOut      = true;
     return true;
 }
 
 D2D1_SIZE_F Divider::Size() const {
-    return D2D1_SIZE_F{.width = _style.lineWidthDips, .height = _boxHeightDips * _style.lineHeight};
+    return MainCrossSize(_axis, _style.lineWidthDips, _boxCrossDips * _style.lineHeight);
 }
 
 void Divider::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {

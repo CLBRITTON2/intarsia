@@ -9,6 +9,7 @@
 #include "platform/Text.hpp"
 #include "platform/Win32Window.hpp"
 #include "platform/WindowProc.hpp"
+#include "render/Axis.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 
 #include <shellapi.h>
@@ -34,38 +35,9 @@ namespace {
     constexpr std::uint32_t kMenuListed       = WM_APP + 4;
     constexpr UINT_PTR      kChangeTimer      = 1;
 
-    bool                    IsHorizontal(Edge edge) {
-        return edge == Edge::Top || edge == Edge::Bottom;
-    }
-
-    float MainLength(D2D1_SIZE_F size, Edge edge) {
-        return IsHorizontal(edge) ? size.width : size.height;
-    }
-
-    float CrossLength(D2D1_SIZE_F size, Edge edge) {
-        return IsHorizontal(edge) ? size.height : size.width;
-    }
-
-    // Spacing is on screen axes, as CSS writes it: along a top or bottom bar is x, along a left or right bar is y.
-    float MainOf(const Spacing& spacing, Edge edge) {
-        return IsHorizontal(edge) ? spacing.xDips : spacing.yDips;
-    }
-
-    float CrossOf(const Spacing& spacing, Edge edge) {
-        return IsHorizontal(edge) ? spacing.yDips : spacing.xDips;
-    }
-
-    // A rectangle from a span along the bar (main) and a span across it (cross).
-    D2D1_RECT_F MainCrossRect(Edge edge, float mainStart, float mainLength, float crossStart, float crossLength) {
-        if (IsHorizontal(edge)) {
-            return D2D1::RectF(mainStart, crossStart, mainStart + mainLength, crossStart + crossLength);
-        }
-        return D2D1::RectF(crossStart, mainStart, crossStart + crossLength, mainStart + mainLength);
-    }
-
     // Where a module's content starts in its box: past the padding along the bar, centered across it.
-    D2D1_POINT_2F ContentOrigin(Edge edge, const D2D1_RECT_F& box, float padding, D2D1_SIZE_F content) {
-        if (IsHorizontal(edge)) {
+    D2D1_POINT_2F ContentOrigin(Axis axis, const D2D1_RECT_F& box, float padding, D2D1_SIZE_F content) {
+        if (axis == Axis::Horizontal) {
             return D2D1::Point2F(box.left + padding, box.top + ((box.bottom - box.top - content.height) / 2.0f));
         }
         return D2D1::Point2F(box.left + ((box.right - box.left - content.width) / 2.0f), box.top + padding);
@@ -137,7 +109,7 @@ namespace {
     // The whole monitor's length along the bar's edge, which picks the config's layout.
     float EdgeLengthDips(const BarPlacement& placement, Edge edge) {
         const RECT& rect   = placement.monitorRect;
-        const float pixels = static_cast<float>(IsHorizontal(edge) ? rect.right - rect.left : rect.bottom - rect.top);
+        const float pixels = static_cast<float>(AxisOf(edge) == Axis::Horizontal ? rect.right - rect.left : rect.bottom - rect.top);
         return pixels * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(placement.dpi);
     }
 
@@ -357,29 +329,30 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
     for (const ClassColors& declared : style.classes) {
         classes.push_back(StateBrushes{.text = _brushes->Get(declared.colors.text), .icon = _brushes->Get(declared.colors.icon)});
     }
-    return RenderContext{.context       = _surface->Context(),
-                         .dwrite        = _graphics.dwrite.Get(),
-                         .textFormat    = _textFormat.Get(),
-                         .iconFont      = style.icon.font.c_str(),
-                         .iconSizeDips  = style.icon.sizeDips,
-                         .iconGapDips   = style.icon.gapDips,
-                         .foreground    = _brushes->Get(style.color),
-                         .accent        = _brushes->Get(style.icon.color),
-                         .alert         = _brushes->Get(style.alertColor),
-                         .warning       = {.text = _brushes->Get(style.warning.text), .icon = _brushes->Get(style.warning.icon)},
-                         .critical      = {.text = _brushes->Get(style.critical.text), .icon = _brushes->Get(style.critical.icon)},
-                         .muted         = {.text = _brushes->Get(style.muted.text), .icon = _brushes->Get(style.muted.icon)},
-                         .classes       = std::move(classes),
-                         .brushes       = _brushes.get(),
-                         .boxHeightDips = BoxCrossLength()};
+    return RenderContext{.context      = _surface->Context(),
+                         .dwrite       = _graphics.dwrite.Get(),
+                         .textFormat   = _textFormat.Get(),
+                         .iconFont     = style.icon.font.c_str(),
+                         .iconSizeDips = style.icon.sizeDips,
+                         .iconGapDips  = style.icon.gapDips,
+                         .foreground   = _brushes->Get(style.color),
+                         .accent       = _brushes->Get(style.icon.color),
+                         .alert        = _brushes->Get(style.alertColor),
+                         .warning      = {.text = _brushes->Get(style.warning.text), .icon = _brushes->Get(style.warning.icon)},
+                         .critical     = {.text = _brushes->Get(style.critical.text), .icon = _brushes->Get(style.critical.icon)},
+                         .muted        = {.text = _brushes->Get(style.muted.text), .icon = _brushes->Get(style.muted.icon)},
+                         .classes      = std::move(classes),
+                         .brushes      = _brushes.get(),
+                         .axis         = AxisOf(_config.bar.edge),
+                         .boxCrossDips = BoxCrossLength()};
 }
 
 // A module box spans the bar's thickness less the sections' margin and padding on both sides.
 float Bar::BoxCrossLength() const {
-    const Edge          edge      = _config.bar.edge;
+    const Axis          axis      = AxisOf(_config.bar.edge);
     const SectionStyle& section   = _config.style.section;
-    const float         thickness = CrossLength(_surface->Context()->GetSize(), edge);
-    return thickness - (2.0f * CrossOf(section.margin, edge)) - (2.0f * CrossOf(section.box.padding, edge));
+    const float         thickness = CrossLength(_surface->Context()->GetSize(), axis);
+    return thickness - (2.0f * CrossOf(section.margin, axis)) - (2.0f * CrossOf(section.box.padding, axis));
 }
 
 bool Bar::DeviceLost() const {
@@ -446,23 +419,23 @@ std::vector<float> Bar::BoxLengths(const std::vector<ModuleEntry>& entries) cons
             lengths.push_back(ArrangeMembers(entry, BoxLengths(entry.members)).length);
             continue;
         }
-        const float content = MainLength(entry.module->Size(), _config.bar.edge);
-        lengths.push_back(content > 0.0f ? content + (2.0f * MainOf(entry.style.box.padding, _config.bar.edge)) : 0.0f);
+        const float content = MainLength(entry.module->Size(), AxisOf(_config.bar.edge));
+        lengths.push_back(content > 0.0f ? content + (2.0f * MainOf(entry.style.box.padding, AxisOf(_config.bar.edge))) : 0.0f);
     }
     return lengths;
 }
 
 GroupLayout Bar::ArrangeMembers(const ModuleEntry& entry, const std::vector<float>& memberLengths) const {
-    const Edge edge = _config.bar.edge;
-    return ArrangeGroup(MainLength(entry.module->Size(), edge), memberLengths, entry.group->Revealed(), MainOf(entry.style.box.padding, edge));
+    const Axis axis = AxisOf(_config.bar.edge);
+    return ArrangeGroup(MainLength(entry.module->Size(), axis), memberLengths, entry.group->Revealed(), MainOf(entry.style.box.padding, axis));
 }
 
 void Bar::Draw() {
     ID2D1DeviceContext*         context = _surface->Context();
     const Sections<float>       lengths{.left = BoxLengths(_modules.left), .center = BoxLengths(_modules.center), .right = BoxLengths(_modules.right)};
-    const Edge                  edge    = _config.bar.edge;
+    const Axis                  axis    = AxisOf(_config.bar.edge);
     const SectionStyle&         section = _config.style.section;
-    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), edge), MainOf(section.margin, edge), MainOf(section.box.padding, edge));
+    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), axis), MainOf(section.margin, axis), MainOf(section.box.padding, axis));
     const Sections<PlacedEntry> placed{.left   = PlaceSection(_modules.left, lengths.left, layout.left),
                                        .center = PlaceSection(_modules.center, lengths.center, layout.center),
                                        .right  = PlaceSection(_modules.right, lengths.right, layout.right)};
@@ -519,11 +492,11 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
 
 // The entry's box from start along the bar, spanning across it as every module's box does.
 Bar::HitBox Bar::PlaceBox(const ModuleEntry& entry, float start, float length) const {
-    const Edge          edge     = _config.bar.edge;
+    const Axis          axis     = AxisOf(_config.bar.edge);
     const SectionStyle& style    = _config.style.section;
-    const float         boxStart = CrossOf(style.margin, edge) + CrossOf(style.box.padding, edge);
-    const D2D1_RECT_F   box      = MainCrossRect(edge, start, length, boxStart, BoxCrossLength());
-    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(edge, box, MainOf(entry.style.box.padding, edge), entry.module->Size())};
+    const float         boxStart = CrossOf(style.margin, axis) + CrossOf(style.box.padding, axis);
+    const D2D1_RECT_F   box      = MainCrossRect(axis, start, length, boxStart, BoxCrossLength());
+    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(axis, box, MainOf(entry.style.box.padding, axis), entry.module->Size())};
 }
 
 std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const {
@@ -576,11 +549,11 @@ void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayo
         return;
     }
     ID2D1DeviceContext* context   = _surface->Context();
-    const Edge          edge      = _config.bar.edge;
+    const Axis          axis      = AxisOf(_config.bar.edge);
     const SectionStyle& style     = _config.style.section;
-    const float         margin    = CrossOf(style.margin, edge);
-    const float         thickness = CrossLength(context->GetSize(), edge);
-    const D2D1_RECT_F   section   = MainCrossRect(edge, layout.start, layout.length, margin, thickness - (2.0f * margin));
+    const float         margin    = CrossOf(style.margin, axis);
+    const float         thickness = CrossLength(context->GetSize(), axis);
+    const D2D1_RECT_F   section   = MainCrossRect(axis, layout.start, layout.length, margin, thickness - (2.0f * margin));
     DrawBox(context, *_brushes, section, style.box, style.box.background);
 
     for (const PlacedEntry& placed : entries) {

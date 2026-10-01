@@ -1,5 +1,6 @@
 #pragma once
 
+#include "render/Axis.hpp"
 #include "render/BrushCache.hpp"
 
 #include <d2d1_1.h>
@@ -31,6 +32,8 @@ struct RenderContext {
     std::vector<StateBrushes> classes; // a custom module's declared classes, in their order
     // Any other color a module draws, such as a workspace state's background.
     BrushCache* brushes;
-    // The height of the box a module draws in, across the bar, for a module that fills it such as a divider.
-    float boxHeightDips;
+    Axis        axis; // the bar's
+    // The length across the bar of the box a module draws in, for a module that fills it such as a divider, and the
+    // room a vertical bar cuts text to.
+    float boxCrossDips;
 };

@@ -166,6 +166,29 @@ TEST_F(TrayModule, ClicksReachTheIconsApp) {
     EXPECT_EQ(_tray.presses[2].button, TrayButton::Middle);
 }
 
+TEST_F(TrayModule, DownAVerticalBarTheIconsUnfoldDownwardAndAreClickedWhereTheyShow) {
+    RenderContext vertical = _render;
+    vertical.axis          = Axis::Vertical;
+    Tray module(kConfig, _tray, TestModuleStyle());
+    module.Layout(vertical);
+    const D2D1_SIZE_F folded = module.Size();
+    module.Click(D2D1::Point2F(folded.width / 2.0f, folded.height / 2.0f));
+    module.Layout(vertical);
+    // Icons 1 and 4, each a 20 icon padded 2 down with no margin there, at 0 to 24 and 24 to 48.
+    EXPECT_FLOAT_EQ(module.Size().height, folded.height + 48.0f);
+    module.Click(D2D1::Point2F(module.Size().width / 2.0f, 36.0f));
+    ASSERT_EQ(_tray.presses.size(), 1u);
+    EXPECT_EQ(_tray.presses[0].id, 4u);
+    _context->BeginDraw();
+    module.Draw(vertical, D2D1::Point2F(0.0f, 0.0f));
+    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+
+    // The toggle is last, below the icons.
+    module.Click(D2D1::Point2F(module.Size().width / 2.0f, module.Size().height - 2.0f));
+    module.Layout(vertical);
+    EXPECT_FLOAT_EQ(module.Size().height, folded.height);
+}
+
 TEST_F(TrayModule, MovesOverAnIconReachItsAppAndMovesElsewhereDoNot) {
     Tray module(kConfig, _tray, TestModuleStyle());
     module.Layout(_render);

@@ -8,6 +8,8 @@
 #include <string>
 
 // A line across the bar between modules, such as between workspaces and window icons, in its color, width and height.
+// Its width is its thickness along the bar and its height its share of the box across it, so a vertical bar's divider
+// lies flat.
 class Divider final : public IModule {
   public:
     explicit Divider(ModuleStyle style);
@@ -21,6 +23,7 @@ class Divider final : public IModule {
 
   private:
     ModuleStyle _style;
-    float       _boxHeightDips = 0.0f;
-    bool        _laidOut       = false;
+    float       _boxCrossDips = 0.0f;
+    Axis        _axis         = Axis::Horizontal;
+    bool        _laidOut      = false;
 };

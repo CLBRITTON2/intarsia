@@ -17,7 +17,7 @@
 // The notification area: one item per icon apps show, in the order they added them, then a toggle item that folds
 // them away or shows them again. Starts folded, showing the toggle alone. Icons are in the module's .item style at its
 // .icon font-size, and the toggle in its .item.toggle style with its text as an icon. The icons unfold over the module's width transition,
-// revealed from the left as the box widens, and the toggle turns to the .expanded icon's rotation over the icon's.
+// revealed from the start as the box grows along the bar, and the toggle turns to the .expanded icon's rotation over the icon's.
 // Clicking an icon reaches its app as a click on the taskbar's icon would, and resting on one shows its tooltip.
 class Tray final : public IModule {
   public:
@@ -52,9 +52,10 @@ class Tray final : public IModule {
         Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
     };
 
-    // The icons' width unfolded, how much of it shows, and how far left the toggle sits of where the whole row puts it.
-    float IconsWidth() const;
-    float RevealedWidth() const;
+    // The icons' length along the bar unfolded, how much of it shows, and how far back the toggle sits of where the
+    // whole row puts it.
+    float IconsLength() const;
+    float RevealedLength() const;
     float ToggleShift() const;
     // A point on the module as a point on the whole row, so the row's items can be hit where they are drawn.
     D2D1_POINT_2F         RowPoint(D2D1_POINT_2F point) const;
@@ -73,7 +74,7 @@ class Tray final : public IModule {
     std::vector<Slot> _slots; // as last laid out with any icon in sight
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.
-    ItemRow                 _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
+    ItemRow                 _row = EmptyItemRow();
     HoveredItem             _hovered;
     std::optional<TrayIcon> _popup; // the icon whose app's popup is open
     bool                    _laidOut = false;
