@@ -27,3 +27,6 @@ D2D1_POINT_2F MovedAlong(D2D1_POINT_2F point, float distance, Axis axis);
 D2D1_SIZE_F   MainCrossSize(Axis axis, float main, float cross);
 // A rectangle from a span along the main axis and a span across it.
 D2D1_RECT_F MainCrossRect(Axis axis, float mainStart, float mainLength, float crossStart, float crossLength);
+// Whether point lies in rect, its left and top edges in and its right and bottom edges out.
+bool        Contains(const D2D1_RECT_F& rect, D2D1_POINT_2F point);
+D2D1_RECT_F Offset(const D2D1_RECT_F& rect, D2D1_POINT_2F by);

@@ -45,6 +45,10 @@ Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* con
 // Rounded to the nearest pixel.
 std::int32_t DipsToPixels(float dips, std::uint32_t dpi);
 
+float        PixelsToDips(float pixels, std::uint32_t dpi);
+// A client-area point in pixels, in DIPs.
+D2D1_POINT_2F ClientDips(POINT client, std::uint32_t dpi);
+
 // Rounded up, so text sized by it is never clipped by a partial pixel.
 std::int32_t DipsToWholePixels(float dips, std::uint32_t dpi);
 

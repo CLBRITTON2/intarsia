@@ -3,6 +3,7 @@
 #include "bar/Box.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Win32Window.hpp"
+#include "render/Graphics.hpp"
 
 #include <cstdint>
 #include <algorithm>
@@ -70,7 +71,7 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     const Insets              insets        = ContentInsets(style);
     const std::int32_t        monitorWidth  = anchor.monitor.right - anchor.monitor.left;
     const std::int32_t        monitorHeight = anchor.monitor.bottom - anchor.monitor.top;
-    const float               widthDips     = static_cast<float>(monitorWidth) * USER_DEFAULT_SCREEN_DPI / static_cast<float>(anchor.dpi);
+    const float               widthDips     = PixelsToDips(static_cast<float>(monitorWidth), anchor.dpi);
     ComPtr<IDWriteTextLayout> layout;
     ThrowIfFailed(_graphics.dwrite->CreateTextLayout(text.data(), static_cast<std::uint32_t>(text.size()), _textFormat, std::max(widthDips - insets.left - insets.right, 1.0f),
                                                      std::numeric_limits<float>::max(), &layout),

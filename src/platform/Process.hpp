@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/Errors.hpp"
 #include "platform/WorkQueue.hpp"
 
 #include <windows.h>
@@ -12,6 +13,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 // A program to start with its arguments, never through a shell: the arguments reach the program as they are written.
@@ -52,6 +55,25 @@ std::string CaptureOutput(const Command& command, std::chrono::milliseconds time
 // (without "\n" or "\r\n") as the line completes, and returns its exit code. Throws CommandError when cancel is
 // signaled or a line passes maxLineBytes, and the job dies either way.
 std::uint32_t StreamLines(const Command& command, size_t maxLineBytes, HANDLE cancel, const std::function<void(std::string_view)>& onLine);
+
+// Far more than one line on a bar or one menu needs. Output past it fails the run instead of growing without bound.
+constexpr size_t kMaxCommandOutputBytes = size_t{64} * 1024;
+
+// Why a command gave no output, for callers on a worker thread that report a failure instead of throwing it.
+struct RunFailure {
+    std::string reason; // short enough to show on the bar
+    std::string detail; // the full failure, for the log
+};
+
+// What run returns, or the RunFailure for the CommandError or Win32Error it throws.
+template <typename Run>
+std::variant<std::invoke_result_t<Run>, RunFailure> RunOrFailure(const Run& run) {
+    try {
+        return run();
+    } catch (const CommandError& error) { return RunFailure{.reason = error.what(), .detail = error.what()}; } catch (const Win32Error& error) {
+        return RunFailure{.reason = "could not run", .detail = error.what()};
+    }
+}
 
 // Starts commands on its own thread with ShellExecuteExW, so a UAC prompt (Task Manager needs one) never blocks the UI.
 class Launcher {

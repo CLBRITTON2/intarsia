@@ -103,10 +103,8 @@ class Menu {
     // Starts dragging the thumb from point, which first jumps the thumb's middle there when point misses it.
     void GrabThumb(D2D1_POINT_2F point);
     // Hides the entry's tooltip and waits for the cursor to rest again before showing the next one.
-    void RestartHover();
-    void ShowTooltip();
-    // Mouse positions are client pixels, and rows lay out in DIPs.
-    D2D1_POINT_2F                               ClientDips(POINT client) const;
+    void                                        RestartHover();
+    void                                        ShowTooltip();
     void                                        ReleaseSurface();
 
     const GraphicsDevice&                       _graphics;

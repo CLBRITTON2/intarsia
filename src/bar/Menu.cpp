@@ -6,8 +6,9 @@
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
 #include "platform/Win32Window.hpp"
-
-#include <windowsx.h>
+#include "platform/WindowProc.hpp"
+#include "render/Axis.hpp"
+#include "render/Graphics.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -26,16 +27,8 @@ namespace {
     // Short enough for hundreds of entries, long enough to grab.
     constexpr float kMinThumbDips = 16.0f;
 
-    bool            Contains(const D2D1_RECT_F& rect, D2D1_POINT_2F point) {
-        return point.x >= rect.left && point.x < rect.right && point.y >= rect.top && point.y < rect.bottom;
-    }
-
-    float MaxOffset(const MenuScroll& scroll) {
+    float           MaxOffset(const MenuScroll& scroll) {
         return std::max(0.0f, scroll.contentDips - (scroll.viewport.bottom - scroll.viewport.top));
-    }
-
-    POINT ClientPoint(LPARAM lParam) {
-        return POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)};
     }
 
 } // namespace
@@ -128,7 +121,7 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
             // Gives the menu the keyboard focus once it is active.
             return DefWindowProcW(window, message, wParam, lParam);
         case WM_MOUSEMOVE: {
-            const D2D1_POINT_2F point = ClientDips(ClientPoint(lParam));
+            const D2D1_POINT_2F point = ClientDips(ClientPoint(lParam), _dpi);
             if (_thumbGrabDips.has_value()) {
                 Scroll(ScrolledToThumb(_scroll, _track, point.y - *_thumbGrabDips));
             } else {
@@ -143,7 +136,7 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
         case WM_MOUSEHOVER: ShowTooltip(); return 0;
         case WM_MOUSELEAVE: _tooltip.Hide(); return 0;
         case WM_LBUTTONDOWN: {
-            const D2D1_POINT_2F point = ClientDips(ClientPoint(lParam));
+            const D2D1_POINT_2F point = ClientDips(ClientPoint(lParam), _dpi);
             if (Contains(_gutter, point)) {
                 GrabThumb(point);
             }
@@ -155,7 +148,7 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
                 ReleaseCapture();
                 return 0;
             }
-            const std::optional<size_t> entry = EntryAt(_rows, _scroll, ClientDips(ClientPoint(lParam)));
+            const std::optional<size_t> entry = EntryAt(_rows, _scroll, ClientDips(ClientPoint(lParam), _dpi));
             if (entry.has_value()) {
                 Pick(*entry);
             }
@@ -208,9 +201,8 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     const float           gutter        = scrollbar.widthDips > 0.0f ? scrollbar.widthDips + (2.0f * scrollbar.margin.xDips) : 0.0f;
     const std::int32_t    monitorWidth  = anchor.monitor.right - anchor.monitor.left;
     const std::int32_t    monitorHeight = anchor.monitor.bottom - anchor.monitor.top;
-    const float           pixelsToDips  = USER_DEFAULT_SCREEN_DPI / static_cast<float>(anchor.dpi);
-    const float           maxWidth      = std::min(static_cast<float>(monitorWidth) * pixelsToDips, style.maxWidthDips.value_or(std::numeric_limits<float>::max()));
-    const float           maxHeight     = std::min(static_cast<float>(monitorHeight) * pixelsToDips, style.maxHeightDips.value_or(std::numeric_limits<float>::max()));
+    const float           maxWidth      = std::min(PixelsToDips(static_cast<float>(monitorWidth), anchor.dpi), style.maxWidthDips.value_or(std::numeric_limits<float>::max()));
+    const float           maxHeight     = std::min(PixelsToDips(static_cast<float>(monitorHeight), anchor.dpi), style.maxHeightDips.value_or(std::numeric_limits<float>::max()));
     // Leaves room for the scroll bar whether or not the rows overflow, so a cut row never grows once they do.
     const auto textWidth = [maxWidth, insets, gutter](const ItemStyle& row) {
         return maxWidth - gutter - insets.left - insets.right - (2.0f * (row.margin.xDips + row.padding.xDips));
@@ -256,7 +248,8 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     const bool        overflow = height > maxHeight;
     const SIZE        size{.cx = std::min(DipsToWholePixels(inner + insets.left + insets.right + (overflow ? gutter : 0.0f), anchor.dpi), monitorWidth),
                            .cy = std::min(DipsToWholePixels(overflow ? maxHeight : height, anchor.dpi), monitorHeight)};
-    const D2D1_RECT_F viewport{.left = insets.left, .top = insets.top, .right = insets.left + inner, .bottom = (static_cast<float>(size.cy) * pixelsToDips) - insets.bottom};
+    const D2D1_RECT_F viewport{
+        .left = insets.left, .top = insets.top, .right = insets.left + inner, .bottom = PixelsToDips(static_cast<float>(size.cy), anchor.dpi) - insets.bottom};
     // A window takes one composition target at a time, so the old surface goes before the new one is made.
     ReleaseSurface();
     _entries   = std::move(entries);
@@ -386,7 +379,7 @@ void Menu::Wheel(std::int16_t delta) {
     if (!ScreenToClient(_window.get(), &cursor)) {
         ThrowLastError("ScreenToClient(menu)");
     }
-    Highlight(EntryAt(_rows, _scroll, ClientDips(cursor)));
+    Highlight(EntryAt(_rows, _scroll, ClientDips(cursor, _dpi)));
 }
 
 void Menu::Step(MenuStep step) {
@@ -430,13 +423,8 @@ void Menu::ShowTooltip() {
     if (row == _rows.end()) {
         return;
     }
-    const D2D1_RECT_F shown = D2D1::RectF(row->box.left, row->box.top - _scroll.offsetDips, row->box.right, row->box.bottom - _scroll.offsetDips);
+    const D2D1_RECT_F shown = Offset(row->box, D2D1::Point2F(0.0f, -_scroll.offsetDips));
     _tooltip.Show(ToWide(*_entries[*_highlight].tooltip), RowTooltipAnchor(DipsToScreen(_rect, shown, _dpi), _monitor, _dpi));
-}
-
-D2D1_POINT_2F Menu::ClientDips(POINT client) const {
-    const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_dpi);
-    return D2D1::Point2F(static_cast<float>(client.x) * scale, static_cast<float>(client.y) * scale);
 }
 
 void Menu::ReleaseSurface() {

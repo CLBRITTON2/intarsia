@@ -46,3 +46,11 @@ D2D1_RECT_F MainCrossRect(Axis axis, float mainStart, float mainLength, float cr
     }
     return D2D1::RectF(crossStart, mainStart, crossStart + crossLength, mainStart + mainLength);
 }
+
+bool Contains(const D2D1_RECT_F& rect, D2D1_POINT_2F point) {
+    return point.x >= rect.left && point.x < rect.right && point.y >= rect.top && point.y < rect.bottom;
+}
+
+D2D1_RECT_F Offset(const D2D1_RECT_F& rect, D2D1_POINT_2F by) {
+    return D2D1::RectF(rect.left + by.x, rect.top + by.y, rect.right + by.x, rect.bottom + by.y);
+}

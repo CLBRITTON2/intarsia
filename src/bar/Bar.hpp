@@ -12,6 +12,7 @@
 #include "platform/AppBar.hpp"
 #include "platform/FrameClock.hpp"
 #include "platform/Process.hpp"
+#include "render/Axis.hpp"
 #include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
 #include "render/RenderContext.hpp"
@@ -148,6 +149,7 @@ class Bar {
 
     const GraphicsDevice&       _graphics;
     const Config&               _config;
+    const Axis                  _axis;
     Launcher&                   _launcher;
     std::unique_ptr<FrameClock> _frames; // paced by this bar's monitor, null until the window exists
     bool                        _animating = false;

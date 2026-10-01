@@ -120,7 +120,7 @@ namespace {
     float EdgeLengthDips(const BarPlacement& placement, Edge edge) {
         const RECT& rect   = placement.monitorRect;
         const float pixels = static_cast<float>(AxisOf(edge) == Axis::Horizontal ? rect.right - rect.left : rect.bottom - rect.top);
-        return pixels * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(placement.dpi);
+        return PixelsToDips(pixels, placement.dpi);
     }
 
     RECT ReserveRect(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, AppBarRoute route) {
@@ -165,9 +165,10 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
          AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
-    _graphics(graphics), _config(config), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control), _deviceLostMessage(deviceLostMessage),
-    _placement(placement), _route(route), _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)),
-    _taskbarCreated(TaskbarCreatedMessage()), _window(CreateBarWindow(instance, this)) {
+    _graphics(graphics), _config(config), _axis(AxisOf(config.bar.edge)), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control),
+    _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
+    _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)), _taskbarCreated(TaskbarCreatedMessage()),
+    _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
@@ -272,7 +273,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         case kFrameClockFailed: _frames->RethrowFailure(); return 0;
         case kMenuListed: ShowMenu(); return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
-        case WM_MOUSEMOVE: PointAt(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}); return 0;
+        case WM_MOUSEMOVE: PointAt(ClientPoint(lParam)); return 0;
         case WM_MOUSEHOVER: ShowTooltip(); return 0;
         case WM_MOUSELEAVE:
             if (_pointed != nullptr) {
@@ -284,9 +285,9 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             // Draws the box that was under the cursor without its hover.
             Redraw();
             return 0;
-        case WM_LBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::LeftClick); return 0;
-        case WM_RBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::RightClick); return 0;
-        case WM_MBUTTONUP: HandleInput(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}, ModuleInput::MiddleClick); return 0;
+        case WM_LBUTTONUP: HandleInput(ClientPoint(lParam), ModuleInput::LeftClick); return 0;
+        case WM_RBUTTONUP: HandleInput(ClientPoint(lParam), ModuleInput::RightClick); return 0;
+        case WM_MBUTTONUP: HandleInput(ClientPoint(lParam), ModuleInput::MiddleClick); return 0;
         case WM_MOUSEWHEEL: {
             // Wheel messages carry screen coordinates, unlike button messages.
             POINT point{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)};
@@ -353,17 +354,16 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .muted        = {.text = _brushes->Get(style.muted.text), .icon = _brushes->Get(style.muted.icon)},
                          .classes      = std::move(classes),
                          .brushes      = _brushes.get(),
-                         .axis         = AxisOf(_config.bar.edge),
-                         .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, AxisOf(_config.bar.edge)))};
+                         .axis         = _axis,
+                         .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, _axis))};
 }
 
 // A module box spans the bar's thickness less the sections' margin and insets on both sides.
 float Bar::BoxCrossLength() const {
-    const Axis          axis      = AxisOf(_config.bar.edge);
     const SectionStyle& section   = _config.style.section;
-    const float         thickness = CrossLength(_surface->Context()->GetSize(), axis);
-    const EndInsets     insets    = CrossInsets(section.box, axis);
-    return thickness - (2.0f * CrossOf(section.margin, axis)) - insets.start - insets.end;
+    const float         thickness = CrossLength(_surface->Context()->GetSize(), _axis);
+    const EndInsets     insets    = CrossInsets(section.box, _axis);
+    return thickness - (2.0f * CrossOf(section.margin, _axis)) - insets.start - insets.end;
 }
 
 bool Bar::DeviceLost() const {
@@ -423,33 +423,30 @@ bool Bar::LayOutModules() {
 // Each module's room along the bar: what it draws plus its insets and margin at both ends. A module showing nothing,
 // such as a battery module with no battery, takes no room at all.
 std::vector<float> Bar::BoxLengths(const std::vector<ModuleEntry>& entries) const {
-    const Axis         axis = AxisOf(_config.bar.edge);
     std::vector<float> lengths;
     lengths.reserve(entries.size());
     for (const ModuleEntry& entry : entries) {
-        const float margin = 2.0f * MainOf(entry.style.margin, axis);
+        const float margin = 2.0f * MainOf(entry.style.margin, _axis);
         if (entry.group != nullptr) {
             lengths.push_back(ArrangeMembers(entry, BoxLengths(entry.members)).length + margin);
             continue;
         }
-        const float     content = MainLength(entry.module->Size(), axis);
-        const EndInsets insets  = MainInsets(entry.style.box, axis);
+        const float     content = MainLength(entry.module->Size(), _axis);
+        const EndInsets insets  = MainInsets(entry.style.box, _axis);
         lengths.push_back(content > 0.0f ? content + insets.start + insets.end + margin : 0.0f);
     }
     return lengths;
 }
 
 GroupLayout Bar::ArrangeMembers(const ModuleEntry& entry, const std::vector<float>& memberLengths) const {
-    const Axis axis = AxisOf(_config.bar.edge);
-    return ArrangeGroup(MainLength(entry.module->Size(), axis), memberLengths, entry.group->Revealed(), MainInsets(entry.style.box, axis));
+    return ArrangeGroup(MainLength(entry.module->Size(), _axis), memberLengths, entry.group->Revealed(), MainInsets(entry.style.box, _axis));
 }
 
 void Bar::Draw() {
     ID2D1DeviceContext*         context = _surface->Context();
     const Sections<float>       lengths{.left = BoxLengths(_modules.left), .center = BoxLengths(_modules.center), .right = BoxLengths(_modules.right)};
-    const Axis                  axis    = AxisOf(_config.bar.edge);
     const SectionStyle&         section = _config.style.section;
-    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), axis), MainOf(section.margin, axis), MainInsets(section.box, axis));
+    const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), _axis), MainOf(section.margin, _axis), MainInsets(section.box, _axis));
     const Sections<PlacedEntry> placed{.left   = PlaceSection(_modules.left, lengths.left, layout.left),
                                        .center = PlaceSection(_modules.center, lengths.center, layout.center),
                                        .right  = PlaceSection(_modules.right, lengths.right, layout.right)};
@@ -506,17 +503,16 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
 
 // The entry's box from start along the bar, spanning across it as every module's box does, less its margin.
 Bar::HitBox Bar::PlaceBox(const ModuleEntry& entry, float start, float length) const {
-    const Axis          axis     = AxisOf(_config.bar.edge);
     const SectionStyle& style    = _config.style.section;
-    const float         margin   = CrossOf(entry.style.margin, axis);
-    const float         boxStart = CrossOf(style.margin, axis) + CrossInsets(style.box, axis).start + margin;
-    const D2D1_RECT_F   box      = MainCrossRect(axis, start, length, boxStart, BoxCrossLength() - (2.0f * margin));
-    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(axis, box, ContentInsets(entry.style.box), entry.module->Size())};
+    const float         margin   = CrossOf(entry.style.margin, _axis);
+    const float         boxStart = CrossOf(style.margin, _axis) + CrossInsets(style.box, _axis).start + margin;
+    const D2D1_RECT_F   box      = MainCrossRect(_axis, start, length, boxStart, BoxCrossLength() - (2.0f * margin));
+    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(_axis, box, ContentInsets(entry.style.box), entry.module->Size())};
 }
 
 // The entry's box within the room BoxLengths gave it, past its margin at both ends.
 Bar::HitBox Bar::PlaceInRoom(const ModuleEntry& entry, float start, float length) const {
-    const float margin = MainOf(entry.style.margin, AxisOf(_config.bar.edge));
+    const float margin = MainOf(entry.style.margin, _axis);
     return PlaceBox(entry, start + margin, length - (2.0f * margin));
 }
 
@@ -530,7 +526,7 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
         const ModuleEntry& entry = entries[index];
         PlacedEntry        one{.entry = &entry, .box = PlaceInRoom(entry, layout.offsets[index], lengths[index]), .toggle = {}, .members = {}, .shown = {}};
         if (entry.group != nullptr) {
-            const float              start         = layout.offsets[index] + MainOf(entry.style.margin, AxisOf(_config.bar.edge));
+            const float              start         = layout.offsets[index] + MainOf(entry.style.margin, _axis);
             const std::vector<float> memberLengths = BoxLengths(entry.members);
             const GroupLayout        group         = ArrangeMembers(entry, memberLengths);
             one.toggle                             = PlaceBox(entry, start, group.toggleLength).bounds;
@@ -570,11 +566,10 @@ void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayo
         return;
     }
     ID2D1DeviceContext* context   = _surface->Context();
-    const Axis          axis      = AxisOf(_config.bar.edge);
     const SectionStyle& style     = _config.style.section;
-    const float         margin    = CrossOf(style.margin, axis);
-    const float         thickness = CrossLength(context->GetSize(), axis);
-    const D2D1_RECT_F   section   = MainCrossRect(axis, layout.start, layout.length, margin, thickness - (2.0f * margin));
+    const float         margin    = CrossOf(style.margin, _axis);
+    const float         thickness = CrossLength(context->GetSize(), _axis);
+    const D2D1_RECT_F   section   = MainCrossRect(_axis, layout.start, layout.length, margin, thickness - (2.0f * margin));
     DrawBox(context, *_brushes, section, style.box, style.box.background);
 
     for (const PlacedEntry& placed : entries) {
@@ -588,11 +583,8 @@ void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayo
 
 // Mouse positions are client pixels, and modules lay out in DIPs.
 const Bar::HitBox* Bar::BoxAt(POINT client) const {
-    const float         scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
-    const D2D1_POINT_2F point = D2D1::Point2F(static_cast<float>(client.x) * scale, static_cast<float>(client.y) * scale);
-    const auto          box   = std::ranges::find_if(_hitBoxes, [point](const HitBox& candidate) {
-        return point.x >= candidate.bounds.left && point.x < candidate.bounds.right && point.y >= candidate.bounds.top && point.y < candidate.bounds.bottom;
-    });
+    const D2D1_POINT_2F point = ClientDips(client, _placement.dpi);
+    const auto          box   = std::ranges::find_if(_hitBoxes, [point](const HitBox& candidate) { return Contains(candidate.bounds, point); });
     return box == _hitBoxes.end() ? nullptr : &*box;
 }
 
@@ -649,8 +641,8 @@ void Bar::ScheduleNextChange() {
 }
 
 D2D1_POINT_2F Bar::ContentPoint(POINT client, const HitBox& box) const {
-    const float scale = USER_DEFAULT_SCREEN_DPI / static_cast<float>(_placement.dpi);
-    return D2D1::Point2F((static_cast<float>(client.x) * scale) - box.contentOrigin.x, (static_cast<float>(client.y) * scale) - box.contentOrigin.y);
+    const D2D1_POINT_2F point = ClientDips(client, _placement.dpi);
+    return D2D1::Point2F(point.x - box.contentOrigin.x, point.y - box.contentOrigin.y);
 }
 
 bool Bar::Point(POINT client) {
@@ -702,7 +694,7 @@ void Bar::ShowTooltip() {
     // Against the item the text describes, such as one tray icon, or else the whole module.
     const std::optional<D2D1_RECT_F> item   = _pointed->TooltipItem();
     const D2D1_POINT_2F              origin = box->contentOrigin;
-    const D2D1_RECT_F span = item.has_value() ? D2D1::RectF(origin.x + item->left, origin.y + item->top, origin.x + item->right, origin.y + item->bottom) : box->bounds;
+    const D2D1_RECT_F                span   = item.has_value() ? Offset(*item, origin) : box->bounds;
     _tooltip->Show(*text, AnchorFor(span));
 }
 

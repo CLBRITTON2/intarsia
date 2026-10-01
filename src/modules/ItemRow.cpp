@@ -1,6 +1,7 @@
 #include "modules/ItemRow.hpp"
 
 #include "bar/Box.hpp"
+#include "render/Axis.hpp"
 
 #include <algorithm>
 #include <format>
@@ -38,9 +39,7 @@ float ItemTextInset(const ItemStyle& style, Axis axis) {
 }
 
 std::optional<size_t> ItemAt(const ItemRow& row, D2D1_POINT_2F point) {
-    const auto box = std::ranges::find_if(row.boxes, [point](const D2D1_RECT_F& candidate) {
-        return point.x >= candidate.left && point.x < candidate.right && point.y >= candidate.top && point.y < candidate.bottom;
-    });
+    const auto box = std::ranges::find_if(row.boxes, [point](const D2D1_RECT_F& candidate) { return Contains(candidate, point); });
     if (box == row.boxes.end()) {
         return std::nullopt;
     }
@@ -52,7 +51,7 @@ D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, 
 }
 
 void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, bool hovered, D2D1_POINT_2F origin) {
-    const D2D1_RECT_F placed = D2D1::RectF(origin.x + box.left, origin.y + box.top, origin.x + box.right, origin.y + box.bottom);
+    const D2D1_RECT_F placed = Offset(box, origin);
     const BoxStyle    boxStyle{.background = style.background, .border = {}, .radiusDips = style.radiusDips, .padding = style.padding, .shadows = style.shadows};
     DrawBox(render.context, *render.brushes, placed, boxStyle, hovered ? style.hoverBackground : style.background);
 }

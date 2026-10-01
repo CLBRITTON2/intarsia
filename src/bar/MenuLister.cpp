@@ -3,6 +3,7 @@
 #include "modules/CommandPoller.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
+#include "platform/Process.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -10,12 +11,11 @@
 #include <format>
 #include <string>
 #include <utility>
+#include <variant>
 
 namespace {
 
-    constexpr size_t kMaxOutputBytes = size_t{64} * 1024;
-
-    MenuItem         ReadItem(const nlohmann::json& item) {
+    MenuItem ReadItem(const nlohmann::json& item) {
         if (!item.is_object()) {
             throw OutputError("printed a JSON item that is not an object");
         }
@@ -44,9 +44,9 @@ namespace {
             throw OutputError("printed a JSON item tooltip that is not a string");
         }
         MenuEntry entry{.id      = id->get<std::string>(),
-                                .text    = text->get<std::string>(),
-                                .active  = active != item.end() && active->get<bool>(),
-                                .tooltip = tooltip == item.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>())};
+                        .text    = text->get<std::string>(),
+                        .active  = active != item.end() && active->get<bool>(),
+                        .tooltip = tooltip == item.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>())};
         RequireDrawable(entry.id, "id", L"");
         RequireDrawable(entry.text, "text", L"");
         if (entry.tooltip.has_value()) {
@@ -60,14 +60,12 @@ namespace {
 
     // Runs on the lister's thread, so every failure becomes a listing instead of an exception.
     MenuListing ListEntries(const Command& command, std::chrono::seconds timeout, HANDLE stopEvent) {
-        std::string output;
-        try {
-            output = CaptureOutput(command, timeout, kMaxOutputBytes, stopEvent);
-        } catch (const CommandError& error) { return MenuFailure{.reason = error.what(), .detail = error.what()}; } catch (const Win32Error& error) {
-            return MenuFailure{.reason = "could not run", .detail = error.what()};
+        const auto output = RunOrFailure([&] { return CaptureOutput(command, timeout, kMaxCommandOutputBytes, stopEvent); });
+        if (const auto* failure = std::get_if<RunFailure>(&output)) {
+            return MenuFailure{.reason = failure->reason, .detail = failure->detail};
         }
         try {
-            return ParseMenuOutput(output);
+            return ParseMenuOutput(std::get<std::string>(output));
         } catch (const OutputError& error) { return MenuFailure{.reason = error.what(), .detail = error.what()}; }
     }
 

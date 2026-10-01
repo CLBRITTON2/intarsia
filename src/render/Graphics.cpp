@@ -111,6 +111,14 @@ std::int32_t DipsToPixels(float dips, std::uint32_t dpi) {
     return static_cast<std::int32_t>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
 }
 
+float PixelsToDips(float pixels, std::uint32_t dpi) {
+    return pixels * USER_DEFAULT_SCREEN_DPI / static_cast<float>(dpi);
+}
+
+D2D1_POINT_2F ClientDips(POINT client, std::uint32_t dpi) {
+    return D2D1::Point2F(PixelsToDips(static_cast<float>(client.x), dpi), PixelsToDips(static_cast<float>(client.y), dpi));
+}
+
 std::int32_t DipsToWholePixels(float dips, std::uint32_t dpi) {
     return static_cast<std::int32_t>(std::ceil(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
 }

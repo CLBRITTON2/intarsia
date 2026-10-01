@@ -1,3 +1,4 @@
+#include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Process.hpp"
 
@@ -18,6 +19,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -203,6 +205,25 @@ TEST(Process, StreamLinesDeliversALastLineWithNoLineEnding) {
 TEST(Process, StreamLinesFailsPastTheLineCap) {
     EXPECT_THAT([] { return StreamLines(Cmd({L"/c", L"echo 0123456789abcdef"}), 8, NeverSignaled().get(), [](std::string_view) {}); },
                 CommandErrorWith("printed a line longer than 8 bytes"));
+}
+
+TEST(Process, RunOrFailureReturnsWhatTheRunReturns) {
+    const std::variant<std::string, RunFailure> result = RunOrFailure([] { return std::string("printed"); });
+    EXPECT_EQ(std::get<std::string>(result), "printed");
+}
+
+TEST(Process, RunOrFailureShowsACommandErrorAsItsMessage) {
+    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw CommandError("timed out"); });
+    const RunFailure&                           failure = std::get<RunFailure>(result);
+    EXPECT_EQ(failure.reason, "timed out");
+    EXPECT_EQ(failure.detail, "timed out");
+}
+
+TEST(Process, RunOrFailureShowsAWin32ErrorAsCouldNotRun) {
+    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw Win32Error("CreateProcessW", E_ACCESSDENIED); });
+    const RunFailure&                           failure = std::get<RunFailure>(result);
+    EXPECT_EQ(failure.reason, "could not run");
+    EXPECT_THAT(failure.detail, testing::HasSubstr("CreateProcessW"));
 }
 
 TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {

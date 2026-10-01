@@ -17,12 +17,9 @@
 
 namespace {
 
-    // Far more than one line on a bar needs. Output past it fails the run instead of growing without bound.
-    constexpr size_t kMaxOutputBytes = size_t{64} * 1024;
-
-    CommandResult    Failure(std::string text, std::string detail) {
+    CommandResult Failure(std::string text, std::string detail) {
         return CommandResult{
-               .outcome = CommandOutcome::Failed, .text = std::move(text), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = std::move(detail)};
+            .outcome = CommandOutcome::Failed, .text = std::move(text), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = std::move(detail)};
     }
 
     // The first line of text, without its line ending.
@@ -175,26 +172,24 @@ bool CommandPoller::StoppedWaiting(HANDLE stopEvent, std::chrono::steady_clock::
 
 // Runs on the poller thread, so every failure becomes a result instead of an exception.
 CommandResult CommandPoller::RunOnce(HANDLE stopEvent, std::chrono::seconds timeout) const {
-    std::string output;
-    try {
-        output = CaptureOutput(_command, timeout, kMaxOutputBytes, stopEvent);
-    } catch (const CommandError& error) { return Failure(error.what(), error.what()); } catch (const Win32Error& error) {
-        return Failure("could not run", error.what());
+    const auto output = RunOrFailure([&] { return CaptureOutput(_command, timeout, kMaxCommandOutputBytes, stopEvent); });
+    if (const auto* failure = std::get_if<RunFailure>(&output)) {
+        return Failure(failure->reason, failure->detail);
     }
     // Parsed here so the UI thread only ever meets text it can draw.
-    return ParseOutput(output, _output, _classes);
+    return ParseOutput(std::get<std::string>(output), _output, _classes);
 }
 
 // Publishes each line as it comes and returns how the command ended, which is always a failure: a continuous command
 // is expected to keep running.
 CommandResult CommandPoller::StreamOnce(HANDLE stopEvent) {
-    try {
-        const std::uint32_t exitCode = StreamLines(_command, kMaxOutputBytes, stopEvent, [this](std::string_view line) { Publish(ParseOutput(line, _output, _classes)); });
-        const std::string   reason   = std::format("exited with code {}", exitCode);
-        return Failure(reason, reason);
-    } catch (const CommandError& error) { return Failure(error.what(), error.what()); } catch (const Win32Error& error) {
-        return Failure("could not run", error.what());
+    const auto exitCode = RunOrFailure(
+        [this, stopEvent] { return StreamLines(_command, kMaxCommandOutputBytes, stopEvent, [this](std::string_view line) { Publish(ParseOutput(line, _output, _classes)); }); });
+    if (const auto* failure = std::get_if<RunFailure>(&exitCode)) {
+        return Failure(failure->reason, failure->detail);
     }
+    const std::string reason = std::format("exited with code {}", std::get<std::uint32_t>(exitCode));
+    return Failure(reason, reason);
 }
 
 // Posts and logs only on a change, so a command that keeps failing the same way logs once.

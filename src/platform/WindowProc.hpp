@@ -3,6 +3,7 @@
 #include "platform/Win32Cast.hpp"
 
 #include <windows.h>
+#include <windowsx.h>
 
 #include <exception>
 #include <memory>
@@ -42,3 +43,8 @@ struct OwnedWindowDestroyer {
 };
 
 using UniqueOwnedWindow = std::unique_ptr<std::remove_pointer_t<HWND>, OwnedWindowDestroyer>;
+
+// The client-area point a mouse message's lParam carries.
+inline POINT ClientPoint(LPARAM lParam) {
+    return POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)};
+}

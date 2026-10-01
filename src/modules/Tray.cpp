@@ -1,5 +1,6 @@
 #include "modules/Tray.hpp"
 
+#include "render/Axis.hpp"
 #include "render/Graphics.hpp"
 #include "render/Icon.hpp"
 
@@ -72,10 +73,7 @@ void Tray::Place(const ModulePlacement& placement) {
     const D2D1_POINT_2F       origin   = placement.contentOrigin;
     for (size_t index = 0; index < _slots.size() && MainEnd(_row.boxes[index], _row.axis) <= revealed; ++index) {
         const D2D1_RECT_F& box = _row.boxes[index];
-        rects.push_back(
-            TrayIconRect{.owner = _slots[index].icon.owner,
-                         .id    = _slots[index].icon.id,
-                         .rect = DipsToScreen(placement.window, D2D1::RectF(origin.x + box.left, origin.y + box.top, origin.x + box.right, origin.y + box.bottom), placement.dpi)});
+        rects.push_back(TrayIconRect{.owner = _slots[index].icon.owner, .id = _slots[index].icon.id, .rect = DipsToScreen(placement.window, Offset(box, origin), placement.dpi)});
     }
     _tray.ShowRects(this, std::move(rects));
 }
