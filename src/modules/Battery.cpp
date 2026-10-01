@@ -6,36 +6,24 @@
 #include <stdexcept>
 #include <utility>
 
-Battery::Battery(BatteryConfig config, const IBattery& battery) : _config(std::move(config)), _battery(battery) {
+Battery::Battery(BatteryConfig config, const IBattery& battery) : IconTextModule(std::move(config)), _battery(battery) {
     const std::vector<Placeholder> samples = BatteryPlaceholders(BatteryState{.charge = ChargeState::Discharging, .percent = 80, .secondsLeft = 3600, .healthPercent = 90});
-    RequirePlaceholders("battery format_discharging", _config.formatDischarging, samples);
-    RequirePlaceholders("battery format_charging", _config.formatCharging, samples);
-    RequirePlaceholders("battery format_plugged", _config.formatPlugged, samples);
-    RequireOptionalPlaceholders("battery tooltip", _config.tooltip, samples);
+    RequirePlaceholders("battery format_discharging", Settings().formatDischarging, samples);
+    RequirePlaceholders("battery format_charging", Settings().formatCharging, samples);
+    RequirePlaceholders("battery format_plugged", Settings().formatPlugged, samples);
+    RequireOptionalPlaceholders("battery tooltip", Settings().tooltip, samples);
 }
 
-bool Battery::Layout(const RenderContext& render) {
-    return _line.Update(render, FormatBattery(_config, _battery.State()));
-}
-
-D2D1_SIZE_F Battery::Size() const {
-    return _line.Size();
-}
-
-void Battery::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    _line.Draw(render, origin);
-}
-
-const ModuleActions& Battery::Actions() const {
-    return _config.actions;
+ModuleText Battery::Content() {
+    return FormatBattery(Settings(), _battery.State());
 }
 
 std::optional<std::wstring> Battery::TooltipText() {
     const std::optional<BatteryState> state = _battery.State();
-    if (!_config.tooltip.has_value() || !state.has_value()) {
+    if (!Settings().tooltip.has_value() || !state.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*_config.tooltip, BatteryPlaceholders(*state)));
+    return ToWide(FormatPlaceholders(*Settings().tooltip, BatteryPlaceholders(*state)));
 }
 
 std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {

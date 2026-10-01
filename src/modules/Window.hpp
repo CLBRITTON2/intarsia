@@ -1,8 +1,8 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/IconTextModule.hpp"
 #include "modules/Placeholders.hpp"
 #include "wm/IWindowManager.hpp"
 
@@ -12,21 +12,17 @@
 #include <vector>
 
 // The focused window's title. Empty while nothing has focus.
-class Window final : public IModule {
+class Window final : public IconTextModule<WindowConfig> {
   public:
     // Throws ConfigError when the tooltip names another value or has a spec that cannot render a string.
     Window(WindowConfig config, const IWindowManager& windowManager);
 
-    bool                        Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                 Size() const override;
-    void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    WindowConfig          _config;
+    ModuleText            Content() override;
+
     const IWindowManager& _windowManager;
-    TextLine              _line;
 };
 
 // The values a window tooltip can name: {title}, the whole title.

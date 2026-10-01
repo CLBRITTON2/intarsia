@@ -35,33 +35,21 @@ namespace {
 
 } // namespace
 
-Network::Network(NetworkConfig config, const INetwork& network) : _config(Validated(std::move(config))), _network(network), _showsRates(ShowsRates(_config)) {}
+Network::Network(NetworkConfig config, const INetwork& network) : IconTextModule(Validated(std::move(config))), _network(network), _showsRates(ShowsRates(Settings())) {}
 
-bool Network::Layout(const RenderContext& render) {
-    return _line.Update(render, FormatNetwork(_config, _network.State()));
+ModuleText Network::Content() {
+    return FormatNetwork(Settings(), _network.State());
 }
 
 std::optional<std::uint32_t> Network::MillisecondsUntilChange() const {
     return _showsRates ? std::optional<std::uint32_t>(kRateTickMs) : std::nullopt;
 }
 
-D2D1_SIZE_F Network::Size() const {
-    return _line.Size();
-}
-
-void Network::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    _line.Draw(render, origin);
-}
-
-const ModuleActions& Network::Actions() const {
-    return _config.actions;
-}
-
 std::optional<std::wstring> Network::TooltipText() {
-    if (!_config.tooltip.has_value()) {
+    if (!Settings().tooltip.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*_config.tooltip, NetworkPlaceholders(_network.State())));
+    return ToWide(FormatPlaceholders(*Settings().tooltip, NetworkPlaceholders(_network.State())));
 }
 
 std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {

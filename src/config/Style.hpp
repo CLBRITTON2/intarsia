@@ -63,6 +63,9 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
 // Every #id names a module the config defines, so a misspelled name is an error rather than a rule that never applies.
 void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& names);
 
+// Letters, digits, '_' and '-': a CSS identifier's characters, which module and class names are written in.
+bool IsIdentCharacter(char character);
+
 // Whether name is one of the classes intarsia styles itself (.module, .alert, .icon ...), which a custom module cannot
 // declare.
 bool IsStyledClass(std::string_view name);

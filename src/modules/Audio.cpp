@@ -16,23 +16,15 @@ namespace {
 
 } // namespace
 
-Audio::Audio(AudioConfig config, IAudio& audio) : _config(std::move(config)), _audio(audio) {
+Audio::Audio(AudioConfig config, IAudio& audio) : IconTextModule(std::move(config)), _audio(audio) {
     const std::vector<Placeholder> samples = AudioPlaceholders(AudioDevice{.name = L"Speakers", .volume = 0.5f, .muted = false});
-    RequirePlaceholders("audio format", _config.format, samples);
-    RequirePlaceholders("audio format_muted", _config.formatMuted, samples);
-    RequireOptionalPlaceholders("audio tooltip", _config.tooltip, samples);
+    RequirePlaceholders("audio format", Settings().format, samples);
+    RequirePlaceholders("audio format_muted", Settings().formatMuted, samples);
+    RequireOptionalPlaceholders("audio tooltip", Settings().tooltip, samples);
 }
 
-bool Audio::Layout(const RenderContext& render) {
-    return _line.Update(render, FormatAudio(_config, _audio.Device()));
-}
-
-D2D1_SIZE_F Audio::Size() const {
-    return _line.Size();
-}
-
-void Audio::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    _line.Draw(render, origin);
+ModuleText Audio::Content() {
+    return FormatAudio(Settings(), _audio.Device());
 }
 
 void Audio::Click(D2D1_POINT_2F) {
@@ -45,20 +37,16 @@ void Audio::Click(D2D1_POINT_2F) {
 void Audio::Scroll(ScrollDirection direction) {
     const std::optional<AudioDevice> device = _audio.Device();
     if (device.has_value()) {
-        _audio.SetVolume(SteppedVolume(device->volume, _config.stepPercent, direction));
+        _audio.SetVolume(SteppedVolume(device->volume, Settings().stepPercent, direction));
     }
-}
-
-const ModuleActions& Audio::Actions() const {
-    return _config.actions;
 }
 
 std::optional<std::wstring> Audio::TooltipText() {
     const std::optional<AudioDevice> device = _audio.Device();
-    if (!_config.tooltip.has_value() || !device.has_value()) {
+    if (!Settings().tooltip.has_value() || !device.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*_config.tooltip, AudioPlaceholders(*device)));
+    return ToWide(FormatPlaceholders(*Settings().tooltip, AudioPlaceholders(*device)));
 }
 
 std::int32_t VolumePercent(float volume) {

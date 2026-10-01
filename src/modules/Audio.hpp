@@ -4,6 +4,7 @@
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/IconTextModule.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -12,23 +13,19 @@
 // The default output or input device's volume through format, or format_muted and icon_muted in the module's .muted
 // colors while it is muted. A click toggles mute and a scroll changes the volume by step, unless the config binds those
 // inputs to actions. Shows nothing while there is no device of its flow.
-class Audio final : public IModule {
+class Audio final : public IconTextModule<AudioConfig> {
   public:
     // Throws ConfigError when a format is not a valid spec for its values.
     Audio(AudioConfig config, IAudio& audio);
 
-    bool                        Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                 Size() const override;
-    void                        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     void                        Click(D2D1_POINT_2F point) override;
     void                        Scroll(ScrollDirection direction) override;
-    const ModuleActions&        Actions() const override;
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    AudioConfig _config;
-    IAudio&     _audio;
-    TextLine    _line;
+    ModuleText Content() override;
+
+    IAudio&    _audio;
 };
 
 // The volume as the formats get it: a whole percent.

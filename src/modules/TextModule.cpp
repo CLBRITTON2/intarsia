@@ -7,38 +7,22 @@
 #include <format>
 #include <utility>
 
-TextModule::TextModule(TextModuleConfig config, std::string_view type, const std::vector<Placeholder>& samples) : _config(std::move(config)) {
-    RequirePlaceholders(std::format("{} format", type), _config.format, samples);
-    RequireOptionalPlaceholders(std::format("{} tooltip", type), _config.tooltip, samples);
-}
-
-bool TextModule::Layout(const RenderContext& render) {
-    return _line.Update(render, Format(_config.format));
-}
-
-D2D1_SIZE_F TextModule::Size() const {
-    return _line.Size();
-}
-
-void TextModule::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    _line.Draw(render, origin);
+TextModule::TextModule(TextModuleConfig config, std::string_view type, const std::vector<Placeholder>& samples) : IconTextModule(std::move(config)) {
+    RequirePlaceholders(std::format("{} format", type), Settings().format, samples);
+    RequireOptionalPlaceholders(std::format("{} tooltip", type), Settings().tooltip, samples);
 }
 
 std::optional<std::uint32_t> TextModule::MillisecondsUntilChange() const {
-    return static_cast<std::uint32_t>(TimeUntilNextTick(std::chrono::system_clock::now(), _config.interval).count());
-}
-
-const ModuleActions& TextModule::Actions() const {
-    return _config.actions;
+    return static_cast<std::uint32_t>(TimeUntilNextTick(std::chrono::system_clock::now(), Settings().interval).count());
 }
 
 std::optional<std::wstring> TextModule::TooltipText() {
-    if (!_config.tooltip.has_value()) {
+    if (!Settings().tooltip.has_value()) {
         return std::nullopt;
     }
-    return Format(*_config.tooltip).text;
+    return Format(*Settings().tooltip).text;
 }
 
-const TextModuleConfig& TextModule::Settings() const {
-    return _config;
+ModuleText TextModule::Content() {
+    return Format(Settings().format);
 }

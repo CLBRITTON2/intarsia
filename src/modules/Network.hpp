@@ -1,8 +1,8 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/IconTextModule.hpp"
 #include "modules/Placeholders.hpp"
 #include "network/INetwork.hpp"
 
@@ -14,22 +14,18 @@
 // The interface the default route leaves through: its format and icon for Wi-Fi (the icon by signal strength),
 // Ethernet or no connection. Input does nothing unless the config binds actions. The backend tells of link changes
 // only, so a format showing a rate makes the module tick each second instead.
-class Network final : public IModule {
+class Network final : public IconTextModule<NetworkConfig> {
   public:
     // Throws ConfigError when a format uses a name it has no value for.
     Network(NetworkConfig config, const INetwork& network);
 
-    bool                         Layout(const RenderContext& render) override;
-    D2D1_SIZE_F                  Size() const override;
-    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    const ModuleActions&         Actions() const override;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     std::optional<std::wstring>  TooltipText() override;
 
   private:
-    NetworkConfig   _config;
+    ModuleText      Content() override;
+
     const INetwork& _network;
-    TextLine        _line;
     bool            _showsRates;
 };
 

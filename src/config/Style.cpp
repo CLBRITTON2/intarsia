@@ -9,6 +9,7 @@
 #include <format>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -35,10 +36,6 @@ namespace {
 
     std::uint32_t LineAt(std::string_view text, size_t offset) {
         return static_cast<std::uint32_t>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(offset), '\n')) + 1;
-    }
-
-    bool IsIdentCharacter(char character) {
-        return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-';
     }
 
     // Comments become spaces, newlines kept, so every offset keeps its line.
@@ -381,12 +378,7 @@ namespace {
     }
 
     std::string KnownTypes() {
-        std::string names = "section, tooltip";
-        for (const ModuleTypeName& type : kModuleTypes) {
-            names += ", ";
-            names += type.name;
-        }
-        return names;
+        return "section, tooltip, " + JoinNames(kModuleTypes | std::views::transform(&ModuleTypeName::name));
     }
 
     // Reads one identifier from start, throwing when there is none.
@@ -612,15 +604,6 @@ namespace {
         throw std::invalid_argument(std::format("unknown style target {}", static_cast<std::int32_t>(selector.target)));
     }
 
-    std::string Joined(const std::vector<std::string_view>& names) {
-        std::string joined;
-        for (const std::string_view name : names) {
-            joined += joined.empty() ? "" : ", ";
-            joined += name;
-        }
-        return joined;
-    }
-
     // One rule block as written, before its selector list is split and its values checked.
     struct RawRule {
         std::string_view         selectors;
@@ -752,7 +735,7 @@ namespace {
                 const std::vector<Declaration> expanded = declaration.property == "border" ? ExpandBorder(declaration) : std::vector<Declaration>{declaration};
                 for (const Declaration& longhand : expanded) {
                     if (std::ranges::find(allowed, longhand.property) == allowed.end()) {
-                        throw std::invalid_argument(std::format("does not apply to {}, which takes: {}", selectorText, Joined(allowed)));
+                        throw std::invalid_argument(std::format("does not apply to {}, which takes: {}", selectorText, JoinNames(allowed)));
                     }
                     CheckValue(*KindOf(longhand.property), longhand.value);
                     if (longhand.property == "transition") {
@@ -1001,11 +984,14 @@ void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& na
         for (const Compound& compound : rule.selector.compounds) {
             if (!compound.id.empty() && std::ranges::find(names, compound.id) == names.end()) {
                 throw StyleError(sheet.source, rule.line,
-                                 std::format("#{} names no module: the config's modules table defines {}", compound.id,
-                                             names.empty() ? std::string("none") : Joined(std::vector<std::string_view>(names.begin(), names.end()))));
+                                 std::format("#{} names no module: the config's modules table defines {}", compound.id, names.empty() ? std::string("none") : JoinNames(names)));
             }
         }
     }
+}
+
+bool IsIdentCharacter(char character) {
+    return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-';
 }
 
 bool IsStyledClass(std::string_view name) {

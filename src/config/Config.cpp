@@ -22,6 +22,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <sstream>
 #include <string_view>
 #include <utility>
@@ -202,74 +203,40 @@ namespace {
         return static_cast<std::int64_t>(value);
     }
 
-    WindowManagerKind ParseWindowManager(const TableReader& table, std::string_view key) {
+    // One word a config key accepts and the value it stands for.
+    template <typename Value>
+    struct Keyword {
+        std::string_view name;
+        Value            value;
+    };
+
+    template <typename Value, size_t Count>
+    Value ParseKeyword(const TableReader& table, std::string_view key, const std::array<Keyword<Value>, Count>& keywords) {
         const std::string value = table.String(key);
-        if (value == "windows") {
-            return WindowManagerKind::Windows;
+        const auto        entry = std::ranges::find(keywords, value, &Keyword<Value>::name);
+        if (entry == keywords.end()) {
+            throw table.Error(std::format("{} must be one of {}, got '{}'", table.KeyPath(key), JoinNames(keywords | std::views::transform(&Keyword<Value>::name)), value));
         }
-        if (value == "glazewm") {
-            return WindowManagerKind::GlazeWm;
-        }
-        throw table.Error(std::format("{} must be one of windows, glazewm, got '{}'", table.KeyPath(key), value));
+        return entry->value;
     }
 
-    Edge ParseEdge(const TableReader& table, std::string_view key) {
-        const std::string value = table.String(key);
-        if (value == "top") {
-            return Edge::Top;
-        }
-        if (value == "bottom") {
-            return Edge::Bottom;
-        }
-        if (value == "left") {
-            return Edge::Left;
-        }
-        if (value == "right") {
-            return Edge::Right;
-        }
-        throw table.Error(std::format("{} must be one of top, bottom, left, right, got '{}'", table.KeyPath(key), value));
-    }
+    constexpr std::array<Keyword<WindowManagerKind>, 2> kWindowManagers{
+        {{.name = "windows", .value = WindowManagerKind::Windows}, {.name = "glazewm", .value = WindowManagerKind::GlazeWm}}};
+    constexpr std::array<Keyword<Edge>, 4> kEdges{
+        {{.name = "top", .value = Edge::Top}, {.name = "bottom", .value = Edge::Bottom}, {.name = "left", .value = Edge::Left}, {.name = "right", .value = Edge::Right}}};
+    constexpr std::array<Keyword<Layer>, 2>          kLayers{{{.name = "top", .value = Layer::Top}, {.name = "bottom", .value = Layer::Bottom}}};
+    constexpr std::array<Keyword<Space>, 2>          kSpaces{{{.name = "reserve", .value = Space::Reserve}, {.name = "share", .value = Space::Share}}};
+    constexpr std::array<Keyword<CustomOutput>, 2>   kCustomOutputs{{{.name = "text", .value = CustomOutput::Text}, {.name = "json", .value = CustomOutput::Json}}};
+    constexpr std::array<Keyword<CounterCombine>, 3> kCounterCombines{
+        {{.name = "sum", .value = CounterCombine::Sum}, {.name = "max", .value = CounterCombine::Max}, {.name = "average", .value = CounterCombine::Average}}};
+    constexpr std::array<Keyword<AudioFlow>, 2> kAudioFlows{{{.name = "output", .value = AudioFlow::Output}, {.name = "input", .value = AudioFlow::Input}}};
 
-    Layer ParseLayer(const TableReader& table, std::string_view key) {
-        const std::string value = table.String(key);
-        if (value == "top") {
-            return Layer::Top;
-        }
-        if (value == "bottom") {
-            return Layer::Bottom;
-        }
-        throw table.Error(std::format("{} must be one of top, bottom, got '{}'", table.KeyPath(key), value));
-    }
-
-    Space ParseSpace(const TableReader& table, std::string_view key) {
-        const std::string value = table.String(key);
-        if (value == "reserve") {
-            return Space::Reserve;
-        }
-        if (value == "share") {
-            return Space::Share;
-        }
-        throw table.Error(std::format("{} must be one of reserve, share, got '{}'", table.KeyPath(key), value));
-    }
-
-    std::string KnownModuleNames() {
-        std::string names;
-        for (const ModuleTypeName& module : kModuleTypes) {
-            names += names.empty() ? "" : ", ";
-            names += module.name;
-        }
-        return names;
-    }
-
-    bool IsModuleNameCharacter(char character) {
-        return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-';
-    }
-
-    ModuleKind ParseModuleType(const TableReader& module) {
+    ModuleKind                                  ParseModuleType(const TableReader& module) {
         const std::string type  = module.String("type");
         const auto        entry = std::ranges::find(kModuleTypes, type, &ModuleTypeName::name);
         if (entry == kModuleTypes.end()) {
-            throw module.Error(std::format("{} is '{}', known types are: {}", module.KeyPath("type"), type, KnownModuleNames()));
+            throw module.Error(
+                std::format("{} is '{}', known types are: {}", module.KeyPath("type"), type, JoinNames(kModuleTypes | std::views::transform(&ModuleTypeName::name))));
         }
         return entry->kind;
     }
@@ -385,7 +352,7 @@ namespace {
     // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
     void RejectUnshownModules(const TableReader& definitions, const Config& config) {
         for (const std::string& name : definitions.Keys()) {
-            if (name.empty() || !std::ranges::all_of(name, IsModuleNameCharacter)) {
+            if (name.empty() || !std::ranges::all_of(name, IsIdentCharacter)) {
                 throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
             }
             if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
@@ -535,24 +502,12 @@ namespace {
         return ReadTextFields(module);
     }
 
-    CustomOutput ParseCustomOutput(const TableReader& module, std::string_view key) {
-        const std::string value = module.String(key);
-        if (value == "text") {
-            return CustomOutput::Text;
-        }
-        if (value == "json") {
-            return CustomOutput::Json;
-        }
-        throw module.Error(std::format("{} must be one of text, json, got '{}'", module.KeyPath(key), value));
-    }
-
     // Each a CSS class name that style.css writes as .name, none of intarsia's own, none twice.
     std::vector<std::string> ReadCustomClasses(const TableReader& module, std::string_view key) {
         std::vector<std::string> classes = module.StringList(key);
         for (size_t index = 0; index < classes.size(); ++index) {
             const std::string& name = classes[index];
-            const bool         ident =
-                !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, IsModuleNameCharacter);
+            const bool ident = !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, IsIdentCharacter);
             if (!ident) {
                 throw module.Error(
                     std::format("{} lists '{}', which is not a class name: use letters, digits, '_' or '-', starting with a letter or '_'", module.KeyPath(key), name));
@@ -571,23 +526,9 @@ namespace {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "timeout", "output", "classes", "format", "icon", "interval"}));
         return CustomConfig{.command = ReadCommand(module, "command"),
                             .timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout")),
-                            .output  = ParseCustomOutput(module, "output"),
+                            .output  = ParseKeyword(module, "output", kCustomOutputs),
                             .classes = ReadCustomClasses(module, "classes"),
                             .text    = ReadTextFields(module)};
-    }
-
-    CounterCombine ParseCounterCombine(const TableReader& module, std::string_view key) {
-        const std::string value = module.String(key);
-        if (value == "sum") {
-            return CounterCombine::Sum;
-        }
-        if (value == "max") {
-            return CounterCombine::Max;
-        }
-        if (value == "average") {
-            return CounterCombine::Average;
-        }
-        throw module.Error(std::format("{} must be one of sum, max, average, got '{}'", module.KeyPath(key), value));
     }
 
     // Added to a query of its own here, so a path this system has no counter for stops the load rather than the bar.
@@ -607,18 +548,7 @@ namespace {
 
     CounterConfig ReadCounterConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "counter", "combine", "format", "icon", "interval"}));
-        return CounterConfig{.path = ReadCounterPath(module, "counter"), .combine = ParseCounterCombine(module, "combine"), .text = ReadTextFields(module)};
-    }
-
-    AudioFlow ParseAudioFlow(const TableReader& module, std::string_view key) {
-        const std::string value = module.String(key);
-        if (value == "output") {
-            return AudioFlow::Output;
-        }
-        if (value == "input") {
-            return AudioFlow::Input;
-        }
-        throw module.Error(std::format("{} must be one of output, input, got '{}'", module.KeyPath(key), value));
+        return CounterConfig{.path = ReadCounterPath(module, "counter"), .combine = ParseKeyword(module, "combine", kCounterCombines), .text = ReadTextFields(module)};
     }
 
     AudioConfig ReadAudioConfig(const TableReader& module) {
@@ -627,7 +557,7 @@ namespace {
         if (step > 100) {
             throw module.Error(std::format("{} is a percent of full volume, from 1 to 100, got {}", module.KeyPath("step"), step));
         }
-        return AudioConfig{.flow        = ParseAudioFlow(module, "flow"),
+        return AudioConfig{.flow        = ParseKeyword(module, "flow", kAudioFlows),
                            .format      = module.String("format"),
                            .formatMuted = module.String("format_muted"),
                            .tooltip     = ReadTooltip(module),
@@ -862,11 +792,16 @@ Config LoadConfig(const std::filesystem::path& path) {
 
     const TableReader           bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "layer", "space", "thickness"});
-    const BarConfig barConfig{
-        .edge = ParseEdge(bar, "edge"), .layer = ParseLayer(bar, "layer"), .space = ParseSpace(bar, "space"), .thicknessDips = PositiveNumber(bar, "thickness")};
+    const BarConfig barConfig{.edge          = ParseKeyword(bar, "edge", kEdges),
+                              .layer         = ParseKeyword(bar, "layer", kLayers),
+                              .space         = ParseKeyword(bar, "space", kSpaces),
+                              .thicknessDips = PositiveNumber(bar, "thickness")};
 
-    Config config{
-        .bar = barConfig, .style = std::move(style), .windowManager = ParseWindowManager(root, "window_manager"), .modules = std::move(modules), .layouts = std::move(layouts)};
+    Config          config{.bar           = barConfig,
+                           .style         = std::move(style),
+                           .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
+                           .modules       = std::move(modules),
+                           .layouts       = std::move(layouts)};
     RejectUnshownModules(definitions, config);
     RequireMembersInOneGroup(definitions, config);
     RequireKnownIds(sheet, definitions.Keys());

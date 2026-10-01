@@ -1,7 +1,19 @@
 #pragma once
 
+#include <ranges>
 #include <string>
 #include <string_view>
+
+// The names as "a, b, c", for messages that list what is allowed.
+template <std::ranges::input_range Names>
+std::string JoinNames(const Names& names) {
+    std::string joined;
+    for (const std::string_view name : names) {
+        joined += joined.empty() ? "" : ", ";
+        joined += name;
+    }
+    return joined;
+}
 
 std::string  ToUtf8(std::wstring_view text);
 std::wstring ToWide(std::string_view text);

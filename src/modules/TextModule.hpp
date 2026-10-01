@@ -1,24 +1,21 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
+#include "modules/IconTextModule.hpp"
 #include "modules/Placeholders.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 // A module that shows its icon and one formatted value, redrawn on each interval tick: clock, cpu, memory, custom. A
 // subclass supplies only the value, formatted with whichever spec it is given: format on the bar, tooltip on hover.
-class TextModule : public IModule {
+class TextModule : public IconTextModule<TextModuleConfig> {
   public:
-    bool                         Layout(const RenderContext& render) final;
-    D2D1_SIZE_F                  Size() const final;
-    void                         Draw(const RenderContext& render, D2D1_POINT_2F origin) const final;
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    const ModuleActions&         Actions() const final;
     std::optional<std::wstring>  TooltipText() override;
 
   protected:
@@ -26,12 +23,9 @@ class TextModule : public IModule {
     // type names the module, such as "cpu".
     TextModule(TextModuleConfig config, std::string_view type, const std::vector<Placeholder>& samples);
 
-    const TextModuleConfig& Settings() const;
-
     // The module's icon and its current value run through spec.
     virtual ModuleText Format(const std::string& spec) = 0;
 
   private:
-    TextModuleConfig _config;
-    TextLine         _line;
+    ModuleText Content() final;
 };
