@@ -250,6 +250,31 @@ TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
     EXPECT_TRUE(_tray.rects.empty());
 }
 
+TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
+    Tray module(kConfig, _tray, TestModuleStyle());
+    module.Layout(_render);
+    const float folded = module.Size().width;
+    module.Click(At(module, folded / 2.0f));
+    module.Layout(_render);
+    module.Click(At(module, module.Size().width - (folded / 2.0f)));
+    EXPECT_TRUE(module.Layout(_render));
+    EXPECT_FLOAT_EQ(module.Size().width, folded);
+
+    _tray.icons[1].hidden = false;
+    _tray.icons[0].pixels = Pixels();
+    EXPECT_FALSE(module.Layout(_render));
+    EXPECT_FLOAT_EQ(module.Size().width, folded);
+    module.Place(ModulePlacement{.window = RECT{.left = 0, .top = 0, .right = 2000, .bottom = 60}, .contentOrigin = D2D1::Point2F(0.0f, 0.0f), .dpi = 96});
+    EXPECT_TRUE(_tray.rects.empty());
+
+    module.Click(At(module, folded / 2.0f));
+    EXPECT_TRUE(module.Layout(_render));
+    EXPECT_NEAR(module.Size().width, folded + (3.0f * 38.0f), 1.0f);
+    _context->BeginDraw();
+    module.Draw(_render, D2D1::Point2F(0.0f, 0.0f));
+    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+}
+
 TEST_F(TrayModule, NewIconsAndNewPixelsAreChangesButATooltipIsNot) {
     Tray module(kConfig, _tray, TestModuleStyle());
     module.Layout(_render);

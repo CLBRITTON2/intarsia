@@ -70,7 +70,7 @@ class Tray final : public IModule {
     // What the last layout read of them, so drawing and hit tests agree with one frame.
     float             _revealShown = 0.0f;
     float             _angleShown  = 0.0f;
-    std::vector<Slot> _slots; // empty while fully folded
+    std::vector<Slot> _slots; // as last laid out with any icon in sight
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.
     ItemRow                 _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};

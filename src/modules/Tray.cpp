@@ -31,20 +31,22 @@ bool Tray::Layout(const RenderContext& render) {
     _revealShown                = reveal;
     _angleShown                 = position.angleDegrees;
 
-    // Folding keeps the icons until they are out of sight.
-    const std::vector<TrayIcon> shown = reveal > 0.0f ? ShownIcons(_tray.Icons()) : std::vector<TrayIcon>{};
-    changed                           = changed || shown.size() != _slots.size();
-    std::vector<Slot> slots;
-    slots.reserve(shown.size());
-    for (size_t index = 0; index < shown.size(); ++index) {
-        // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
-        const auto kept   = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.icon.pixels == shown[index].pixels; });
-        auto       bitmap = kept != _slots.end() ? kept->bitmap : CreateIconBitmap(render.context, *shown[index].pixels);
-        // changed is already true when the counts differ, so _slots[index] is only read while it exists.
-        changed = changed || _slots[index].icon.pixels != shown[index].pixels;
-        slots.push_back(Slot{.icon = shown[index], .bitmap = std::move(bitmap)});
+    // Folded, the icons wait out of sight as last shown, so unfolding uploads only those that are new or redrawn since.
+    if (reveal > 0.0f) {
+        const std::vector<TrayIcon> shown = ShownIcons(_tray.Icons());
+        changed                           = changed || shown.size() != _slots.size();
+        std::vector<Slot> slots;
+        slots.reserve(shown.size());
+        for (size_t index = 0; index < shown.size(); ++index) {
+            // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
+            const auto kept   = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.icon.pixels == shown[index].pixels; });
+            auto       bitmap = kept != _slots.end() ? kept->bitmap : CreateIconBitmap(render.context, *shown[index].pixels);
+            // changed is already true when the counts differ, so _slots[index] is only read while it exists.
+            changed = changed || _slots[index].icon.pixels != shown[index].pixels;
+            slots.push_back(Slot{.icon = shown[index], .bitmap = std::move(bitmap)});
+        }
+        _slots = std::move(slots);
     }
-    _slots = std::move(slots);
 
     if (!_laidOut) {
         _toggle = LayOutIconText(render, _config.icon, L"");
@@ -81,7 +83,7 @@ void Tray::Place(const ModulePlacement& placement) {
 void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle& style = _style.item;
     const float      icon  = _style.icon.sizeDips;
-    if (!_slots.empty()) {
+    if (_revealShown > 0.0f) {
         // The icons stay where the unfolded row puts them, and the box's edge uncovers them.
         render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + RevealedWidth(), origin.y + _row.size.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (size_t index = 0; index < _slots.size(); ++index) {
