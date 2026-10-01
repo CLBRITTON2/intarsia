@@ -25,24 +25,6 @@ namespace {
                .outcome = CommandOutcome::Failed, .text = std::move(text), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = std::move(detail)};
     }
 
-    // Output that fails its run. The message never quotes the output, so it is always safe to draw and log.
-    class OutputError : public std::runtime_error {
-      public:
-        using std::runtime_error::runtime_error;
-    };
-
-    // Throws OutputError naming field when text is not UTF-8 or holds an unsafe character other than those in allowed.
-    void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed) {
-        std::wstring wide;
-        try {
-            wide = ToWide(text);
-        } catch (const Win32Error&) { throw OutputError(std::format("{} is not UTF-8", field)); }
-        const auto unsafe = std::ranges::find_if(wide, [allowed](wchar_t unit) { return IsUnsafeCharacter(unit) && allowed.find(unit) == std::wstring_view::npos; });
-        if (unsafe != wide.end()) {
-            throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<std::uint32_t>(*unsafe)));
-        }
-    }
-
     // The first line of text, without its line ending.
     std::string_view FirstLine(std::string_view text) {
         std::string_view line = text.substr(0, text.find('\n'));
@@ -118,6 +100,17 @@ namespace {
     }
 
 } // namespace
+
+void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed) {
+    std::wstring wide;
+    try {
+        wide = ToWide(text);
+    } catch (const Win32Error&) { throw OutputError(std::format("{} is not UTF-8", field)); }
+    const auto unsafe = std::ranges::find_if(wide, [allowed](wchar_t unit) { return IsUnsafeCharacter(unit) && allowed.find(unit) == std::wstring_view::npos; });
+    if (unsafe != wide.end()) {
+        throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<std::uint32_t>(*unsafe)));
+    }
+}
 
 CommandResult ParseOutput(std::string_view output, CustomOutput format, const std::vector<std::string>& classes) {
     try {

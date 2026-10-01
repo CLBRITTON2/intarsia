@@ -126,6 +126,7 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     MatchSourcesToConfig();
     Bar::RegisterWindowClass(_instance);
     Tooltip::RegisterWindowClass(_instance);
+    Menu::RegisterWindowClass(_instance);
     CreateBars(PlacementsForAllMonitors());
 }
 

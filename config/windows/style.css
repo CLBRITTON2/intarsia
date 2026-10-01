@@ -32,6 +32,35 @@ tooltip {
     border-radius: 8px;
 }
 
+menu {
+    padding: 4px;
+    background: rgba(28, 28, 30, 0.98);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-width: 480px;
+    max-height: 400px;
+}
+
+menu .scrollbar {
+    width: 3px;
+    margin: 4px 3px;
+    background: var(--muted);
+    border-radius: 2px;
+}
+
+menu .item {
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+menu .item:hover {
+    background: var(--hover);
+}
+
+menu .item.active {
+    color: var(--accent);
+}
+
 .module {
     padding: 0 10px;
     border-radius: 7px;

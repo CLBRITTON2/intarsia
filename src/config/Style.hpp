@@ -10,12 +10,15 @@
 
 // What a selector styles, from its last part.
 enum class StyleTarget : std::uint8_t {
-    Bar,     // *: the bar-wide font and color
-    Section, // section
-    Tooltip, // tooltip
-    Module,  // a module's box: by type (clock), id (its name in the config, #time) or .module, with a state or :hover
-    Icon,    // .icon, alone or inside a module selector
-    Item     // .item with an optional .focused, .occupied, .empty or .toggle and :hover, alone or inside a module selector
+    Bar,          // *: the bar-wide font and color
+    Section,      // section
+    Tooltip,      // tooltip
+    Module,       // a module's box: by type (clock), id (its name in the config, #time) or .module, with a state or :hover
+    Icon,         // .icon, alone or inside a module selector
+    Item,         // .item with an optional .focused, .occupied, .empty or .toggle and :hover, alone or inside a module selector
+    Menu,         // menu
+    MenuItem,     // menu .item with an optional .active and :hover
+    MenuScrollbar // menu .scrollbar
 };
 
 // One part of a selector, as workspaces, #cpu.alert or .item.focused.
@@ -27,7 +30,7 @@ struct Compound {
 };
 
 struct Selector {
-    std::vector<Compound>        compounds; // one, or a module then its .icon or .item
+    std::vector<Compound>        compounds; // one, or a module then its .icon or .item, or menu then .item
     StyleTarget                  target;
     std::array<std::uint32_t, 3> specificity; // ids, then classes and :hover, then types, as CSS ranks them
 };
@@ -53,7 +56,7 @@ struct StyleSheet {
 // Everything outside the subset is a ConfigError naming the line, never a rule that silently does nothing.
 StyleSheet ParseStyleSheet(std::string_view text, std::string source);
 
-// The * rules, which must set font-family, font-size and color, and the section and tooltip rules.
+// The * rules, which must set font-family, font-size and color, and the section, tooltip and menu rules.
 StyleConfig ResolveBarStyle(const StyleSheet& sheet);
 
 // Every rule matching one module, by specificity and then file order, as CSS cascades. Color and font inherit from the

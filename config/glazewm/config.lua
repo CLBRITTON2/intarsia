@@ -44,7 +44,11 @@ return {
     -- on_middle_click, on_scroll_up and on_scroll_down actions. { program, arguments... } starts a program: it must be
     -- an .exe (absolute, or found on PATH when the config loads), and it starts without a shell, so arguments reach it
     -- exactly as written. { window_manager = "focus --next-workspace" } sends the window manager a command in its own
-    -- syntax instead, without starting a process (glazewm only).
+    -- syntax instead, without starting a process (glazewm only). { menu = { command = {...}, timeout = 5,
+    -- on_select = {...} } } opens a menu of what command prints, as {"items":[{"id":"work","text":"Work",
+    -- "active":true,"tooltip":"..."}]} with active and tooltip optional and {"separator":true} a blank line between
+    -- entries. An entry's tooltip shows beside the menu while the cursor rests on it, and picking an entry runs
+    -- on_select with the entry's id as its last argument. An id may not start with - or /.
     --
     -- They also take an optional tooltip: a second format for the same value, shown while the cursor rests on the
     -- module. The workspaces module shows why the window manager is disconnected, with no key needed.

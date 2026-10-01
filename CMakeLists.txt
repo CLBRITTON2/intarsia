@@ -52,9 +52,12 @@ add_library(intarsia_core STATIC
   src/LaunchOptions.cpp
   src/audio/CoreAudio.cpp
   src/bar/Bar.cpp
+  src/bar/Box.cpp
   src/bar/FrameStats.cpp
   src/battery/PowerStatus.cpp
   src/bar/Layout.cpp
+  src/bar/Menu.cpp
+  src/bar/MenuLister.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
   src/config/Style.cpp
@@ -156,6 +159,8 @@ if(BUILD_TESTING)
   add_executable(intarsia_gtests
     tests/LaunchOptions.cpp
     tests/bar/Layout.cpp
+    tests/bar/Menu.cpp
+    tests/bar/MenuLister.cpp
     tests/bar/Tooltip.cpp
     tests/config/Config.cpp
     tests/config/Style.cpp

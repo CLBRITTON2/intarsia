@@ -121,7 +121,7 @@ namespace {
         ValueKind        kind;
     };
 
-    constexpr std::array<PropertyKind, 17> kProperties{{
+    constexpr std::array<PropertyKind, 19> kProperties{{
         {.property = "color", .kind = ValueKind::Color},
         {.property = "background", .kind = ValueKind::Color},
         {.property = "border-color", .kind = ValueKind::Color},
@@ -137,6 +137,8 @@ namespace {
         {.property = "height", .kind = ValueKind::Share},
         {.property = "transition", .kind = ValueKind::Transition},
         {.property = "transform", .kind = ValueKind::Rotation},
+        {.property = "max-width", .kind = ValueKind::PositiveLength},
+        {.property = "max-height", .kind = ValueKind::PositiveLength},
         // Shorthands, expanded into the longhands above as they are read.
         {.property = "border", .kind = ValueKind::Color},
         {.property = "background-color", .kind = ValueKind::Color},
@@ -371,6 +373,7 @@ namespace {
         return {Declaration{.property = "border-width", .value = *width, .line = border.line}, Declaration{.property = "border-color", .value = *color, .line = border.line}};
     }
 
+    // A menu entry's .active is matched by the menu's own selector form, so a custom module may still declare it.
     constexpr std::array<std::string_view, 12> kClasses{"module", "alert", "warning", "critical", "muted", "expanded", "icon", "item", "focused", "occupied", "empty", "toggle"};
 
     bool                                       IsModuleType(std::string_view type) {
@@ -378,7 +381,7 @@ namespace {
     }
 
     std::string KnownTypes() {
-        return "section, tooltip, " + JoinNames(kModuleTypes | std::views::transform(&ModuleTypeName::name));
+        return "section, tooltip, menu, " + JoinNames(kModuleTypes | std::views::transform(&ModuleTypeName::name));
     }
 
     // Reads one identifier from start, throwing when there is none.
@@ -402,7 +405,7 @@ namespace {
         } else if (IsIdentCharacter(text.front())) {
             compound.type = std::string(ReadIdent(text, 0, "type"));
             index         = compound.type.size();
-            if (compound.type != "section" && compound.type != "tooltip" && !IsModuleType(compound.type)) {
+            if (compound.type != "section" && compound.type != "tooltip" && compound.type != "menu" && !IsModuleType(compound.type)) {
                 throw std::invalid_argument(std::format("'{}' is not a type intarsia styles, known types are: {}", compound.type, KnownTypes()));
             }
         }
@@ -496,11 +499,27 @@ namespace {
             }
             return StyleTarget::Bar;
         }
-        if (compounds.size() == 1 && (last.type == "section" || last.type == "tooltip")) {
+        if (compounds.size() == 1 && (last.type == "section" || last.type == "tooltip" || last.type == "menu")) {
             if (!last.id.empty() || !last.classes.empty() || last.hover) {
                 throw std::invalid_argument(std::format("{} takes no id, class or :hover", last.type));
             }
-            return last.type == "section" ? StyleTarget::Section : StyleTarget::Tooltip;
+            return last.type == "section" ? StyleTarget::Section : last.type == "tooltip" ? StyleTarget::Tooltip : StyleTarget::Menu;
+        }
+        if (compounds.front().type == "menu") {
+            const Compound& menu      = compounds.front();
+            const bool      plainMenu = menu.id.empty() && menu.classes.empty() && !menu.hover;
+            const bool      bare      = last.type.empty() && last.id.empty();
+            const bool      entry     = bare &&
+                (last.classes == std::vector<std::string>{"item"} || last.classes == std::vector<std::string>{"item", "active"} ||
+                 last.classes == std::vector<std::string>{"active", "item"});
+            if (plainMenu && bare && last.classes == std::vector<std::string>{"scrollbar"} && !last.hover) {
+                return StyleTarget::MenuScrollbar;
+            }
+            if (!plainMenu || !entry) {
+                throw std::invalid_argument(
+                    std::format("'{}': a menu's entries are menu .item, with .active and :hover, as menu .item.active:hover, and its scroll bar is menu .scrollbar", text));
+            }
+            return StyleTarget::MenuItem;
         }
         if (!compounds.empty() && StateCount(compounds.front()) > 1) {
             throw std::invalid_argument(
@@ -528,8 +547,8 @@ namespace {
             }
             return StyleTarget::Module;
         }
-        throw std::invalid_argument(std::format("'{}' matches nothing intarsia draws: style *, section, tooltip, a module (clock, #time, .module), "
-                                                "or a module's .icon or .item",
+        throw std::invalid_argument(std::format("'{}' matches nothing intarsia draws: style *, section, tooltip, menu, a module (clock, #time, .module), "
+                                                "a module's .icon or .item, or a menu's .item",
                                                 text));
     }
 
@@ -573,6 +592,11 @@ namespace {
                 allowed.assign(kBox.begin(), kBox.end());
                 allowed.emplace_back("color");
                 return allowed;
+            case StyleTarget::Menu:
+                allowed.assign(kBox.begin(), kBox.end());
+                allowed.insert(allowed.end(), {"color", "max-width", "max-height"});
+                return allowed;
+            case StyleTarget::MenuScrollbar: return {"width", "background", "border-radius", "margin"};
             case StyleTarget::Icon:
                 // An unfolded tray's or group's icon turns and nothing else, so its size never changes as it unfolds.
                 if (selector.compounds.size() == 2 && HasClass(selector.compounds.front(), "expanded")) {
@@ -583,6 +607,7 @@ namespace {
                 }
                 return {"font-family", "font-size", "color", "margin-right", "transform", "transition"};
             case StyleTarget::Item:
+            case StyleTarget::MenuItem:
                 // An item under the cursor changes color only: a change of size would move every item after it.
                 if (selector.compounds.back().hover) {
                     return {"color", "background"};
@@ -826,12 +851,13 @@ namespace {
                                  .padding         = box.Space("padding", kNoSpace)};
     }
 
-    ItemStyle ReadItem(const StyleSheet& sheet, const Element& module, std::string_view state, const D2D1_COLOR_F& color) {
+    // An item of owner, a module or the menu, in one state or none.
+    ItemStyle ReadItem(const StyleSheet& sheet, StyleTarget target, const Element& owner, std::string_view state, const D2D1_COLOR_F& color) {
         const std::vector<std::string_view> classes = state.empty() ? std::vector<std::string_view>{"item"} : std::vector<std::string_view>{"item", state};
         const Element                       item{.type = {}, .id = {}, .classes = classes, .hover = false};
         const Element                       hovered{.type = {}, .id = {}, .classes = classes, .hover = true};
-        const Cascaded                      cascaded(sheet, StyleTarget::Item, &module, &item);
-        const Cascaded                      hover(sheet, StyleTarget::Item, &module, &hovered);
+        const Cascaded                      cascaded(sheet, target, &owner, &item);
+        const Cascaded                      hover(sheet, target, &owner, &hovered);
         const D2D1_COLOR_F                  itemColor  = cascaded.Color("color", color);
         const D2D1_COLOR_F                  background = cascaded.Color("background", kTransparent);
         return ItemStyle{.color           = itemColor,
@@ -912,12 +938,27 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     const Cascaded     bar(sheet, StyleTarget::Bar, nullptr, nullptr);
     const Cascaded     section(sheet, StyleTarget::Section, nullptr, nullptr);
     const Cascaded     tooltip(sheet, StyleTarget::Tooltip, nullptr, nullptr);
-    const D2D1_COLOR_F color = ReadColor(Required(bar, "color", "#e0def4").value);
+    const Cascaded     menu(sheet, StyleTarget::Menu, nullptr, nullptr);
+    const Cascaded     scrollbar(sheet, StyleTarget::MenuScrollbar, nullptr, nullptr);
+    const Element      menuElement{.type = "menu", .id = {}, .classes = {}, .hover = false};
+    const D2D1_COLOR_F color     = ReadColor(Required(bar, "color", "#e0def4").value);
+    const D2D1_COLOR_F menuColor = menu.Color("color", color);
+    const auto         readCap   = [](std::string_view text) { return std::optional<float>(ReadPositiveLength(text)); };
     return StyleConfig{.font         = ReadFamily(Required(bar, "font-family", "\"Segoe UI\"").value),
                        .fontSizeDips = ReadPositiveLength(Required(bar, "font-size", "14px").value),
                        .color        = color,
                        .section      = {.box = ReadBox(section), .margin = section.Space("margin", kNoSpace)},
-                       .tooltip      = {.box = ReadBox(tooltip), .color = tooltip.Color("color", color)}};
+                       .tooltip      = {.box = ReadBox(tooltip), .color = tooltip.Color("color", color)},
+                       .menu         = {.box           = ReadBox(menu),
+                                        .color         = menuColor,
+                                        .maxWidthDips  = menu.Read("max-width", readCap, std::nullopt),
+                                        .maxHeightDips = menu.Read("max-height", readCap, std::nullopt),
+                                        .item          = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "", menuColor),
+                                        .active        = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "active", menuColor),
+                                        .scrollbar     = {.widthDips  = scrollbar.Read("width", ReadPositiveLength, 0.0f),
+                                                          .background = scrollbar.Color("background", kTransparent),
+                                                          .radiusDips = scrollbar.Length("border-radius", 0.0f),
+                                                          .margin     = scrollbar.Space("margin", kNoSpace)}}};
 }
 
 ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes) {
@@ -968,11 +1009,11 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
                                                        .gapDips         = iconRules.Length("margin-right", 0.0f),
                                                        .rotationDegrees = rotation,
                                                        .transition      = iconRules.Read("transition", ReadTransition, kNoTransition)},
-                       .item                        = ReadItem(sheet, normal, "", color),
-                       .focused                     = ReadItem(sheet, normal, "focused", color),
-                       .occupied                    = ReadItem(sheet, normal, "occupied", color),
-                       .empty                       = ReadItem(sheet, normal, "empty", color),
-                       .toggle                      = ReadItem(sheet, normal, "toggle", color),
+                       .item                        = ReadItem(sheet, StyleTarget::Item, normal, "", color),
+                       .focused                     = ReadItem(sheet, StyleTarget::Item, normal, "focused", color),
+                       .occupied                    = ReadItem(sheet, StyleTarget::Item, normal, "occupied", color),
+                       .empty                       = ReadItem(sheet, StyleTarget::Item, normal, "empty", color),
+                       .toggle                      = ReadItem(sheet, StyleTarget::Item, normal, "toggle", color),
                        .lineWidthDips               = box.Read("width", ReadPositiveLength, 0.0f),
                        .lineHeight                  = box.Read("height", ReadShare, 1.0f),
                        .transition                  = box.Read("transition", ReadTransition, kNoTransition),

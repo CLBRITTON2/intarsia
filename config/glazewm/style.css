@@ -5,6 +5,10 @@
  *   *                 the bar-wide font-family, font-size and color, which every module inherits
  *   section           the box behind each section of modules (left, center, right)
  *   tooltip           the box shown while the cursor rests on a module
+ *   menu              the box a menu action opens, and menu .item its entries, with .active for the entry its command
+ *                     marks active and :hover for the one under the cursor or picked with the arrow keys. Its
+ *                     max-width cuts each entry with an ellipsis, and past its max-height the entries scroll, with
+ *                     menu .scrollbar the thumb beside them (width, background, border-radius and margin)
  *   .module           every module's box, or one type (clock, cpu, workspaces...) or one module by its name (#clock)
  *   .alert            a module's text while it needs attention, such as a failed command
  *   .warning          a battery running low, and .critical nearly empty: its text, or its icon as #battery.warning .icon,
@@ -55,6 +59,35 @@ tooltip {
     background: rgba(28, 28, 30, 0.98);
     border: 1px solid var(--border);
     border-radius: 8px;
+}
+
+menu {
+    padding: 4px;
+    background: rgba(28, 28, 30, 0.98);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-width: 480px;
+    max-height: 400px;
+}
+
+menu .scrollbar {
+    width: 3px;
+    margin: 4px 3px;
+    background: var(--muted);
+    border-radius: 2px;
+}
+
+menu .item {
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+menu .item:hover {
+    background: var(--hover);
+}
+
+menu .item.active {
+    color: var(--accent);
 }
 
 .module {

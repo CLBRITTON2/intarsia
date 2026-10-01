@@ -2,6 +2,8 @@
 
 #include "bar/FrameStats.hpp"
 #include "bar/Layout.hpp"
+#include "bar/Menu.hpp"
+#include "bar/MenuLister.hpp"
 #include "bar/Sections.hpp"
 #include "bar/Tooltip.hpp"
 #include "config/Config.hpp"
@@ -121,7 +123,8 @@ class Bar {
     const HitBox* BoxAt(POINT client) const;
     // A point in client pixels as DIPs from the box's content origin, as modules take input.
     D2D1_POINT_2F ContentPoint(POINT client, const HitBox& box) const;
-    // Runs the module's action for the input, or for a click or scroll without one, lets the module handle it.
+    // Runs the module's action for the input, or for a click or scroll without one, lets the module handle it. Any input
+    // closes the menu, and a menu action starts listing unless it is the click toggling its own module's menu closed.
     void HandleInput(POINT client, ModuleInput input);
     // Hovers the module and item under the cursor, restarting hover tracking and hiding any tooltip whenever either
     // changes. Returns whether one did, and the bar needs drawing.
@@ -129,8 +132,18 @@ class Bar {
     // A cursor move: hovers what it is over and draws the bar if that changed.
     void PointAt(POINT client);
     // Hides the tooltip and waits for the cursor to rest again before showing the next one.
-    void                        RestartHover();
-    void                        ShowTooltip();
+    void RestartHover();
+    void ShowTooltip();
+    // Where a popup beside a span of the bar goes, the span in DIPs from the bar's top left.
+    TooltipAnchor AnchorFor(const D2D1_RECT_F& span) const;
+    // Shows the finished listing beside the module that asked for it, unless another click has moved on since.
+    void ShowMenu();
+
+    // The module whose menu action the shown or pending menu belongs to.
+    struct MenuOwner {
+        IModule* module;
+        Command  onSelect;
+    };
 
     const GraphicsDevice&       _graphics;
     const Config&               _config;
@@ -151,10 +164,13 @@ class Bar {
     IModule*                    _pointed = nullptr; // the module under the cursor, null when there is none
     std::optional<POINT>        _cursor;            // client pixels where the cursor last moved, null once it left
     std::uint32_t               _taskbarCreated;
+    std::optional<MenuOwner>    _menuOwner; // null once any other input came after the menu's
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                  _surface;
     std::unique_ptr<Tooltip>                  _tooltip;
+    std::unique_ptr<Menu>                     _menu;
+    std::unique_ptr<MenuLister>               _lister; // posts to the window, so it stops before the window goes
     std::unique_ptr<BrushCache>               _brushes;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> _textFormat;
 

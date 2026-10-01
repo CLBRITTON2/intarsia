@@ -208,6 +208,52 @@ TEST(Style, ItemHoverChangesColorsAndLosesToAMoreSpecificStateRule) {
     EXPECT_THAT([] { return Parse(".icon:hover { color: #fff; }"); }, ConfigErrorWith("matches nothing intarsia draws"));
 }
 
+TEST(Style, MenuRulesStyleTheMenuItsEntriesAndTheActiveEntry) {
+    const std::string rules = R"css(
+        menu { background: #111111; color: #eeeeee; padding: 6px; }
+        menu .item { padding: 2px 8px; }
+        menu .item:hover { background: #222222; }
+        menu .item.active { font-weight: bold; color: #00ff00; }
+        menu .item.active:hover { color: #ffffff; }
+    )css";
+    const MenuStyle   menu  = ResolveBarStyle(Parse(std::string(kBar) + rules)).menu;
+    EXPECT_EQ(Rgba(menu.box.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
+    EXPECT_FLOAT_EQ(menu.box.padding.xDips, 6.0f);
+    EXPECT_EQ(Rgba(menu.item.color), (std::array<std::int32_t, 4>{0xee, 0xee, 0xee, 255}));
+    EXPECT_FLOAT_EQ(menu.item.padding.xDips, 8.0f);
+    EXPECT_EQ(Rgba(menu.item.hoverBackground), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
+    EXPECT_EQ(menu.active.weight, DWRITE_FONT_WEIGHT_BOLD);
+    EXPECT_EQ(Rgba(menu.active.color), (std::array<std::int32_t, 4>{0, 255, 0, 255}));
+    EXPECT_EQ(Rgba(menu.active.hoverColor), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
+    EXPECT_FLOAT_EQ(menu.active.padding.xDips, 8.0f);
+    // With no menu rules the entries take the bar's color.
+    EXPECT_EQ(Rgba(ResolveBarStyle(Parse(kBar)).menu.item.color), (std::array<std::int32_t, 4>{0x10, 0x20, 0x30, 255}));
+    EXPECT_THAT([] { return Parse("menu .icon { color: #fff; }"); }, ConfigErrorWith("a menu's entries are menu .item"));
+}
+
+TEST(Style, MenuRulesCapTheMenuAndStyleItsScrollBar) {
+    const std::string rules = R"css(
+        menu { max-width: 480px; max-height: 360px; }
+        menu .scrollbar { width: 4px; background: #333333; border-radius: 2px; margin: 6px 3px; }
+    )css";
+    const MenuStyle   menu  = ResolveBarStyle(Parse(std::string(kBar) + rules)).menu;
+    EXPECT_EQ(menu.maxWidthDips, 480.0f);
+    EXPECT_EQ(menu.maxHeightDips, 360.0f);
+    EXPECT_FLOAT_EQ(menu.scrollbar.widthDips, 4.0f);
+    EXPECT_EQ(Rgba(menu.scrollbar.background), (std::array<std::int32_t, 4>{0x33, 0x33, 0x33, 255}));
+    EXPECT_FLOAT_EQ(menu.scrollbar.radiusDips, 2.0f);
+    EXPECT_FLOAT_EQ(menu.scrollbar.margin.yDips, 6.0f);
+    EXPECT_FLOAT_EQ(menu.scrollbar.margin.xDips, 3.0f);
+    // Without caps the monitor bounds the menu, and without a width no thumb draws.
+    const MenuStyle plain = ResolveBarStyle(Parse(kBar)).menu;
+    EXPECT_EQ(plain.maxWidthDips, std::nullopt);
+    EXPECT_EQ(plain.maxHeightDips, std::nullopt);
+    EXPECT_FLOAT_EQ(plain.scrollbar.widthDips, 0.0f);
+    EXPECT_THAT([] { return Parse("menu .scrollbar:hover { background: #fff; }"); }, ConfigErrorWith("its scroll bar is menu .scrollbar"));
+    EXPECT_THAT([] { return Parse("menu .scrollbar { color: #fff; }"); }, ConfigErrorWith("color does not apply to menu .scrollbar"));
+    EXPECT_THAT([] { return Parse("tooltip { max-width: 100px; }"); }, ConfigErrorWith("max-width does not apply to tooltip"));
+}
+
 TEST(Style, BorderShorthandSetsWidthAndColor) {
     const StyleSheet  sheet = Parse(std::string(kBar) + "section { border: 1px solid rgba(110, 106, 134, 0.25); border-radius: 14px; margin: 5px; padding: 4px; }");
     const StyleConfig bar   = ResolveBarStyle(sheet);

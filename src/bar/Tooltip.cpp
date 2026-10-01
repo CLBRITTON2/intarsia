@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <algorithm>
-#include <cmath>
 #include <limits>
 
 using Microsoft::WRL::ComPtr;
@@ -17,11 +16,6 @@ namespace {
     // Where a span of length starting at start goes to stay within low to high. Show caps length at the monitor's.
     std::int32_t KeepWithin(std::int32_t start, std::int32_t length, std::int32_t low, std::int32_t high) {
         return std::max(low, std::min(start, high - length));
-    }
-
-    // Rounded up so the text is never clipped by a partial pixel.
-    std::int32_t DipsToWholePixels(float dips, std::uint32_t dpi) {
-        return static_cast<std::int32_t>(std::ceil(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
     }
 
     // The tooltip only shows what Show drew. WM_CLOSE (taskkill sends it to every top-level window) is ignored: the
@@ -50,7 +44,7 @@ RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
         case Edge::Left:
         case Edge::Right:
             top  = KeepWithin(((module.top + module.bottom) / 2) - (size.cy / 2), size.cy, monitor.top, monitor.bottom);
-            left = anchor.edge == Edge::Left ? bar.right : bar.left - size.cx;
+            left = KeepWithin(anchor.edge == Edge::Left ? bar.right : bar.left - size.cx, size.cx, monitor.left, monitor.right);
             break;
     }
     return RECT{.left = left, .top = top, .right = left + size.cx, .bottom = top + size.cy};

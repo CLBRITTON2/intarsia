@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -32,6 +33,15 @@ struct CommandResult {
 
     bool                       operator==(const CommandResult&) const = default;
 };
+
+// Output that fails its run. The message never quotes the output, so it is always safe to draw and log.
+class OutputError : public std::runtime_error {
+  public:
+    using std::runtime_error::runtime_error;
+};
+
+// Throws OutputError naming field when text is not UTF-8 or holds an unsafe character other than those in allowed.
+void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed);
 
 // What a successful run printed, read as format says. Output is untrusted: text must be UTF-8 with no control or
 // bidirectional override characters, a tooltip may also hold line breaks, and a json class must be one of classes and

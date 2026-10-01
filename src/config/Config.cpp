@@ -436,7 +436,16 @@ namespace {
         return WindowManagerCommand{.text = std::move(text)};
     }
 
-    // { window_manager = "..." } sends the window manager a command, and a list starts a program.
+    MenuAction ReadMenuAction(const TableReader& action) {
+        action.RejectUnknownKeys({"menu"});
+        const TableReader menu = action.Table("menu");
+        menu.RejectUnknownKeys({"command", "timeout", "on_select"});
+        return MenuAction{
+            .command = ReadCommand(menu, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(menu, "timeout")), .onSelect = ReadCommand(menu, "on_select")};
+    }
+
+    // { window_manager = "..." } sends the window manager a command, { menu = {...} } opens a menu, and a list starts a
+    // program.
     std::optional<ModuleAction> ReadAction(const TableReader& module, std::string_view key) {
         if (!module.Has(key)) {
             return std::nullopt;
@@ -444,6 +453,9 @@ namespace {
         const TableReader action = module.Table(key);
         if (action.Has("window_manager")) {
             return ModuleAction(ReadWindowManagerCommand(action));
+        }
+        if (action.Has("menu")) {
+            return ModuleAction(ReadMenuAction(action));
         }
         return ModuleAction(ReadCommand(module, key));
     }

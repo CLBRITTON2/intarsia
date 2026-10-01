@@ -111,6 +111,10 @@ std::int32_t DipsToPixels(float dips, std::uint32_t dpi) {
     return static_cast<std::int32_t>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
 }
 
+std::int32_t DipsToWholePixels(float dips, std::uint32_t dpi) {
+    return static_cast<std::int32_t>(std::ceil(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
+}
+
 RECT DipsToScreen(const RECT& window, const D2D1_RECT_F& dips, std::uint32_t dpi) {
     return RECT{.left   = window.left + DipsToPixels(dips.left, dpi),
                 .top    = window.top + DipsToPixels(dips.top, dpi),

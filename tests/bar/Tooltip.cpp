@@ -33,6 +33,11 @@ TEST(Tooltip, SideBarsPlaceTheTooltipBesideTheBar) {
     EXPECT_TRUE(SameRect(right, RECT{1680, 525, 1880, 555}));
 }
 
+TEST(Tooltip, ASideTooltipTooWideForItsSideStaysOnTheMonitor) {
+    const RECT rect = TooltipRect(AnchorAt(Edge::Left, RECT{1500, 0, 1800, 1080}, RECT{1505, 500, 1795, 580}), SIZE{.cx = 200, .cy = 30});
+    EXPECT_TRUE(SameRect(rect, RECT{1720, 525, 1920, 555}));
+}
+
 TEST(Tooltip, ATooltipNearTheMonitorEdgeStaysOnTheMonitor) {
     const RECT nearRight = TooltipRect(AnchorAt(Edge::Top, RECT{0, 0, 1920, 40}, RECT{1880, 5, 1915, 35}), SIZE{.cx = 200, .cy = 30});
     EXPECT_TRUE(SameRect(nearRight, RECT{1720, 40, 1920, 70}));

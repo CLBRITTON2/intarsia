@@ -1,5 +1,6 @@
 #include "bar/Bar.hpp"
 
+#include "bar/Box.hpp"
 #include "bar/Layout.hpp"
 #include "modules/ModuleFactory.hpp"
 #include "platform/AppBar.hpp"
@@ -20,6 +21,9 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace {
 
@@ -27,6 +31,7 @@ namespace {
     constexpr std::uint32_t kAppBarCallback   = WM_APP + 1;
     constexpr std::uint32_t kAnimationFrame   = WM_APP + 2;
     constexpr std::uint32_t kFrameClockFailed = WM_APP + 3;
+    constexpr std::uint32_t kMenuListed       = WM_APP + 4;
     constexpr UINT_PTR      kChangeTimer      = 1;
 
     bool                    IsHorizontal(Edge edge) {
@@ -64,25 +69,6 @@ namespace {
             return D2D1::Point2F(box.left + padding, box.top + ((box.bottom - box.top - content.height) / 2.0f));
         }
         return D2D1::Point2F(box.left + ((box.right - box.left - content.width) / 2.0f), box.top + padding);
-    }
-
-    // A border is stroked centered on its outline, so the outline is inset by half the width to keep it inside.
-    void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& box, const BoxStyle& style, const D2D1_COLOR_F& fill) {
-        // An empty module's box has no length, and its inset border would draw inside out.
-        if (box.right <= box.left || box.bottom <= box.top) {
-            return;
-        }
-        const float radius = std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f);
-        if (fill.a > 0.0f) {
-            context->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), brushes.Get(fill));
-        }
-        const float width = style.borderWidthDips;
-        if (width > 0.0f && style.borderColor.a > 0.0f) {
-            const float       inset = width / 2.0f;
-            const D2D1_RECT_F edge  = D2D1::RectF(box.left + inset, box.top + inset, box.right - inset, box.bottom - inset);
-            const float       round = std::max(radius - inset, 0.0f);
-            context->DrawRoundedRectangle(D2D1::RoundedRect(edge, round, round), brushes.Get(style.borderColor), width);
-        }
     }
 
     // Every entry of every section, each group's members right after it.
@@ -236,13 +222,17 @@ void Bar::Build(HINSTANCE instance) {
     _surface = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     _brushes = std::make_unique<BrushCache>(_surface->Context());
     _tooltip = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
+    _menu =
+        std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _state, *_tooltip, [this](const DeviceLostError& error) { ReportDeviceLost(error); });
+    _lister = std::make_unique<MenuLister>(_window, kMenuListed);
     ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
 
 Bar::~Bar() {
-    // The clock's thread posts to the window, so it stops first.
+    // The clock's and the lister's threads post to the window, so they stop first.
     _frames.reset();
+    _lister.reset();
     if (_window != nullptr) {
         DestroyWindow(_window);
     }
@@ -298,6 +288,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
         case kFrameClockFailed: _frames->RethrowFailure(); return 0;
+        case kMenuListed: ShowMenu(); return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
         case WM_MOUSEMOVE: PointAt(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}); return 0;
         case WM_MOUSEHOVER: ShowTooltip(); return 0;
@@ -520,6 +511,7 @@ void Bar::ReportDeviceLost(const DeviceLostError& error) {
     _deviceLost = true;
     KillTimer(_window, kChangeTimer);
     _tooltip->Hide();
+    _menu->Hide();
     if (!PostMessageW(_control, _deviceLostMessage, 0, 0)) {
         ThrowLastError("PostMessageW(device lost)");
     }
@@ -612,6 +604,9 @@ const Bar::HitBox* Bar::BoxAt(POINT client) const {
 
 void Bar::HandleInput(POINT client, ModuleInput input) {
     _tooltip->Hide();
+    const bool                     menuWasShown = _menu->Shown();
+    const std::optional<MenuOwner> menuOwner    = std::exchange(_menuOwner, std::nullopt);
+    _menu->Hide();
     const HitBox* box = BoxAt(client);
     if (box == nullptr) {
         return;
@@ -621,6 +616,11 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
         _launcher.Launch(*command);
     } else if (const auto* windowManagerCommand = action.has_value() ? std::get_if<WindowManagerCommand>(&*action) : nullptr) {
         _windowManager.RunCommand(windowManagerCommand->text);
+    } else if (const auto* menu = action.has_value() ? std::get_if<MenuAction>(&*action) : nullptr) {
+        if (!menuWasShown || !menuOwner.has_value() || menuOwner->module != box->module) {
+            _menuOwner = MenuOwner{.module = box->module, .onSelect = menu->onSelect};
+            _lister->List(menu->command, menu->timeout);
+        }
     } else if (input == ModuleInput::LeftClick) {
         box->module->Click(ContentPoint(client, *box));
         // A click can change what the module itself shows, such as the tray folding away its icons.
@@ -705,14 +705,37 @@ void Bar::ShowTooltip() {
     if (!text.has_value() || text->empty()) {
         return;
     }
+    // Against the item the text describes, such as one tray icon, or else the whole module.
+    const std::optional<D2D1_RECT_F> item   = _pointed->TooltipItem();
+    const D2D1_POINT_2F              origin = box->contentOrigin;
+    const D2D1_RECT_F span = item.has_value() ? D2D1::RectF(origin.x + item->left, origin.y + item->top, origin.x + item->right, origin.y + item->bottom) : box->bounds;
+    _tooltip->Show(*text, AnchorFor(span));
+}
+
+TooltipAnchor Bar::AnchorFor(const D2D1_RECT_F& span) const {
     RECT bar{};
     if (!GetWindowRect(_window, &bar)) {
         ThrowLastError("GetWindowRect");
     }
-    // Against the item the text describes, such as one tray icon, or else the whole module.
-    const std::optional<D2D1_RECT_F> item   = _pointed->TooltipItem();
-    const D2D1_POINT_2F              origin = box->contentOrigin;
-    const D2D1_RECT_F   anchor = item.has_value() ? D2D1::RectF(origin.x + item->left, origin.y + item->top, origin.x + item->right, origin.y + item->bottom) : box->bounds;
-    const std::uint32_t dpi    = _placement.dpi;
-    _tooltip->Show(*text, TooltipAnchor{.module = DipsToScreen(bar, anchor, dpi), .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi});
+    const std::uint32_t dpi = _placement.dpi;
+    return TooltipAnchor{.module = DipsToScreen(bar, span, dpi), .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi};
+}
+
+void Bar::ShowMenu() {
+    const std::optional<MenuListing> listing = _lister->Take();
+    if (!listing.has_value() || !_menuOwner.has_value() || _deviceLost) {
+        return;
+    }
+    // A group folding can take the module off the bar while its command runs.
+    const auto box = std::ranges::find(_hitBoxes, _menuOwner->module, &HitBox::module);
+    if (box == _hitBoxes.end()) {
+        return;
+    }
+    if (const auto* failure = std::get_if<MenuFailure>(&*listing)) {
+        Log(LogLevel::Warning, "bar", "menu_failed", {{.key = "reason", .value = failure->detail}});
+    } else if (!HasEntries(std::get<std::vector<MenuItem>>(*listing))) {
+        Log(LogLevel::Info, "bar", "menu_empty", {});
+        return;
+    }
+    _menu->Show(*listing, _menuOwner->onSelect, AnchorFor(box->bounds));
 }

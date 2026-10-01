@@ -65,15 +65,6 @@ struct TooltipStyle {
     D2D1_COLOR_F color;
 };
 
-// What style.css sets for the whole bar. Modules inherit the font and color.
-struct StyleConfig {
-    std::wstring font;
-    float        fontSizeDips;
-    D2D1_COLOR_F color;
-    SectionStyle section;
-    TooltipStyle tooltip;
-};
-
 // CSS's timing functions, each a cubic Bézier from (0, 0) to (1, 1).
 enum class TimingFunction : std::uint8_t {
     Linear,
@@ -110,6 +101,36 @@ struct ItemStyle {
     // The item under the cursor, from .item:hover rules.
     D2D1_COLOR_F hoverColor;
     D2D1_COLOR_F hoverBackground;
+};
+
+// The thumb a menu draws beside its entries while they overflow its box, from menu .scrollbar.
+struct ScrollbarStyle {
+    float        widthDips; // 0 draws none, and the entries still scroll by wheel and arrow keys
+    D2D1_COLOR_F background;
+    float        radiusDips;
+    Spacing      margin; // x on each side of the thumb, y at each end of its track
+};
+
+// A popup menu's box and its entries (menu .item), the entry the listing marks active from menu .item.active rules.
+// The entry under the cursor or picked with the arrow keys takes its style's hover colors.
+struct MenuStyle {
+    BoxStyle             box;
+    D2D1_COLOR_F         color;
+    std::optional<float> maxWidthDips;  // of the whole box, which never outgrows its monitor either
+    std::optional<float> maxHeightDips; // the entries scroll past it
+    ItemStyle            item;
+    ItemStyle            active;
+    ScrollbarStyle       scrollbar;
+};
+
+// What style.css sets for the whole bar. Modules inherit the font and color.
+struct StyleConfig {
+    std::wstring font;
+    float        fontSizeDips;
+    D2D1_COLOR_F color;
+    SectionStyle section;
+    TooltipStyle tooltip;
+    MenuStyle    menu;
 };
 
 // The text and icon colors of one state a module's value can be in.
@@ -209,8 +230,18 @@ struct WindowManagerCommand {
     bool        operator==(const WindowManagerCommand&) const = default;
 };
 
-// What an input does: start a program, or send the window manager a command.
-using ModuleAction = std::variant<Command, WindowManagerCommand>;
+// A popup menu of what command prints, killed after timeout like an interval custom command. Picking an entry starts
+// onSelect with the entry's id as one more argument.
+struct MenuAction {
+    Command              command;
+    std::chrono::seconds timeout;
+    Command              onSelect;
+
+    bool                 operator==(const MenuAction&) const = default;
+};
+
+// What an input does: start a program, send the window manager a command, or open a menu.
+using ModuleAction = std::variant<Command, WindowManagerCommand, MenuAction>;
 
 // What a module does for each input, from the optional on_click, on_right_click, on_middle_click, on_scroll_up and
 // on_scroll_down keys. An input with an action replaces the module's own handling of it.

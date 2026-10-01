@@ -20,7 +20,7 @@ struct TooltipAnchor {
 };
 
 // The tooltip's rectangle for a tooltip of size pixels: against the bar's desktop side, centered on the module along
-// the bar and kept on the monitor.
+// the bar, and kept on the monitor.
 RECT TooltipRect(const TooltipAnchor& anchor, SIZE size);
 
 // A popup showing one module's tooltip text in the bar's font and colors. It never takes focus and stays above other
