@@ -85,7 +85,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
         // The icons stay where the unfolded row puts them, and the box's edge uncovers them.
         render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + RevealedWidth(), origin.y + _row.size.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (size_t index = 0; index < _slots.size(); ++index) {
-            DrawItemBackground(render, _row.boxes[index], style, _hovered == index ? style.hoverBackground : style.background, origin);
+            DrawItemBackground(render, _row.boxes[index], style, _hovered.Is(index), origin);
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(_slots[index].bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
         }
@@ -95,7 +95,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle&    toggleStyle = _style.toggle;
     const size_t        toggle      = _slots.size();
     const D2D1_POINT_2F shifted     = D2D1::Point2F(origin.x - ToggleShift(), origin.y);
-    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _hovered == toggle ? toggleStyle.hoverBackground : toggleStyle.background, shifted);
+    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _hovered.Is(toggle), shifted);
     DrawTurnedIconText(render, ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted), _toggle, _angleShown, render.accent, render.foreground);
 }
 
@@ -127,10 +127,8 @@ void Tray::MiddleClick(D2D1_POINT_2F point) {
 }
 
 bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
-    const std::optional<size_t> hovered = point.has_value() ? ItemUnder(*point) : std::nullopt;
-    const bool                  changed = hovered != _hovered;
-    _hovered                            = hovered;
-    const Slot* slot                    = point.has_value() ? SlotAt(*point) : nullptr;
+    const bool  changed = _hovered.Set(point.has_value() ? ItemUnder(*point) : std::nullopt);
+    const Slot* slot    = point.has_value() ? SlotAt(*point) : nullptr;
     if (_popup.has_value() && (slot == nullptr || !SameIcon(slot->icon, *_popup))) {
         _tray.ClosePopup(*_popup);
         _popup.reset();
@@ -146,10 +144,11 @@ const ModuleActions& Tray::Actions() const {
 }
 
 std::optional<std::wstring> Tray::TooltipText() {
-    if (!_hovered.has_value() || *_hovered >= _slots.size()) {
+    const std::optional<size_t> hovered = _hovered.Get();
+    if (!hovered.has_value() || *hovered >= _slots.size()) {
         return std::nullopt;
     }
-    const TrayIcon& icon = _slots[*_hovered].icon;
+    const TrayIcon& icon = _slots[*hovered].icon;
     if (DrawsOwnPopup(icon)) {
         if (!_popup.has_value()) {
             _tray.OpenPopup(icon);
@@ -164,10 +163,11 @@ std::optional<std::wstring> Tray::TooltipText() {
 }
 
 std::optional<D2D1_RECT_F> Tray::TooltipItem() const {
-    if (!_hovered.has_value() || *_hovered >= _slots.size()) {
+    const std::optional<size_t> hovered = _hovered.Get();
+    if (!hovered.has_value() || *hovered >= _slots.size()) {
         return std::nullopt;
     }
-    return _row.boxes[*_hovered];
+    return _row.boxes[*hovered];
 }
 
 // The icons end where the toggle's margin begins.

@@ -31,7 +31,7 @@ class WindowList final : public IModule {
     const ModuleActions& Actions() const override;
 
   private:
-    std::optional<size_t> _hovered; // the item under the cursor
+    HoveredItem _hovered;
     // One shown window. The bitmap is made from pixels on this bar's device, and is null while the icon is unknown.
     struct Slot {
         ManagedWindow                       window;
@@ -49,6 +49,3 @@ class WindowList final : public IModule {
     ItemRow           _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
     bool              _laidOut = false;
 };
-
-// The windows on one monitor, in order.
-std::vector<ManagedWindow> WindowsOnMonitor(const std::vector<ManagedWindow>& windows, std::intptr_t monitor);

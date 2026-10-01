@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <concepts>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,6 +31,15 @@ struct ManagedWindow {
 
     bool          operator==(const ManagedWindow&) const = default;
 };
+
+// The workspaces or windows on one monitor, in order.
+template <typename Item>
+    requires std::same_as<Item, Workspace> || std::same_as<Item, ManagedWindow>
+std::vector<Item> OnMonitor(const std::vector<Item>& items, std::intptr_t monitor) {
+    std::vector<Item> shown;
+    std::ranges::copy_if(items, std::back_inserter(shown), [monitor](const Item& item) { return item.monitor == monitor; });
+    return shown;
+}
 
 // The axis new windows tile along in the focused container.
 enum class TilingDirection : std::uint8_t {

@@ -31,10 +31,10 @@ class Workspaces final : public IModule {
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    std::optional<size_t> _hovered; // the item under the cursor
-    IWindowManager&       _windowManager;
-    std::intptr_t         _monitor;
-    ModuleStyle           _style;
+    HoveredItem     _hovered;
+    IWindowManager& _windowManager;
+    std::intptr_t   _monitor;
+    ModuleStyle     _style;
     // What the items show, once laid out, so an unchanged list lays out nothing.
     std::vector<Workspace> _shown;
     std::wstring           _disconnectedText;
@@ -44,9 +44,6 @@ class Workspaces final : public IModule {
     ItemRow                _row;
     IconText               _disconnected;
 };
-
-// The workspaces on one monitor, in order.
-std::vector<Workspace> WorkspacesOnMonitor(const std::vector<Workspace>& workspaces, std::intptr_t monitor);
 
 // The style a workspace draws in: focused before occupied before empty.
 const ItemStyle& WorkspaceState(const Workspace& workspace, const ModuleStyle& style);

@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <vector>
 
 TEST(ItemRow, ItemsSitSideBySideWithTheirMarginsAndCenteredAcrossTheTallest) {
@@ -31,4 +32,15 @@ TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(25.0f, 5.0f)).has_value());
     EXPECT_EQ(ItemAt(row, D2D1::Point2F(34.0f, 5.0f)), 1u);
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(34.0f, 20.0f)).has_value());
+}
+
+TEST(ItemRow, HoveredItemReportsOnlyAChangeOfItem) {
+    HoveredItem hovered;
+    EXPECT_FALSE(hovered.Set(std::nullopt));
+    EXPECT_TRUE(hovered.Set(1));
+    EXPECT_TRUE(hovered.Is(1));
+    EXPECT_FALSE(hovered.Is(0));
+    EXPECT_FALSE(hovered.Set(1));
+    EXPECT_TRUE(hovered.Set(std::nullopt));
+    EXPECT_FALSE(hovered.Get().has_value());
 }

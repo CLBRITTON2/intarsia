@@ -2,9 +2,7 @@
 
 #include "platform/Text.hpp"
 
-#include <algorithm>
 #include <cstdint>
-#include <iterator>
 #include <utility>
 
 Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleStyle style) :
@@ -14,7 +12,7 @@ Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleSt
 bool Workspaces::Layout(const RenderContext& render) {
     const WindowManagerStatus status           = _windowManager.Status();
     std::wstring              disconnectedText = status.connection == Connection::Disconnected ? status.name + L" disconnected" : std::wstring();
-    std::vector<Workspace>    shown            = disconnectedText.empty() ? WorkspacesOnMonitor(_windowManager.Workspaces(), _monitor) : std::vector<Workspace>();
+    std::vector<Workspace>    shown            = disconnectedText.empty() ? OnMonitor(_windowManager.Workspaces(), _monitor) : std::vector<Workspace>();
     if (_laidOut && shown == _shown && disconnectedText == _disconnectedText) {
         return false;
     }
@@ -49,17 +47,14 @@ void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     }
     for (size_t index = 0; index < _labels.size(); ++index) {
         const ItemStyle& state   = _states[index];
-        const bool       hovered = _hovered == index;
-        DrawItemBackground(render, _row.boxes[index], state, hovered ? state.hoverBackground : state.background, origin);
-        DrawIconText(render, ItemContentOrigin(_row.boxes[index], state, origin), _labels[index], render.accent, render.brushes->Get(hovered ? state.hoverColor : state.color));
+        const bool       hovered = _hovered.Is(index);
+        DrawItemBackground(render, _row.boxes[index], state, hovered, origin);
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], state, origin), _labels[index], render.accent, render.brushes->Get(ItemColor(state, hovered)));
     }
 }
 
 bool Workspaces::Hover(std::optional<D2D1_POINT_2F> point) {
-    const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
-    const bool                  changed = hovered != _hovered;
-    _hovered                            = hovered;
-    return changed;
+    return _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
 }
 
 void Workspaces::Click(D2D1_POINT_2F point) {
@@ -79,12 +74,6 @@ std::optional<std::wstring> Workspaces::TooltipText() {
         return std::nullopt;
     }
     return DrawableText(status.detail);
-}
-
-std::vector<Workspace> WorkspacesOnMonitor(const std::vector<Workspace>& workspaces, std::intptr_t monitor) {
-    std::vector<Workspace> shown;
-    std::ranges::copy_if(workspaces, std::back_inserter(shown), [monitor](const Workspace& workspace) { return workspace.monitor == monitor; });
-    return shown;
 }
 
 const ItemStyle& WorkspaceState(const Workspace& workspace, const ModuleStyle& style) {

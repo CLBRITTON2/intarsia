@@ -25,5 +25,21 @@ std::optional<size_t> ItemAt(const ItemRow& row, D2D1_POINT_2F point);
 // Where a box's content starts once the row is drawn at origin.
 D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, D2D1_POINT_2F origin);
 
-// The box filled with fill at origin, unless fill is transparent, rounded by the style's radius up to half its height.
-void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, D2D1_POINT_2F origin);
+// The box filled with the style's background, or its hover background while hovered, at origin, unless that fill is
+// transparent, rounded by the style's radius up to half its height.
+void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, bool hovered, D2D1_POINT_2F origin);
+
+// The style's text color, or its hover color while hovered.
+const D2D1_COLOR_F& ItemColor(const ItemStyle& style, bool hovered);
+
+// The item under the cursor, held between a module's hovers.
+class HoveredItem {
+  public:
+    // Returns whether item differs from the one held before.
+    bool                  Set(std::optional<size_t> item);
+    bool                  Is(size_t index) const;
+    std::optional<size_t> Get() const;
+
+  private:
+    std::optional<size_t> _item;
+};

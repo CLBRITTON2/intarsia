@@ -24,7 +24,7 @@ class BindingModes final : public IModule {
     const ModuleActions& Actions() const override;
 
   private:
-    std::optional<size_t>     _hovered; // the item under the cursor
+    HoveredItem               _hovered;
     const IWindowManager&     _windowManager;
     ModuleStyle               _style;
     std::vector<std::wstring> _shown;

@@ -29,17 +29,14 @@ D2D1_SIZE_F BindingModes::Size() const {
 void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle& item = _style.item;
     for (size_t index = 0; index < _labels.size(); ++index) {
-        const bool hovered = _hovered == index;
-        DrawItemBackground(render, _row.boxes[index], item, hovered ? item.hoverBackground : item.background, origin);
-        DrawIconText(render, ItemContentOrigin(_row.boxes[index], item, origin), _labels[index], render.accent, render.brushes->Get(hovered ? item.hoverColor : item.color));
+        const bool hovered = _hovered.Is(index);
+        DrawItemBackground(render, _row.boxes[index], item, hovered, origin);
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], item, origin), _labels[index], render.accent, render.brushes->Get(ItemColor(item, hovered)));
     }
 }
 
 bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
-    const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
-    const bool                  changed = hovered != _hovered;
-    _hovered                            = hovered;
-    return changed;
+    return _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
 }
 
 const ModuleActions& BindingModes::Actions() const {

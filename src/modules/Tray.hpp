@@ -74,8 +74,8 @@ class Tray final : public IModule {
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.
     ItemRow                 _row{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}};
-    std::optional<size_t>   _hovered; // the item under the cursor
-    std::optional<TrayIcon> _popup;   // the icon whose app's popup is open
+    HoveredItem             _hovered;
+    std::optional<TrayIcon> _popup; // the icon whose app's popup is open
     bool                    _laidOut = false;
 };
 

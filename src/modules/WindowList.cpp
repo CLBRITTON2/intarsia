@@ -4,14 +4,13 @@
 
 #include <cstdint>
 #include <algorithm>
-#include <iterator>
 #include <utility>
 
 WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONITOR monitor, ModuleStyle style) :
     _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
 
 bool WindowList::Layout(const RenderContext& render) {
-    const std::vector<ManagedWindow> shown   = WindowsOnMonitor(_windowManager.Windows(), _monitor);
+    const std::vector<ManagedWindow> shown   = OnMonitor(_windowManager.Windows(), _monitor);
     bool                             changed = !_laidOut || shown.size() != _slots.size();
     std::vector<Slot>                slots;
     slots.reserve(shown.size());
@@ -46,7 +45,7 @@ void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     for (size_t index = 0; index < _slots.size(); ++index) {
         const Slot&      slot  = _slots[index];
         const ItemStyle& style = StyleOf(slot);
-        DrawItemBackground(render, _row.boxes[index], style, _hovered == index ? style.hoverBackground : style.background, origin);
+        DrawItemBackground(render, _row.boxes[index], style, _hovered.Is(index), origin);
         if (slot.bitmap != nullptr) {
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
@@ -59,10 +58,7 @@ const ItemStyle& WindowList::StyleOf(const Slot& slot) const {
 }
 
 bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {
-    const std::optional<size_t> hovered = point.has_value() ? ItemAt(_row, *point) : std::nullopt;
-    const bool                  changed = hovered != _hovered;
-    _hovered                            = hovered;
-    return changed;
+    return _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
 }
 
 void WindowList::Click(D2D1_POINT_2F point) {
@@ -74,10 +70,4 @@ void WindowList::Click(D2D1_POINT_2F point) {
 
 const ModuleActions& WindowList::Actions() const {
     return kNoActions;
-}
-
-std::vector<ManagedWindow> WindowsOnMonitor(const std::vector<ManagedWindow>& windows, std::intptr_t monitor) {
-    std::vector<ManagedWindow> shown;
-    std::ranges::copy_if(windows, std::back_inserter(shown), [monitor](const ManagedWindow& window) { return window.monitor == monitor; });
-    return shown;
 }
