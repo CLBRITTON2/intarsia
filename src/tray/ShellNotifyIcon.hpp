@@ -87,7 +87,7 @@ class ShellNotifyIcon final : public ITray {
     // The tray thread's alone.
     HWND                                       _window   = nullptr;
     HWND                                       _explorer = nullptr;
-    Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging; // released before the thread's CoUninitialize
+    Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging; // released before the thread leaves COM
     FailureLog                                 _messageLog{"tray"};
     FailureLog                                 _iconLog{"tray"};
     FailureLog                                 _ownerLog{"tray"};

@@ -1,5 +1,6 @@
 #include "platform/ShellLaunch.hpp"
 
+#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
@@ -32,19 +33,6 @@
 namespace {
 
     constexpr std::chrono::milliseconds kShellPoll{500};
-
-    // A single-threaded apartment for the calls to the shell, left when it goes.
-    class ComApartment {
-      public:
-        ComApartment() {
-            ThrowIfFailed(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE), "CoInitializeEx(shell launch)");
-        }
-        ~ComApartment() {
-            CoUninitialize();
-        }
-        ComApartment(const ComApartment&)            = delete;
-        ComApartment& operator=(const ComApartment&) = delete;
-    };
 
     using Bstr = UniqueReleased<BSTR, &SysFreeString>;
 
@@ -126,7 +114,7 @@ std::uint32_t ShellIntegrityLevel(std::chrono::milliseconds timeout) {
 }
 
 void StartThroughShell(const std::filesystem::path& program, const std::vector<std::wstring>& arguments) {
-    const ComApartment                            apartment;
+    const ComScope                                com(ComThreading::Single, "shell launch");
     const Microsoft::WRL::ComPtr<IShellDispatch2> shell     = DesktopShell();
     const Bstr                                    file      = MakeBstr(program.wstring());
     const Bstr                                    line      = MakeBstr(JoinArguments(arguments));

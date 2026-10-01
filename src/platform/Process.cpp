@@ -1,11 +1,11 @@
 #include "platform/Process.hpp"
 
+#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
-#include <objbase.h>
 #include <shellapi.h>
 
 #include <array>
@@ -82,25 +82,27 @@ namespace {
         return kept;
     }
 
-    // ShellExecuteExW can use COM shell extensions, which need an apartment on the calling thread.
+    // ShellExecuteExW can use COM shell extensions, which need an apartment on the calling thread. Nothing here may throw
+    // out of the launcher's thread, so a failed launch is logged.
     void Start(const Command& command) {
-        const HRESULT      initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-        const std::wstring program     = command.program.wstring();
-        const std::wstring parameters  = JoinArguments(command.arguments);
-        SHELLEXECUTEINFOW  info{};
-        info.cbSize = sizeof(info);
-        // Zone checks stay on, so a program downloaded from the internet still gets its warning.
-        info.fMask        = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-        info.lpVerb       = L"open";
-        info.lpFile       = program.c_str();
-        info.lpParameters = parameters.empty() ? nullptr : parameters.c_str();
-        info.nShow        = SW_SHOWNORMAL;
-        if (!ShellExecuteExW(&info)) {
+        const std::wstring program    = command.program.wstring();
+        const std::wstring parameters = JoinArguments(command.arguments);
+        try {
+            const ComScope    com(ComThreading::Single, "launcher");
+            SHELLEXECUTEINFOW info{};
+            info.cbSize = sizeof(info);
+            // Zone checks stay on, so a program downloaded from the internet still gets its warning.
+            info.fMask        = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+            info.lpVerb       = L"open";
+            info.lpFile       = program.c_str();
+            info.lpParameters = parameters.empty() ? nullptr : parameters.c_str();
+            info.nShow        = SW_SHOWNORMAL;
+            if (!ShellExecuteExW(&info)) {
+                ThrowLastError("ShellExecuteExW");
+            }
+        } catch (const Win32Error& error) {
             Log(LogLevel::Warning, "launcher", "launch_failed",
-                {{.key = "error", .value = std::to_string(GetLastError())}, {.key = "program", .value = ToUtf8(program)}, {.key = "arguments", .value = ToUtf8(parameters)}});
-        }
-        if (SUCCEEDED(initialized)) {
-            CoUninitialize();
+                {{.key = "reason", .value = error.what()}, {.key = "program", .value = ToUtf8(program)}, {.key = "arguments", .value = ToUtf8(parameters)}});
         }
     }
 

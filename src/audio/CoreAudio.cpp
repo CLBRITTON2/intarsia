@@ -11,6 +11,7 @@
 
 #include <functiondiscoverykeys_devpkey.h>
 
+#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
@@ -23,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -221,80 +223,79 @@ void CoreAudio::Publish(std::optional<AudioDevice> device) {
 // Nothing here may throw out of the thread, so every Core Audio failure is logged and retried.
 void CoreAudio::Run(HANDLE stopEvent) {
     // Core Audio calls back on its own threads, which a multithreaded apartment allows without marshalling.
-    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
-    if (FAILED(initialized)) {
-        Log(LogLevel::Error, "audio", "com_init_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = Win32Error("CoInitializeEx", initialized).what()}});
+    std::optional<ComScope> com;
+    try {
+        com.emplace(ComThreading::Multi, "audio");
+    } catch (const Win32Error& error) {
+        Log(LogLevel::Error, "audio", "com_init_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}});
         return;
     }
-    {
-        std::unique_ptr<Devices>    devices;
-        std::unique_ptr<Endpoint>   endpoint;
-        bool                        attach  = true;
-        bool                        failing = false;
-        const std::array<HANDLE, 3> waits{stopEvent, _deviceEvent.get(), _requestEvent.get()};
-        while (true) {
-            if (attach) {
-                attach = false;
+    std::unique_ptr<Devices>    devices;
+    std::unique_ptr<Endpoint>   endpoint;
+    bool                        attach  = true;
+    bool                        failing = false;
+    const std::array<HANDLE, 3> waits{stopEvent, _deviceEvent.get(), _requestEvent.get()};
+    while (true) {
+        if (attach) {
+            attach = false;
+            endpoint.reset();
+            try {
+                if (devices == nullptr) {
+                    devices = std::make_unique<Devices>(*this, CoreAudioFlow(_flow));
+                }
+                endpoint = devices->DefaultDevice(*this);
+                Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioDevice>(endpoint->Read()));
+                if (failing) {
+                    Log(LogLevel::Info, "audio", "recovered", {{.key = "flow", .value = FlowName(_flow)}});
+                }
+                failing = false;
+            } catch (const Win32Error& error) {
                 endpoint.reset();
-                try {
-                    if (devices == nullptr) {
-                        devices = std::make_unique<Devices>(*this, CoreAudioFlow(_flow));
-                    }
-                    endpoint = devices->DefaultDevice(*this);
-                    Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioDevice>(endpoint->Read()));
-                    if (failing) {
-                        Log(LogLevel::Info, "audio", "recovered", {{.key = "flow", .value = FlowName(_flow)}});
-                    }
-                    failing = false;
-                } catch (const Win32Error& error) {
-                    endpoint.reset();
-                    devices.reset();
-                    Publish(std::nullopt);
-                    if (!failing) {
-                        Log(LogLevel::Warning, "audio", "unavailable",
-                            {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(kRetryMs)}});
-                    }
-                    failing = true;
-                }
-            }
-            const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, failing ? kRetryMs : INFINITE);
-            if (woke == WAIT_FAILED) {
-                Log(LogLevel::Error, "audio", "wait_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "error", .value = std::to_string(GetLastError())}});
+                devices.reset();
                 Publish(std::nullopt);
-                break;
+                if (!failing) {
+                    Log(LogLevel::Warning, "audio", "unavailable",
+                        {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}, {.key = "retry_ms", .value = std::to_string(kRetryMs)}});
+                }
+                failing = true;
             }
-            if (woke == WAIT_OBJECT_0) {
-                break;
+        }
+        const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, failing ? kRetryMs : INFINITE);
+        if (woke == WAIT_FAILED) {
+            Log(LogLevel::Error, "audio", "wait_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "error", .value = std::to_string(GetLastError())}});
+            Publish(std::nullopt);
+            break;
+        }
+        if (woke == WAIT_OBJECT_0) {
+            break;
+        }
+        if (woke == WAIT_OBJECT_0 + 2) {
+            std::optional<float> volume;
+            std::optional<bool>  muted;
+            {
+                const std::scoped_lock lock(_mutex);
+                volume = std::exchange(_pendingVolume, std::nullopt);
+                muted  = std::exchange(_pendingMuted, std::nullopt);
             }
-            if (woke == WAIT_OBJECT_0 + 2) {
-                std::optional<float> volume;
-                std::optional<bool>  muted;
-                {
-                    const std::scoped_lock lock(_mutex);
-                    volume = std::exchange(_pendingVolume, std::nullopt);
-                    muted  = std::exchange(_pendingMuted, std::nullopt);
-                }
-                // A request while there is no device has nothing to change.
-                if (endpoint == nullptr) {
-                    continue;
-                }
-                try {
-                    if (volume.has_value()) {
-                        endpoint->SetVolume(*volume);
-                    }
-                    if (muted.has_value()) {
-                        endpoint->SetMuted(*muted);
-                    }
-                } catch (const Win32Error& error) {
-                    // The device most likely went away mid-change, so the request is dropped and the device read again.
-                    Log(LogLevel::Warning, "audio", "change_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}});
-                    attach = true;
-                }
+            // A request while there is no device has nothing to change.
+            if (endpoint == nullptr) {
                 continue;
             }
-            // The default device changed or the retry wait ran out.
-            attach = true;
+            try {
+                if (volume.has_value()) {
+                    endpoint->SetVolume(*volume);
+                }
+                if (muted.has_value()) {
+                    endpoint->SetMuted(*muted);
+                }
+            } catch (const Win32Error& error) {
+                // The device most likely went away mid-change, so the request is dropped and the device read again.
+                Log(LogLevel::Warning, "audio", "change_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}});
+                attach = true;
+            }
+            continue;
         }
+        // The default device changed or the retry wait ran out.
+        attach = true;
     }
-    CoUninitialize();
 }

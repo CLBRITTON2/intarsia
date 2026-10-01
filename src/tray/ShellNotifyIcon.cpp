@@ -1,6 +1,7 @@
 #include "tray/ShellNotifyIcon.hpp"
 
 #include "platform/AppBar.hpp"
+#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/FileWatcher.hpp"
 #include "platform/Handle.hpp"
@@ -10,7 +11,6 @@
 #include "render/Icon.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 
-#include <objbase.h>
 #include <shellapi.h>
 
 #include <chrono>
@@ -369,16 +369,13 @@ void ShellNotifyIcon::Publish(std::vector<TrayIcon> icons) {
 
 void ShellNotifyIcon::Run(std::promise<void>& ready) {
     // WIC reads the icons on this thread.
-    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+    std::optional<ComScope> com;
     try {
-        ThrowIfFailed(initialized, "CoInitializeEx(tray)");
+        com.emplace(ComThreading::Multi, "tray");
         _imaging = CreateImagingFactory();
         _window  = CreateTrayWindow(_windowClass, WindowProc, this);
     } catch (...) {
         _imaging.Reset();
-        if (SUCCEEDED(initialized)) {
-            CoUninitialize();
-        }
         ready.set_exception(std::current_exception());
         return;
     }
@@ -391,7 +388,6 @@ void ShellNotifyIcon::Run(std::promise<void>& ready) {
         DestroyWindow(_window);
         UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
         _imaging.Reset();
-        CoUninitialize();
         ready.set_exception(std::current_exception());
         return;
     }
@@ -401,7 +397,6 @@ void ShellNotifyIcon::Run(std::promise<void>& ready) {
     DestroyWindow(_window);
     UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
     _imaging.Reset();
-    CoUninitialize();
 }
 
 // Sent messages, which is how every app's WM_COPYDATA arrives, are delivered inside PeekMessageW.

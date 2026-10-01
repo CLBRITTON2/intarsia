@@ -1,5 +1,6 @@
 #include "modules/WindowIcons.hpp"
 
+#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Win32Cast.hpp"
@@ -19,33 +20,29 @@ namespace {
     // Windows appear a few at a time, so a full queue means a burst: the rest are asked for again on the next layout.
     constexpr size_t kMaxQueuedReads = 64;
 
-    // The reader thread's COM apartment and WIC factory, made and ended on that thread. Without them the thread reads
-    // no icons, which is logged once.
+    // The reader thread's COM apartment and WIC factory, made and ended on that thread.
     class ReaderApartment {
       public:
-        ReaderApartment() : _initialized(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE)) {
-            try {
-                ThrowIfFailed(_initialized, "CoInitializeEx(window icons)");
-                _imaging = CreateImagingFactory();
-            } catch (const Win32Error& error) { Log(LogLevel::Error, "window_icons", "imaging_unavailable", {{.key = "reason", .value = error.what()}}); }
-        }
-        ~ReaderApartment() {
-            _imaging.Reset();
-            if (SUCCEEDED(_initialized)) {
-                CoUninitialize();
-            }
-        }
-        ReaderApartment(const ReaderApartment&)               = delete;
-        ReaderApartment&    operator=(const ReaderApartment&) = delete;
+        ReaderApartment() : _com(ComThreading::Multi, "window icons"), _imaging(CreateImagingFactory()) {}
 
         IWICImagingFactory* Imaging() const {
             return _imaging.Get();
         }
 
       private:
-        HRESULT                                    _initialized;
-        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging;
+        ComScope                                   _com;
+        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging; // released before _com leaves COM
     };
+
+    // Null when the thread could not set up WIC, which is logged: the thread then reads no icons.
+    std::shared_ptr<const ReaderApartment> EnterReaderApartment() {
+        try {
+            return std::make_shared<const ReaderApartment>();
+        } catch (const Win32Error& error) {
+            Log(LogLevel::Error, "window_icons", "imaging_unavailable", {{.key = "reason", .value = error.what()}});
+            return nullptr;
+        }
+    }
 
 } // namespace
 
@@ -67,8 +64,8 @@ HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
 
 WindowIcons::WindowIcons(ChangeSignal& changes, std::chrono::milliseconds retryAfter) :
     _changes(changes), _retryAfter(retryAfter), _reader(kMaxQueuedReads, [this] {
-        auto apartment = std::make_shared<ReaderApartment>();
-        return WorkQueue<std::intptr_t>::Process([this, apartment](const std::intptr_t& window) { Read(apartment->Imaging(), window); });
+        const std::shared_ptr<const ReaderApartment> apartment = EnterReaderApartment();
+        return WorkQueue<std::intptr_t>::Process([this, apartment](const std::intptr_t& window) { Read(apartment == nullptr ? nullptr : apartment->Imaging(), window); });
     }) {}
 
 std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {

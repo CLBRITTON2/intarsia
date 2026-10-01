@@ -88,6 +88,7 @@ add_library(intarsia_core STATIC
   src/modules/Workspaces.cpp
   src/platform/AppBar.cpp
   src/platform/ChangeSignal.cpp
+  src/platform/ComScope.cpp
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
   src/platform/FrameClock.cpp
@@ -186,6 +187,7 @@ if(BUILD_TESTING)
     tests/wm/GlazeWmProtocol.cpp
     tests/platform/AppBar.cpp
     tests/platform/ChangeSignal.cpp
+    tests/platform/ComScope.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/KnownFolder.cpp
     tests/platform/Log.cpp

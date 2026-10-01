@@ -1,4 +1,5 @@
 #include "audio/CoreAudio.hpp"
+#include "platform/ComScope.hpp"
 #include "support/Eventually.hpp"
 #include "support/MessageWindow.hpp"
 
@@ -15,17 +16,11 @@ namespace {
 
     // Whether the system has a default output device, asked of Core Audio directly.
     bool HasDefaultOutput() {
-        const HRESULT                               initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const ComScope                              com(ComThreading::Multi, "audio test");
         Microsoft::WRL::ComPtr<IMMDeviceEnumerator> enumerator;
         Microsoft::WRL::ComPtr<IMMDevice>           device;
-        const bool                                  found = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&enumerator))) &&
+        return SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&enumerator))) &&
             SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device));
-        device.Reset();
-        enumerator.Reset();
-        if (SUCCEEDED(initialized)) {
-            CoUninitialize();
-        }
-        return found;
     }
 
 } // namespace

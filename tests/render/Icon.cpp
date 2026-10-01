@@ -1,8 +1,7 @@
 #include "render/Icon.hpp"
 
+#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
-
-#include <objbase.h>
 
 #include <gtest/gtest.h>
 
@@ -33,21 +32,13 @@ namespace {
     // A COM apartment and a WIC factory for the test's thread, as a thread that reads icons holds them.
     class IconReading : public testing::Test {
       protected:
-        void SetUp() override {
-            ASSERT_TRUE(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
-            _imaging = CreateImagingFactory();
-        }
-        void TearDown() override {
-            _imaging.Reset();
-            CoUninitialize();
-        }
-
         IWICImagingFactory& Imaging() const {
             return *_imaging.Get();
         }
 
       private:
-        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging;
+        ComScope                                   _com{ComThreading::Multi, "icon test"};
+        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging = CreateImagingFactory();
     };
 
 } // namespace
