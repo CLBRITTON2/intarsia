@@ -91,7 +91,7 @@ namespace {
 } // namespace
 
 ShellNotifyIcon::ShellNotifyIcon(ChangeSignal& changes, std::wstring windowClass, HWND target, std::uint32_t failedMessage) :
-    _changes(changes), _windowClass(std::move(windowClass)), _target(target), _failedMessage(failedMessage),
+    _changes(changes), _windowClass(std::move(windowClass)), _failure(target, failedMessage, "tray"),
     _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(tray stop)")) {
     std::promise<void> ready;
     std::future<void>  created = ready.get_future();
@@ -209,9 +209,8 @@ DWORD ShellNotifyIcon::PostInput(const TrayIcon& icon, const std::vector<TrayInp
     return ERROR_SUCCESS;
 }
 
-std::exception_ptr ShellNotifyIcon::TakeError() {
-    const std::scoped_lock lock(_mutex);
-    return std::exchange(_error, nullptr);
+void ShellNotifyIcon::RethrowFailure() {
+    _failure.RethrowReported();
 }
 
 LRESULT CALLBACK ShellNotifyIcon::WindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -436,17 +435,8 @@ void ShellNotifyIcon::RunLoop() {
 
 // Stops the thread and leaves the error for App, which ends the process with it.
 void ShellNotifyIcon::Fail(const std::exception_ptr& error) {
-    {
-        const std::scoped_lock lock(_mutex);
-        if (_error) {
-            return;
-        }
-        _error = error;
-    }
     SetEvent(_stopEvent.get());
-    if (!PostMessageW(_target, _failedMessage, 0, 0)) {
-        Log(LogLevel::Error, "tray", "failure_unreported", {{.key = "error", .value = std::to_string(GetLastError())}});
-    }
+    _failure.Report(error);
 }
 
 HWND ExplorerTaskbar(const std::wstring& windowClass) {

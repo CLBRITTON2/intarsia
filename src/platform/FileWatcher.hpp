@@ -2,15 +2,14 @@
 
 #include "platform/Handle.hpp"
 #include "platform/StoppableThread.hpp"
+#include "platform/ThreadFailure.hpp"
 
 #include <windows.h>
 
 #include <cstdint>
 #include <chrono>
 #include <cstddef>
-#include <exception>
 #include <filesystem>
-#include <mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -25,8 +24,8 @@ class FileWatcher {
     FileWatcher(const FileWatcher&)            = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
 
-    // The error that stopped the watcher thread, set before failedMessage is posted.
-    std::exception_ptr TakeError();
+    // On failedMessage, rethrows the error that stopped the watcher thread.
+    void RethrowFailure();
 
   private:
     void                      Watch(HANDLE stopEvent);
@@ -35,11 +34,9 @@ class FileWatcher {
     std::vector<std::wstring> _fileNames;
     HWND                      _target;
     std::uint32_t             _changedMessage;
-    std::uint32_t             _failedMessage;
     std::chrono::milliseconds _settle;
     UniqueHandle              _directory;
-    std::mutex                _errorMutex;
-    std::exception_ptr        _error;
+    ThreadFailure             _failure;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

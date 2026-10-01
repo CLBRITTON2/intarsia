@@ -309,15 +309,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
                 _frames->Stop();
             }
             return 0;
-        case kFrameClockFailed: {
-            const std::exception_ptr error = _frames->TakeError();
-            // Any process on the desktop can post this message, so one with nothing stored behind it is not fatal.
-            if (!error) {
-                Log(LogLevel::Warning, "bar", "spurious_frame_clock_failure", {});
-                return 0;
-            }
-            std::rethrow_exception(error);
-        }
+        case kFrameClockFailed: _frames->RethrowFailure(); return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
         case WM_MOUSEMOVE: PointAt(POINT{.x = GET_X_LPARAM(lParam), .y = GET_Y_LPARAM(lParam)}); return 0;
         case WM_MOUSEHOVER: ShowTooltip(); return 0;

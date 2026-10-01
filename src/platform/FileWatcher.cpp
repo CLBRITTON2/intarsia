@@ -1,7 +1,6 @@
 #include "platform/FileWatcher.hpp"
 
 #include "platform/Errors.hpp"
-#include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
 #include <cstdint>
@@ -25,30 +24,20 @@ namespace {
 
 FileWatcher::FileWatcher(const std::filesystem::path& directory, std::vector<std::wstring> fileNames, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage,
                          std::chrono::milliseconds settle) :
-    _fileNames(std::move(fileNames)), _target(target), _changedMessage(changedMessage), _failedMessage(failedMessage), _settle(settle),
+    _fileNames(std::move(fileNames)), _target(target), _changedMessage(changedMessage), _settle(settle),
     _directory(OwnHandle(CreateFileW(directory.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr),
                          "CreateFileW(config directory)")),
-    _thread("file watcher", [this](HANDLE stopEvent) { Watch(stopEvent); }) {}
+    _failure(target, failedMessage, "file_watcher"), _thread("file watcher", [this](HANDLE stopEvent) { Watch(stopEvent); }) {}
 
-std::exception_ptr FileWatcher::TakeError() {
-    const std::scoped_lock lock(_errorMutex);
-    return std::exchange(_error, nullptr);
+void FileWatcher::RethrowFailure() {
+    _failure.RethrowReported();
 }
 
 void FileWatcher::Watch(HANDLE stopEvent) {
     try {
         WatchUntilStopped(stopEvent);
-    } catch (...) {
-        {
-            const std::scoped_lock lock(_errorMutex);
-            _error = std::current_exception();
-        }
-        // The app then never learns that reloads stopped, so the log is the only record.
-        if (!PostMessageW(_target, _failedMessage, 0, 0)) {
-            Log(LogLevel::Error, "file_watcher", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
-        }
-    }
+    } catch (...) { _failure.Report(std::current_exception()); }
 }
 
 void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {

@@ -205,24 +205,15 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 std::rethrow_exception(_configError);
             }
             return 0;
-        case kWatcherFailed: {
-            const std::exception_ptr error = _watcher->TakeError();
-            // Any process on the desktop can post this message, so one with nothing stored behind it is not fatal.
-            if (!error) {
-                Log(LogLevel::Warning, "app", "spurious_watcher_failure", {});
-                return 0;
-            }
-            std::rethrow_exception(error);
-        }
-        case kTrayFailed: {
-            const std::exception_ptr error = _tray != nullptr ? _tray->TakeError() : nullptr;
-            // Like the watcher's, any process can post this message.
-            if (!error) {
+        case kWatcherFailed: _watcher->RethrowFailure(); return 0;
+        case kTrayFailed:
+            // Any process on the desktop can post this message, even while no tray exists.
+            if (_tray == nullptr) {
                 Log(LogLevel::Warning, "app", "spurious_tray_failure", {});
                 return 0;
             }
-            std::rethrow_exception(error);
-        }
+            _tray->RethrowFailure();
+            return 0;
         // taskkill sends WM_CLOSE to every top-level window, this hidden one included, and DefWindowProcW would destroy
         // it. The bars' own WM_CLOSE can be lost when a reload replaces them first, so this one quits too.
         case WM_CLOSE: PostQuitMessage(0); return 0;

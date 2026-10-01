@@ -2,6 +2,7 @@
 
 #include "platform/Handle.hpp"
 #include "platform/StoppableThread.hpp"
+#include "platform/ThreadFailure.hpp"
 
 #include <dxgi.h>
 #include <windows.h>
@@ -9,8 +10,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <exception>
-#include <mutex>
 
 // Posts frameMessage to target once per vertical blank of output while started, so animations draw at that monitor's
 // refresh rather than a timer's (DwmFlush would follow one composition clock for every monitor, the primary's). As
@@ -26,20 +25,18 @@ class FrameClock {
     void        Stop();
     // The UI thread, once it has drawn the frame, so the next frame posts again at the following vertical blank.
     void Acknowledge();
-    // The error that stopped the thread, set before failedMessage is posted.
-    std::exception_ptr TakeError();
+    // On failedMessage, rethrows the error that stopped the thread.
+    void RethrowFailure();
 
   private:
     void                                Run(HANDLE stopEvent);
 
     HWND                                _target;
     std::uint32_t                       _frameMessage;
-    std::uint32_t                       _failedMessage;
     Microsoft::WRL::ComPtr<IDXGIOutput> _output;
     UniqueHandle                        _runningEvent; // set while started
     std::atomic<bool>                   _pending = false;
-    std::mutex                          _mutex; // guards _error
-    std::exception_ptr                  _error;
+    ThreadFailure                       _failure;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

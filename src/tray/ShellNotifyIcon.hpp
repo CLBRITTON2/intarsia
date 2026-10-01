@@ -3,6 +3,7 @@
 #include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
+#include "platform/ThreadFailure.hpp"
 #include "tray/ITray.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 
@@ -45,8 +46,8 @@ class ShellNotifyIcon final : public ITray {
     void ClosePopup(const TrayIcon& icon) override;
     void ShowRects(const void* view, std::vector<TrayIconRect> rects) override;
 
-    // The error that stopped the thread, set before failedMessage is posted.
-    std::exception_ptr TakeError();
+    // On failedMessage, rethrows the error that stopped the thread.
+    void RethrowFailure();
 
   private:
     // Null while the cursor cannot be read (another desktop has the input), logged once per outage.
@@ -76,8 +77,7 @@ class ShellNotifyIcon final : public ITray {
 
     ChangeSignal& _changes;
     std::wstring  _windowClass;
-    HWND          _target;
-    std::uint32_t _failedMessage;
+    ThreadFailure _failure;
     UniqueHandle  _stopEvent;
     // The UI thread's alone, which Press and Move are called on.
     std::optional<TrayClick> _lastClick; // null after a double click, so a third click starts a new pair
@@ -93,15 +93,14 @@ class ShellNotifyIcon final : public ITray {
     FailureLog                                 _ownerLog{"tray"};
     FailureLog                                 _forwardLog{"tray"};
     FailureLog                                 _rectLog{"tray"};
-    // Guards _icons, _views and _error.
+    // Guards _icons and _views.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;
     struct View {
         const void*               view;
         std::vector<TrayIconRect> rects;
     };
-    std::vector<View>  _views;
-    std::exception_ptr _error;
+    std::vector<View> _views;
     // Started by the constructor once every member above exists.
     std::thread _thread;
 };
