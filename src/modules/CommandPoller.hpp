@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/Config.hpp"
+#include "modules/SharedWorkers.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/StoppableThread.hpp"
 
@@ -8,8 +9,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <map>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -67,15 +66,4 @@ class CommandPoller {
     StoppableThread _thread;
 };
 
-// One poller per custom module name, shared by every bar that shows it, so each command runs once however many monitors
-// there are.
-class CommandPollers {
-  public:
-    CommandPollers(const Config& config, ChangeSignal& changes);
-
-    // Throws std::logic_error for a name the config defines no custom module under.
-    const CommandPoller& For(const std::string& name) const;
-
-  private:
-    std::map<std::string, std::unique_ptr<CommandPoller>> _pollers;
-};
+using CommandPollers = SharedWorkers<CommandPoller, CustomConfig, ModuleKind::Custom>;

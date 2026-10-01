@@ -18,6 +18,9 @@ std::string JoinNames(const Names& names) {
 std::string  ToUtf8(std::wstring_view text);
 std::wstring ToWide(std::string_view text);
 
+// Case-insensitive, as NTFS file names are.
+bool SameFileName(std::wstring_view left, std::wstring_view right);
+
 // Text from another process with each unpaired surrogate replaced by U+FFFD, so ToUtf8 accepts it.
 std::wstring ReplaceLoneSurrogates(std::wstring_view text);
 

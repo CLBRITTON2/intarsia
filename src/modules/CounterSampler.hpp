@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/Config.hpp"
+#include "modules/SharedWorkers.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/StoppableThread.hpp"
 
@@ -8,8 +9,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <map>
-#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -58,14 +57,4 @@ class CounterSampler {
     StoppableThread _thread;
 };
 
-// One sampler per counter module name, shared by every bar that shows it.
-class CounterSamplers {
-  public:
-    CounterSamplers(const Config& config, ChangeSignal& changes);
-
-    // Throws std::logic_error for a name the config defines no counter module under.
-    const CounterSampler& For(const std::string& name) const;
-
-  private:
-    std::map<std::string, std::unique_ptr<CounterSampler>> _samplers;
-};
+using CounterSamplers = SharedWorkers<CounterSampler, CounterConfig, ModuleKind::Counter>;

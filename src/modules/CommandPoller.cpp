@@ -182,19 +182,3 @@ void CommandPoller::Publish(const CommandResult& result) {
     }
     _changes.Notify("custom");
 }
-
-CommandPollers::CommandPollers(const Config& config, ChangeSignal& changes) {
-    ForEachModuleInConfig(config, [&](const ModuleInstance& instance) {
-        if (instance.kind == ModuleKind::Custom && !_pollers.contains(instance.name)) {
-            _pollers.emplace(instance.name, std::make_unique<CommandPoller>(instance.name, std::get<CustomConfig>(instance.settings), changes));
-        }
-    });
-}
-
-const CommandPoller& CommandPollers::For(const std::string& name) const {
-    const auto poller = _pollers.find(name);
-    if (poller == _pollers.end()) {
-        throw std::logic_error(std::format("no command poller for module {}, CommandPollers should have made one from the config", name));
-    }
-    return *poller->second;
-}

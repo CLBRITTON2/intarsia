@@ -61,6 +61,10 @@ std::wstring ToWide(std::string_view text) {
     return wide;
 }
 
+bool SameFileName(std::wstring_view left, std::wstring_view right) {
+    return CompareStringOrdinal(left.data(), static_cast<std::int32_t>(left.size()), right.data(), static_cast<std::int32_t>(right.size()), TRUE) == CSTR_EQUAL;
+}
+
 std::wstring ReplaceLoneSurrogates(std::wstring_view text) {
     std::wstring valid(text);
     for (size_t index = 0; index < valid.size(); ++index) {

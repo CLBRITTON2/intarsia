@@ -3,7 +3,7 @@
 #include "platform/AppBar.hpp"
 #include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
-#include "platform/FileWatcher.hpp"
+#include "platform/Text.hpp"
 #include "platform/Handle.hpp"
 #include "platform/PeerProcess.hpp"
 #include "platform/Win32Cast.hpp"

@@ -1,6 +1,5 @@
 #include "tray/NotifyIconProtocol.hpp"
 
-#include "platform/FileWatcher.hpp"
 #include "platform/Text.hpp"
 
 #include <shellapi.h>

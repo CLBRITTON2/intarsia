@@ -12,7 +12,6 @@
 #include <filesystem>
 #include <span>
 #include <string>
-#include <string_view>
 #include <vector>
 
 // Posts changedMessage to target once a burst of changes to any of the named files in directory settles. Watches the
@@ -43,6 +42,3 @@ class FileWatcher {
 
 // File names in a ReadDirectoryChangesW result buffer, in order.
 std::vector<std::wstring> ChangedFileNames(std::span<const std::byte> buffer);
-
-// Case-insensitive, as NTFS file names are.
-bool SameFileName(std::wstring_view left, std::wstring_view right);

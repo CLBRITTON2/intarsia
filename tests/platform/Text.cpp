@@ -38,6 +38,11 @@ TEST(Text, ToUtf8RejectsALoneSurrogate) {
     EXPECT_THROW(ToUtf8(loneHigh), Win32Error);
 }
 
+TEST(Text, SameFileNameIgnoresCase) {
+    EXPECT_TRUE(SameFileName(L"Config.LUA", L"config.lua"));
+    EXPECT_FALSE(SameFileName(L"config.lua.bak", L"config.lua"));
+}
+
 TEST(Text, LogExcerptEscapesQuotesBackslashesAndControlBytes) {
     EXPECT_EQ(LogExcerpt("a\"b\\c\nd\x7F", 100), "a\\\"b\\\\c\\x0ad\\x7f");
 }

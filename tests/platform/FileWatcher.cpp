@@ -54,8 +54,3 @@ TEST(FileWatcher, ChangedFileNamesRejectsANameRunningPastTheBuffer) {
     buffer.resize(offsetof(FILE_NOTIFY_INFORMATION, FileName) + 4);
     EXPECT_THROW(ChangedFileNames(buffer), std::out_of_range);
 }
-
-TEST(FileWatcher, SameFileNameIgnoresCase) {
-    EXPECT_TRUE(SameFileName(L"Config.LUA", L"config.lua"));
-    EXPECT_FALSE(SameFileName(L"config.lua.bak", L"config.lua"));
-}

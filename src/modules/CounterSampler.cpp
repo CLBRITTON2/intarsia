@@ -79,19 +79,3 @@ void CounterSampler::Publish(const CounterReading& reading) {
     }
     _changes.Notify("counter");
 }
-
-CounterSamplers::CounterSamplers(const Config& config, ChangeSignal& changes) {
-    ForEachModuleInConfig(config, [&](const ModuleInstance& instance) {
-        if (instance.kind == ModuleKind::Counter && !_samplers.contains(instance.name)) {
-            _samplers.emplace(instance.name, std::make_unique<CounterSampler>(instance.name, std::get<CounterConfig>(instance.settings), changes));
-        }
-    });
-}
-
-const CounterSampler& CounterSamplers::For(const std::string& name) const {
-    const auto sampler = _samplers.find(name);
-    if (sampler == _samplers.end()) {
-        throw std::logic_error(std::format("no counter sampler for module {}, CounterSamplers should have made one from the config", name));
-    }
-    return *sampler->second;
-}

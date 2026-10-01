@@ -130,7 +130,3 @@ std::vector<std::wstring> ChangedFileNames(std::span<const std::byte> buffer) {
     }
     return names;
 }
-
-bool SameFileName(std::wstring_view left, std::wstring_view right) {
-    return CompareStringOrdinal(left.data(), static_cast<std::int32_t>(left.size()), right.data(), static_cast<std::int32_t>(right.size()), TRUE) == CSTR_EQUAL;
-}
