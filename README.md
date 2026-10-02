@@ -4,6 +4,13 @@ A native status bar for Windows. Every monitor gets a bar docked to one screen e
 from small modules that a Lua config places into left, center and right sections and a CSS file styles. It draws with
 Direct2D and DirectWrite, and runs alongside GlazeWM or on plain Windows.
 
+## Docs
+
+- [Installing intarsia](docs/install.md)
+- [Configuring the bar](docs/configuration.md), with every module
+- [Styling the bar](docs/styling.md)
+- [Custom modules](docs/custom-modules.md): your own scripts and menus on the bar
+
 ## Requirements
 
 - Windows 10 version 1903 or later.
@@ -81,7 +88,7 @@ pwsh -File scripts/package-release.ps1 -Version 0.2.0
 `draft-changelog.ps1` adds a section for the version to `CHANGELOG.md`, one line per commit since the previous
 release's tag (for the first release, pass the first commit). Edit it and commit. `package-release.ps1` then builds
 from a clean `build\dist` with the version stamped into `intarsia.exe`, and packages `build\dist\intarsia-<version>.zip`
-with both configs, this README, the license and the changelog, and `build\dist\release-notes.md` with the version's
+with both configs, the docs, this README, the license and the changelog, and `build\dist\release-notes.md` with the version's
 section. It refuses uncommitted changes and a version the changelog lacks. The Release workflow runs the tests and both steps on
 `windows-2022`, then `scripts/publish-release.ps1` publishes the zip as the GitHub release `v<version>`.
 
