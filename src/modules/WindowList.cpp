@@ -55,7 +55,7 @@ void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     for (size_t index = 0; index < _slots.size(); ++index) {
         const Slot&      slot  = _slots[index];
         const ItemStyle& style = StyleOf(slot);
-        DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), origin);
+        DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), _fades.Shadows(index, now), origin);
         if (slot.bitmap != nullptr) {
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);

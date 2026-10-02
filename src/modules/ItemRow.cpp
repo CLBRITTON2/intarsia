@@ -54,9 +54,10 @@ D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, 
     return D2D1::Point2F(origin.x + box.left + style.padding.xDips, origin.y + box.top + style.padding.yDips);
 }
 
-void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, D2D1_POINT_2F origin) {
+void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, const std::vector<InsetShadow>& shadows,
+                        D2D1_POINT_2F origin) {
     const D2D1_RECT_F placed = Offset(box, origin);
-    const BoxStyle    boxStyle{.background = style.background, .border = {}, .radiusDips = style.radiusDips, .padding = style.padding, .shadows = style.shadows};
+    const BoxStyle    boxStyle{.background = style.background, .border = {}, .radiusDips = style.radiusDips, .padding = style.padding, .shadows = shadows};
     DrawBox(render.context, *render.brushes, placed, boxStyle, fill);
 }
 
@@ -84,12 +85,17 @@ void ItemFades::Follow(const std::vector<const ItemStyle*>& styles, const Hovere
         const D2D1_COLOR_F background = isHovered ? style.hoverBackground : style.background;
         const D2D1_COLOR_F text       = isHovered ? style.hoverColor : style.color;
         if (index == _fades.size()) {
-            _fades.push_back(Fade{.background = ColorFade(background), .text = ColorFade(text)});
+            _fades.push_back(Fade{.background = ColorFade(background), .text = ColorFade(text), .shadows = ShadowFade(style.shadows)});
             continue;
         }
         _fades[index].background.Retarget(background, style.backgroundTransition, now);
         _fades[index].text.Retarget(text, style.colorTransition, now);
+        _fades[index].shadows.Retarget(style.shadows, style.backgroundTransition, now);
     }
+}
+
+std::vector<InsetShadow> ItemFades::Shadows(size_t index, std::chrono::steady_clock::time_point now) const {
+    return _fades.at(index).shadows.Shadows(now);
 }
 
 D2D1_COLOR_F ItemFades::Background(size_t index, std::chrono::steady_clock::time_point now) const {
@@ -101,7 +107,7 @@ D2D1_COLOR_F ItemFades::Text(size_t index, std::chrono::steady_clock::time_point
 }
 
 std::optional<std::uint32_t> ItemFades::Wait(std::chrono::steady_clock::time_point now) const {
-    if (std::ranges::any_of(_fades, [now](const Fade& fade) { return fade.background.Running(now) || fade.text.Running(now); })) {
+    if (std::ranges::any_of(_fades, [now](const Fade& fade) { return fade.background.Running(now) || fade.text.Running(now) || fade.shadows.Running(now); })) {
         return 0;
     }
     return std::nullopt;

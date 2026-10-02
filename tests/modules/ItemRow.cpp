@@ -88,6 +88,23 @@ TEST(ItemRow, ItemFadesFadeAnItemIntoANewStatesColors) {
     EXPECT_FLOAT_EQ(fades.Background(0, start).r, 1.0f);
 }
 
+TEST(ItemRow, ItemFadesFadeANewStatesShadowsOverItsBackgroundTransition) {
+    const ItemStyle rest                              = TestItemStyle(0x000000, 0x000000);
+    ItemStyle       focused                           = TestItemStyle(0xFFFFFF, 0xFFFFFF);
+    focused.backgroundTransition                      = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    focused.shadows                                   = {{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 0.0f, .spreadDips = 0.0f, .color = D2D1::ColorF(0xFFFFFF)}};
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    const HoveredItem                           hovered;
+    ItemFades                                   fades;
+    fades.Follow({&rest}, hovered, start);
+    EXPECT_TRUE(fades.Shadows(0, start).empty());
+    fades.Follow({&focused}, hovered, start);
+    const std::vector<InsetShadow> halfway = fades.Shadows(0, start + std::chrono::milliseconds(50));
+    ASSERT_EQ(halfway.size(), 1u);
+    EXPECT_NEAR(halfway[0].color.a, 0.5f, 0.001f);
+    EXPECT_EQ(fades.Wait(start + std::chrono::milliseconds(50)), 0U);
+}
+
 TEST(ItemRow, HoveredItemReportsOnlyAChangeOfItem) {
     HoveredItem hovered;
     EXPECT_FALSE(hovered.Set(std::nullopt));

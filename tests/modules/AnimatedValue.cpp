@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstdint>
+#include <vector>
 
 namespace {
 
@@ -46,6 +48,36 @@ TEST(ColorFade, WithoutATransitionItChangesAtOnce) {
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), Transition{.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease}, start);
     EXPECT_FALSE(fade.Running(start));
     EXPECT_FLOAT_EQ(fade.Color(start).r, 1.0f);
+}
+
+TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    const InsetShadow                           line{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 0.0f, .spreadDips = 0.0f, .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f)};
+    ShadowFade                                  fade({});
+    fade.Retarget({line}, kLinear100, start);
+    const std::vector<InsetShadow> halfway = fade.Shadows(start + std::chrono::milliseconds(50));
+    ASSERT_EQ(halfway.size(), 1u);
+    EXPECT_FLOAT_EQ(halfway[0].yDips, 1.0f);
+    EXPECT_FLOAT_EQ(halfway[0].color.r, 1.0f);
+    EXPECT_NEAR(halfway[0].color.a, 0.25f, 0.001f);
+    EXPECT_EQ(fade.Shadows(start + std::chrono::milliseconds(100)).size(), 1u);
+
+    fade.Retarget({}, kLinear100, start + std::chrono::milliseconds(100));
+    EXPECT_NEAR(fade.Shadows(start + std::chrono::milliseconds(150))[0].color.a, 0.25f, 0.001f);
+    EXPECT_TRUE(fade.Shadows(start + std::chrono::milliseconds(200)).empty());
+}
+
+TEST(ShadowFade, RetargetedMidwayItKeepsNoMoreShadowsThanEitherEndHolds) {
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    const InsetShadow                           line{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 0.0f, .spreadDips = 0.0f, .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f)};
+    ShadowFade                                  fade({line});
+    for (std::int64_t step = 0; step < 10; ++step) {
+        fade.Retarget(step % 2 == 0 ? std::vector<InsetShadow>{} : std::vector<InsetShadow>{line}, kLinear100, start + std::chrono::milliseconds(10 * step));
+    }
+    EXPECT_EQ(fade.Shadows(start + std::chrono::milliseconds(95)).size(), 1u);
+    // The same target again neither restarts nor stalls the fade.
+    fade.Retarget({line}, kLinear100, start + std::chrono::milliseconds(95));
+    EXPECT_FALSE(fade.Running(start + std::chrono::milliseconds(190)));
 }
 
 TEST(AnimatedValue, EveryTimingFunctionRunsFromZeroToOne) {

@@ -5,6 +5,7 @@
 #include <d2d1.h>
 
 #include <chrono>
+#include <vector>
 
 // How far a timing function has eased at progress, a share of the duration from 0 to 1, as a share from 0 to 1.
 float Eased(TimingFunction timing, float progress);
@@ -41,6 +42,23 @@ class ColorFade {
     D2D1_COLOR_F  _from;
     D2D1_COLOR_F  _to;
     AnimatedValue _progress{1.0f};
+};
+
+// Inset shadows moving to a new list over a transition. Shadows pair up by index, and one without a partner fades in
+// or out in place, its partner taken as the same shadow in transparent, so a state that adds a shadow fades it in.
+class ShadowFade {
+  public:
+    explicit ShadowFade(const std::vector<InsetShadow>& shadows);
+
+    // A target equal to the current one leaves the fade running as it was.
+    void                     Retarget(const std::vector<InsetShadow>& target, const Transition& transition, std::chrono::steady_clock::time_point now);
+    std::vector<InsetShadow> Shadows(std::chrono::steady_clock::time_point now) const;
+    bool                     Running(std::chrono::steady_clock::time_point now) const;
+
+  private:
+    std::vector<InsetShadow> _from;
+    std::vector<InsetShadow> _to;
+    AnimatedValue            _progress{1.0f};
 };
 
 // first and second mixed by share, 0 all first and 1 all second, through premultiplied alpha as CSS mixes them, so a

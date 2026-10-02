@@ -54,7 +54,7 @@ void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     for (size_t index = 0; index < _labels.size(); ++index) {
         const ItemStyle& state = _states[index];
-        DrawItemBackground(render, _row.boxes[index], state, _fades.Background(index, now), origin);
+        DrawItemBackground(render, _row.boxes[index], state, _fades.Background(index, now), _fades.Shadows(index, now), origin);
         DrawIconText(render, ItemContentOrigin(_row.boxes[index], state, origin), _labels[index], render.accent, render.brushes->Get(_fades.Text(index, now)));
     }
 }

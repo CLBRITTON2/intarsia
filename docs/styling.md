@@ -89,7 +89,8 @@ Hover and state rules only change colors, so nothing resizes under the cursor.
 - `transform`: `rotate(<n>deg)` or `none`. Mainly for flipping the tray or group toggle when it unfolds.
 - `transition`: comma separated `property duration timing`, with timing one of `linear`, `ease`, `ease-in`, `ease-out`,
   `ease-in-out` (default `ease`). Modules animate `background`, plus `width` on a tray or group unfolding. Icons
-  animate `transform`, and items animate `background` and `color`.
+  animate `transform`, and items animate `background` and `color`. An item's `box-shadow` fades over its
+  `background` transition.
 - `max-width`, `max-height`: menu only. A taller menu scrolls.
 - Lengths are capped at 10000px and durations at 60s. `!important` isn't supported.
 

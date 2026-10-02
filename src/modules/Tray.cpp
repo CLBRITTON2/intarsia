@@ -111,7 +111,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
         const D2D1_SIZE_F revealed = MainCrossSize(_row.axis, RevealedLength(), CrossLength(_row.size, _row.axis));
         render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + revealed.width, origin.y + revealed.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (size_t index = 0; index < _slots.size(); ++index) {
-            DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), origin);
+            DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), _fades.Shadows(index, now), origin);
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(_slots[index].bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
         }
@@ -121,7 +121,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle&    toggleStyle = _style.toggle;
     const size_t        toggle      = _slots.size();
     const D2D1_POINT_2F shifted     = MovedAlong(origin, -ToggleShift(), _row.axis);
-    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _fades.Background(toggle, now), shifted);
+    DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _fades.Background(toggle, now), _fades.Shadows(toggle, now), shifted);
     DrawTurnedIconText(render, ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted), _toggle, _angleShown, render.accent, render.foreground);
 }
 
