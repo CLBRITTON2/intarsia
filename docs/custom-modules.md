@@ -20,7 +20,7 @@ weather = {
 | --- | --- |
 | `command` | Program and arguments, under the same rules as an [action](configuration.md#actions): an `.exe`, no shell. |
 | `run` | `interval` runs it every `interval` seconds. `continuous` keeps it running (see below). |
-| `timeout` | Seconds before an interval run is killed, along with everything it started. Not allowed with `continuous`. |
+| `timeout` | Whole seconds, up to 86400, before an interval run is killed, along with everything it started. Not allowed with `continuous`. |
 | `output` | `text` shows the first line. `json` reads an object (see below). |
 | `classes` | Classes the JSON output may set. `{}` for none. |
 | `format` | `{text}` is the output. |

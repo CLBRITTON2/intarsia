@@ -217,9 +217,12 @@ TEST(Config, ChoicesNameEveryWordTheyTake) {
     }
 }
 
-TEST(Config, SizesMustBePositiveAndIntervalWholeSeconds) {
+TEST(Config, SizesAndIntervalsMustBePositiveAndBounded) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 10001")); }, ConfigErrorWith("bar.thickness must be at most 10000"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ConfigErrorWith("modules.time.interval must be a whole number"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 86401")); }, ConfigErrorWith("modules.time.interval must be at most 86400 seconds"));
+    EXPECT_NO_THROW(LoadText(Replace(kValidConfig, "interval = 60", "interval = 86400")));
 }
 
 TEST(Config, ModuleTableKeysMustBeStrings) {

@@ -207,6 +207,28 @@ namespace {
         return static_cast<std::int64_t>(value);
     }
 
+    // Far inside the 32-bit millisecond waits these reach, which wrap past about 49.7 days.
+    constexpr std::int64_t kLongestWaitSeconds = 86400;
+
+    std::chrono::seconds   Seconds(const TableReader& table, std::string_view key) {
+        const std::int64_t value = PositiveWholeNumber(table, key);
+        if (value > kLongestWaitSeconds) {
+            throw table.Error(std::format("{} must be at most {} seconds, got {}", table.KeyPath(key), kLongestWaitSeconds, value));
+        }
+        return std::chrono::seconds(value);
+    }
+
+    // Far past any monitor, and small enough that the bar's edges in device pixels fit 32-bit coordinates.
+    constexpr float kThickestBarDips = 10000.0f;
+
+    float           BarThickness(const TableReader& bar) {
+        const float value = PositiveNumber(bar, "thickness");
+        if (value > kThickestBarDips) {
+            throw bar.Error(std::format("{} must be at most {}, got {}", bar.KeyPath("thickness"), kThickestBarDips, value));
+        }
+        return value;
+    }
+
     // One word a config key accepts and the value it stands for.
     template <typename Value>
     struct Keyword {
@@ -441,7 +463,7 @@ namespace {
         action.RejectUnknownKeys({"menu"});
         const TableReader menu = action.Table("menu");
         menu.RejectUnknownKeys({"command", "timeout", "on_select"});
-        MenuAction read{.command = ReadCommand(menu, "command"), .timeout = std::chrono::seconds(PositiveWholeNumber(menu, "timeout")), .onSelect = ReadCommand(menu, "on_select")};
+        MenuAction read{.command = ReadCommand(menu, "command"), .timeout = Seconds(menu, "timeout"), .onSelect = ReadCommand(menu, "on_select")};
         if (SameFileName(read.onSelect.program.filename().wstring(), L"cmd.exe")) {
             throw menu.Error(
                 std::format("{} may not run cmd.exe, which would read the picked id as shell syntax: name an .exe that takes it as an argument", menu.KeyPath("on_select")));
@@ -519,7 +541,7 @@ namespace {
         return TextModuleConfig{.format   = module.String("format"),
                                 .tooltip  = ReadTooltip(module),
                                 .icon     = ToWide(module.String("icon")),
-                                .interval = std::chrono::seconds(PositiveWholeNumber(module, "interval")),
+                                .interval = Seconds(module, "interval"),
                                 .actions  = ReadActions(module)};
     }
 
@@ -550,7 +572,7 @@ namespace {
 
     std::variant<IntervalRun, ContinuousRun> ReadCustomRun(const TableReader& module) {
         switch (ParseKeyword(module, "run", kCustomRuns)) {
-            case CustomRun::Interval: return IntervalRun{.timeout = std::chrono::seconds(PositiveWholeNumber(module, "timeout"))};
+            case CustomRun::Interval: return IntervalRun{.timeout = Seconds(module, "timeout")};
             case CustomRun::Continuous:
                 if (module.Has("timeout")) {
                     throw module.Error(std::format("{} applies only to run = \"interval\": a continuous command runs until it exits", module.KeyPath("timeout")));
@@ -827,16 +849,14 @@ Config LoadConfig(const std::filesystem::path& path) {
 
     const TableReader           bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "layer", "space", "thickness"});
-    const BarConfig barConfig{.edge          = ParseKeyword(bar, "edge", kEdges),
-                              .layer         = ParseKeyword(bar, "layer", kLayers),
-                              .space         = ParseKeyword(bar, "space", kSpaces),
-                              .thicknessDips = PositiveNumber(bar, "thickness")};
+    const BarConfig barConfig{
+        .edge = ParseKeyword(bar, "edge", kEdges), .layer = ParseKeyword(bar, "layer", kLayers), .space = ParseKeyword(bar, "space", kSpaces), .thicknessDips = BarThickness(bar)};
 
-    Config          config{.bar           = barConfig,
-                           .style         = std::move(style),
-                           .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
-                           .modules       = std::move(modules),
-                           .layouts       = std::move(layouts)};
+    Config config{.bar           = barConfig,
+                  .style         = std::move(style),
+                  .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
+                  .modules       = std::move(modules),
+                  .layouts       = std::move(layouts)};
     RejectUnshownModules(definitions, config);
     RequireMembersInOneGroup(definitions, config);
     RequireKnownIds(sheet, definitions.Keys());

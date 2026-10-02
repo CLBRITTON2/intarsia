@@ -30,7 +30,7 @@ return {
 | `edge` | `top`, `bottom`, `left`, `right` | The screen edge the bar docks to. |
 | `layer` | `top`, `bottom` | `top` stays above windows and drops behind fullscreen apps. `bottom` lets windows cover it. |
 | `space` | `reserve`, `share` | `reserve` shrinks the work area so maximized windows stop at the bar. `share` leaves it alone, for window managers that leave their own gap. |
-| `thickness` | number | Height (or width on a side edge) in DIPs, scaled by each monitor's DPI. |
+| `thickness` | number up to 10000 | Height (or width on a side edge) in DIPs, scaled by each monitor's DPI. |
 
 ## window_manager
 
@@ -74,7 +74,7 @@ names, and `style.css` can target each one by name (`#work_clock`).
   [std::format spec](https://en.cppreference.com/w/cpp/utility/format/spec): `{used:.1f}` for one decimal,
   `{usage:>3}` to pad to three characters.
 - `icon`: a glyph shown before the text, or `""`.
-- `interval`: seconds between updates.
+- `interval`: whole seconds between updates, up to 86400 (a day).
 - `tooltip` (optional): a second format shown on hover. `\n` breaks lines.
 - Actions (optional): `on_click`, `on_right_click`, `on_middle_click`, `on_scroll_up`, `on_scroll_down`.
 
