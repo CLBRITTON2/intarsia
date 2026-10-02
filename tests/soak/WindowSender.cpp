@@ -54,6 +54,28 @@ namespace {
         return std::format(L"{} building [{}{}] {}%", kSpinner[tick % kSpinner.size()], filled, empty, percent);
     }
 
+    // The foreground window's class and process, which say what took the foreground from the sender.
+    std::string ForegroundOwner() {
+        HWND foreground = GetForegroundWindow();
+        if (foreground == nullptr) {
+            return "no foreground window";
+        }
+        std::array<char, 256> className{};
+        GetClassNameA(foreground, className.data(), static_cast<int>(className.size()));
+        DWORD processId = 0;
+        GetWindowThreadProcessId(foreground, &processId);
+        std::array<char, MAX_PATH> image{};
+        DWORD                      imageLength = static_cast<DWORD>(image.size());
+        HANDLE                     process     = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        if (process == nullptr || !QueryFullProcessImageNameA(process, 0, image.data(), &imageLength)) {
+            imageLength = 0;
+        }
+        if (process != nullptr) {
+            CloseHandle(process);
+        }
+        return std::format("class={} pid={} image={}", className.data(), processId, std::string(image.data(), imageLength));
+    }
+
     void DrainMessages() {
         MSG message{};
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -64,7 +86,7 @@ namespace {
     [[noreturn]] void Retitle() {
         HWND window = CreateShownWindow();
         if (!SetForegroundWindow(window) || GetForegroundWindow() != window) {
-            throw NotForeground("could not take the foreground, start it from the foreground console");
+            throw NotForeground(std::format("could not take the foreground from {}, start it from the foreground console", ForegroundOwner()));
         }
         HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
         if (timer == nullptr) {
@@ -89,7 +111,7 @@ namespace {
                 continue;
             }
             if (GetForegroundWindow() != window) {
-                throw NotForeground(std::format("lost the foreground after {} retitles", tick));
+                throw NotForeground(std::format("lost the foreground after {} retitles to {}", tick, ForegroundOwner()));
             }
             if (!SetWindowTextW(window, ProgressTitle(tick).c_str())) {
                 throw std::runtime_error(std::format("SetWindowTextW failed with {}", GetLastError()));

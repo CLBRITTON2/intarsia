@@ -378,8 +378,8 @@ tooltip { padding: 6px; background: rgba(31, 29, 46, 0.9); border: 1px solid var
     [System.IO.File]::WriteAllText($path, $style)
 }
 
-function Invoke-Scenario([string] $name) {
-    $work = Join-Path $LogRoot "intarsia-soak-$name-$PID"
+function Invoke-Scenario([string] $name, [int] $run) {
+    $work = Join-Path $LogRoot "intarsia-soak-$name-$PID-$run"
     New-Item -ItemType Directory -Force $work | Out-Null
     $configPath = Join-Path $work 'config.lua'
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
@@ -469,9 +469,10 @@ function Invoke-Scenario([string] $name) {
                 Send-GroupInput $bar.Id $second
             }
             if ($name -eq 'retitle') {
-                # Started once the bar is up, from this console, which may hand it the foreground.
+                # Started once the bar is up, in this console, which may hand it the foreground. A console of its own
+                # opens a terminal window that takes the foreground back a moment later.
                 if ($null -eq $retitler) {
-                    $retitler = Start-Process $retitlerExe -PassThru `
+                    $retitler = Start-Process $retitlerExe -PassThru -NoNewWindow `
                         -RedirectStandardOutput (Join-Path $work 'retitler.out') -RedirectStandardError (Join-Path $work 'retitler.err')
                 } elseif ($retitler.HasExited) {
                     $failures.Add("window sender exited with code $($retitler.ExitCode) at ${second}s (2: it could not take the foreground or lost it): $(Get-Content -Raw (Join-Path $work 'retitler.err'))")
@@ -563,9 +564,9 @@ foreach ($exe in @($barExe, $serverExe, $senderExe, $retitlerExe)) {
     }
 }
 
-$results = foreach ($name in $Scenario) {
-    Write-Host "running $name for $Seconds s"
-    Invoke-Scenario $name
+$results = for ($run = 0; $run -lt $Scenario.Count; ++$run) {
+    Write-Host "running $($Scenario[$run]) for $Seconds s"
+    Invoke-Scenario $Scenario[$run] $run
 }
 $results | Format-Table -AutoSize | Out-String -Width 400 | Write-Host
 if (@($results | Where-Object Result -ne 'pass').Count -gt 0) {
