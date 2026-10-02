@@ -195,7 +195,7 @@ namespace {
             throw std::invalid_argument("must be a length in px, as 4px");
         }
         if (std::abs(*value) > kLongestLengthDips) {
-            throw std::invalid_argument("must be a length no longer than 10000px");
+            throw std::invalid_argument(std::format("must be a length no longer than {}px", kLongestLengthDips));
         }
         return *value;
     }
@@ -332,7 +332,7 @@ namespace {
         const std::optional<float> value        = milliseconds ? ParseNumber(text.substr(0, text.size() - 2)) :
                              text.ends_with('s')                         ? ParseNumber(text.substr(0, text.size() - 1)) :
                                                                            std::nullopt;
-        const float                scaled       = milliseconds ? value.value_or(0.0f) : value.value_or(0.0f) * 1000.0f;
+        const float                scaled       = value.value_or(0.0f) * (milliseconds ? 1.0f : 1000.0f);
         if (!value.has_value() || scaled < 0.0f || scaled > 60000.0f) {
             throw std::invalid_argument("takes a duration in ms or s from 0 to 60s, as 400ms or 0.4s");
         }

@@ -24,13 +24,17 @@ namespace {
 
 } // namespace
 
+GlazeWm::Snapshot GlazeWm::Snapshot::Empty(Connection connection, std::string detail) {
+    return Snapshot{.workspaces   = {},
+                    .windows      = {},
+                    .bindingModes = {},
+                    .direction    = std::nullopt,
+                    .status       = WindowManagerStatus{.name = kName, .connection = connection, .detail = std::move(detail)}};
+}
+
 GlazeWm::GlazeWm(ChangeSignal& changes, std::uint16_t port, std::unique_ptr<Native> focus) :
     _focus(std::move(focus)), _port(port), _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
-    _snapshot{.workspaces   = {},
-              .windows      = {},
-              .bindingModes = {},
-              .direction    = std::nullopt,
-              .status       = WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = "not connected yet"}},
+    _snapshot(Snapshot::Empty(Connection::Disconnected, "not connected yet")),
     _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands,
                                                      [this] { return WorkQueue<std::string>::Process([this](const std::string& command) { SendCommand(command); }); })),
     _receiver([this] { Receive(); }) {}
@@ -144,11 +148,7 @@ void GlazeWm::Receive() {
                      {.key = "max_retry_ms", .value = std::to_string(kLongestRetry.count())}});
                 loggedOut = true;
             }
-            Publish(Snapshot{.workspaces   = {},
-                             .windows      = {},
-                             .bindingModes = {},
-                             .direction    = std::nullopt,
-                             .status       = WindowManagerStatus{.name = kName, .connection = Connection::Disconnected, .detail = error.what()}});
+            Publish(Snapshot::Empty(Connection::Disconnected, error.what()));
         }
         if (WaitForSingleObject(_stopEvent.get(), static_cast<DWORD>(retry.count())) == WAIT_OBJECT_0) {
             return;
@@ -197,11 +197,7 @@ void GlazeWm::Session() {
         }
     };
 
-    Snapshot current{.workspaces   = {},
-                     .windows      = {},
-                     .bindingModes = {},
-                     .direction    = std::nullopt,
-                     .status       = WindowManagerStatus{.name = kName, .connection = Connection::Connected, .detail = ""}};
+    Snapshot current = Snapshot::Empty(Connection::Connected, "");
     SendSerialized(*socket, glazewm::SubscribeCommand());
     ask(monitorsGate, glazewm::kQueryMonitors);
     ask(bindingModesGate, glazewm::kQueryBindingModes);

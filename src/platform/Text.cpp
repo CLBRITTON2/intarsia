@@ -82,6 +82,11 @@ bool IsUnsafeCodePoint(char32_t code) {
         (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
 }
 
+bool IsControlByte(char character) {
+    const auto byte = static_cast<std::uint8_t>(character);
+    return byte < 0x20u || byte == 0x7Fu;
+}
+
 bool IsUnsafeCharacter(wchar_t unit) {
     return IsUnsafeCodePoint(static_cast<char32_t>(unit));
 }
@@ -144,7 +149,7 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
         if (character == '"' || character == '\\') {
             excerpt += '\\';
             excerpt += character;
-        } else if (byte < 0x20u || byte == 0x7Fu) {
+        } else if (IsControlByte(character)) {
             excerpt += std::format("\\x{:02x}", byte);
         } else {
             excerpt += character;

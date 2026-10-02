@@ -447,10 +447,7 @@ namespace {
     WindowManagerCommand ReadWindowManagerCommand(const TableReader& action) {
         action.RejectUnknownKeys({"window_manager"});
         std::string text    = action.String("window_manager");
-        const bool  control = std::ranges::any_of(text, [](char character) {
-            const auto byte = static_cast<std::uint8_t>(character);
-            return byte < 0x20u || byte == 0x7Fu;
-        });
+        const bool  control = std::ranges::any_of(text, IsControlByte);
         if (text.empty() || control) {
             throw action.Error(std::format("{} must be a command on one line, as \"focus --next-workspace\"", action.KeyPath("window_manager")));
         }
@@ -868,18 +865,20 @@ Config LoadConfig(const std::filesystem::path& path) {
     });
     RequireDeclaredClasses(sheet, declared);
 
-    for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"}, std::pair{ModuleKind::BindingMode, "binding_mode"},
-                                    std::pair{ModuleKind::TilingDirection, "tiling_direction"}}) {
-        if (config.windowManager == WindowManagerKind::Windows && AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; })) {
-            throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", name));
+    if (config.windowManager == WindowManagerKind::Windows) {
+        for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"},
+                                        std::pair{ModuleKind::BindingMode, "binding_mode"}, std::pair{ModuleKind::TilingDirection, "tiling_direction"}}) {
+            if (ShowsKind(config, kind)) {
+                throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", name));
+            }
         }
-    }
-    const bool sendsCommands = AnyModuleInConfig(config, [](const ModuleInstance& instance) {
-        const ModuleActions* actions = ActionsOf(instance.settings);
-        return actions != nullptr && SendsWindowManagerCommands(*actions);
-    });
-    if (config.windowManager == WindowManagerKind::Windows && sendsCommands) {
-        throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
+        const bool sendsCommands = AnyModuleInConfig(config, [](const ModuleInstance& instance) {
+            const ModuleActions* actions = ActionsOf(instance.settings);
+            return actions != nullptr && SendsWindowManagerCommands(*actions);
+        });
+        if (sendsCommands) {
+            throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
+        }
     }
 
     return config;

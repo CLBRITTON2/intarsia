@@ -107,10 +107,7 @@ namespace glazewm {
     }
 
     std::string FocusWorkspaceCommand(std::string_view name) {
-        const bool unsafe = std::ranges::any_of(name, [](char character) {
-            const auto byte = static_cast<std::uint8_t>(character);
-            return byte <= 0x20u || byte == 0x7Fu;
-        });
+        const bool unsafe = std::ranges::any_of(name, [](char character) { return character == ' ' || IsControlByte(character); });
         if (name.empty() || unsafe) {
             throw ProtocolError(
                 std::format("workspace name \"{}\" cannot be sent to GlazeWM: it is empty or holds whitespace or control characters", LogExcerpt(name, kExcerptBytes)));
@@ -126,10 +123,7 @@ namespace glazewm {
     }
 
     std::string CommandMessage(std::string_view command) {
-        const bool control = std::ranges::any_of(command, [](char character) {
-            const auto byte = static_cast<std::uint8_t>(character);
-            return byte < 0x20u || byte == 0x7Fu;
-        });
+        const bool control = std::ranges::any_of(command, IsControlByte);
         if (command.empty() || control) {
             throw ProtocolError(std::format("command \"{}\" cannot be sent to GlazeWM: it is empty or holds control characters", LogExcerpt(command, kExcerptBytes)));
         }

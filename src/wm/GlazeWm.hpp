@@ -52,7 +52,9 @@ class GlazeWm final : public IWindowManager {
         std::optional<TilingDirection> direction;
         WindowManagerStatus            status;
 
-        bool                           operator==(const Snapshot&) const = default;
+        // No workspaces, windows, binding modes or direction yet.
+        static Snapshot Empty(Connection connection, std::string detail);
+        bool            operator==(const Snapshot&) const = default;
     };
 
     void Receive();

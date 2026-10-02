@@ -56,9 +56,10 @@ class App {
     void        RebuildBarsIfMonitorsChanged();
     // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
     void HandleDeviceLost();
-    void ScheduleDeviceRetry();
-    // Doubles the wait, logs event with reason, and schedules the next try.
-    void                  RetryDeviceLater(std::string_view event, std::string_view reason);
+    // Twice the last wait, up to kLongestDeviceRetry.
+    std::chrono::milliseconds LongerDeviceRetry() const;
+    // Logs event with reason and schedules the next try after wait.
+    void                  RetryDeviceLater(std::string_view event, std::string_view reason, std::chrono::milliseconds wait);
     void                  RecreateDevice();
 
     HINSTANCE             _instance;

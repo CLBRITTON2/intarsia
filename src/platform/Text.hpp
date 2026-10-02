@@ -28,6 +28,8 @@ std::wstring ReplaceLoneSurrogates(std::wstring_view text);
 // bidirectional marks, embeddings, overrides and isolates, which can make drawn text read as something other than what
 // it holds (Trojan Source, CVE-2021-42574), and the invisible byte order mark (U+FEFF). All are single UTF-16 units.
 bool IsUnsafeCodePoint(char32_t code);
+// An ASCII control byte (C0 or DEL), which would break a line of text another parser reads.
+bool IsControlByte(char character);
 bool IsUnsafeCharacter(wchar_t unit);
 
 // Whether bytes are well-formed UTF-8 (no overlong forms, encoded surrogates or code points past U+10FFFF).
