@@ -5,10 +5,12 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <format>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using testing::ElementsAre;
 
@@ -16,9 +18,12 @@ namespace {
 
     // Every module that sends GlazeWM a command on a click, one per place along the bar. The test server shows
     // workspaces 1 and 2 on the primary monitor, 2 displayed and holding the test's windows.
-    constexpr std::string_view kConfig = R"(
+    std::string ClicksConfig(std::string_view edge) {
+        return std::string(R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = ")") +
+            std::string(edge) +
+            R"(", layer = "top", space = "share", thickness = 40 },
     window_manager = "glazewm",
     modules_left = { "workspaces", "apps" },
     modules_center = { "clock" },
@@ -33,6 +38,7 @@ return {
     },
 }
 )";
+    }
 
     constexpr std::string_view kStyle = R"(
 * { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
@@ -93,20 +99,168 @@ section { margin: 4px; padding: 3px; background: #191724; }
 .alert { color: #e74c3c; }
 )";
 
+    // The test server shows the binding mode "resize" and the vertical direction while the focus index is odd.
+    constexpr std::string_view kModesConfig = R"(
+return {
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    window_manager = "glazewm",
+    modules_left = { "modes", "tiling" },
+    modules_center = {},
+    modules_right = {},
+    layouts = {},
+    modules = {
+        modes = { type = "binding_mode" },
+        tiling = { type = "tiling_direction", horizontal = "WWWW", vertical = "W" },
+    },
+}
+)";
+
+    constexpr std::uint32_t    kModeColor   = 0xF39C12;
+    constexpr std::uint32_t    kTilingColor = 0x2E86C1;
+
+    constexpr std::string_view kModesStyle = R"(
+* { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
+section { margin: 4px; padding: 3px; background: #191724; }
+binding_mode .item { background: #f39c12; }
+#tiling { background: #2e86c1; }
+)";
+
+    constexpr std::uint32_t    kEmptyColor = 0xF39C12;
+
+    constexpr std::string_view kStatesStyle = R"(
+* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
+section { margin: 4px; padding: 3px; background: #191724; }
+.item { padding: 2px 6px; margin: 0 1px; }
+.item.empty { background: #f39c12; }
+.item.focused { background: #2e86c1; }
+)";
+
+    // A tiling module the rejecting server never gives a direction, styled so any drawing of it shows.
+    constexpr std::string_view  kRejectedStyle = R"(
+* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
+section { margin: 4px; padding: 3px; background: #191724; }
+.module { padding: 0 8px; }
+.item { padding: 2px 6px; margin: 0 1px; }
+#tiling { background: #2e86c1; }
+)";
+
+    std::optional<std::int32_t> TilingSpan(const integration::RunningBar& bar) {
+        HWND window = bar.PrimaryBar();
+        if (window == nullptr) {
+            return std::nullopt;
+        }
+        return integration::ColumnSpan(integration::CaptureScreenOver(window), kTilingColor);
+    }
+
 } // namespace
 
 TEST(GlazeWm, ClicksAlongTheBarSendEachItemsCommandInOrder) {
     const integration::TestWindow first(L" 1");
     const integration::TestWindow second(L" 2");
-    const integration::RunningBar bar("clicks", kConfig, kStyle);
+    const integration::RunningBar bar("clicks", ClicksConfig("top"), kStyle);
 
     EXPECT_THAT(bar.CommandsFromSweep(),
                 ElementsAre("command focus --workspace 1", "command focus --workspace 2", FocusWindow(kFirstWindowId), FocusWindow(kSecondWindowId),
                             "command focus --next-workspace", "command toggle-tiling-direction"));
 }
 
+TEST(GlazeWm, ClicksDownASideBarSendEachItemsCommandInOrder) {
+    const integration::TestWindow first(L" 1");
+    const integration::TestWindow second(L" 2");
+    const integration::RunningBar bar("side-clicks", ClicksConfig("left"), kStyle);
+
+    EXPECT_THAT(bar.CommandsFromSweep(),
+                ElementsAre("command focus --workspace 1", "command focus --workspace 2", FocusWindow(kFirstWindowId), FocusWindow(kSecondWindowId),
+                            "command focus --next-workspace", "command toggle-tiling-direction"));
+}
+
+TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
+    const integration::RunningBar bar("rejected", ClicksConfig("top"), kRejectedStyle, integration::GlazeWmTestServer(L"rejecting"));
+
+    // The direction has no text and takes no room, so no click reaches the toggle.
+    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace"));
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=command_failed").empty(); }, std::chrono::seconds(5)))
+        << "the rejected focus --workspace 1 was never logged";
+    for (const std::string& line : bar.LogLines("event=command_failed")) {
+        EXPECT_NE(line.find("focus --workspace 1"), std::string::npos) << line;
+    }
+    EXPECT_THAT(bar.LogLines("event=disconnected"), testing::IsEmpty());
+    EXPECT_EQ(bar.PixelsOf(kTilingColor), size_t{0});
+}
+
+TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
+    const std::filesystem::path impostor = integration::NewWorkDirectory("impostor-server") / "impostor.exe";
+    std::filesystem::copy_file(integration::GlazeWmTestServer(L"integration").program, impostor, std::filesystem::copy_options::overwrite_existing);
+    const integration::RunningBar  bar("impostor", ClicksConfig("top"), kStyle,
+                                       integration::TestServer{.program = impostor, .scenario = L"integration", .readyLog = "event=disconnected"});
+
+    const std::vector<std::string> refused = bar.LogLines("event=disconnected");
+    ASSERT_FALSE(refused.empty());
+    EXPECT_NE(refused.front().find("not glazewm.exe"), std::string::npos) << refused.front();
+
+    const std::uint32_t clicks = integration::SweepClicks(bar.PrimaryBar());
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=command_dropped").empty(); }, std::chrono::seconds(2)))
+        << "the clock's click was not dropped for want of a connection";
+    // Long enough for a command sent anyway to reach the server's output.
+    integration::Eventually([] { return false; }, std::chrono::seconds(1));
+    integration::Log("sweep", std::format("clicks={} commands={}", clicks, bar.Commands().size()));
+    EXPECT_THAT(bar.Commands(), testing::IsEmpty());
+    EXPECT_THAT(bar.LogLines("event=connected"), testing::IsEmpty());
+}
+
+TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActive) {
+    integration::RunningBar bar("binding-mode", kModesConfig, kModesStyle);
+    ASSERT_TRUE(bar.Draws(kTilingColor, std::chrono::seconds(5))) << "the tiling direction never drew, so the bar has no answers yet";
+    EXPECT_EQ(bar.PixelsOf(kModeColor), size_t{0}) << "a binding mode drew while none is active";
+
+    bar.PushFocus(1);
+    EXPECT_TRUE(bar.Draws(kModeColor, std::chrono::seconds(5))) << "the active binding mode never drew";
+
+    bar.PushFocus(2);
+    EXPECT_TRUE(bar.StopsDrawing(kModeColor, std::chrono::seconds(5))) << "the binding mode still drew once it ended";
+}
+
+TEST(GlazeWm, ShowsTheConfiguredTextForTheTilingDirection) {
+    integration::RunningBar     bar("tiling-text", kModesConfig, kModesStyle);
+    std::optional<std::int32_t> horizontal;
+    ASSERT_TRUE(integration::Eventually(
+        [&] {
+            horizontal = TilingSpan(bar);
+            return horizontal.has_value();
+        },
+        std::chrono::seconds(5)))
+        << "the horizontal direction never drew";
+
+    bar.PushFocus(1);
+    std::optional<std::int32_t> vertical;
+    EXPECT_TRUE(integration::Eventually(
+        [&] {
+            vertical = TilingSpan(bar);
+            return horizontal.has_value() && vertical.has_value() && *vertical < *horizontal;
+        },
+        std::chrono::seconds(5)))
+        << "the direction's box stayed " << horizontal.value_or(-1) << " px wide for the shorter vertical text, now " << vertical.value_or(-1);
+    integration::Log("tiling_spans", std::format("horizontal={} vertical={}", horizontal.value_or(-1), vertical.value_or(-1)));
+}
+
+TEST(GlazeWm, StylesAnEmptyWorkspaceApartFromTheFocusedOne) {
+    integration::RunningBar bar("workspace-states", kWorkspacesConfig, kStatesStyle);
+    std::optional<double>   empty;
+    std::optional<double>   focused;
+    EXPECT_TRUE(integration::Eventually(
+        [&] {
+            const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
+            empty                              = integration::MeanColumn(capture, kEmptyColor);
+            focused                            = integration::MeanColumn(capture, kFocusedColor);
+            return empty.has_value() && focused.has_value() && *empty < *focused;
+        },
+        std::chrono::seconds(5)))
+        << "workspace 1 (empty) did not draw left of workspace 2 (focused): empty column " << empty.value_or(-1) << ", focused column " << focused.value_or(-1);
+    integration::Log("workspace_columns", std::format("empty={:.1f} focused={:.1f}", empty.value_or(-1), focused.value_or(-1)));
+}
+
 TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
-    integration::RunningBar bar("reconnect", kConfig, kStyle);
+    integration::RunningBar bar("reconnect", ClicksConfig("top"), kStyle);
     bar.StopServer();
     EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=disconnected").empty(); }, std::chrono::seconds(5)));
     integration::Log("bar_logged", std::format("text=event=disconnected lines={}", bar.LogLines("event=disconnected").size()));

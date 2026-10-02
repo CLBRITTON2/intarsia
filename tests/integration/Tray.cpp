@@ -48,8 +48,8 @@ section { margin: 4px; padding: 3px; background: #191724; }
     // The tray drops the icons of closed owners every 5 s.
     constexpr auto kSwept = std::chrono::seconds(7);
 
-    // Clicks the middle of the pixels drawn in rgb. False when none are drawn within kDrawn.
-    bool ClickColor(const integration::RunningBar& bar, std::uint32_t rgb) {
+    // The middle of the pixels drawn in rgb, or nullopt when none are drawn within kDrawn.
+    std::optional<std::int32_t> DrawnColumn(const integration::RunningBar& bar, std::uint32_t rgb) {
         std::optional<double> column;
         if (!integration::Eventually(
                 [&] {
@@ -57,9 +57,18 @@ section { margin: 4px; padding: 3px; background: #191724; }
                     return column.has_value();
                 },
                 kDrawn)) {
+            return std::nullopt;
+        }
+        return static_cast<std::int32_t>(column.value_or(0));
+    }
+
+    // Clicks the middle of the pixels drawn in rgb. False when none are drawn within kDrawn.
+    bool ClickColor(const integration::RunningBar& bar, std::uint32_t rgb) {
+        const std::optional<std::int32_t> column = DrawnColumn(bar, rgb);
+        if (!column.has_value()) {
             return false;
         }
-        bar.ClickAt(static_cast<std::int32_t>(column.value_or(0)));
+        bar.ClickAt(*column);
         return true;
     }
 
@@ -99,6 +108,26 @@ TEST(Tray, PostsAClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
     EXPECT_THAT(LParams(current.Received(), 1), ElementsAre(Version4Event(WM_LBUTTONDOWN, 1), Version4Event(WM_LBUTTONUP, 1), Version4Event(NIN_SELECT, 1)));
     EXPECT_THAT(LParams(legacy.Received(), 2), ElementsAre(WM_LBUTTONDOWN, WM_LBUTTONUP));
     EXPECT_THAT(WParams(legacy.Received()), ElementsAre(WPARAM{2}, WPARAM{2}));
+}
+
+TEST(Tray, PostsARightClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
+    const integration::RunningBar bar("tray-right-click", kConfig, kStyle);
+    const integration::TrayApp    current(1, NOTIFYICON_VERSION_4);
+    const integration::TrayApp    legacy(2, 0);
+    ASSERT_TRUE(current.Add(kGreen));
+    ASSERT_TRUE(legacy.Add(kOrange));
+    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+
+    const std::optional<std::int32_t> green = DrawnColumn(bar, kGreen);
+    ASSERT_TRUE(green.has_value()) << "the version 4 icon never drew";
+    bar.ButtonUpAt(WM_RBUTTONUP, green.value_or(0));
+    const std::optional<std::int32_t> orange = DrawnColumn(bar, kOrange);
+    ASSERT_TRUE(orange.has_value()) << "the version 0 icon never drew";
+    bar.ButtonUpAt(WM_RBUTTONUP, orange.value_or(0));
+    integration::Eventually([&] { return current.Received().size() >= 3 && legacy.Received().size() >= 2; }, kDrawn);
+
+    EXPECT_THAT(LParams(current.Received(), 1), ElementsAre(Version4Event(WM_RBUTTONDOWN, 1), Version4Event(WM_RBUTTONUP, 1), Version4Event(WM_CONTEXTMENU, 1)));
+    EXPECT_THAT(LParams(legacy.Received(), 2), ElementsAre(WM_RBUTTONDOWN, WM_RBUTTONUP));
 }
 
 TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {

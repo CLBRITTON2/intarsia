@@ -46,6 +46,14 @@ return {{
                            left, modules);
     }
 
+    // Prints class one, then class two about two seconds later, then exits with code 3 two seconds after that.
+    constexpr std::string_view kContinuousScript = "@echo off\r\n"
+                                                   "echo {\"text\":\"WWWW\",\"class\":\"one\"}\r\n"
+                                                   "ping -n 3 127.0.0.1 >nul\r\n"
+                                                   "echo {\"text\":\"WWWW\",\"class\":\"two\"}\r\n"
+                                                   "ping -n 3 127.0.0.1 >nul\r\n"
+                                                   "exit /b 3\r\n";
+
     // Large text, so glyph stems cover whole pixels in the exact color.
     std::string StyleWithRules(std::string_view rules) {
         return std::string(R"(
@@ -72,4 +80,21 @@ TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
         StyleWithRules(""));
     EXPECT_TRUE(bar.Draws(kRed, kDrawn)) << "the failing command never drew the alert color";
     EXPECT_FALSE(bar.LogLines("event=command_failed").empty()) << "the bar logged no command_failed";
+}
+
+TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
+    // Apart from the bar's work directory, which the bar's start empties.
+    const std::filesystem::path script = integration::NewWorkDirectory("custom-continuous-script") / "lines.cmd";
+    integration::WriteText(script, kContinuousScript);
+    const std::string module = std::format(R"(probe = {{ type = "custom", command = {{ {}, "/c", {} }}, run = "continuous", output = "json", classes = {{ "one", "two" }},
+                  format = "{{text}}", icon = "", interval = 2 }},)",
+                                           integration::LuaString(R"(C:\Windows\System32\cmd.exe)"), integration::LuaString(ToUtf8(script.wstring())));
+    const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module), StyleWithRules("#probe.one { color: #27ae60; } #probe.two { color: #f39c12; }"));
+
+    ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";
+    ASSERT_TRUE(bar.Draws(kOrange, kDrawn)) << "the second line's class never drew";
+    EXPECT_EQ(bar.PixelsOf(kGreen), size_t{0}) << "the first line's class still drew beside the second's";
+    ASSERT_TRUE(bar.Draws(kRed, kDrawn)) << "the command's exit never drew the alert color";
+    EXPECT_FALSE(bar.LogLines("exited with code 3").empty()) << "the bar logged no exit code";
+    EXPECT_TRUE(bar.Draws(kGreen, kDrawn)) << "the command never restarted after its interval";
 }

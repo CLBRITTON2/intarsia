@@ -13,6 +13,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 namespace integration {
 
@@ -133,6 +134,25 @@ namespace integration {
         std::string CommandText(const std::string& line) {
             constexpr std::string_view kPrefix = "command ";
             return line.substr(kPrefix.size());
+        }
+
+        RECT ClientRect(HWND window) {
+            RECT client{};
+            if (!GetClientRect(window, &client)) {
+                ThrowLastError("GetClientRect");
+            }
+            return client;
+        }
+
+        bool Vertical(const RECT& client) {
+            return client.bottom - client.top > client.right - client.left;
+        }
+
+        void SendAndWait(HWND window, std::uint32_t message, WPARAM wParam, LPARAM lParam, std::string_view what) {
+            DWORD_PTR result = 0;
+            if (SendMessageTimeoutW(window, message, wParam, lParam, SMTO_ABORTIFHUNG, 1000, &result) == 0) {
+                ThrowLastError(std::format("SendMessageTimeoutW({})", what));
+            }
         }
 
         void LogPixelCount(std::uint32_t rgb, const std::optional<size_t>& count) {
@@ -318,29 +338,44 @@ namespace integration {
         return nullptr;
     }
 
-    std::uint32_t SweepClicks(HWND bar) {
-        RECT client{};
-        if (!GetClientRect(bar, &client)) {
-            ThrowLastError("GetClientRect(bar)");
+    POINT AlongBar(HWND bar, std::int32_t offset) {
+        const RECT client = ClientRect(bar);
+        if (Vertical(client)) {
+            return POINT{.x = client.right / 2, .y = offset};
         }
-        std::uint32_t clicks = 0;
-        for (std::int32_t x = client.left; x < client.right; x += kSweepStepPixels) {
-            SendClick(bar, x);
+        return POINT{.x = offset, .y = client.bottom / 2};
+    }
+
+    std::uint32_t SweepClicks(HWND bar) {
+        const RECT         client = ClientRect(bar);
+        const std::int32_t length = Vertical(client) ? client.bottom : client.right;
+        std::uint32_t      clicks = 0;
+        for (std::int32_t offset = 0; offset < length; offset += kSweepStepPixels) {
+            SendClick(bar, offset);
             ++clicks;
         }
         return clicks;
     }
 
-    void SendClick(HWND bar, std::int32_t x) {
-        RECT client{};
-        if (!GetClientRect(bar, &client)) {
-            ThrowLastError("GetClientRect(bar)");
+    void SendButtonUp(HWND window, std::uint32_t message, POINT client) {
+        // Sent, not posted, so the window handles each input before the next and none waits in its queue.
+        SendAndWait(window, message, 0, MAKELPARAM(client.x, client.y), std::format("button message {:#x} at {},{}", message, client.x, client.y));
+    }
+
+    void SendClick(HWND bar, std::int32_t offset) {
+        SendButtonUp(bar, WM_LBUTTONUP, AlongBar(bar, offset));
+    }
+
+    void SendWheel(HWND bar, std::int32_t offset, std::int16_t delta) {
+        POINT point = AlongBar(bar, offset);
+        if (!ClientToScreen(bar, &point)) {
+            ThrowLastError("ClientToScreen(bar)");
         }
-        DWORD_PTR result = 0;
-        // Sent, not posted, so the bar handles each click before the next and none waits in its queue.
-        if (SendMessageTimeoutW(bar, WM_LBUTTONUP, 0, MAKELPARAM(x, (client.bottom - client.top) / 2), SMTO_ABORTIFHUNG, 1000, &result) == 0) {
-            ThrowLastError(std::format("SendMessageTimeoutW(WM_LBUTTONUP at {})", x));
-        }
+        SendAndWait(bar, WM_MOUSEWHEEL, MAKEWPARAM(0, delta), MAKELPARAM(point.x, point.y), std::format("WM_MOUSEWHEEL delta {} at {},{}", delta, point.x, point.y));
+    }
+
+    void SendKey(HWND window, std::uint32_t virtualKey) {
+        SendAndWait(window, WM_KEYDOWN, virtualKey, 0, std::format("WM_KEYDOWN {:#x}", virtualKey));
     }
 
     SavedCursor::SavedCursor() : _position{} {
@@ -355,16 +390,20 @@ namespace integration {
         }
     }
 
-    void PlaceCursor(HWND bar, std::int32_t x) {
-        const RECT rect = ScreenRect(bar);
-        if (!SetCursorPos(rect.left + x, (rect.top + rect.bottom) / 2)) {
-            ThrowLastError(std::format("SetCursorPos(bar column {})", x));
+    void PlaceCursor(HWND bar, std::int32_t offset) {
+        POINT point = AlongBar(bar, offset);
+        if (!ClientToScreen(bar, &point)) {
+            ThrowLastError("ClientToScreen(bar)");
+        }
+        if (!SetCursorPos(point.x, point.y)) {
+            ThrowLastError(std::format("SetCursorPos(bar offset {})", offset));
         }
     }
 
-    HWND VisibleTooltipWindow(std::uint32_t processId) {
-        HWND window = nullptr;
-        while ((window = FindWindowExW(nullptr, window, L"IntarsiaTooltip", nullptr)) != nullptr) {
+    HWND VisibleWindow(std::uint32_t processId, std::wstring_view className) {
+        const std::wstring name(className);
+        HWND               window = nullptr;
+        while ((window = FindWindowExW(nullptr, window, name.c_str(), nullptr)) != nullptr) {
             DWORD owner = 0;
             GetWindowThreadProcessId(window, &owner);
             if (owner == processId && IsWindowVisible(window)) {
@@ -475,7 +514,14 @@ namespace integration {
         return folded;
     }
 
-    RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style) : _work(NewWorkDirectory(testName)), _port(FreePort()), _serverStarts(0) {
+    TestServer GlazeWmTestServer(std::wstring_view scenario) {
+        return TestServer{.program = Executable(INTARSIA_GLAZEWM_SERVER), .scenario = std::wstring(scenario), .readyLog = "event=connected"};
+    }
+
+    RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style) : RunningBar(testName, config, style, GlazeWmTestServer(L"integration")) {}
+
+    RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style, TestServer server) :
+        _work(NewWorkDirectory(testName)), _serverKind(std::move(server)), _port(FreePort()), _serverStarts(0) {
         Log("work_directory", std::format("path={}", LogValue(_work.string())));
         const std::filesystem::path configPath = _work / "config.lua";
         WriteText(configPath, config);
@@ -487,10 +533,10 @@ namespace integration {
                                                L"--tray-class", std::wstring(kTrayClass)},
                      _work / "bar.out", _work / "bar.err");
         Log("bar_started", std::format("pid={} program={}", _bar->Id(), LogValue(INTARSIA_EXE)));
-        if (!Eventually([this] { return !LogLines("event=connected").empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
+        if (!Eventually([this] { return !LogLines(_serverKind.readyLog).empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
             PrintLogs();
-            throw std::runtime_error(
-                std::format("the bar did not connect and show a bar on the primary monitor within {} s (bar log {})", kStartLimit.count(), (_work / "bar.err").string()));
+            throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _serverKind.readyLog, kStartLimit.count(),
+                                                 (_work / "bar.err").string()));
         }
         RECT client{};
         GetClientRect(PrimaryBar(), &client);
@@ -532,21 +578,39 @@ namespace integration {
         return PrimaryBarWindow(_bar->Id());
     }
 
-    void RunningBar::ClickAt(std::int32_t x) const {
-        SendClick(PrimaryBar(), x);
-        Log("click", std::format("x={}", x));
+    void RunningBar::ClickAt(std::int32_t offset) const {
+        SendClick(PrimaryBar(), offset);
+        Log("click", std::format("offset={}", offset));
     }
 
-    void RunningBar::MoveCursorTo(std::int32_t x) const {
-        PlaceCursor(PrimaryBar(), x);
-        Log("cursor_moved", std::format("x={}", x));
+    void RunningBar::ButtonUpAt(std::uint32_t message, std::int32_t offset) const {
+        HWND bar = PrimaryBar();
+        SendButtonUp(bar, message, AlongBar(bar, offset));
+        Log("button_up", std::format("message={:#x} offset={}", message, offset));
+    }
+
+    void RunningBar::WheelAt(std::int32_t offset, std::int16_t delta) const {
+        SendWheel(PrimaryBar(), offset, delta);
+        Log("wheel", std::format("delta={} offset={}", delta, offset));
+    }
+
+    void RunningBar::MoveCursorTo(std::int32_t offset) const {
+        PlaceCursor(PrimaryBar(), offset);
+        Log("cursor_moved", std::format("offset={}", offset));
     }
 
     HWND RunningBar::Tooltip() const {
         if (!_bar.has_value()) {
             throw std::logic_error("the bar is closed");
         }
-        return VisibleTooltipWindow(_bar->Id());
+        return VisibleWindow(_bar->Id(), L"IntarsiaTooltip");
+    }
+
+    HWND RunningBar::Menu() const {
+        if (!_bar.has_value()) {
+            throw std::logic_error("the bar is closed");
+        }
+        return VisibleWindow(_bar->Id(), L"IntarsiaMenu");
     }
 
     std::optional<size_t> RunningBar::PixelsOf(std::uint32_t rgb) const {
@@ -644,8 +708,8 @@ namespace integration {
     void RunningBar::StartServer() {
         ++_serverStarts;
         const auto started = std::chrono::steady_clock::now();
-        _server.emplace(Executable(INTARSIA_GLAZEWM_SERVER), std::vector<std::wstring>{L"--port", std::to_wstring(_port), L"--scenario", L"integration"},
-                        ServerOutput(_serverStarts), _work / std::format("server-{}.err", _serverStarts));
+        _server.emplace(_serverKind.program, std::vector<std::wstring>{L"--port", std::to_wstring(_port), L"--scenario", _serverKind.scenario}, ServerOutput(_serverStarts),
+                        _work / std::format("server-{}.err", _serverStarts));
         if (!Eventually([this] { return !ReadLines(ServerOutput(_serverStarts)).empty(); }, kStartLimit)) {
             PrintLogs();
             throw std::runtime_error(std::format("the test GlazeWM server did not listen on port {} within {} s (logs in {})", _port, kStartLimit.count(), _work.string()));

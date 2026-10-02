@@ -74,11 +74,22 @@ namespace integration {
     // The bar's window on the primary monitor, where the test server puts every workspace, or null while it has none.
     HWND PrimaryBarWindow(std::uint32_t processId);
 
-    // Sends a left click every few pixels along the bar's middle, left to right, each handled before the next is sent.
-    // The number of clicks sent.
+    // The client point offset pixels along the bar from its start, on the middle line across it. A bar taller than it is
+    // wide runs down a side of the monitor.
+    POINT AlongBar(HWND bar, std::int32_t offset);
+    // Sends a left click every few pixels along the bar's middle line, from its start, each handled before the next is
+    // sent. The number of clicks sent.
     std::uint32_t SweepClicks(HWND bar);
-    // Sends a left click at column x of the bar's middle row and waits until the bar has handled it.
-    void SendClick(HWND bar, std::int32_t x);
+    // Sends a button-up message (WM_LBUTTONUP, WM_RBUTTONUP, WM_MBUTTONUP) at a client point and waits until the window
+    // has handled it.
+    void SendButtonUp(HWND window, std::uint32_t message, POINT client);
+    // Sends a left click offset pixels along the bar's middle line and waits until the bar has handled it.
+    void SendClick(HWND bar, std::int32_t offset);
+    // Sends one wheel notch (delta WHEEL_DELTA up, -WHEEL_DELTA down) offset pixels along the bar, in the screen
+    // coordinates a real wheel message carries, and waits until the bar has handled it.
+    void SendWheel(HWND bar, std::int32_t offset, std::int16_t delta);
+    // Sends WM_KEYDOWN for a virtual key and waits until the window has handled it.
+    void SendKey(HWND window, std::uint32_t virtualKey);
     // Where the real cursor was when made, where it goes back to when destroyed.
     class SavedCursor {
       public:
@@ -91,11 +102,11 @@ namespace integration {
         POINT _position;
     };
 
-    // Moves the real cursor to column x of the bar's middle row. Hover and leave come only from the real cursor: a
-    // sent WM_MOUSEMOVE starts TrackMouseEvent, which posts WM_MOUSELEAVE at once while the cursor is elsewhere.
-    void PlaceCursor(HWND bar, std::int32_t x);
-    // The process's tooltip window while it is shown, or null.
-    HWND VisibleTooltipWindow(std::uint32_t processId);
+    // Moves the real cursor offset pixels along the bar's middle line. Hover and leave come only from the real cursor:
+    // a sent WM_MOUSEMOVE starts TrackMouseEvent, which posts WM_MOUSELEAVE at once while the cursor is elsewhere.
+    void PlaceCursor(HWND bar, std::int32_t offset);
+    // The process's top-level window of a class while it is shown, or null.
+    HWND VisibleWindow(std::uint32_t processId, std::wstring_view className);
 
     // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
     struct Capture {
@@ -121,22 +132,37 @@ namespace integration {
     // Each run of equal lines folded into one.
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);
 
+    // The server a RunningBar starts and the bar log line that shows the bar has reached it.
+    struct TestServer {
+        std::filesystem::path program;
+        std::wstring          scenario;
+        std::string           readyLog;
+    };
+
+    // tests/support/GlazeWmServer.cpp, run with its scenario of that name, which the bar trusts and connects to.
+    TestServer GlazeWmTestServer(std::wstring_view scenario);
+
     // The test server and a bar connected to it, both started from config and style text written to a work directory.
     class RunningBar {
       public:
+        // Against GlazeWmTestServer(L"integration").
         RunningBar(std::string_view testName, std::string_view config, std::string_view style);
+        RunningBar(std::string_view testName, std::string_view config, std::string_view style, TestServer server);
         // Closes the bar unless the test already has, and records a test failure unless it exits 0.
         ~RunningBar();
         RunningBar(const RunningBar&)            = delete;
         RunningBar& operator=(const RunningBar&) = delete;
 
         HWND        PrimaryBar() const;
-        // Clicks the primary bar at column x of its middle row and logs it.
-        void ClickAt(std::int32_t x) const;
-        // Moves the real cursor to column x of the primary bar's middle row and logs it.
-        void MoveCursorTo(std::int32_t x) const;
-        // The bar's tooltip window while it is shown, or null.
+        // Each sends its input offset pixels along the primary bar's middle line and logs it.
+        void ClickAt(std::int32_t offset) const;
+        void ButtonUpAt(std::uint32_t message, std::int32_t offset) const;
+        void WheelAt(std::int32_t offset, std::int16_t delta) const;
+        // Moves the real cursor offset pixels along the primary bar's middle line and logs it.
+        void MoveCursorTo(std::int32_t offset) const;
+        // Each is the bar's window of that kind while it is shown, or null.
         HWND Tooltip() const;
+        HWND Menu() const;
         // Each is nullopt while the primary bar has no window, as between the bars a reload replaces and their new
         // ones.
         std::optional<size_t> PixelsOf(std::uint32_t rgb) const;
@@ -170,6 +196,7 @@ namespace integration {
         std::filesystem::path       ServerOutput(std::uint32_t start) const;
 
         std::filesystem::path       _work;
+        TestServer                  _serverKind;
         std::uint16_t               _port;
         std::uint32_t               _serverStarts;
         std::optional<ChildProcess> _server;

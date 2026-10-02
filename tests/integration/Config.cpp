@@ -1,5 +1,6 @@
 #include "Harness.hpp"
 #include "platform/Errors.hpp"
+#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -9,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <format>
 #include <optional>
 #include <string>
@@ -86,7 +88,87 @@ return {{
                            reachedLength, reachedLength + 1);
     }
 
+    // mark records "mark" in record on a click.
+    std::string ClickableConfig(const std::filesystem::path& record) {
+        return std::format(R"(
+return {{
+    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40 }},
+    window_manager = "glazewm",
+    modules_left = {{ "mark" }},
+    modules_center = {{}},
+    modules_right = {{}},
+    layouts = {{}},
+    modules = {{ mark = {{ type = "clock", format = "WWWW", icon = "", interval = 60,
+                         on_click = {{ {}, {}, "mark" }} }} }},
+}}
+)",
+                           integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring())), integration::LuaString(ToUtf8(record.wstring())));
+    }
+
 } // namespace
+
+TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
+    integration::RunningBar bar("config-resave", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { background: #27ae60; }"));
+    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
+
+    // Cut short, as a reload can read a file an editor is still writing.
+    const std::string valid = OneModuleConfig(R"("mark")", "");
+    bar.SaveConfig(std::string_view(valid).substr(0, valid.size() / 2));
+    ASSERT_TRUE(integration::Eventually([&] { return !bar.LogLines("event=config_invalid").empty(); }, kDrawn)) << "the cut-short save was not logged as invalid";
+    bar.SaveStyle(StyleWithRules("#mark { background: #f39c12; }"));
+    bar.SaveConfig(valid);
+
+    EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the replacing save never drew";
+    // Past the second an invalid file must stay unchanged before it ends the bar.
+    integration::Eventually([] { return false; }, std::chrono::seconds(2));
+    EXPECT_THAT(bar.LogLines("event=fatal"), testing::IsEmpty());
+    EXPECT_NE(bar.PrimaryBar(), nullptr) << "the bar closed although a valid save replaced the invalid one";
+}
+
+TEST(Config, DrawsARightBorderPastTheBackground) {
+    const integration::RunningBar bar("config-border", OneModuleConfig(R"("mark")", ""),
+                                      StyleWithRules("#mark { background: #27ae60; border-right: 8px solid #2e86c1; }"));
+    std::optional<double>         background;
+    std::optional<double>         border;
+    EXPECT_TRUE(integration::Eventually(
+        [&] {
+            const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
+            background                         = integration::MeanColumn(capture, kGreen);
+            border                             = integration::MeanColumn(capture, kBlue);
+            return background.has_value() && border.has_value() && *border > *background;
+        },
+        kDrawn))
+        << "the border did not draw right of the background: background column " << background.value_or(-1) << ", border column " << border.value_or(-1);
+    integration::Log("border_columns", std::format("background={:.1f} border={:.1f}", background.value_or(-1), border.value_or(-1)));
+}
+
+TEST(Config, AClickOnAModulesMarginRunsNothing) {
+    constexpr std::string_view  kTestName = "config-margin";
+    const std::filesystem::path record    = integration::WorkDirectoryPath(kTestName) / "argv.txt";
+    // 40 DIPs of margin, so a click 10 pixels before the box lands in it at any scale.
+    const integration::RunningBar bar(kTestName, ClickableConfig(record), StyleWithRules("#mark { background: #27ae60; margin: 0 40px; }"));
+    std::optional<double>         middle;
+    std::optional<std::int32_t>   span;
+    ASSERT_TRUE(integration::Eventually(
+        [&] {
+            const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
+            middle                             = integration::MeanColumn(capture, kGreen);
+            span                               = integration::ColumnSpan(capture, kGreen);
+            return middle.has_value() && span.has_value();
+        },
+        kDrawn))
+        << "the module never drew its background";
+    const auto boxLeft = static_cast<std::int32_t>(std::lround(middle.value_or(0) - (static_cast<double>(span.value_or(0)) / 2)));
+    integration::Log("module_box", std::format("left={} span={}", boxLeft, span.value_or(-1)));
+
+    bar.ClickAt(boxLeft - 10);
+    integration::Eventually([] { return false; }, std::chrono::seconds(1));
+    EXPECT_FALSE(std::filesystem::exists(record)) << "a click in the margin ran the module's action";
+
+    bar.ClickAt(static_cast<std::int32_t>(std::lround(middle.value_or(0))));
+    EXPECT_TRUE(integration::Eventually([&] { return std::filesystem::exists(record) && !integration::ReadLines(record).empty(); }, kDrawn))
+        << "a click on the box ran no action, so the margin click proves nothing";
+}
 
 TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
     integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { background: #27ae60; }"));

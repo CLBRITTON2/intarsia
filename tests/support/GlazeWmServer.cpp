@@ -2,9 +2,9 @@
 // queries the way GlazeWM does, plus the load or faults a scenario names, and prints every command it receives to
 // stdout on a line of its own. Built as glazewm.exe, the image name the bar's peer check requires.
 //
-//   glazewm.exe --port <n> --scenario <normal|flap|integration>
+//   glazewm.exe --port <n> --scenario <normal|flap|integration|rejecting>
 //
-// Under integration, a stdin line "focus <n>" focuses the nth listed window and sends the events a focus change does,
+// Under integration and rejecting, a stdin line "focus <n>" focuses the nth listed window and sends the events a focus change does,
 // then prints "pushed focus <n>" once they are sent.
 
 #include "../platform/Loopback.hpp"
@@ -29,10 +29,17 @@
 namespace {
 
     enum class Scenario : std::uint8_t {
-        Normal,     // answers everything and sends an event a second
-        Flap,       // answers, then drops the connection after a random moment
-        Integration // answers everything, sends events only when stdin asks, and lists only the integration tests' own windows
+        Normal,      // answers everything and sends an event a second
+        Flap,        // answers, then drops the connection after a random moment
+        Integration, // answers everything, sends events only when stdin asks, and lists only the integration tests' own windows
+        Rejecting    // as integration, but fails kRejectedCommand and every tiling direction query, as GlazeWM can
     };
+
+    constexpr std::string_view kRejectedCommand = "command focus --workspace 1";
+
+    bool                       DrivenByStdin(Scenario scenario) {
+        return scenario == Scenario::Integration || scenario == Scenario::Rejecting;
+    }
 
     // Focus changes read from stdin, waiting for a connection to send them on.
     class PushedFocus {
@@ -75,13 +82,14 @@ namespace {
     };
 
     Scenario ParseScenario(std::string_view name) {
-        constexpr std::array<std::pair<std::string_view, Scenario>, 3> kScenarios{{{"normal", Scenario::Normal}, {"flap", Scenario::Flap}, {"integration", Scenario::Integration}}};
+        constexpr std::array<std::pair<std::string_view, Scenario>, 4> kScenarios{
+            {{"normal", Scenario::Normal}, {"flap", Scenario::Flap}, {"integration", Scenario::Integration}, {"rejecting", Scenario::Rejecting}}};
         for (const auto& [known, scenario] : kScenarios) {
             if (known == name) {
                 return scenario;
             }
         }
-        throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flap or integration", name));
+        throw std::invalid_argument(std::format("unknown scenario '{}', use normal, flap, integration or rejecting", name));
     }
 
     Options ParseOptions(std::int32_t argc, char** argv) {
@@ -129,6 +137,10 @@ namespace {
 
     std::string Response(std::string_view clientMessage, std::string_view data) {
         return std::format(R"({{"messageType":"client_response","clientMessage":"{}","success":true,"error":null,"data":{}}})", clientMessage, data);
+    }
+
+    std::string Rejection(std::string_view clientMessage, std::string_view error) {
+        return std::format(R"({{"messageType":"client_response","clientMessage":"{}","success":false,"error":"{}","data":null}})", clientMessage, error);
     }
 
     std::string Event(std::string_view eventType) {
@@ -180,10 +192,15 @@ namespace {
                 if (text.starts_with("command ")) {
                     std::cout << text << std::endl;
                 }
-                if (text.starts_with("sub ")) {
+                const bool rejecting = scenario == Scenario::Rejecting;
+                if (rejecting && text == kRejectedCommand) {
+                    loopback::SendText(peer, Rejection(text, "Workspace not found."));
+                } else if (rejecting && text == "query tiling-direction") {
+                    loopback::SendText(peer, Rejection(text, "No direction container."));
+                } else if (text.starts_with("sub ")) {
                     loopback::SendText(peer, Response(text, R"({"subscriptionId":"s"})"));
                 } else if (text == "query monitors") {
-                    loopback::SendText(peer, Response(text, Monitors(focused, scenario == Scenario::Integration)));
+                    loopback::SendText(peer, Response(text, Monitors(focused, DrivenByStdin(scenario))));
                 } else if (text == "query binding-modes") {
                     loopback::SendText(peer, Response(text, focused % 2 == 0 ? R"({"bindingModes":[]})" : R"({"bindingModes":[{"name":"resize","displayName":null}]})"));
                 } else if (text == "query tiling-direction") {
@@ -193,7 +210,7 @@ namespace {
                 }
                 continue;
             }
-            if (scenario == Scenario::Integration) {
+            if (DrivenByStdin(scenario)) {
                 if (const std::optional<size_t> index = pushed.Next(); index.has_value()) {
                     focused = *index;
                     SendFocusEvents(peer);
@@ -216,7 +233,7 @@ int main(int argc, char** argv) {
         const loopback::Socket  listener = loopback::ListenOn(options.port);
         std::cout << std::format("listening on 127.0.0.1:{}", options.port) << std::endl;
         PushedFocus pushed;
-        if (options.scenario == Scenario::Integration) {
+        if (DrivenByStdin(options.scenario)) {
             // Ends with the process, blocked in getline while stdin stays open.
             std::thread(ReadPushedFocus, std::ref(pushed)).detach();
         }
