@@ -1,11 +1,9 @@
 #include "Harness.hpp"
-#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -24,8 +22,8 @@ namespace {
 
     // A bottom bar, so a wheel message's screen point lies far from the same client point.
     std::string InputsConfig(const std::filesystem::path& record) {
-        const std::string recorder = integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring()));
-        const std::string file     = integration::LuaString(ToUtf8(record.wstring()));
+        const std::string recorder = integration::LuaPath(integration::ArgvRecorderPath());
+        const std::string file     = integration::LuaPath(record);
         return std::format(R"(
 return {{
     bar = {{ edge = "bottom", layer = "top", space = "share", thickness = 40 }},
@@ -56,26 +54,21 @@ section { margin: 4px; padding: 3px; background: #191724; }
     // Sends one input and waits until the record holds lines lines, so each action's line lands in order.
     bool RecordsAfter(const std::filesystem::path& record, size_t lines, const std::function<void()>& send) {
         send();
-        const bool recorded = integration::Eventually([&] { return std::filesystem::exists(record) && integration::ReadLines(record).size() >= lines; }, kLimit);
-        integration::Log("argv_recorded",
-                         std::format("path=\"{}\" lines={} expected={}", record.string(), std::filesystem::exists(record) ? integration::ReadLines(record).size() : 0, lines));
+        const bool recorded = integration::Eventually([&] { return integration::RecordedLines(record).size() >= lines; }, kLimit);
+        integration::Log("argv_recorded", std::format("path=\"{}\" lines={} expected={}", record.string(), integration::RecordedLines(record).size(), lines));
         return recorded;
     }
 
 } // namespace
 
 TEST(Input, RightMiddleAndWheelInputsEachRunTheirAction) {
-    const std::filesystem::path record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
-    integration::RunningBar     bar(kTestName, InputsConfig(record), kStyle);
-    std::optional<double>       column;
-    ASSERT_TRUE(integration::Eventually(
-        [&] {
-            column = bar.ColumnOf(kTextColor);
-            return column.has_value();
-        },
-        kLimit))
-        << "the module never drew in its color";
-    const auto at = static_cast<std::int32_t>(std::lround(column.value_or(0)));
+    const std::filesystem::path       record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
+    integration::RunningBar           bar(kTestName, InputsConfig(record), kStyle);
+    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
+    if (!column.has_value()) {
+        FAIL() << "the module never drew in its color";
+    }
+    const std::int32_t at = *column;
 
     EXPECT_TRUE(RecordsAfter(record, 1, [&] { bar.ButtonUpAt(WM_RBUTTONUP, at); }));
     EXPECT_TRUE(RecordsAfter(record, 2, [&] { bar.ButtonUpAt(WM_MBUTTONUP, at); }));

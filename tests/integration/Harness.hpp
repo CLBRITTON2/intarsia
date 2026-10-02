@@ -66,10 +66,14 @@ namespace integration {
     std::uint16_t            FreePort();
     void                     WriteText(const std::filesystem::path& path, std::string_view text);
     std::vector<std::string> ReadLines(const std::filesystem::path& path);
+    // ReadLines of a file a child may not have written yet, empty until it has.
+    std::vector<std::string> RecordedLines(const std::filesystem::path& path);
 
     // Polls condition until it holds or limit passes, pumping this thread's messages meanwhile so the bar's reads of
     // the test's own windows are answered.
     bool Eventually(const std::function<bool()>& condition, std::chrono::milliseconds limit);
+    // Pumps this thread's messages for duration, for a test that checks something did not happen.
+    void PumpFor(std::chrono::milliseconds duration);
 
     // The bar's window on the primary monitor, where the test server puts every workspace, or null while it has none.
     HWND PrimaryBarWindow(std::uint32_t processId);
@@ -128,6 +132,7 @@ namespace integration {
     std::filesystem::path ArgvRecorderPath();
     // text as a Lua long string, which takes backslashes and quotes as they are.
     std::string LuaString(std::string_view text);
+    std::string LuaPath(const std::filesystem::path& path);
 
     // Each run of equal lines folded into one.
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);
@@ -167,6 +172,8 @@ namespace integration {
         // ones.
         std::optional<size_t> PixelsOf(std::uint32_t rgb) const;
         std::optional<double> ColumnOf(std::uint32_t rgb) const;
+        // ColumnOf rounded to a pixel once the primary bar draws rgb, or nullopt when it does not within limit.
+        std::optional<std::int32_t> DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         // Each waits until the primary bar draws some pixel in rgb, or none, within limit and logs the count.
         bool Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         bool StopsDrawing(std::uint32_t rgb, std::chrono::milliseconds limit) const;

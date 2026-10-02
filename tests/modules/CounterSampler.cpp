@@ -63,3 +63,16 @@ TEST_F(Sampler, AStartedSamplerReadsTheCounterAfterOneInterval) {
     MSG message{};
     EXPECT_TRUE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
 }
+
+// Only the module's own tick shows a new value, so the sampler stores it without a notify.
+TEST_F(Sampler, ANewValueOfTheSameOutcomeIsReadWithoutANotify) {
+    const CounterSampler sampler("uptime", SumOf(L"\\System\\System Up Time"), _changes);
+    ASSERT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Sampled; }, std::chrono::seconds(3)));
+    const double first = sampler.Reading().value;
+    MSG          message{};
+    ASSERT_TRUE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
+
+    EXPECT_TRUE(Eventually([&sampler, first] { return sampler.Reading().value > first; }, std::chrono::seconds(3))) << "the value stayed at " << first;
+    EXPECT_EQ(sampler.Reading().outcome, CounterOutcome::Sampled);
+    EXPECT_FALSE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
+}

@@ -201,7 +201,7 @@ TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
     EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("command_dropped").empty(); }, std::chrono::seconds(2)))
         << "the clock's click was not dropped for want of a connection";
     // Long enough for a command sent anyway to reach the server's output.
-    integration::Eventually([] { return false; }, std::chrono::seconds(1));
+    integration::PumpFor(std::chrono::seconds(1));
     integration::Log("sweep", std::format("clicks={} commands={}", clicks, bar.Commands().size()));
     EXPECT_THAT(bar.Commands(), testing::IsEmpty());
     EXPECT_THAT(bar.Events("connected"), testing::IsEmpty());

@@ -1,6 +1,5 @@
 #include "Harness.hpp"
 #include "platform/Errors.hpp"
-#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -102,7 +101,7 @@ return {{
                          on_click = {{ {}, {}, "mark" }} }} }},
 }}
 )",
-                           integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring())), integration::LuaString(ToUtf8(record.wstring())));
+                           integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record));
     }
 
 } // namespace
@@ -120,7 +119,7 @@ TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
 
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the replacing save never drew";
     // Past the second an invalid file must stay unchanged before it ends the bar.
-    integration::Eventually([] { return false; }, std::chrono::seconds(2));
+    integration::PumpFor(std::chrono::seconds(2));
     EXPECT_THAT(bar.Events("fatal"), testing::IsEmpty());
     EXPECT_NE(bar.PrimaryBar(), nullptr) << "the bar closed although a valid save replaced the invalid one";
 }
@@ -161,11 +160,11 @@ TEST(Config, AClickOnAModulesMarginRunsNothing) {
     integration::Log("module_box", std::format("left={} span={}", boxLeft, span.value_or(-1)));
 
     bar.ClickAt(boxLeft - 10);
-    integration::Eventually([] { return false; }, std::chrono::seconds(1));
+    integration::PumpFor(std::chrono::seconds(1));
     EXPECT_FALSE(std::filesystem::exists(record)) << "a click in the margin ran the module's action";
 
     bar.ClickAt(static_cast<std::int32_t>(std::lround(middle.value_or(0))));
-    EXPECT_TRUE(integration::Eventually([&] { return std::filesystem::exists(record) && !integration::ReadLines(record).empty(); }, kDrawn))
+    EXPECT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kDrawn))
         << "a click on the box ran no action, so the margin click proves nothing";
 }
 

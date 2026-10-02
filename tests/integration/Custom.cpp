@@ -1,5 +1,4 @@
 #include "Harness.hpp"
-#include "platform/Text.hpp"
 
 #include <gtest/gtest.h>
 
@@ -24,8 +23,7 @@ namespace {
         const std::filesystem::path record = integration::WorkDirectoryPath(testName) / std::format("{}.txt", name);
         return std::format(R"({} = {{ type = "custom", command = {{ {}, {}, {} }}, run = "interval", timeout = 5, output = "{}", classes = {{ {} }}, format = "{{text}}", icon = "",
                   interval = 30 }},)",
-                           name, integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring())), integration::LuaString(ToUtf8(record.wstring())), printed, output,
-                           classes);
+                           name, integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record), printed, output, classes);
     }
 
     // left is the Lua list contents of the left section, modules the Lua definitions of the modules it names.
@@ -88,7 +86,7 @@ TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
     integration::WriteText(script, kContinuousScript);
     const std::string module = std::format(R"(probe = {{ type = "custom", command = {{ {}, "/c", {} }}, run = "continuous", output = "json", classes = {{ "one", "two" }},
                   format = "{{text}}", icon = "", interval = 2 }},)",
-                                           integration::LuaString(R"(C:\Windows\System32\cmd.exe)"), integration::LuaString(ToUtf8(script.wstring())));
+                                           integration::LuaString(R"(C:\Windows\System32\cmd.exe)"), integration::LuaPath(script));
     const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module), StyleWithRules("#probe.one { color: #27ae60; } #probe.two { color: #f39c12; }"));
 
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";

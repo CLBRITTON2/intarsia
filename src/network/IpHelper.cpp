@@ -115,10 +115,7 @@ namespace {
 
 } // namespace
 
-IpHelper::IpHelper(ChangeSignal& changes) :
-    _changes(changes),
-    _state{.link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0},
-    _thread("network", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
+IpHelper::IpHelper(ChangeSignal& changes) : _changes(changes), _state(NetworkState::None()), _thread("network", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 NetworkState IpHelper::State() const {
     const std::scoped_lock lock(_mutex);
@@ -131,9 +128,9 @@ void IpHelper::Run(HANDLE stopEvent) {
     std::unique_ptr<WlanClient> wlan;
     FailureLog                  sampleLog("network");
     FailureLog                  wlanLog("network");
+    DWORD                       woke = WAIT_TIMEOUT;
     do {
-        NetworkState state{
-            .link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};
+        NetworkState state = NetworkState::None();
         try {
             const std::optional<NET_IFINDEX> index = DefaultRouteInterface();
             if (index.has_value()) {
@@ -175,8 +172,7 @@ void IpHelper::Run(HANDLE stopEvent) {
             sampleLog.Succeeded();
         } catch (const Win32Error& error) {
             last.reset();
-            state = NetworkState{
-                .link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};
+            state = NetworkState::None();
             sampleLog.Failed("sample_failed", error);
         }
         bool changed = false;
@@ -188,8 +184,9 @@ void IpHelper::Run(HANDLE stopEvent) {
         if (changed) {
             _changes.Notify("network");
         }
-    } while (WaitForSingleObject(stopEvent, kSampleMs) == WAIT_TIMEOUT);
-    if (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0) {
+        woke = WaitForSingleObject(stopEvent, kSampleMs);
+    } while (woke == WAIT_TIMEOUT);
+    if (woke != WAIT_OBJECT_0) {
         Log(LogLevel::Error, "network", "wait_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
     }
 }

@@ -1,11 +1,9 @@
 #include "Harness.hpp"
-#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -39,7 +37,7 @@ return {{
     }},
 }}
 )",
-                           integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring())), integration::LuaString(ToUtf8(record.wstring())));
+                           integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record));
     }
 
     // No transitions, so a fold is done on the next frame.
@@ -50,37 +48,19 @@ section { margin: 4px; padding: 3px; background: #191724; }
 #member { background: #27ae60; }
 )";
 
-    // The middle of the pixels drawn in rgb, or nullopt when none are drawn within kLimit.
-    std::optional<std::int32_t> DrawnColumn(const integration::RunningBar& bar, std::uint32_t rgb) {
-        std::optional<double> column;
-        if (!integration::Eventually(
-                [&] {
-                    column = bar.ColumnOf(rgb);
-                    return column.has_value();
-                },
-                kLimit)) {
-            return std::nullopt;
-        }
-        return static_cast<std::int32_t>(std::lround(column.value_or(0)));
-    }
-
-    bool Recorded(const std::filesystem::path& record) {
-        return std::filesystem::exists(record) && !integration::ReadLines(record).empty();
-    }
-
 } // namespace
 
 TEST(Group, UnfoldsItsMembersOnAClickAndTakesNoClickForThemWhileFolded) {
     const std::filesystem::path       record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
     const integration::RunningBar     bar(kTestName, GroupConfig(record), kStyle);
-    const std::optional<std::int32_t> toggle = DrawnColumn(bar, kGroupColor);
+    const std::optional<std::int32_t> toggle = bar.DrawnColumn(kGroupColor, kLimit);
     if (!toggle.has_value()) {
         FAIL() << "the folded group never drew";
     }
     EXPECT_EQ(bar.PixelsOf(kMemberColor), size_t{0}) << "a member drew while the group starts folded";
 
     bar.ClickAt(*toggle);
-    const std::optional<std::int32_t> member = DrawnColumn(bar, kMemberColor);
+    const std::optional<std::int32_t> member = bar.DrawnColumn(kMemberColor, kLimit);
     if (!member.has_value()) {
         FAIL() << "a click on the toggle never unfolded the member";
     }
@@ -89,12 +69,13 @@ TEST(Group, UnfoldsItsMembersOnAClickAndTakesNoClickForThemWhileFolded) {
     bar.ClickAt(*toggle);
     ASSERT_TRUE(bar.StopsDrawing(kMemberColor, kLimit)) << "a second click on the toggle left the member shown";
     bar.ClickAt(*member);
-    integration::Eventually([] { return false; }, std::chrono::seconds(1));
+    integration::PumpFor(std::chrono::seconds(1));
     EXPECT_FALSE(std::filesystem::exists(record)) << "a click where the folded member was ran its action";
 
     bar.ClickAt(*toggle);
     ASSERT_TRUE(bar.Draws(kMemberColor, kLimit)) << "a third click on the toggle never unfolded the member";
     bar.ClickAt(*member);
-    ASSERT_TRUE(integration::Eventually([&] { return Recorded(record); }, kLimit)) << "a click on the unfolded member ran no action (" << record.string() << ")";
+    ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kLimit))
+        << "a click on the unfolded member ran no action (" << record.string() << ")";
     EXPECT_THAT(integration::ReadLines(record), ElementsAre("member"));
 }

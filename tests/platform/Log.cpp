@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <regex>
 #include <sstream>
 #include <string>
 
@@ -48,9 +49,21 @@ TEST(Log, PrintsAPlainValueAsWrittenAndQuotesAnyOther) {
         {{.key = "path", .value = R"(C:\Temp\bar.log)"},
          {.key = "spaced", .value = R"(C:\Program Files)"},
          {.key = "quote", .value = R"(say "hi")"},
-         {.key = "empty", .value = ""}});
+         {.key = "empty", .value = ""},
+         {.key = "equals", .value = "a=b"},
+         // U+202E as bytes, since a string literal holding it fails misc-misleading-bidirectional.
+         {.key = "bidi", .value = std::string{'a', '\xE2', '\x80', '\xAE', 'b'}},
+         {.key = "long", .value = std::string(2000, 'a')}});
 
     // Named outside the macro, since MSVC's preprocessor misreads this raw string as a macro argument.
-    const std::string expected = R"(values path=C:\Temp\bar.log spaced="C:\\Program Files" quote="say \"hi\"" empty="")";
+    const std::string expected = R"(values path=C:\Temp\bar.log spaced="C:\\Program Files" quote="say \"hi\"" empty="" equals="a=b" bidi="a)" + std::string("\\u202e") +
+        R"(b" long=")" + std::string(1000, 'a') + "...(1000 more bytes)\"";
     EXPECT_NE(ReadAll(directory / "intarsia.log").find(expected), std::string::npos);
+}
+
+TEST(Log, TheSoakTestsFatalPatternMatchesAFatalLine) {
+    // The pattern scripts/run-soak-tests.ps1 reads each bar log with.
+    const std::regex fatal(R"(^\[\S+\]\s+ERROR\s+\S+\s+fatal\b)");
+    EXPECT_TRUE(std::regex_search(LogHead(LogLevel::Error, "app", "fatal"), fatal));
+    EXPECT_FALSE(std::regex_search(LogHead(LogLevel::Warning, "app", "fatal"), fatal));
 }

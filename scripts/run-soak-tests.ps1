@@ -418,7 +418,8 @@ function Invoke-Scenario([string] $name) {
                 $failures.Add("exited early with code $($bar.ExitCode)")
                 break
             }
-            # Quoted in the result, since a CI runner's log directory is gone once the job ends.
+            # Quoted in the result, since a CI runner's log directory is gone once the job ends. Log.TheSoakTestsFatalPatternMatchesAFatalLine
+            # holds the same pattern.
             $fatal = Select-String -Path $barLog -Pattern '^\[\S+\]\s+ERROR\s+\S+\s+fatal\b' | Select-Object -First 1
             if ($fatal) {
                 $failures.Add("logged a fatal error: $($fatal.Line)")

@@ -57,7 +57,7 @@ namespace {
 
         std::string String(std::string_view key) const {
             PushField(key, LUA_TSTRING, "a string");
-            std::string value = StringAt(-1);
+            std::string value = StringAt(-1, KeyPath(key));
             lua_pop(_lua, 1);
             return value;
         }
@@ -81,7 +81,7 @@ namespace {
                 if (lua_rawgeti(_lua, listIndex, position) != LUA_TSTRING) {
                     throw Error(std::format("{}[{}] must be a string, got {}", KeyPath(key), position, luaL_typename(_lua, -1)));
                 }
-                values.push_back(StringAt(-1));
+                values.push_back(StringAt(-1, std::format("{}[{}]", KeyPath(key), position)));
                 lua_pop(_lua, 1);
             }
             lua_pop(_lua, 1);
@@ -113,9 +113,9 @@ namespace {
             lua_pushnil(_lua);
             while (lua_next(_lua, _index) != 0) {
                 if (lua_type(_lua, -2) != LUA_TSTRING) {
-                    throw Error(std::format("{} has a key that is not a string", _path.empty() ? std::string("the returned table") : _path));
+                    throw Error(std::format("{} has a key that is not a string", TableName()));
                 }
-                keys.push_back(StringAt(-2));
+                keys.push_back(StringAt(-2, std::format("a key of {}", TableName())));
                 lua_pop(_lua, 1);
             }
             return keys;
@@ -138,10 +138,19 @@ namespace {
         }
 
       private:
-        std::string StringAt(std::int32_t index) const {
-            size_t      length = 0;
-            const char* data   = lua_tolstring(_lua, index, &length);
-            return {data, length};
+        std::string TableName() const {
+            return _path.empty() ? std::string("the returned table") : _path;
+        }
+
+        // ReadFile checked the source, but a Lua escape ("\xff", "\u{D800}") still builds any bytes.
+        std::string StringAt(std::int32_t index, std::string_view name) const {
+            size_t                 length = 0;
+            const char*            data   = lua_tolstring(_lua, index, &length);
+            const std::string_view value(data, length);
+            if (!IsValidUtf8(value)) {
+                throw Error(std::format("{} is not valid UTF-8", name));
+            }
+            return std::string(value);
         }
 
         size_t CountKeys(std::int32_t tableIndex) const {
@@ -165,7 +174,7 @@ namespace {
         // the LUA_MINSTACK slots Lua guarantees. Pushing past the allocated stack is unchecked in a release build.
         void Reserve(std::int32_t slots) const {
             if (lua_checkstack(_lua, slots) == 0) {
-                throw Error(std::format("Lua cannot grow its stack by {} slots to read {}", slots, _path.empty() ? std::string("the returned table") : _path));
+                throw Error(std::format("Lua cannot grow its stack by {} slots to read {}", slots, TableName()));
             }
         }
 

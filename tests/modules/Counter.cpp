@@ -42,6 +42,16 @@ TEST_F(CounterModule, FormatsAreCheckedAgainstTheValues) {
     EXPECT_THROW(Counter(WithFormat(config.path, "{rate:.1f}"), sampler), ConfigError);
 }
 
+// The sampler notifies only on a new outcome, so this tick is what redraws a new value.
+TEST_F(CounterModule, ChangesByItsNextIntervalTick) {
+    const CounterConfig                config = WithFormat(L"\\Processor(_Total)\\% Processor Time", "{value}");
+    const CounterSampler               sampler("cpu", config, _changes);
+    const Counter                      module(config, sampler);
+    const std::optional<std::uint32_t> wait = module.MillisecondsUntilChange();
+    ASSERT_TRUE(wait.has_value()) << "a counter waits for no change, so it shows its first sample forever";
+    EXPECT_LE(wait.value_or(0), std::uint32_t{1000});
+}
+
 TEST_F(CounterModule, AFailingCounterShowsTheReasonAsItsTooltip) {
     const CounterConfig  config = WithFormat(L"\\No Such Object\\Nothing", "{value}");
     const CounterSampler sampler("gone", config, _changes);

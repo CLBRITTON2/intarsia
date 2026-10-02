@@ -1,11 +1,9 @@
 #include "Harness.hpp"
-#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -37,7 +35,7 @@ return {{
     }},
 }}
 )",
-                           integration::LuaString(ToUtf8(integration::ArgvRecorderPath().wstring())), integration::LuaString(ToUtf8(record.wstring())));
+                           integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record));
     }
 
     // Large text, so glyph stems cover whole pixels in the exact color.
@@ -50,19 +48,15 @@ section { margin: 4px; padding: 3px; background: #191724; }
 } // namespace
 
 TEST(Actions, AClickStartsItsProgramWithEachArgumentAsWritten) {
-    const std::filesystem::path record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
-    integration::RunningBar     bar(kTestName, ClickConfig(record), kStyle);
-    std::optional<double>       column;
-    ASSERT_TRUE(integration::Eventually(
-        [&] {
-            column = bar.ColumnOf(kTextColor);
-            return column.has_value();
-        },
-        kLimit))
-        << "the module never drew in its color";
+    const std::filesystem::path       record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
+    const integration::RunningBar     bar(kTestName, ClickConfig(record), kStyle);
+    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
+    if (!column.has_value()) {
+        FAIL() << "the module never drew in its color";
+    }
 
-    bar.ClickAt(static_cast<std::int32_t>(std::lround(column.value_or(0))));
-    ASSERT_TRUE(integration::Eventually([&] { return std::filesystem::exists(record) && !integration::ReadLines(record).empty(); }, kLimit))
+    bar.ClickAt(*column);
+    ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kLimit))
         << "the click started no recorder within " << kLimit.count() << " s (" << record.string() << ")";
     integration::Log("argv_recorded", std::format("path=\"{}\" lines={}", record.string(), integration::ReadLines(record).size()));
     EXPECT_THAT(integration::ReadLines(record), ElementsAre("plain", "two words", R"(a "quoted" one)", R"(C:\dir\)", ""));

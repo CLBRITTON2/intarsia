@@ -236,6 +236,14 @@ TEST(Config, ConfigFilesMustBeUtf8) {
     EXPECT_THAT([] { return LoadStyled(kValidConfig, "/* \xC0\xAF */"); }, ConfigErrorWith("style file"));
 }
 
+// Lua escapes in valid UTF-8 source still build any bytes.
+TEST(Config, ConfigStringsMustBeUtf8) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(icon = "x")", R"(icon = "\xff")")); }, ConfigErrorWith("modules.time.icon is not valid UTF-8"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "title" })", R"({ "\u{D800}" })")); }, ConfigErrorWith("modules_left[1] is not valid UTF-8"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "    modules = {\n", "    modules = {\n        [\"\\xc0\"] = { type = \"clock\" },\n")); },
+                ConfigErrorWith("a key of modules is not valid UTF-8"));
+}
+
 // A relative path with a directory part would resolve against the bar's current directory.
 TEST(Config, ActionsRefuseRelativePathsWithDirectories) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { ".\\cmd.exe" } })")); },

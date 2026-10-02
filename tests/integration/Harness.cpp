@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <fstream>
 #include <iostream>
@@ -326,6 +327,17 @@ namespace integration {
         return lines;
     }
 
+    std::vector<std::string> RecordedLines(const std::filesystem::path& path) {
+        return std::filesystem::exists(path) ? ReadLines(path) : std::vector<std::string>{};
+    }
+
+    void PumpFor(std::chrono::milliseconds duration) {
+        const auto deadline = std::chrono::steady_clock::now() + duration;
+        while (std::chrono::steady_clock::now() < deadline) {
+            PumpMessagesAndWait();
+        }
+    }
+
     bool Eventually(const std::function<bool()>& condition, std::chrono::milliseconds limit) {
         const auto deadline = std::chrono::steady_clock::now() + limit;
         while (std::chrono::steady_clock::now() < deadline) {
@@ -520,6 +532,10 @@ namespace integration {
         return std::format("[==[{}]==]", text);
     }
 
+    std::string LuaPath(const std::filesystem::path& path) {
+        return LuaString(ToUtf8(path.wstring()));
+    }
+
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
         std::vector<std::string> folded;
         std::ranges::unique_copy(lines, std::back_inserter(folded));
@@ -550,8 +566,7 @@ namespace integration {
             throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _serverKind.readyEvent,
                                                  kStartLimit.count(), (_work / "bar.err").string()));
         }
-        RECT client{};
-        GetClientRect(PrimaryBar(), &client);
+        const RECT client = ClientRect(PrimaryBar());
         Log("bar_ready",
             std::format("pid={} after_ms={} primary_bar={} size={}x{}", _bar->Id(), MillisecondsSince(started), WindowHandle(PrimaryBar()), client.right, client.bottom));
     }
@@ -639,6 +654,19 @@ namespace integration {
             return std::nullopt;
         }
         return MeanColumn(CaptureScreenOver(window), rgb);
+    }
+
+    std::optional<std::int32_t> RunningBar::DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const {
+        std::optional<double> column;
+        if (!Eventually(
+                [&] {
+                    column = ColumnOf(rgb);
+                    return column.has_value();
+                },
+                limit)) {
+            return std::nullopt;
+        }
+        return static_cast<std::int32_t>(std::lround(column.value_or(0)));
     }
 
     bool RunningBar::Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const {

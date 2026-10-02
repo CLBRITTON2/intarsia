@@ -48,23 +48,9 @@ section { margin: 4px; padding: 3px; background: #191724; }
     // The tray drops the icons of closed owners every 5 s.
     constexpr auto kSwept = std::chrono::seconds(7);
 
-    // The middle of the pixels drawn in rgb, or nullopt when none are drawn within kDrawn.
-    std::optional<std::int32_t> DrawnColumn(const integration::RunningBar& bar, std::uint32_t rgb) {
-        std::optional<double> column;
-        if (!integration::Eventually(
-                [&] {
-                    column = bar.ColumnOf(rgb);
-                    return column.has_value();
-                },
-                kDrawn)) {
-            return std::nullopt;
-        }
-        return static_cast<std::int32_t>(column.value_or(0));
-    }
-
     // Clicks the middle of the pixels drawn in rgb. False when none are drawn within kDrawn.
     bool ClickColor(const integration::RunningBar& bar, std::uint32_t rgb) {
-        const std::optional<std::int32_t> column = DrawnColumn(bar, rgb);
+        const std::optional<std::int32_t> column = bar.DrawnColumn(rgb, kDrawn);
         if (!column.has_value()) {
             return false;
         }
@@ -118,10 +104,10 @@ TEST(Tray, PostsARightClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
     ASSERT_TRUE(legacy.Add(kOrange));
     ASSERT_TRUE(ClickColor(bar, kToggleColor));
 
-    const std::optional<std::int32_t> green = DrawnColumn(bar, kGreen);
+    const std::optional<std::int32_t> green = bar.DrawnColumn(kGreen, kDrawn);
     ASSERT_TRUE(green.has_value()) << "the version 4 icon never drew";
     bar.ButtonUpAt(WM_RBUTTONUP, green.value_or(0));
-    const std::optional<std::int32_t> orange = DrawnColumn(bar, kOrange);
+    const std::optional<std::int32_t> orange = bar.DrawnColumn(kOrange, kDrawn);
     ASSERT_TRUE(orange.has_value()) << "the version 0 icon never drew";
     bar.ButtonUpAt(WM_RBUTTONUP, orange.value_or(0));
     integration::Eventually([&] { return current.Received().size() >= 3 && legacy.Received().size() >= 2; }, kDrawn);

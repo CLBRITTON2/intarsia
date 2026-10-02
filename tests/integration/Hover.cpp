@@ -30,7 +30,7 @@ return {
 )";
 
     // The transition makes the hover an animation, which logs its frames when it ends.
-    constexpr std::string_view  kModuleStyle = R"(
+    constexpr std::string_view kModuleStyle = R"(
 * { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
 section { margin: 4px; padding: 3px; background: #191724; }
 .module { transition: background 200ms; }
@@ -38,7 +38,7 @@ section { margin: 4px; padding: 3px; background: #191724; }
 #probe:hover { background: #2e86c1; }
 )";
 
-    constexpr std::string_view  kItemConfig = R"(
+    constexpr std::string_view kItemConfig = R"(
 return {
     bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
     window_manager = "glazewm",
@@ -50,25 +50,12 @@ return {
 }
 )";
 
-    constexpr std::string_view  kItemStyle = R"(
+    constexpr std::string_view kItemStyle = R"(
 * { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
 section { margin: 4px; padding: 3px; background: #191724; }
 .item { padding: 4px 8px; margin: 0 2px; background: #27ae60; transition: background 200ms; }
 .item:hover { background: #2e86c1; }
 )";
-
-    std::optional<std::int32_t> RestColumn(const integration::RunningBar& bar) {
-        std::optional<double> column;
-        if (!integration::Eventually(
-                [&] {
-                    column = bar.ColumnOf(kRestColor);
-                    return column.has_value();
-                },
-                kLimit)) {
-            return std::nullopt;
-        }
-        return static_cast<std::int32_t>(std::lround(column.value_or(0)));
-    }
 
     // The right section is empty, so its end has no module under it.
     std::int32_t EmptyEnd(const integration::RunningBar& bar) {
@@ -80,7 +67,7 @@ section { margin: 4px; padding: 3px; background: #191724; }
 
 TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
     integration::RunningBar           bar("hover-module", kModuleConfig, kModuleStyle);
-    const std::optional<std::int32_t> probe = RestColumn(bar);
+    const std::optional<std::int32_t> probe = bar.DrawnColumn(kRestColor, kLimit);
     if (!probe.has_value()) {
         FAIL() << "the module never drew its background at rest";
     }

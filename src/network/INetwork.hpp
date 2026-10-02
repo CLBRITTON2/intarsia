@@ -23,6 +23,11 @@ struct NetworkState {
     double                      sentBytesPerSecond;
 
     bool                        operator==(const NetworkState&) const = default;
+
+    // No link, as before the first sample or after a failed one.
+    static NetworkState None() {
+        return {.link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};
+    }
 };
 
 // The system's network state, sampled as it changes. Reads come from the UI thread and never wait on the network stack.
