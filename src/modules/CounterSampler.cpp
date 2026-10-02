@@ -64,14 +64,19 @@ void CounterSampler::Run(HANDLE stopEvent) {
     }
 }
 
-// Posts and logs only on a change, so a counter that keeps failing the same way logs once.
+bool ChangesOutcome(const CounterReading& previous, const CounterReading& next) {
+    return next.outcome != previous.outcome || next.detail != previous.detail;
+}
+
+// A counter that keeps failing the same way logs once.
 void CounterSampler::Publish(const CounterReading& reading) {
     {
         const std::scoped_lock lock(_mutex);
-        if (reading == _reading) {
+        const bool             changesOutcome = ChangesOutcome(_reading, reading);
+        _reading                              = reading;
+        if (!changesOutcome) {
             return;
         }
-        _reading = reading;
     }
     if (reading.outcome == CounterOutcome::Failed) {
         Log(LogLevel::Warning, "counter", "sample_failed",

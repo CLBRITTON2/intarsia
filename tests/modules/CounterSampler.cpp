@@ -41,6 +41,20 @@ TEST(CounterSampler, NoInstancesCombineToZero) {
     EXPECT_DOUBLE_EQ(CombineCounterValues({}, CounterCombine::Average), 0.0);
 }
 
+TEST(CounterSampler, OnlyANewOutcomeOrFailureChangesOutcome) {
+    const CounterReading pending{.outcome = CounterOutcome::Pending, .value = 0.0, .detail = {}};
+    const CounterReading sampled{.outcome = CounterOutcome::Sampled, .value = 1.0, .detail = {}};
+    const CounterReading resampled{.outcome = CounterOutcome::Sampled, .value = 2.0, .detail = {}};
+    const CounterReading failed{.outcome = CounterOutcome::Failed, .value = 0.0, .detail = "gone"};
+    const CounterReading failedOtherwise{.outcome = CounterOutcome::Failed, .value = 0.0, .detail = "denied"};
+    EXPECT_TRUE(ChangesOutcome(pending, sampled));
+    EXPECT_FALSE(ChangesOutcome(sampled, resampled));
+    EXPECT_TRUE(ChangesOutcome(sampled, failed));
+    EXPECT_TRUE(ChangesOutcome(failed, failedOtherwise));
+    EXPECT_FALSE(ChangesOutcome(failed, failed));
+    EXPECT_TRUE(ChangesOutcome(failed, sampled));
+}
+
 TEST_F(Sampler, AStartedSamplerReadsTheCounterAfterOneInterval) {
     const CounterSampler sampler("cpu", SumOf(L"\\Processor(_Total)\\% Processor Time"), _changes);
     EXPECT_EQ(sampler.Reading().outcome, CounterOutcome::Pending);

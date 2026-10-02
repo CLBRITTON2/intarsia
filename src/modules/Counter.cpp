@@ -9,10 +9,6 @@
 
 Counter::Counter(const CounterConfig& config, const CounterSampler& sampler) : TextModule(config.text, "counter", CounterPlaceholders(0.0)), _sampler(sampler) {}
 
-std::optional<std::uint32_t> Counter::MillisecondsUntilChange() const {
-    return std::nullopt;
-}
-
 std::optional<std::wstring> Counter::TooltipText() {
     const CounterReading reading = _sampler.Reading();
     if (reading.outcome == CounterOutcome::Failed) {

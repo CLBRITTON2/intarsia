@@ -31,9 +31,13 @@ struct CounterReading {
 // while no process draws, means nothing is counted.
 double CombineCounterValues(const std::vector<double>& values, CounterCombine combine);
 
-// Samples a counter module's counter on its own thread every interval, keeping the latest reading and notifying
-// changes whenever it changes. A counter that fails is added again on the next interval, since one can come back
-// (a GPU driver restarting).
+// Whether next must be drawn now rather than on the module's next tick: its outcome or failure differs from previous.
+bool ChangesOutcome(const CounterReading& previous, const CounterReading& next);
+
+// Samples a counter module's counter on its own thread every interval, keeping the latest reading. It notifies changes
+// only when ChangesOutcome, since the module draws new values on its own interval tick and a notify per sample would
+// wake every bar a second time each interval. A counter that fails is added again on the next interval, since one can
+// come back (a GPU driver restarting).
 class CounterSampler {
   public:
     CounterSampler(std::string name, const CounterConfig& config, ChangeSignal& changes);

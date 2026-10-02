@@ -20,9 +20,7 @@ class Counter final : public TextModule {
     // Throws ConfigError when a format names another value or has a spec that fits neither a number nor text.
     Counter(const CounterConfig& config, const CounterSampler& sampler);
 
-    // Never on its own: the sampler posts when the reading changes.
-    std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    std::optional<std::wstring>  TooltipText() override;
+    std::optional<std::wstring> TooltipText() override;
 
   private:
     ModuleText            Format(const std::string& spec) override;
