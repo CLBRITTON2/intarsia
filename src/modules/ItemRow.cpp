@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <format>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -98,6 +100,9 @@ D2D1_COLOR_F ItemFades::Text(size_t index, std::chrono::steady_clock::time_point
     return _fades.at(index).text.Color(now);
 }
 
-bool ItemFades::Running(std::chrono::steady_clock::time_point now) const {
-    return std::ranges::any_of(_fades, [now](const Fade& fade) { return fade.background.Running(now) || fade.text.Running(now); });
+std::optional<std::uint32_t> ItemFades::Wait(std::chrono::steady_clock::time_point now) const {
+    if (std::ranges::any_of(_fades, [now](const Fade& fade) { return fade.background.Running(now) || fade.text.Running(now); })) {
+        return 0;
+    }
+    return std::nullopt;
 }

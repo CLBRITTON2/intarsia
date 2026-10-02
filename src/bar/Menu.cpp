@@ -11,7 +11,6 @@
 #include "render/Graphics.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <optional>
 #include <string>
@@ -331,10 +330,10 @@ void Menu::Draw() {
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
     DrawBox(context, *_brushes, whole, style.box, style.box.background);
-    _surface->ShowBackdrops(BackdropOutlines(style.backdrop, PixelGridOf(context), {whole}, style.box), style.backdrop);
+    const PixelGrid grid = PixelGridOf(context);
+    _surface->ShowBackdrops(BackdropOutlines(style.backdrop, grid, {whole}, style.box), style.backdrop);
     // Whole pixels, so scrolled text stays as sharp as unscrolled text.
-    const float scale  = static_cast<float>(_dpi) / USER_DEFAULT_SCREEN_DPI;
-    const float offset = std::round(_scroll.offsetDips * scale) / scale;
+    const float offset = SnapLength(grid, _scroll.offsetDips);
     context->PushAxisAlignedClip(_scroll.viewport, D2D1_ANTIALIAS_MODE_ALIASED);
     context->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, -offset));
     for (const MenuRow& row : _rows) {

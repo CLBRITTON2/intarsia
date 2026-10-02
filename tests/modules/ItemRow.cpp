@@ -62,16 +62,16 @@ TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
     HoveredItem                                 hovered;
     ItemFades                                   fades;
     fades.Follow({&style}, hovered, start);
-    EXPECT_FALSE(fades.Running(start));
+    EXPECT_EQ(fades.Wait(start), std::nullopt);
 
     EXPECT_TRUE(hovered.Set(0));
     fades.Follow({&style, &style}, hovered, start);
-    EXPECT_TRUE(fades.Running(start));
+    EXPECT_EQ(fades.Wait(start), 0U);
     EXPECT_NEAR(fades.Background(0, start + std::chrono::milliseconds(50)).r, 0.5f, 0.001f);
     // The text has no transition of its own, so it takes the hover's at once.
     EXPECT_FLOAT_EQ(fades.Text(0, start).r, 1.0f);
     EXPECT_FLOAT_EQ(fades.Background(1, start).r, 0.0f);
-    EXPECT_FALSE(fades.Running(start + std::chrono::milliseconds(100)));
+    EXPECT_EQ(fades.Wait(start + std::chrono::milliseconds(100)), std::nullopt);
 }
 
 TEST(ItemRow, ItemFadesFadeAnItemIntoANewStatesColors) {

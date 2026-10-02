@@ -60,10 +60,7 @@ void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
 }
 
 std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
-    if (_fades.Running(std::chrono::steady_clock::now())) {
-        return 0;
-    }
-    return std::nullopt;
+    return _fades.Wait(std::chrono::steady_clock::now());
 }
 
 bool Workspaces::Hover(std::optional<D2D1_POINT_2F> point) {

@@ -127,10 +127,10 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
 
 std::optional<std::uint32_t> Tray::MillisecondsUntilChange() const {
     const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-    if (_fold.Running(now) || _fades.Running(now)) {
+    if (_fold.Running(now)) {
         return 0;
     }
-    return std::nullopt;
+    return _fades.Wait(now);
 }
 
 void Tray::Click(D2D1_POINT_2F point) {

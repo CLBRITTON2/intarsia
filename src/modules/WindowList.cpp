@@ -77,10 +77,7 @@ std::vector<const ItemStyle*> WindowList::ItemStyles() const {
 }
 
 std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
-    if (_fades.Running(std::chrono::steady_clock::now())) {
-        return 0;
-    }
-    return std::nullopt;
+    return _fades.Wait(std::chrono::steady_clock::now());
 }
 
 bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {

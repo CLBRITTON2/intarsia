@@ -10,7 +10,6 @@
 #include <winrt/Windows.UI.Composition.Desktop.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -34,12 +33,8 @@ namespace {
             first.radiusX == second.radiusX && first.radiusY == second.radiusY;
     }
 
-    std::int32_t ToPixels(float dips, std::uint32_t dpi) {
-        return static_cast<std::int32_t>(std::lround(dips * static_cast<float>(dpi) / USER_DEFAULT_SCREEN_DPI));
-    }
-
     winrt::Windows::Graphics::SizeInt32 PixelSize(const D2D1_RECT_F& rect, std::uint32_t dpi) {
-        return {.Width = ToPixels(rect.right, dpi) - ToPixels(rect.left, dpi), .Height = ToPixels(rect.bottom, dpi) - ToPixels(rect.top, dpi)};
+        return {.Width = DipsToPixels(rect.right, dpi) - DipsToPixels(rect.left, dpi), .Height = DipsToPixels(rect.bottom, dpi) - DipsToPixels(rect.top, dpi)};
     }
 
     // Opaque inside box and clear outside it, drawn as DrawBox fills a box so the two edges antialias alike.
@@ -74,7 +69,7 @@ namespace {
     void PlaceBackdrop(BackdropVisual& backdrop, const D2D1_ROUNDED_RECT& box, std::uint32_t dpi) {
         const winrt::Windows::Graphics::SizeInt32 size = PixelSize(box.rect, dpi);
         backdrop.box                                   = box;
-        backdrop.sprite.Offset({static_cast<float>(ToPixels(box.rect.left, dpi)), static_cast<float>(ToPixels(box.rect.top, dpi)), 0.0f});
+        backdrop.sprite.Offset({static_cast<float>(DipsToPixels(box.rect.left, dpi)), static_cast<float>(DipsToPixels(box.rect.top, dpi)), 0.0f});
         backdrop.sprite.Size({static_cast<float>(std::max(size.Width, 0)), static_cast<float>(std::max(size.Height, 0))});
         if (size.Width <= 0 || size.Height <= 0) {
             return;

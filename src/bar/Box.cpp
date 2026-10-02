@@ -2,6 +2,7 @@
 
 #include "platform/Errors.hpp"
 
+#include <windows.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -225,10 +226,6 @@ namespace {
         return (std::round((dips + offset) * pixelsPerDip) / pixelsPerDip) - offset;
     }
 
-    float SnapLength(float pixelsPerDip, float dips) {
-        return std::round(dips * pixelsPerDip) / pixelsPerDip;
-    }
-
     BorderSide SnapSide(float pixelsPerDip, const BorderSide& side) {
         if (side.widthDips <= 0.0f) {
             return side;
@@ -246,7 +243,11 @@ PixelGrid PixelGridOf(ID2D1DeviceContext* context) {
     context->GetDpi(&dpiX, &dpiY);
     D2D1_MATRIX_3X2_F transform{};
     context->GetTransform(&transform);
-    return PixelGrid{.pixelsPerDip = dpiX / 96.0f, .offsetX = transform._31, .offsetY = transform._32};
+    return PixelGrid{.pixelsPerDip = dpiX / USER_DEFAULT_SCREEN_DPI, .offsetX = transform._31, .offsetY = transform._32};
+}
+
+float SnapLength(const PixelGrid& grid, float dips) {
+    return std::round(dips * grid.pixelsPerDip) / grid.pixelsPerDip;
 }
 
 D2D1_RECT_F SnapRect(const PixelGrid& grid, const D2D1_RECT_F& rect) {
@@ -262,9 +263,9 @@ BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
                                       .bottom = SnapSide(pixelsPerDip, style.border.bottom),
                                       .left   = SnapSide(pixelsPerDip, style.border.left)};
     for (InsetShadow& shadow : snapped.shadows) {
-        shadow.xDips      = SnapLength(pixelsPerDip, shadow.xDips);
-        shadow.yDips      = SnapLength(pixelsPerDip, shadow.yDips);
-        shadow.spreadDips = SnapLength(pixelsPerDip, shadow.spreadDips);
+        shadow.xDips      = SnapLength(grid, shadow.xDips);
+        shadow.yDips      = SnapLength(grid, shadow.yDips);
+        shadow.spreadDips = SnapLength(grid, shadow.spreadDips);
     }
     return snapped;
 }

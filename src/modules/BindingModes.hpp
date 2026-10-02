@@ -27,14 +27,15 @@ class BindingModes final : public IModule {
 
   private:
     // Layout's work before the fades follow it.
-    bool                      LayOutItems(const RenderContext& render);
+    bool                          LayOutItems(const RenderContext& render);
+    std::vector<const ItemStyle*> ItemStyles() const;
 
-    HoveredItem               _hovered;
-    ItemFades                 _fades;
-    const IWindowManager&     _windowManager;
-    ModuleStyle               _style;
-    std::vector<std::wstring> _shown;
-    bool                      _laidOut = false;
-    std::vector<IconText>     _labels;
-    ItemRow                   _row = EmptyItemRow();
+    HoveredItem                   _hovered;
+    ItemFades                     _fades;
+    const IWindowManager&         _windowManager;
+    ModuleStyle                   _style;
+    std::vector<std::wstring>     _shown;
+    bool                          _laidOut = false;
+    std::vector<IconText>         _labels;
+    ItemRow                       _row = EmptyItemRow();
 };

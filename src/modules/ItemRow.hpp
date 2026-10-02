@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -59,7 +60,8 @@ class ItemFades {
     void         Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hovered, std::chrono::steady_clock::time_point now);
     D2D1_COLOR_F Background(size_t index, std::chrono::steady_clock::time_point now) const;
     D2D1_COLOR_F Text(size_t index, std::chrono::steady_clock::time_point now) const;
-    bool         Running(std::chrono::steady_clock::time_point now) const;
+    // A module's MillisecondsUntilChange: 0 while an item fades, so the bar draws every frame, and none after.
+    std::optional<std::uint32_t> Wait(std::chrono::steady_clock::time_point now) const;
 
   private:
     struct Fade {

@@ -3,12 +3,13 @@
 #include <chrono>
 #include <cstdint>
 #include <utility>
+#include <vector>
 
 BindingModes::BindingModes(const IWindowManager& windowManager, ModuleStyle style) : _windowManager(windowManager), _style(std::move(style)) {}
 
 bool BindingModes::Layout(const RenderContext& render) {
     const bool changed = LayOutItems(render);
-    _fades.Follow(std::vector<const ItemStyle*>(_labels.size(), &_style.item), _hovered, std::chrono::steady_clock::now());
+    _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
     return changed;
 }
 
@@ -25,8 +26,12 @@ bool BindingModes::LayOutItems(const RenderContext& render) {
         _labels.push_back(LayOutWeightedText(render, mode, _style.item.weight, ItemTextInset(_style.item, render.axis)));
         contents.push_back(_labels.back().size);
     }
-    _row = ArrangeItems(contents, std::vector<const ItemStyle*>(_labels.size(), &_style.item), render.axis);
+    _row = ArrangeItems(contents, ItemStyles(), render.axis);
     return true;
+}
+
+std::vector<const ItemStyle*> BindingModes::ItemStyles() const {
+    return std::vector<const ItemStyle*>(_labels.size(), &_style.item);
 }
 
 D2D1_SIZE_F BindingModes::Size() const {
@@ -43,15 +48,12 @@ void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const
 }
 
 std::optional<std::uint32_t> BindingModes::MillisecondsUntilChange() const {
-    if (_fades.Running(std::chrono::steady_clock::now())) {
-        return 0;
-    }
-    return std::nullopt;
+    return _fades.Wait(std::chrono::steady_clock::now());
 }
 
 bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
     const bool changed = _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
-    _fades.Follow(std::vector<const ItemStyle*>(_labels.size(), &_style.item), _hovered, std::chrono::steady_clock::now());
+    _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
     return changed;
 }
 
