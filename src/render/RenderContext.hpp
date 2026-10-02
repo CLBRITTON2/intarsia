@@ -8,6 +8,8 @@
 
 #include <vector>
 
+class BoxCache;
+
 // The text and icon colors of one state a module's value can be in, such as a battery's .warning.
 struct StateBrushes {
     ID2D1SolidColorBrush* text;
@@ -32,6 +34,7 @@ struct RenderContext {
     std::vector<StateBrushes> classes; // a custom module's declared classes, in their order
     // Any other color a module draws, such as a workspace state's background.
     BrushCache* brushes;
+    BoxCache*   boxes;
     Axis        axis;         // the bar's
     float       boxCrossDips; // across the bar, of the box a module draws in: the room a vertical bar cuts text to
 };

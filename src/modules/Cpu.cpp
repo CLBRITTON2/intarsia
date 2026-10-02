@@ -88,8 +88,12 @@ ModuleText Cpu::Format(const std::string& spec) {
     if (SampleDue(_sampledAt, now, Settings().interval)) {
         Sample();
         _sampledAt = now;
+        _texts.Forget();
     }
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))), .state = TextState::Normal, .classIndex = 0};
+    return ModuleText{.icon       = Settings().icon,
+                      .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }),
+                      .state      = TextState::Normal,
+                      .classIndex = 0};
 }
 
 void Cpu::Sample() {

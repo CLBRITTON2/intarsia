@@ -12,9 +12,11 @@ WindowList::WindowList(IWindowManager& windowManager, WindowIcons& icons, HMONIT
     _windowManager(windowManager), _icons(icons), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
 
 bool WindowList::Layout(const RenderContext& render) {
-    const bool changed = LayOutItems(render);
+    if (!LayOutItems(render)) {
+        return false;
+    }
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
-    return changed;
+    return true;
 }
 
 bool WindowList::LayOutItems(const RenderContext& render) {

@@ -37,6 +37,7 @@ struct TextOnlyRender {
                              .muted        = {.text = nullptr, .icon = nullptr},
                              .classes      = {},
                              .brushes      = nullptr,
+                             .boxes        = nullptr,
                              .axis         = axis,
                              .boxCrossDips = boxCrossDips};
     }

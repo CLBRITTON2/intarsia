@@ -37,9 +37,11 @@ namespace {
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
         ThrowIfFailed(target.As(&context), "ID2D1RenderTarget::QueryInterface(ID2D1DeviceContext)");
         BrushCache brushes(context.Get());
+        BoxCache   boxes(context.Get());
         context->BeginDraw();
         context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-        DrawBox(context.Get(), brushes, D2D1::RectF(0.0f, 0.0f, static_cast<float>(kDrawnWidth), static_cast<float>(kDrawnHeight)), style, D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+        DrawBox(context.Get(), brushes, boxes, D2D1::RectF(0.0f, 0.0f, static_cast<float>(kDrawnWidth), static_cast<float>(kDrawnHeight)), style,
+                D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
         ThrowIfFailed(context->EndDraw(), "ID2D1RenderTarget::EndDraw");
         std::vector<std::uint8_t> pixels(static_cast<size_t>(kDrawnWidth) * kDrawnHeight * 4);
         ThrowIfFailed(bitmap->CopyPixels(nullptr, kDrawnWidth * 4, static_cast<UINT>(pixels.size()), pixels.data()), "IWICBitmap::CopyPixels");
@@ -126,4 +128,20 @@ TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
     EXPECT_FLOAT_EQ(snapped.shadows[0].yDips, 0.8f);
     EXPECT_FLOAT_EQ(snapped.shadows[0].spreadDips, -6.4f);
     EXPECT_FLOAT_EQ(snapped.shadows[0].blurDips, 14.0f);
+}
+
+// A shadow box far longer than its edges reach, both ways, so it draws from a bitmap of both ends and one row and
+// column between: each edge of the hard shadow still lands on its own pixel.
+TEST(Box, AShadowLongerThanItsReachDrawsEachEdgeInPlace) {
+    const InsetShadow               shadow{.xDips = 0.0f, .yDips = 2.0f, .blurDips = 0.0f, .spreadDips = 3.0f, .color = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)};
+    const std::vector<std::uint8_t> pixels = DrawnPixels(Lined(Border{.top = Side(0.0f), .right = Side(0.0f), .bottom = Side(0.0f), .left = Side(0.0f)}, {shadow}));
+    // The shadow's hole is the box moved down 2 and shrunk 3: rows 5 to 28, columns 3 to 56.
+    EXPECT_GT(Red(pixels, 30, 4), 200);
+    EXPECT_LT(Red(pixels, 30, 5), 50);
+    EXPECT_LT(Red(pixels, 30, 28), 50);
+    EXPECT_GT(Red(pixels, 30, 29), 200);
+    EXPECT_GT(Red(pixels, 2, 15), 200);
+    EXPECT_LT(Red(pixels, 3, 15), 50);
+    EXPECT_LT(Red(pixels, 56, 15), 50);
+    EXPECT_GT(Red(pixels, 57, 15), 200);
 }

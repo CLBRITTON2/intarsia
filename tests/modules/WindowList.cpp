@@ -2,6 +2,7 @@
 
 #include "../wm/FakeWindowManager.hpp"
 #include "TestStyle.hpp"
+#include "bar/Box.hpp"
 #include "render/BrushCache.hpp"
 #include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
@@ -37,6 +38,7 @@ namespace {
                              .muted        = {.text = nullptr, .icon = nullptr},
                              .classes      = {},
                              .brushes      = nullptr,
+                             .boxes        = nullptr,
                              .axis         = Axis::Horizontal,
                              .boxCrossDips = 24.0f};
     }
@@ -99,9 +101,11 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
                                                 &target)));
     context->SetTarget(target.Get());
     BrushCache    brushes(context.Get());
+    BoxCache      boxes(context.Get());
     RenderContext render = NoDrawing();
     render.context       = context.Get();
     render.brushes       = &brushes;
+    render.boxes         = &boxes;
 
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     EXPECT_TRUE(module.Layout(render));

@@ -90,6 +90,19 @@ TEST(Network, ARateInAFormatMakesTheModuleTick) {
     EXPECT_FALSE(ShowsRates(literal));
 }
 
+TEST(Network, ATooltipNamingARateNeedsRatesSampledButNoTick) {
+    const FakeNetwork network;
+    NetworkConfig     config = TestConfig();
+    EXPECT_TRUE(ReadsRates(config));
+    EXPECT_FALSE(ShowsRates(config));
+    EXPECT_EQ(Network(config, network).MillisecondsUntilChange(), std::nullopt);
+    config.tooltip = "{ip}";
+    EXPECT_FALSE(ReadsRates(config));
+    config.tooltip    = std::nullopt;
+    config.formatWifi = "{down}";
+    EXPECT_TRUE(ReadsRates(config));
+}
+
 TEST(Network, AFormatNamingAnUnknownValueIsAConfigError) {
     FakeNetwork   network;
     NetworkConfig config = TestConfig();

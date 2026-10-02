@@ -77,13 +77,47 @@ namespace {
         return {};
     }
 
-    // A WLAN API client, open for as long as it lives.
+    // Runs on a system thread, so it only wakes the worker.
+    void WINAPI WakeOnInterfaceChange(PVOID linkEvent, PMIB_IPINTERFACE_ROW, MIB_NOTIFICATION_TYPE) {
+        SetEvent(linkEvent);
+    }
+    void WINAPI WakeOnAddressChange(PVOID linkEvent, PMIB_UNICASTIPADDRESS_ROW, MIB_NOTIFICATION_TYPE) {
+        SetEvent(linkEvent);
+    }
+    void WINAPI WakeOnRouteChange(PVOID linkEvent, PMIB_IPFORWARD_ROW2, MIB_NOTIFICATION_TYPE) {
+        SetEvent(linkEvent);
+    }
+
+    // Only the notifications that change what State shows, since the WLAN service also reports every scan.
+    void WINAPI WakeOnWlanChange(PWLAN_NOTIFICATION_DATA data, PVOID linkEvent) {
+        const bool acm = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_ACM &&
+            (data->NotificationCode == wlan_notification_acm_connection_complete || data->NotificationCode == wlan_notification_acm_disconnected);
+        const bool msm = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_MSM &&
+            (data->NotificationCode == wlan_notification_msm_signal_quality_change || data->NotificationCode == wlan_notification_msm_roaming_end);
+        if (acm || msm) {
+            SetEvent(linkEvent);
+        }
+    }
+
+    UniqueMibNotification OwnNotification(DWORD result, HANDLE notification, std::string_view call) {
+        ThrowIfWin32Failed(result, call);
+        return UniqueMibNotification(notification);
+    }
+
+    // A WLAN API client, open for as long as it lives, that sets linkEvent when the connection or its signal changes.
     class WlanClient {
       public:
-        WlanClient() {
+        explicit WlanClient(HANDLE linkEvent) {
             DWORD negotiated = 0;
             ThrowIfWin32Failed(WlanOpenHandle(2, nullptr, &negotiated, &_handle), "WlanOpenHandle");
+            const DWORD registered =
+                WlanRegisterNotification(_handle, WLAN_NOTIFICATION_SOURCE_ACM | WLAN_NOTIFICATION_SOURCE_MSM, TRUE, WakeOnWlanChange, linkEvent, nullptr, nullptr);
+            if (registered != ERROR_SUCCESS) {
+                WlanCloseHandle(_handle, nullptr);
+                ThrowIfWin32Failed(registered, "WlanRegisterNotification");
+            }
         }
+        // Also unregisters the notification, waiting out a callback in progress.
         ~WlanClient() {
             WlanCloseHandle(_handle, nullptr);
         }
@@ -115,11 +149,33 @@ namespace {
 
 } // namespace
 
-IpHelper::IpHelper(ChangeSignal& changes) : _changes(changes), _state(NetworkState::None()), _thread("network", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
+void CancelMibNotification::operator()(HANDLE notification) const {
+    CancelMibChangeNotify2(notification);
+}
+
+IpHelper::IpHelper(ChangeSignal& changes, bool samplesRates) :
+    _changes(changes), _samplesRates(samplesRates), _linkEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(network link)")), _state(NetworkState::None()),
+    _interfaces([this] {
+        HANDLE notification = nullptr;
+        return OwnNotification(NotifyIpInterfaceChange(AF_UNSPEC, WakeOnInterfaceChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyIpInterfaceChange");
+    }()),
+    _addresses([this] {
+        HANDLE notification = nullptr;
+        return OwnNotification(NotifyUnicastIpAddressChange(AF_INET, WakeOnAddressChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyUnicastIpAddressChange");
+    }()),
+    _routes([this] {
+        HANDLE notification = nullptr;
+        return OwnNotification(NotifyRouteChange2(AF_UNSPEC, WakeOnRouteChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyRouteChange2");
+    }()),
+    _thread("network", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 NetworkState IpHelper::State() const {
     const std::scoped_lock lock(_mutex);
     return _state;
+}
+
+bool IpHelper::SamplesRates() const {
+    return _samplesRates;
 }
 
 // Nothing here may throw out of the thread, so every failure is logged once and the next sample tries again.
@@ -128,7 +184,9 @@ void IpHelper::Run(HANDLE stopEvent) {
     std::unique_ptr<WlanClient> wlan;
     FailureLog                  sampleLog("network");
     FailureLog                  wlanLog("network");
-    DWORD                       woke = WAIT_TIMEOUT;
+    const std::array<HANDLE, 2> events{stopEvent, _linkEvent.get()};
+    const DWORD                 timeout = _samplesRates ? kSampleMs : INFINITE;
+    DWORD                       woke    = WAIT_TIMEOUT;
     do {
         NetworkState state = NetworkState::None();
         try {
@@ -150,7 +208,7 @@ void IpHelper::Run(HANDLE stopEvent) {
                 if (state.link == NetworkLink::Wifi) {
                     try {
                         if (wlan == nullptr) {
-                            wlan = std::make_unique<WlanClient>();
+                            wlan = std::make_unique<WlanClient>(_linkEvent.get());
                         }
                         auto [ssid, signal] = wlan->Connection(row.InterfaceGuid);
                         state.ssid          = std::move(ssid);
@@ -184,8 +242,8 @@ void IpHelper::Run(HANDLE stopEvent) {
         if (changed) {
             _changes.Notify("network");
         }
-        woke = WaitForSingleObject(stopEvent, kSampleMs);
-    } while (woke == WAIT_TIMEOUT);
+        woke = WaitForMultipleObjects(static_cast<DWORD>(events.size()), events.data(), FALSE, timeout);
+    } while (woke == WAIT_TIMEOUT || woke == WAIT_OBJECT_0 + 1);
     if (woke != WAIT_OBJECT_0) {
         Log(LogLevel::Error, "network", "wait_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
     }

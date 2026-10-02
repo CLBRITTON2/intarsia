@@ -1,6 +1,7 @@
 #include "bar/Box.hpp"
 
 #include "platform/Errors.hpp"
+#include "render/Graphics.hpp"
 
 #include <windows.h>
 #include <wrl/client.h>
@@ -206,14 +207,33 @@ namespace {
         }
     }
 
+    bool SameSide(const BorderSide& first, const BorderSide& second) {
+        return first.widthDips == second.widthDips && SameColor(first.color, second.color);
+    }
+
+    std::array<BorderSide, 4> Sides(const Border& border) {
+        return {border.top, border.right, border.bottom, border.left};
+    }
+
+    bool IsUniform(const Border& border) {
+        return std::ranges::all_of(Sides(border), [&border](const BorderSide& side) { return SameSide(side, border.top); });
+    }
+
+    bool SameBorder(const Border& first, const Border& second) {
+        return SameSide(first.top, second.top) && SameSide(first.right, second.right) && SameSide(first.bottom, second.bottom) && SameSide(first.left, second.left);
+    }
+
+    bool SameShadow(const InsetShadow& first, const InsetShadow& second) {
+        return first.xDips == second.xDips && first.yDips == second.yDips && first.blurDips == second.blurDips && first.spreadDips == second.spreadDips &&
+            SameColor(first.color, second.color);
+    }
+
     void DrawBorder(ID2D1DeviceContext* context, BrushCache& brushes, const Figure& outer, const Figure& inner, const Border& border) {
-        const std::array<BorderSide, 4> sides{border.top, border.right, border.bottom, border.left};
+        const std::array<BorderSide, 4> sides = Sides(border);
         if (std::ranges::none_of(sides, IsDrawn)) {
             return;
         }
-        const bool uniform =
-            std::ranges::all_of(sides, [&border](const BorderSide& side) { return side.widthDips == border.top.widthDips && SameColor(side.color, border.top.color); });
-        if (uniform) {
+        if (IsUniform(border)) {
             // A stroke is centered on its outline, so the outline is inset by half the width to keep it inside.
             const float       inset  = border.top.widthDips / 2.0f;
             const D2D1_RECT_F edge   = D2D1::RectF(outer.rect.left + inset, outer.rect.top + inset, outer.rect.right - inset, outer.rect.bottom - inset);
@@ -253,7 +273,135 @@ namespace {
         return BorderSide{.widthDips = pixels / pixelsPerDip, .color = side.color};
     }
 
+    // Paints the shadows and border inside box, a snapped outline of radius, as CSS paints them over the background.
+    void DrawDecorations(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& box, float radius, const BoxStyle& lines) {
+        const Border&     border = lines.border;
+        const D2D1_SIZE_F corner = D2D1::SizeF(radius, radius);
+        const Figure      outer{.rect = box, .radii = {.topLeft = corner, .topRight = corner, .bottomRight = corner, .bottomLeft = corner}};
+        // CSS's inner edge: each corner's radius less the widths of the two sides that meet there.
+        const Figure inner{
+            .rect  = D2D1::RectF(box.left + border.left.widthDips, box.top + border.top.widthDips, box.right - border.right.widthDips, box.bottom - border.bottom.widthDips),
+            .radii = {.topLeft     = Shrink(corner, border.left.widthDips, border.top.widthDips),
+                      .topRight    = Shrink(corner, border.right.widthDips, border.top.widthDips),
+                      .bottomRight = Shrink(corner, border.right.widthDips, border.bottom.widthDips),
+                      .bottomLeft  = Shrink(corner, border.left.widthDips, border.bottom.widthDips)}};
+        if (!lines.shadows.empty() && !IsEmpty(inner.rect)) {
+            DrawShadows(context, brushes, FactoryOf(context).Get(), inner, lines.shadows);
+        }
+        DrawBorder(context, brushes, outer, inner, border);
+    }
+
+    // A uniform border is one stroke, cheaper to draw again than to draw from a bitmap.
+    bool IsWorthCaching(const BoxStyle& lines) {
+        return !lines.shadows.empty() || (std::ranges::any_of(Sides(lines.border), IsDrawn) && !IsUniform(lines.border));
+    }
+
+    // How far in from an edge the decorations can still change along it: the widest side and the corner, then the
+    // farthest a shadow's rings reach (offset, spread and three deviations of blur), and a DIP for antialiasing. Past
+    // it, every row (or column) across the box is the same.
+    float ReachDips(const BoxStyle& lines, float radius) {
+        float shadowReach = 0.0f;
+        for (const InsetShadow& shadow : lines.shadows) {
+            shadowReach = std::max(shadowReach, std::max(std::abs(shadow.xDips), std::abs(shadow.yDips)) + std::abs(shadow.spreadDips) + (1.5f * shadow.blurDips));
+        }
+        const float widest = std::ranges::max(Sides(lines.border) | std::views::transform(&BorderSide::widthDips));
+        return widest + radius + shadowReach + 1.0f;
+    }
+
+    // One piece of a nine-sliced bitmap along one axis: where it sits in the bitmap and where it is drawn, in DIPs.
+    struct Slice {
+        float sourceFrom;
+        float sourceTo;
+        float drawnFrom;
+        float drawnTo;
+    };
+
+    // The bitmap's length along an axis for a box of length pixels: both ends and one pixel between them when it is
+    // longer than that, else the box's whole length.
+    std::uint32_t SlicedLength(std::uint32_t length, std::uint32_t reach) {
+        return std::min(length, (2 * reach) + 1);
+    }
+
+    std::vector<Slice> Slices(float from, float to, std::uint32_t sliced, std::uint32_t length, std::uint32_t reach, float pixelsPerDip) {
+        if (sliced == length) {
+            return {Slice{.sourceFrom = 0.0f, .sourceTo = to - from, .drawnFrom = from, .drawnTo = to}};
+        }
+        const float end = static_cast<float>(reach) / pixelsPerDip;
+        const float one = 1.0f / pixelsPerDip;
+        return {Slice{.sourceFrom = 0.0f, .sourceTo = end, .drawnFrom = from, .drawnTo = from + end},
+                Slice{.sourceFrom = end, .sourceTo = end + one, .drawnFrom = from + end, .drawnTo = to - end},
+                Slice{.sourceFrom = end + one, .sourceTo = end + one + end, .drawnFrom = to - end, .drawnTo = to}};
+    }
+
+    std::uint32_t PixelLength(float dips, float pixelsPerDip) {
+        return static_cast<std::uint32_t>(std::max(std::lround(dips * pixelsPerDip), 0L));
+    }
+
+    constexpr size_t kMostCachedBoxes = 64; // a shadow fade makes one a frame, so they start over
+
 } // namespace
+
+BoxCache::BoxCache(ID2D1DeviceContext* context) :
+    _context([context] {
+        Microsoft::WRL::ComPtr<ID2D1Device> device;
+        context->GetDevice(&device);
+        Microsoft::WRL::ComPtr<ID2D1DeviceContext> own;
+        ThrowIfDeviceFailed(device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &own), "ID2D1Device::CreateDeviceContext(box cache)");
+        return own;
+    }()),
+    _brushes(_context.Get()) {}
+
+ID2D1Bitmap1* BoxCache::Find(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height) {
+    const auto found = std::ranges::find_if(_entries, [&](const Entry& entry) {
+        return entry.radius == radius && entry.pixelsPerDip == pixelsPerDip && entry.width == width && entry.height == height && SameBorder(entry.border, lines.border) &&
+            std::ranges::equal(entry.shadows, lines.shadows, SameShadow);
+    });
+    if (found == _entries.end()) {
+        return nullptr;
+    }
+    std::rotate(found, found + 1, _entries.end());
+    return _entries.back().bitmap.Get();
+}
+
+void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2D1_RECT_F& box, float radius, const BoxStyle& lines) {
+    const float         pixelsPerDip = grid.pixelsPerDip;
+    const std::uint32_t reach        = PixelLength(std::ceil(ReachDips(lines, radius) * pixelsPerDip) / pixelsPerDip, pixelsPerDip);
+    const std::uint32_t length       = PixelLength(box.right - box.left, pixelsPerDip);
+    const std::uint32_t depth        = PixelLength(box.bottom - box.top, pixelsPerDip);
+    const std::uint32_t width        = SlicedLength(length, reach);
+    const std::uint32_t height       = SlicedLength(depth, reach);
+    ID2D1Bitmap1*       bitmap       = Find(lines, radius, pixelsPerDip, width, height);
+    if (bitmap == nullptr) {
+        const float                          dpi = pixelsPerDip * USER_DEFAULT_SCREEN_DPI;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap1> drawn;
+        ThrowIfDeviceFailed(
+            _context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0,
+                                   D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi),
+                                   &drawn),
+            "ID2D1DeviceContext::CreateBitmap(box)");
+        _context->SetTarget(drawn.Get());
+        _context->SetDpi(dpi, dpi);
+        _context->BeginDraw();
+        _context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+        DrawDecorations(_context.Get(), _brushes, D2D1::RectF(0.0f, 0.0f, static_cast<float>(width) / pixelsPerDip, static_cast<float>(height) / pixelsPerDip), radius, lines);
+        const HRESULT ended = _context->EndDraw();
+        _context->SetTarget(nullptr);
+        ThrowIfDeviceFailed(ended, "ID2D1DeviceContext::EndDraw(box)");
+        if (_entries.size() == kMostCachedBoxes) {
+            _entries.erase(_entries.begin());
+        }
+        _entries.push_back(
+            Entry{.border = lines.border, .shadows = lines.shadows, .radius = radius, .pixelsPerDip = pixelsPerDip, .width = width, .height = height, .bitmap = drawn});
+        bitmap = drawn.Get();
+    }
+    for (const Slice& across : Slices(box.left, box.right, width, length, reach, pixelsPerDip)) {
+        for (const Slice& down : Slices(box.top, box.bottom, height, depth, reach, pixelsPerDip)) {
+            const D2D1_RECT_F drawnRect = D2D1::RectF(across.drawnFrom, down.drawnFrom, across.drawnTo, down.drawnTo);
+            const D2D1_RECT_F source    = D2D1::RectF(across.sourceFrom, down.sourceFrom, across.sourceTo, down.sourceTo);
+            context->DrawBitmap(bitmap, drawnRect, 1.0f, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR, source);
+        }
+    }
+}
 
 PixelGrid PixelGridOf(ID2D1DeviceContext* context) {
     float dpiX = 0.0f;
@@ -313,31 +461,20 @@ std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const 
     return outlines;
 }
 
-void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& bounds, const BoxStyle& style, const D2D1_COLOR_F& fill) {
+void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, BoxCache& boxes, const D2D1_RECT_F& bounds, const BoxStyle& style, const D2D1_COLOR_F& fill) {
     const PixelGrid         grid    = PixelGridOf(context);
     const D2D1_ROUNDED_RECT outline = SnappedOutline(grid, bounds, style);
-    const D2D1_RECT_F&      box     = outline.rect;
     // An empty module's box has no length, and its inset border would draw inside out.
-    if (IsEmpty(box)) {
+    if (IsEmpty(outline.rect)) {
         return;
     }
-    const BoxStyle lines  = SnapLines(grid, style);
-    const float    radius = outline.radiusX;
+    const BoxStyle lines = SnapLines(grid, style);
     if (fill.a > 0.0f) {
         context->FillRoundedRectangle(outline, brushes.Get(fill));
     }
-    const Border&     border = lines.border;
-    const D2D1_SIZE_F corner = D2D1::SizeF(radius, radius);
-    const Figure      outer{.rect = box, .radii = {.topLeft = corner, .topRight = corner, .bottomRight = corner, .bottomLeft = corner}};
-    // CSS's inner edge: each corner's radius less the widths of the two sides that meet there.
-    const Figure inner{.rect =
-                           D2D1::RectF(box.left + border.left.widthDips, box.top + border.top.widthDips, box.right - border.right.widthDips, box.bottom - border.bottom.widthDips),
-                       .radii = {.topLeft     = Shrink(corner, border.left.widthDips, border.top.widthDips),
-                                 .topRight    = Shrink(corner, border.right.widthDips, border.top.widthDips),
-                                 .bottomRight = Shrink(corner, border.right.widthDips, border.bottom.widthDips),
-                                 .bottomLeft  = Shrink(corner, border.left.widthDips, border.bottom.widthDips)}};
-    if (!lines.shadows.empty() && !IsEmpty(inner.rect)) {
-        DrawShadows(context, brushes, FactoryOf(context).Get(), inner, lines.shadows);
+    if (IsWorthCaching(lines)) {
+        boxes.Draw(context, grid, outline.rect, outline.radiusX, lines);
+        return;
     }
-    DrawBorder(context, brushes, outer, inner, border);
+    DrawDecorations(context, brushes, outline.rect, outline.radiusX, lines);
 }

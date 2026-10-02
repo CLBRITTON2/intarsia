@@ -286,7 +286,7 @@ bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
             _iconLog.Failed("icon_unreadable", error);
         }
     }
-    std::optional<std::vector<TrayIcon>> icons = ApplyNotifyIcon(Icons(), message, ownerImage, std::move(pixels));
+    std::optional<std::vector<TrayIcon>> icons = ApplyNotifyIcon(_icons, message, ownerImage, std::move(pixels));
     if (!icons.has_value()) {
         return false;
     }
@@ -351,7 +351,7 @@ void ShellNotifyIcon::KeepFirst() {
 }
 
 void ShellNotifyIcon::DropIconsOfClosedWindows() {
-    std::vector<TrayIcon> icons = Icons();
+    std::vector<TrayIcon> icons = _icons;
     std::erase_if(icons, [](const TrayIcon& icon) { return !IsWindow(ToWindow(icon.owner)); });
     Publish(std::move(icons));
 }

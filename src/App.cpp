@@ -2,6 +2,7 @@
 
 #include "audio/CoreAudio.hpp"
 #include "battery/PowerStatus.hpp"
+#include "modules/Network.hpp"
 #include "network/IpHelper.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
@@ -57,6 +58,13 @@ namespace {
         return AnyModuleInConfig(config, [flow](const ModuleInstance& instance) {
             const auto* audio = std::get_if<AudioConfig>(&instance.settings);
             return audio != nullptr && audio->flow == flow;
+        });
+    }
+
+    bool ReadsNetworkRates(const Config& config) {
+        return AnyModuleInConfig(config, [](const ModuleInstance& instance) {
+            const auto* network = std::get_if<NetworkConfig>(&instance.settings);
+            return network != nullptr && ReadsRates(*network);
         });
     }
 
@@ -287,7 +295,12 @@ void App::MatchSourcesToConfig() {
         MatchedToConfig<IAudio>(std::move(_audioOutput), ShowsAudioFlow(*_config, AudioFlow::Output), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Output); });
     _audioInput =
         MatchedToConfig<IAudio>(std::move(_audioInput), ShowsAudioFlow(*_config, AudioFlow::Input), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Input); });
-    _network = MatchedToConfig<INetwork>(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this] { return std::make_unique<IpHelper>(_changes); });
+    const bool samplesRates = ReadsNetworkRates(*_config);
+    if (_network != nullptr && _network->SamplesRates() != samplesRates) {
+        _network.reset();
+    }
+    _network = MatchedToConfig<IpHelper>(std::move(_network), ShowsKind(*_config, ModuleKind::Network),
+                                         [this, samplesRates] { return std::make_unique<IpHelper>(_changes, samplesRates); });
     _battery = MatchedToConfig<IBattery>(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
     _tray    = MatchedToConfig<ShellNotifyIcon>(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
         auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control.get(), kTrayFailed);

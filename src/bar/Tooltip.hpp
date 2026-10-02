@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bar/Box.hpp"
 #include "config/Config.hpp"
 #include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
@@ -49,4 +50,5 @@ class Tooltip {
     // Only while shown: Show creates it at the text's size and Hide releases it.
     std::unique_ptr<Surface>    _surface;
     std::unique_ptr<BrushCache> _brushes;
+    std::unique_ptr<BoxCache>   _boxes;
 };

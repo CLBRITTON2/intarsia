@@ -175,7 +175,7 @@ void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const B
             backdrops.pop_back();
         }
         if (!boxes.empty() && retoned) {
-            _visuals->factory = CreateBackdropFactory(*_composition, backdrop);
+            _visuals->factory = _composition->backdrops.For(_composition->compositor, backdrop);
             _visuals->tone    = backdrop;
         }
         while (backdrops.size() < boxes.size()) {

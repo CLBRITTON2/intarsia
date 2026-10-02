@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bar/Box.hpp"
 #include "bar/FrameStats.hpp"
 #include "bar/Layout.hpp"
 #include "bar/Menu.hpp"
@@ -187,6 +188,7 @@ class Bar {
     std::unique_ptr<Menu>                                 _menu;
     std::unique_ptr<MenuLister>                           _lister; // posts to the window, so it stops before the window goes
     std::unique_ptr<BrushCache>                           _brushes;
+    std::unique_ptr<BoxCache>                             _boxes;
     std::unordered_map<const ModuleStyle*, RenderContext> _contexts; // by the style of the entry it belongs to
     std::unordered_map<const IModule*, ColorFade>         _boxFades; // every module's box fill, members included
     Microsoft::WRL::ComPtr<IDWriteTextFormat>             _textFormat;

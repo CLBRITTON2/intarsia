@@ -8,9 +8,11 @@
 BindingModes::BindingModes(const IWindowManager& windowManager, ModuleStyle style) : _windowManager(windowManager), _style(std::move(style)) {}
 
 bool BindingModes::Layout(const RenderContext& render) {
-    const bool changed = LayOutItems(render);
+    if (!LayOutItems(render)) {
+        return false;
+    }
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
-    return changed;
+    return true;
 }
 
 bool BindingModes::LayOutItems(const RenderContext& render) {

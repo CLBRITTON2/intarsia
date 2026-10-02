@@ -9,6 +9,7 @@
 #include <windows.ui.composition.interop.h>
 #include <winrt/Windows.Graphics.Effects.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -107,9 +108,9 @@ std::array<float, 20> BackdropColorMatrix(const Backdrop& backdrop) {
     // clang-format on
 }
 
-winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(const CompositionDevice& device, const Backdrop& backdrop) {
+winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop) {
     namespace composition = winrt::Windows::UI::Composition;
-    return Composing("CreateBackdropFactory", [&device, &backdrop] {
+    return Composing("CreateBackdropFactory", [&compositor, &backdrop] {
         const auto values  = FactoryOf<foundation::PropertyValue, foundation::IPropertyValueStatics>("RoGetActivationFactory(PropertyValue)");
         const auto sources = FactoryOf<composition::CompositionEffectSourceParameter, composition::ICompositionEffectSourceParameterFactory>(
             "RoGetActivationFactory(CompositionEffectSourceParameter)");
@@ -122,6 +123,15 @@ winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(
                                                   });
         const auto                  masked =
             winrt::make<D2DEffect>(CLSID_D2D1AlphaMask, std::vector<effects::IGraphicsEffectSource>{toned, sources.Create(L"mask")}, std::vector<foundation::IInspectable>{});
-        return device.compositor.CreateEffectFactory(masked);
+        return compositor.CreateEffectFactory(masked);
     });
+}
+
+winrt::Windows::UI::Composition::CompositionEffectFactory BackdropFactories::For(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop) {
+    const auto found = std::ranges::find(_factories, backdrop, &std::pair<Backdrop, winrt::Windows::UI::Composition::CompositionEffectFactory>::first);
+    if (found != _factories.end()) {
+        return found->second;
+    }
+    _factories.emplace_back(backdrop, CreateBackdropFactory(compositor, backdrop));
+    return _factories.back().second;
 }

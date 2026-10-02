@@ -86,13 +86,14 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     ReleaseSurface();
     _surface = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
     _brushes = std::make_unique<BrushCache>(_surface->Context());
+    _boxes   = std::make_unique<BoxCache>(_surface->Context());
 
     ID2D1DeviceContext* context = _surface->Context();
     const D2D1_SIZE_F   area    = context->GetSize();
     const D2D1_RECT_F   box     = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    DrawBox(context, *_brushes, box, style, style.background);
+    DrawBox(context, *_brushes, *_boxes, box, style, style.background);
     context->DrawTextLayout(D2D1::Point2F(insets.left, insets.top), layout.Get(), _brushes->Get(_config.style.tooltip.color));
     _surface->ShowBackdrops(BackdropOutlines(_config.style.tooltip.backdrop, PixelGridOf(context), {box}, style), _config.style.tooltip.backdrop);
     _surface->EndDrawAndPresent();
@@ -110,6 +111,7 @@ void Tooltip::Hide() {
 }
 
 void Tooltip::ReleaseSurface() {
+    _boxes.reset();
     _brushes.reset();
     _surface.reset();
 }

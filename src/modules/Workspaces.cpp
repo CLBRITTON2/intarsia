@@ -10,9 +10,11 @@ Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleSt
     _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)), _row(EmptyItemRow()), _disconnected(EmptyIconText()) {}
 
 bool Workspaces::Layout(const RenderContext& render) {
-    const bool changed = LayOutItems(render);
+    if (!LayOutItems(render)) {
+        return false;
+    }
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
-    return changed;
+    return true;
 }
 
 bool Workspaces::LayOutItems(const RenderContext& render) {

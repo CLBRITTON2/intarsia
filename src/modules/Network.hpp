@@ -36,6 +36,8 @@ ModuleText               FormatNetwork(const NetworkConfig& config, const Networ
 
 // Whether a format drawn on the bar (not the tooltip, read only as it shows) names {down} or {up}.
 bool ShowsRates(const NetworkConfig& config);
+// Whether any format, the tooltip's included, names {down} or {up}, so the backend has to sample rates.
+bool ReadsRates(const NetworkConfig& config);
 
 // The Wi-Fi icon for a signal: icons split 0 to 100 evenly, weakest first. The strongest while the signal is unknown.
 const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent);

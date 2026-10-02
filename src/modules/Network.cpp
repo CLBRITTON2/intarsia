@@ -33,6 +33,10 @@ namespace {
         return config;
     }
 
+    bool NamesRate(const std::string& format) {
+        return FormatNames(format, "down") || FormatNames(format, "up");
+    }
+
 } // namespace
 
 Network::Network(NetworkConfig config, const INetwork& network) : IconTextModule(Validated(std::move(config))), _network(network), _showsRates(ShowsRates(Settings())) {}
@@ -81,8 +85,11 @@ ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state)
 }
 
 bool ShowsRates(const NetworkConfig& config) {
-    return std::ranges::any_of(std::array{&config.formatWifi, &config.formatEthernet, &config.formatDisconnected},
-                               [](const std::string* format) { return FormatNames(*format, "down") || FormatNames(*format, "up"); });
+    return std::ranges::any_of(std::array{&config.formatWifi, &config.formatEthernet, &config.formatDisconnected}, [](const std::string* format) { return NamesRate(*format); });
+}
+
+bool ReadsRates(const NetworkConfig& config) {
+    return ShowsRates(config) || (config.tooltip.has_value() && NamesRate(*config.tooltip));
 }
 
 const std::wstring& WifiIcon(const std::vector<std::wstring>& icons, std::optional<std::int32_t> signalPercent) {

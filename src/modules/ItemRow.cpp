@@ -58,7 +58,7 @@ void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, con
                         D2D1_POINT_2F origin) {
     const D2D1_RECT_F placed = Offset(box, origin);
     const BoxStyle    boxStyle{.background = style.background, .border = {}, .radiusDips = style.radiusDips, .padding = style.padding, .shadows = shadows};
-    DrawBox(render.context, *render.brushes, placed, boxStyle, fill);
+    DrawBox(render.context, *render.brushes, *render.boxes, placed, boxStyle, fill);
 }
 
 bool HoveredItem::Set(std::optional<size_t> item) {

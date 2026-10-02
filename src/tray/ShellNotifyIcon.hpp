@@ -93,7 +93,7 @@ class ShellNotifyIcon final : public ITray {
     FailureLog                                 _ownerLog{"tray"};
     FailureLog                                 _forwardLog{"tray"};
     FailureLog                                 _rectLog{"tray"};
-    // Guards _icons and _views.
+    // Guards _icons and _views. Only the tray's thread writes _icons, so it reads them without the lock.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;
     struct View {

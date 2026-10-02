@@ -219,6 +219,7 @@ void Bar::Build(HINSTANCE instance) {
     }
     _surface = std::make_unique<Surface>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     _brushes = std::make_unique<BrushCache>(_surface->Context());
+    _boxes   = std::make_unique<BoxCache>(_surface->Context());
     BuildContexts();
     _boxFades = RestingBoxFades(_modules);
     _tooltip  = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
@@ -377,6 +378,7 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
                          .muted        = {.text = _brushes->Keep(style.muted.text), .icon = _brushes->Keep(style.muted.icon)},
                          .classes      = std::move(classes),
                          .brushes      = _brushes.get(),
+                         .boxes        = _boxes.get(),
                          .axis         = _axis,
                          .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, _axis))};
 }
@@ -578,18 +580,18 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
 }
 
 void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
-    DrawBox(_surface->Context(), *_brushes, box.bounds, style.box, _boxFades.at(box.module).Color(std::chrono::steady_clock::now()));
+    DrawBox(_surface->Context(), *_brushes, *_boxes, box.bounds, style.box, _boxFades.at(box.module).Color(std::chrono::steady_clock::now()));
     box.module->Draw(ContextFor(style), box.contentOrigin);
 }
 
 void Bar::DrawGroup(const PlacedEntry& placed) {
     ID2D1DeviceContext* context = _surface->Context();
     const ModuleStyle&  style   = placed.entry->style;
-    DrawBox(context, *_brushes, placed.box.bounds, style.box, style.box.background);
+    DrawBox(context, *_brushes, *_boxes, placed.box.bounds, style.box, style.box.background);
     // The toggle's box at rest is the group's own, drawn once already with its border and shadows.
     const D2D1_COLOR_F toggle = _boxFades.at(placed.box.module).Color(std::chrono::steady_clock::now());
     if (toggle.a > 0.0f) {
-        DrawBox(context, *_brushes, placed.toggle, style.box, toggle);
+        DrawBox(context, *_brushes, *_boxes, placed.toggle, style.box, toggle);
     }
     placed.box.module->Draw(ContextFor(style), placed.box.contentOrigin);
     context->PushAxisAlignedClip(placed.shown, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -622,7 +624,7 @@ void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayo
         return;
     }
     const BoxStyle& box = _config.style.section.box;
-    DrawBox(_surface->Context(), *_brushes, SectionBounds(layout), box, box.background);
+    DrawBox(_surface->Context(), *_brushes, *_boxes, SectionBounds(layout), box, box.background);
 
     for (const PlacedEntry& placed : entries) {
         if (placed.entry->group != nullptr) {

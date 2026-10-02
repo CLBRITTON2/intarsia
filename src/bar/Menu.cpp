@@ -288,6 +288,7 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     _thumbGrabDips.reset();
     _surface = std::make_unique<Surface>(_graphics, _window.get(), static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
     _brushes = std::make_unique<BrushCache>(_surface->Context());
+    _boxes   = std::make_unique<BoxCache>(_surface->Context());
     _shown   = true;
     Draw();
 
@@ -329,7 +330,7 @@ void Menu::Draw() {
     const D2D1_RECT_F   whole   = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    DrawBox(context, *_brushes, whole, style.box, style.box.background);
+    DrawBox(context, *_brushes, *_boxes, whole, style.box, style.box.background);
     const PixelGrid grid = PixelGridOf(context);
     _surface->ShowBackdrops(BackdropOutlines(style.backdrop, grid, {whole}, style.box), style.backdrop);
     // Whole pixels, so scrolled text stays as sharp as unscrolled text.
@@ -343,7 +344,7 @@ void Menu::Draw() {
         const ItemStyle& item        = *row.style;
         const bool       highlighted = row.entry.has_value() && row.entry == _highlight;
         const BoxStyle   box{.background = item.background, .border = {}, .radiusDips = item.radiusDips, .padding = item.padding, .shadows = item.shadows};
-        DrawBox(context, *_brushes, row.box, box, highlighted ? item.hoverBackground : item.background);
+        DrawBox(context, *_brushes, *_boxes, row.box, box, highlighted ? item.hoverBackground : item.background);
         context->DrawTextLayout(row.textOrigin, row.text.Get(), _brushes->Get(highlighted ? item.hoverColor : item.color));
     }
     context->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -352,7 +353,7 @@ void Menu::Draw() {
     const std::optional<D2D1_RECT_F> thumb     = ThumbRect(_scroll, _track);
     if (thumb.has_value() && scrollbar.widthDips > 0.0f) {
         const BoxStyle box{.background = scrollbar.background, .border = {}, .radiusDips = scrollbar.radiusDips, .padding = {}, .shadows = {}};
-        DrawBox(context, *_brushes, *thumb, box, scrollbar.background);
+        DrawBox(context, *_brushes, *_boxes, *thumb, box, scrollbar.background);
     }
     _surface->EndDrawAndPresent();
 }
@@ -452,6 +453,7 @@ void Menu::ShowTooltip() {
 }
 
 void Menu::ReleaseSurface() {
+    _boxes.reset();
     _brushes.reset();
     _surface.reset();
 }

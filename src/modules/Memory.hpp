@@ -3,6 +3,7 @@
 #include "config/Config.hpp"
 #include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
+#include "modules/Ticks.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -36,4 +37,5 @@ class Memory final : public TextModule {
 
     MemoryUsage                           _usage;
     std::chrono::steady_clock::time_point _sampledAt;
+    SampledTexts                          _texts;
 };

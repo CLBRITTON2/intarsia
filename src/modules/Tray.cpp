@@ -30,9 +30,11 @@ Tray::~Tray() {
 }
 
 bool Tray::Layout(const RenderContext& render) {
-    const bool changed = LayOutItems(render);
+    if (!LayOutItems(render)) {
+        return false;
+    }
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
-    return changed;
+    return true;
 }
 
 bool Tray::LayOutItems(const RenderContext& render) {

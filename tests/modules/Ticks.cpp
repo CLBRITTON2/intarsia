@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <chrono>
+#include <string>
 
 namespace {
 
@@ -27,4 +28,19 @@ TEST(Ticks, ASampleIsDueOncePerIntervalWithSlackForAnEarlyTimer) {
     EXPECT_FALSE(SampleDue(sampledAt, sampledAt + std::chrono::milliseconds(1'949), std::chrono::seconds(2)));
     EXPECT_TRUE(SampleDue(sampledAt, sampledAt + std::chrono::milliseconds(1'950), std::chrono::seconds(2)));
     EXPECT_TRUE(SampleDue(sampledAt, sampledAt + std::chrono::seconds(5), std::chrono::seconds(2)));
+}
+
+TEST(Ticks, EachSpecIsFormattedOncePerSample) {
+    SampledTexts texts;
+    std::int32_t formats = 0;
+    const auto   format  = [&formats] {
+        ++formats;
+        return std::to_wstring(formats);
+    };
+    EXPECT_EQ(texts.Of("{usage}", format), L"1");
+    EXPECT_EQ(texts.Of("{usage}", format), L"1");
+    EXPECT_EQ(texts.Of("{ghz}", format), L"2");
+    texts.Forget();
+    EXPECT_EQ(texts.Of("{usage}", format), L"3");
+    EXPECT_EQ(formats, 3);
 }

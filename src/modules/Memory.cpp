@@ -44,8 +44,12 @@ ModuleText Memory::Format(const std::string& spec) {
     if (SampleDue(_sampledAt, now, Settings().interval)) {
         _usage     = ReadMemoryUsage();
         _sampledAt = now;
+        _texts.Forget();
     }
-    return ModuleText{.icon = Settings().icon, .text = ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))), .state = TextState::Normal, .classIndex = 0};
+    return ModuleText{.icon       = Settings().icon,
+                      .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }),
+                      .state      = TextState::Normal,
+                      .classIndex = 0};
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {

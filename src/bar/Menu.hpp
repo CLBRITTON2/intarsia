@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bar/Box.hpp"
 #include "bar/MenuLister.hpp"
 #include "bar/Tooltip.hpp"
 #include "config/Config.hpp"
@@ -145,6 +146,7 @@ class Menu {
     // Only while shown: Show creates it at the rows' size and Hide releases it.
     std::unique_ptr<Surface>    _surface;
     std::unique_ptr<BrushCache> _brushes;
+    std::unique_ptr<BoxCache>   _boxes;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.
     UniqueOwnedWindow _window;

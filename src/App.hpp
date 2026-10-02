@@ -8,7 +8,7 @@
 #include "modules/CommandPoller.hpp"
 #include "modules/CounterSampler.hpp"
 #include "modules/WindowIcons.hpp"
-#include "network/INetwork.hpp"
+#include "network/IpHelper.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/FileWatcher.hpp"
 #include "platform/Process.hpp"
@@ -95,7 +95,7 @@ class App {
     std::unique_ptr<WindowIcons>     _windowIcons;
     std::unique_ptr<IAudio>          _audioOutput;
     std::unique_ptr<IAudio>          _audioInput;
-    std::unique_ptr<INetwork>        _network;
+    std::unique_ptr<IpHelper>        _network;
     std::unique_ptr<IBattery>        _battery;
     std::unique_ptr<ShellNotifyIcon> _tray;
     // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.

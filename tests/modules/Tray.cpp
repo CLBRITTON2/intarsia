@@ -3,6 +3,7 @@
 #include "../tray/FakeTray.hpp"
 #include "TestStyle.hpp"
 #include "TextOnlyRender.hpp"
+#include "bar/Box.hpp"
 #include "render/BrushCache.hpp"
 #include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
@@ -49,7 +50,9 @@ namespace {
             _brushes           = std::make_unique<BrushCache>(_context.Get());
             _render            = _text.Context();
             _render.context    = _context.Get();
+            _boxes             = std::make_unique<BoxCache>(_context.Get());
             _render.brushes    = _brushes.get();
+            _render.boxes      = _boxes.get();
             _render.foreground = _brushes->Keep(D2D1::ColorF(0xFFFFFF));
             _render.accent     = _brushes->Keep(D2D1::ColorF(0x00FFFF));
             _tray.icons        = {Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false), Icon(4, Pixels(), false)};
@@ -66,6 +69,7 @@ namespace {
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
         Microsoft::WRL::ComPtr<ID2D1Bitmap1>       _target;
         std::unique_ptr<BrushCache>                _brushes;
+        std::unique_ptr<BoxCache>                  _boxes;
         TextOnlyRender                             _text;
         RenderContext                              _render{};
         FakeTray                                   _tray;
