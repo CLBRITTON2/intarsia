@@ -347,15 +347,15 @@ return {
     [System.IO.File]::WriteAllText($path, $config)
 }
 
-# A style that draws every box the bar has: sections, module boxes with hover, items in every state, a border on one
-# side, inset shadows, and a tray that animates as it unfolds when the config shows one (an #id naming no module stops
+# A style that draws every box the bar has: sections and the tooltip over a blurred backdrop, module boxes with hover,
+# items in every state, a border on one side, inset shadows, and a tray that animates as it unfolds when the config shows one (an #id naming no module stops
 # the bar).
 function New-SoakStyle([string] $path, [string[]] $optional) {
     $style = @'
 :root { --foreground: #e0def4; --border: rgba(110, 106, 134, 0.25); }
 * { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
-section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18); }
-tooltip { padding: 6px; background: #1f1d2e; border: 1px solid var(--border); border-radius: 10px; }
+section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18); backdrop-filter: blur brightness(0.8) saturate(140%); }
+tooltip { padding: 6px; background: rgba(31, 29, 46, 0.9); border: 1px solid var(--border); border-radius: 10px; backdrop-filter: blur; }
 .module { padding: 0 8px; border-radius: 8px; }
 .module:hover { background: rgba(64, 61, 82, 0.8); }
 .icon { font-size: 16px; margin-right: 6px; color: #c4a7e7; }

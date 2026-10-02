@@ -44,7 +44,7 @@ return {{
         return std::string(R"(
 * { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
 section { margin: 4px; padding: 3px; background: #191724; }
-module { padding: 4px 8px; }
+.module { padding: 4px 8px; }
 )") + std::string(rules);
     }
 
