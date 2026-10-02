@@ -18,11 +18,15 @@ The retitle scenario runs the windows backend instead, whose titles come only fr
 build\debug\window_sender.exe (tests/soak/WindowSender.cpp), which takes the foreground and retitles itself about 60
 times a second. Leave it in the foreground for the whole run: it fails once another window takes it.
 
+The popup scenario moves the real cursor onto the clock until its tooltip shows and then off the bar, and clicks the
+clock to open its menu and closes it with Escape, so every show makes and drops a tooltip's and a menu's surfaces. It
+fails when too few of either showed. Leave the mouse alone while it runs: it puts the cursor back when it ends.
+
 Run it from an interactive desktop session: the bar needs a desktop to draw on.
 #>
 param(
-    [ValidateSet('idle', 'normal', 'flap', 'reload', 'tray', 'retitle')]
-    [string[]] $Scenario = @('idle', 'normal', 'flap', 'reload', 'tray', 'retitle'),
+    [ValidateSet('idle', 'normal', 'flap', 'reload', 'tray', 'retitle', 'popup')]
+    [string[]] $Scenario = @('idle', 'normal', 'flap', 'reload', 'tray', 'retitle', 'popup'),
     [int] $Seconds = 60,
     # The bar build under test. The test server only builds with the debug preset's tests.
     [ValidateSet('debug', 'release')]
@@ -58,6 +62,10 @@ $barThicknessDips  = 40
 # The window sender aims at 60. Release drew them at about 3.3% of a core, each a title read and a redraw.
 $minRetitlesPerSecond = 40
 $maxRetitleCpuPercent = 6
+# Each popup cycle shows one tooltip and one menu. A show can miss (a tooltip waits out the system's hover time, a
+# menu its command), but most must land.
+$popupCycleSeconds = 2
+$minPopupShowShare = 0.5
 
 Add-Type -Namespace Soak -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr process, uint flags);
@@ -67,6 +75,7 @@ Add-Type -Namespace Soak -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out RECT rect);
 [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 
 [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
@@ -74,6 +83,9 @@ Add-Type -Namespace Soak -Name Native -MemberDefinition @'
 [DllImport("user32.dll", SetLastError = true)] static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
 [DllImport("user32.dll", SetLastError = true)] static extern bool GetMonitorInfoW(IntPtr monitor, ref MONITORINFO info);
 [DllImport("shcore.dll")] static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
+[DllImport("user32.dll", SetLastError = true)] static extern bool GetCursorPos(out POINT point);
+[DllImport("user32.dll", SetLastError = true)] static extern bool SetCursorPos(int x, int y);
+[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
 delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
 [StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int Size; public RECT Monitor; public RECT Work; public uint Flags; }
 public struct MonitorArea { public RECT Bounds; public RECT Work; public uint Dpi; }
@@ -87,6 +99,26 @@ public static RECT WindowRect(IntPtr window) {
         RECT rect;
         if (!GetWindowRect(window, out rect)) { throw new System.ComponentModel.Win32Exception(); }
         return rect;
+    } finally {
+        SetThreadDpiAwarenessContext(previous);
+    }
+}
+
+public static POINT CursorPosition() {
+    IntPtr previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+    try {
+        POINT point;
+        if (!GetCursorPos(out point)) { throw new System.ComponentModel.Win32Exception(); }
+        return point;
+    } finally {
+        SetThreadDpiAwarenessContext(previous);
+    }
+}
+
+public static void PlaceCursor(int x, int y) {
+    IntPtr previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2);
+    try {
+        if (!SetCursorPos(x, y)) { throw new System.ComponentModel.Win32Exception(); }
     } finally {
         SetThreadDpiAwarenessContext(previous);
     }
@@ -122,13 +154,21 @@ function Get-FreePort {
     return $port
 }
 
-# The bar's top-level windows, found by class and owner.
 function Get-BarWindows([int] $processId) {
+    return Get-ProcessWindows $processId 'IntarsiaBar'
+}
+
+function Get-VisibleWindows([int] $processId, [string] $class) {
+    return @(Get-ProcessWindows $processId $class | Where-Object { [Soak.Native]::IsWindowVisible($_) })
+}
+
+# The process's top-level windows of one class.
+function Get-ProcessWindows([int] $processId, [string] $class) {
     $windows = @()
     $window  = [IntPtr]::Zero
     while ($true) {
         # [NullString]: PowerShell turns $null into "" for a string parameter, which would match only untitled windows.
-        $window = [Soak.Native]::FindWindowExW([IntPtr]::Zero, $window, 'IntarsiaBar', [NullString]::Value)
+        $window = [Soak.Native]::FindWindowExW([IntPtr]::Zero, $window, $class, [NullString]::Value)
         if ($window -eq [IntPtr]::Zero) {
             break
         }
@@ -210,6 +250,34 @@ function Send-GroupInput([int] $processId, [int] $second) {
         }
         Send-BarMouse $row.Window $WM_MOUSEMOVE ($toggle + [int] ((20 + ($second * 23) % 100) * $row.Scale)) $row.Y
     }
+}
+
+$WM_KEYDOWN = 0x0100
+$VK_ESCAPE  = 0x1B
+
+# The clock is the center section's only module, so it sits at the middle of the bar. Even seconds close the menu the
+# last click opened and rest the real cursor on the clock, whose tooltip shows after the system's hover time, since a
+# posted move is answered by a leave while the cursor is elsewhere. Odd seconds click the clock to open its menu and
+# move the cursor off the bar. Returns how many tooltips and menus were up when it looked.
+function Send-PopupInput([int] $processId, [int] $second) {
+    $tooltips = 0
+    $menus    = 0
+    foreach ($row in @(Get-BarRows $processId)) {
+        $x = [int] ($row.Right / 2)
+        $bounds = [Soak.Native]::WindowRect($row.Window)
+        if ($second % $popupCycleSeconds -eq 0) {
+            foreach ($menu in @(Get-VisibleWindows $processId 'IntarsiaMenu')) {
+                $menus++
+                [void][Soak.Native]::PostMessageW($menu, $WM_KEYDOWN, [IntPtr] $VK_ESCAPE, [IntPtr]::Zero)
+            }
+            [Soak.Native]::PlaceCursor($bounds.Left + $x, $bounds.Top + $row.Y)
+        } else {
+            $tooltips += @(Get-VisibleWindows $processId 'IntarsiaTooltip').Count
+            Send-BarMouse $row.Window $WM_LBUTTONUP $x $row.Y
+            [Soak.Native]::PlaceCursor($bounds.Left + $x, $bounds.Bottom + [int] (300 * $row.Scale))
+        }
+    }
+    return [pscustomobject]@{ Tooltips = $tooltips; Menus = $menus }
 }
 
 function Format-Rect([Soak.Native+RECT] $rect) {
@@ -347,7 +415,35 @@ return {
     [System.IO.File]::WriteAllText($path, $config)
 }
 
-# A style that draws every box the bar has: sections and the tooltip over a blurred backdrop, module boxes with hover,
+# The retitle modules with a clock whose tooltip shows on hover and whose click opens a two entry menu.
+function New-PopupConfig([string] $path) {
+    $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+    $ping       = 'C:\\Windows\\System32\\PING.EXE'
+    # cmd.exe would keep the backslashes of escaped quotes.
+    $items      = '''{\"items\":[{\"id\":\"one\",\"text\":\"One\"},{\"id\":\"two\",\"text\":\"Two\"}]}'''
+    $config = @"
+return {
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
+    window_manager = "windows",
+    modules_left = { "stats", "title" },
+    modules_center = { "clock" },
+    modules_right = {},
+    layouts = {},
+    modules = {
+        title = { type = "window", max_length = 60, tooltip = "{title}" },
+        clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1, tooltip = "{time:%A %d %B %Y}",
+                  on_click = { menu = { command = { "$powershell", "-NoProfile", "-Command", "$items" }, timeout = 5,
+                                        on_select = { "$ping", "-n", "1" } } } },
+        stats = { type = "group", icon = ">", modules = { "cpu", "memory" } },
+        cpu = { type = "cpu", format = "{usage}%", icon = "", interval = 1 },
+        memory = { type = "memory", format = "{used:.1f}", icon = "", interval = 1 },
+    },
+}
+"@
+    [System.IO.File]::WriteAllText($path, $config)
+}
+
+# A style that draws every box the bar has: sections, the tooltip and the menu over a blurred backdrop, module boxes with hover,
 # items in every state, a border on one side, inset shadows, and a tray that animates as it unfolds when the config shows one (an #id naming no module stops
 # the bar).
 function New-SoakStyle([string] $path, [string[]] $optional) {
@@ -356,6 +452,7 @@ function New-SoakStyle([string] $path, [string[]] $optional) {
 * { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
 section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18); backdrop-filter: blur brightness(0.8) saturate(140%); }
 tooltip { padding: 6px; background: rgba(31, 29, 46, 0.9); border: 1px solid var(--border); border-radius: 10px; backdrop-filter: blur; }
+menu { padding: 4px; background: rgba(31, 29, 46, 0.9); border: 1px solid var(--border); border-radius: 10px; backdrop-filter: blur; }
 .module { padding: 0 8px; border-radius: 8px; }
 .module:hover { background: rgba(64, 61, 82, 0.8); }
 .icon { font-size: 16px; margin-right: 6px; color: #c4a7e7; }
@@ -383,12 +480,14 @@ function Invoke-Scenario([string] $name, [int] $run) {
     New-Item -ItemType Directory -Force $work | Out-Null
     $configPath = Join-Path $work 'config.lua'
     # idle has no custom modules, so its CPU is the bar's own cost of ticking and following GlazeWM.
-    $optional   = if ($name -in @('idle', 'retitle')) { @() } else { @('endless', 'hang', 'fail', 'json') }
+    $optional   = if ($name -in @('idle', 'retitle', 'popup')) { @() } else { @('endless', 'hang', 'fail', 'json') }
     if ($name -eq 'tray') {
         $optional += 'tray'
     }
     if ($name -eq 'retitle') {
         New-RetitleConfig $configPath
+    } elseif ($name -eq 'popup') {
+        New-PopupConfig $configPath
     } else {
         New-SoakConfig $configPath 0 $optional
     }
@@ -402,6 +501,10 @@ function Invoke-Scenario([string] $name, [int] $run) {
     $sender = $null
     $senderStarts = 0
     $retitler = $null
+    $tooltipsSeen = 0
+    $menusSeen    = 0
+    $popupCycles  = 0
+    $savedCursor  = if ($name -eq 'popup') { [Soak.Native]::CursorPosition() } else { $null }
 
     $failures   = [System.Collections.Generic.List[string]]::new()
     $samples    = [System.Collections.Generic.List[object]]::new()
@@ -479,6 +582,15 @@ function Invoke-Scenario([string] $name, [int] $run) {
                     break
                 }
             }
+            # From the warmup on, once the bar's windows are up and in place.
+            if ($name -eq 'popup' -and $second -ge $warmupSeconds) {
+                $seen = Send-PopupInput $bar.Id $second
+                $tooltipsSeen += $seen.Tooltips
+                $menusSeen    += $seen.Menus
+                if ($second % $popupCycleSeconds -eq 1) {
+                    $popupCycles += @(Get-BarWindows $bar.Id).Count
+                }
+            }
             $samples.Add((Get-Sample $bar $clock))
         }
 
@@ -514,7 +626,16 @@ function Invoke-Scenario([string] $name, [int] $run) {
             $expected = ($samples.Count - 6) * $minRetitlesPerSecond
             if ($retitles -lt $expected) { $failures.Add("the window sender reported $retitles retitles, under the $expected of $minRetitlesPerSecond a second") }
         }
+        # A run that shows no popups passes every other check without making a surface.
+        if ($name -eq 'popup' -and $failures.Count -eq 0) {
+            $expected = [int] [math]::Floor($popupCycles * $minPopupShowShare)
+            if ($tooltipsSeen -lt $expected) { $failures.Add("saw $tooltipsSeen tooltips in $popupCycles hovers, under $expected") }
+            if ($menusSeen -lt $expected) { $failures.Add("saw $menusSeen menus after $popupCycles clicks, under $expected") }
+        }
     } finally {
+        if ($null -ne $savedCursor) {
+            [Soak.Native]::PlaceCursor($savedCursor.X, $savedCursor.Y)
+        }
         if ($null -ne $sender -and -not $sender.HasExited) {
             Stop-Process -Id $sender.Id -Force
         }
