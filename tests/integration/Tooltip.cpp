@@ -36,11 +36,22 @@ return {
 
     // Large text, so glyph stems cover whole pixels in the exact color.
     constexpr std::string_view kStyle = R"(
-* { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-#ruler { color: #f39c12; }
-#probe { color: #27ae60; }
-tooltip { color: #3498db; background: #191724; padding: 4px; }
+bar:
+  font: Segoe UI
+  size: 24
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+ruler:
+  color: #f39c12
+probe:
+  color: #27ae60
+tooltip:
+  color: #3498db
+  background: #191724
+  padding: 4
 )";
 
 } // namespace

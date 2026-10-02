@@ -10,7 +10,7 @@
 #include <optional>
 #include <string>
 
-// The default output or input device's volume through format, or format_muted and icon_muted in the module's .muted
+// The default output or input device's volume through format, or format_muted and icon_muted in the module's muted
 // colors while it is muted. A click toggles mute and a scroll changes the volume by step, unless the config binds those
 // inputs to actions. Shows nothing while there is no device of its flow.
 class Audio final : public IconTextModule<AudioConfig> {

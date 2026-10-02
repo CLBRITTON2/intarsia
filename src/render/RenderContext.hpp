@@ -10,7 +10,7 @@
 
 class BoxCache;
 
-// The text and icon colors of one state a module's value can be in, such as a battery's .warning.
+// The text and icon colors of one state a module's value can be in, such as a battery's warning.
 struct StateBrushes {
     ID2D1SolidColorBrush* text;
     ID2D1SolidColorBrush* icon;

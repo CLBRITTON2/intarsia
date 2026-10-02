@@ -8,7 +8,7 @@ intarsia runs on Windows 10 1903 or later. It has no dependencies.
    `%LOCALAPPDATA%\Programs`.
 2. Copy a starter config to `%USERPROFILE%\.config\intarsia\`:
    - `config\windows`: a plain bar that works on any machine.
-   - `config\glazewm`: a bar for GlazeWM with workspaces. Its files comment every key and selector.
+   - `config\glazewm`: a bar for GlazeWM with workspaces. Its files comment every key.
 3. Start `intarsia.exe`.
 
 ```powershell
@@ -20,7 +20,7 @@ Copy-Item "$app\config\windows\*" "$env:USERPROFILE\.config\intarsia"
 Start-Process "$app\intarsia.exe"
 ```
 
-The bar reads `config.lua` for what it shows and `style.css` for how it looks. Saving either one reloads the bar.
+The bar reads `config.lua` for what it shows and `style.conf` for how it looks. Saving either one reloads the bar.
 
 ## From source
 
@@ -58,7 +58,7 @@ is. Check `CHANGELOG.md` for changed settings first.
 
 | Option | Effect |
 | --- | --- |
-| `--config <path>` | Read another `config.lua`, and the `style.css` beside it. |
+| `--config <path>` | Read another `config.lua`, and the `style.conf` beside it. |
 | `--log <path>` | Log somewhere other than `%LOCALAPPDATA%\intarsia\intarsia.log`. |
 | `--glazewm-port <port>` | Connect to GlazeWM on a port other than 6123. |
 
@@ -66,7 +66,7 @@ is. Check `CHANGELOG.md` for changed settings first.
 
 **An error box appears.** The config or style has a mistake, and the message names the file and line. The bar is
 strict: a missing key, an unknown key, a module listed but not defined, a module defined but not shown, or a property
-a selector doesn't take all stop it. A bad save while it runs also stops it, so fix the file and start it again.
+a block doesn't take all stop it. A bad save while it runs also stops it, so fix the file and start it again.
 
 **Nothing appears.** Check `Get-Process intarsia`, then the end of the log:
 

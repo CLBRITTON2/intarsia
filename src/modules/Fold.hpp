@@ -8,7 +8,7 @@
 // How far a fold has opened and its toggle has turned at one moment.
 struct FoldPosition {
     float reveal;       // 0 folded, 1 unfolded
-    float angleDegrees; // from the .icon rotation folded to the .expanded .icon one unfolded
+    float angleDegrees; // from the icon rotation folded to the expanded icon one unfolded
 };
 
 // What a toggle folds away and unfolds again, starting folded. It unfolds over the module's width transition and its

@@ -444,32 +444,88 @@ return {
 }
 
 # A style that draws every box the bar has: sections, the tooltip and the menu over a blurred backdrop, module boxes with hover,
-# items in every state, a border on one side, inset shadows, and a tray that animates as it unfolds when the config shows one (an #id naming no module stops
+# items in every state, a border on one side, shadows, and a tray that animates as it unfolds when the config shows one (a block naming no module stops
 # the bar).
 function New-SoakStyle([string] $path, [string[]] $optional) {
     $style = @'
-:root { --foreground: #e0def4; --border: rgba(110, 106, 134, 0.25); }
-* { font-family: "Segoe UI"; font-size: 13px; color: var(--foreground); }
-section { margin: 4px; padding: 3px; background: rgba(25, 23, 36, 0.9); border: 1px solid var(--border); border-radius: 12px; box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18); backdrop-filter: blur brightness(0.8) saturate(140%); }
-tooltip { padding: 6px; background: rgba(31, 29, 46, 0.9); border: 1px solid var(--border); border-radius: 10px; backdrop-filter: blur; }
-menu { padding: 4px; background: rgba(31, 29, 46, 0.9); border: 1px solid var(--border); border-radius: 10px; backdrop-filter: blur; }
-.module { padding: 0 8px; border-radius: 8px; }
-.module:hover { background: rgba(64, 61, 82, 0.8); }
-.icon { font-size: 16px; margin-right: 6px; color: #c4a7e7; }
-.alert { color: #eb6f92; }
-.item { padding: 2px 6px; margin: 0 1px; border-radius: 8px; }
-.item.focused { color: #191724; background: #9ccfd8; font-weight: bold; box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), inset 0 -1px 1px rgba(0, 0, 0, 0.25); }
-.item.empty { color: #908caa; }
-#stats { border-right: 1px solid var(--border); transition: width 300ms ease-out; }
-#stats .icon { transition: transform 200ms ease; }
-#stats.expanded .icon { transform: rotate(90deg); }
+vars:
+  foreground: #e0def4
+  border: #6e6a86 25%
+
+bar:
+  font: Segoe UI
+  size: 13
+  color: $foreground
+
+section:
+  margin: 4
+  padding: 3
+  background: #191724 90%
+  border: 1 $border
+  radius: 12
+  shadow: 0 1 2 #ffffff 18%
+  blur: on
+  brightness: 0.8
+  saturate: 1.4
+
+tooltip:
+  padding: 6
+  background: #1f1d2e 90%
+  border: 1 $border
+  radius: 10
+  blur: on
+
+menu:
+  padding: 4
+  background: #1f1d2e 90%
+  border: 1 $border
+  radius: 10
+  blur: on
+
+module:
+  padding: 0 8
+  radius: 8
+  hover:
+    background: #403d52 80%
+  icon:
+    size: 16
+    margin-right: 6
+    color: #c4a7e7
+  alert:
+    color: #eb6f92
+  item:
+    padding: 2 6
+    margin: 0 1
+    radius: 8
+    focused:
+      color: #191724
+      background: #9ccfd8
+      weight: bold
+      shadow: 0 1 1 #ffffff 35%, 0 -1 1 #000000 25%
+    empty:
+      color: #908caa
+
+stats:
+  border-right: 1 $border
+  transition: width 300ms ease-out
+  icon:
+    transition: rotate 200ms ease
+  expanded:
+    icon:
+      rotate: 90
 '@
     if ('tray' -in $optional) {
         $style += "`n" + @'
-#tray { transition: width 300ms ease-out; }
-#tray .icon { transition: transform 200ms ease; }
-#tray.expanded .icon { transform: rotate(180deg); }
-#tray .item.toggle { padding: 2px 10px; }
+tray:
+  transition: width 300ms ease-out
+  icon:
+    transition: rotate 200ms ease
+  expanded:
+    icon:
+      rotate: 180
+  item:
+    toggle:
+      padding: 2 10
 '@
     }
     [System.IO.File]::WriteAllText($path, $style)
@@ -491,7 +547,7 @@ function Invoke-Scenario([string] $name, [int] $run) {
     } else {
         New-SoakConfig $configPath 0 $optional
     }
-    New-SoakStyle (Join-Path $work 'style.css') $optional
+    New-SoakStyle (Join-Path $work 'style.conf') $optional
     $port       = Get-FreePort
     $serverName = if ($name -eq 'flap') { 'flap' } else { 'normal' }
     $barLog     = Join-Path $work 'intarsia.log'

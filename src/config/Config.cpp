@@ -401,6 +401,15 @@ namespace {
     }
 
     // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
+    // A module's style block is named for it, beside the style's own top-level blocks.
+    void RejectReservedModuleNames(const TableReader& definitions) {
+        for (const std::string& name : definitions.Keys()) {
+            if (IsReservedModuleName(name)) {
+                throw definitions.Error(std::format("{} names a block of style.conf's own: give the module another name", definitions.KeyPath(name)));
+            }
+        }
+    }
+
     void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
         std::vector<const Sections<ModuleInstance>*> lists{&config.modules};
         for (const LayoutConfig& layout : config.layouts) {
@@ -556,7 +565,7 @@ namespace {
         return ReadTextFields(module);
     }
 
-    // Each a CSS class name that style.css writes as .name, none of intarsia's own, none twice.
+    // Each a block name a module's style.conf block holds, none of the blocks every module holds, none twice.
     std::vector<std::string> ReadCustomClasses(const TableReader& module, std::string_view key) {
         std::vector<std::string> classes = module.StringList(key);
         for (size_t index = 0; index < classes.size(); ++index) {
@@ -791,7 +800,7 @@ std::filesystem::path DefaultConfigPath() {
 }
 
 std::filesystem::path StylePath(const std::filesystem::path& configPath) {
-    return configPath.parent_path() / L"style.css";
+    return configPath.parent_path() / L"style.conf";
 }
 
 Config LoadConfig(const std::filesystem::path& path) {
@@ -850,10 +859,11 @@ Config LoadConfig(const std::filesystem::path& path) {
     const StyleSheet            sheet       = ParseStyleSheet(ReadFile(stylePath, "style"), ToUtf8(stylePath.wstring()));
     StyleConfig                 style       = ResolveBarStyle(sheet);
     const TableReader           definitions = root.Table("modules");
-    Sections<ModuleInstance>    modules     = ReadSections(root, definitions, sheet, style);
-    std::vector<LayoutConfig>   layouts     = ReadLayouts(root, definitions, sheet, style);
+    RejectReservedModuleNames(definitions);
+    Sections<ModuleInstance>  modules = ReadSections(root, definitions, sheet, style);
+    std::vector<LayoutConfig> layouts = ReadLayouts(root, definitions, sheet, style);
 
-    const TableReader           bar = root.Table("bar");
+    const TableReader         bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "layer", "space", "thickness"});
     const BarConfig barConfig{
         .edge = ParseKeyword(bar, "edge", kEdges), .layer = ParseKeyword(bar, "layer", kLayers), .space = ParseKeyword(bar, "space", kSpaces), .thicknessDips = BarThickness(bar)};
@@ -865,7 +875,7 @@ Config LoadConfig(const std::filesystem::path& path) {
                   .layouts       = std::move(layouts)};
     RejectUnshownModules(definitions, config);
     RequireMembersInOneGroup(definitions, config);
-    RequireKnownIds(sheet, definitions.Keys());
+    RequireKnownModules(sheet, definitions.Keys());
     std::vector<DeclaredClasses> declared;
     ForEachModuleInConfig(config, [&declared](const ModuleInstance& instance) {
         if (const auto* custom = std::get_if<CustomConfig>(&instance.settings)) {

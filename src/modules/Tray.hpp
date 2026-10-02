@@ -15,9 +15,9 @@
 #include <vector>
 
 // The notification area: one item per icon apps show, in the order they added them, then a toggle item that folds
-// them away or shows them again. Starts folded, showing the toggle alone. Icons are in the module's .item style at its
-// .icon font-size, and the toggle in its .item.toggle style with its text as an icon. The icons unfold over the module's width transition,
-// revealed from the start as the box grows along the bar, and the toggle turns to the .expanded icon's rotation over the icon's.
+// them away or shows them again. Starts folded, showing the toggle alone. Icons are in the module's item style at its
+// icon size, and the toggle in its item toggle style with its text as an icon. The icons unfold over the module's width transition,
+// revealed from the start as the box grows along the bar, and the toggle turns to the expanded icon's rotation over the icon's.
 // Clicking an icon reaches its app as a click on the taskbar's icon would, and resting on one shows its tooltip.
 class Tray final : public IModule {
   public:

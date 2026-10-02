@@ -39,7 +39,7 @@ struct BarConfig {
     float thicknessDips;
 };
 
-// Space inside or around a box on screen, as CSS's two-value padding and margin: y above and below, x left and right.
+// Space inside or around a box on screen: y above and below, x left and right.
 struct Spacing {
     float yDips;
     float xDips;
@@ -59,7 +59,7 @@ struct Border {
 };
 
 // One box-shadow, always inset: the inside edge of the box's border, moved by the offset and shrunk by spread, casts
-// it onto the box blurred over blur, as CSS draws it.
+// it onto the box blurred over blur.
 struct InsetShadow {
     float        xDips;
     float        yDips;
@@ -74,11 +74,11 @@ struct BoxStyle {
     Border                   border;
     float                    radiusDips; // at most half the box's shorter side
     Spacing                  padding;
-    std::vector<InsetShadow> shadows; // the first on top, as CSS stacks them
+    std::vector<InsetShadow> shadows; // the first on top
 };
 
-// backdrop-filter: what shows through a box's background. Blur is the system's own, whose radius it alone sets, and
-// shows nothing while the system's transparency effects are off. brightness() and saturate() tone it as CSS's filters.
+// What shows through a box's background. Blur is the system's own, whose radius it alone sets, and shows nothing while
+// the system's transparency effects are off. brightness and saturate tone it.
 struct Backdrop {
     bool  blur;       // none shows nothing behind the background
     float brightness; // 0 is black, 1 leaves the blur as it is
@@ -99,7 +99,7 @@ struct TooltipStyle {
     Backdrop     backdrop;
 };
 
-// CSS's timing functions, each a cubic Bézier from (0, 0) to (1, 1).
+// Timing functions, each a cubic Bézier from (0, 0) to (1, 1).
 enum class TimingFunction : std::uint8_t {
     Linear,
     Ease,
@@ -108,7 +108,7 @@ enum class TimingFunction : std::uint8_t {
     EaseInOut
 };
 
-// How a change of one property plays out, as CSS's transition. A zero duration (transition: none) changes at once.
+// How a change of one property plays out. A zero duration (transition: none) changes at once.
 struct Transition {
     std::chrono::milliseconds duration;
     TimingFunction            timing;
@@ -120,7 +120,7 @@ struct IconStyle {
     float        sizeDips; // also the size of a window's icon in the windows module
     D2D1_COLOR_F color;
     float        gapDips;         // between the icon and the text after it
-    float        rotationDegrees; // transform: rotate(), clockwise about the icon's center, a tray's or group's only
+    float        rotationDegrees; // clockwise about the icon's center, a tray's or group's only
     Transition   transition;      // of the rotation
 };
 
@@ -133,7 +133,7 @@ struct ItemStyle {
     Spacing                  margin; // x on each side of the box, so two items side by side are 2x apart
     float                    radiusDips;
     std::vector<InsetShadow> shadows;
-    // The item under the cursor, from .item:hover rules.
+    // The item under the cursor, from item > hover blocks.
     D2D1_COLOR_F hoverColor;
     D2D1_COLOR_F hoverBackground;
     // How the item fades into this style's colors, from the hover or another state.
@@ -141,7 +141,7 @@ struct ItemStyle {
     Transition colorTransition;
 };
 
-// The thumb a menu draws beside its entries while they overflow its box, from menu .scrollbar.
+// The thumb a menu draws beside its entries while they overflow its box, from menu > scrollbar.
 struct ScrollbarStyle {
     float        widthDips; // 0 draws none, and the entries still scroll by wheel and arrow keys
     D2D1_COLOR_F background;
@@ -149,7 +149,7 @@ struct ScrollbarStyle {
     Spacing      margin; // x on each side of the thumb, y at each end of its track
 };
 
-// A popup menu's box and its entries (menu .item), the entry the listing marks active from menu .item.active rules.
+// A popup menu's box and its entries (menu > item), the entry the listing marks active from menu > item > active.
 // The entry under the cursor or picked with the arrow keys takes its style's hover colors.
 struct MenuStyle {
     BoxStyle             box;
@@ -162,7 +162,7 @@ struct MenuStyle {
     ScrollbarStyle       scrollbar;
 };
 
-// What style.css sets for the whole bar. Modules inherit the font and color.
+// What style.conf sets for the whole bar. Modules inherit the font and color.
 struct StyleConfig {
     std::wstring font;
     float        fontSizeDips;
@@ -178,13 +178,13 @@ struct StateColors {
     D2D1_COLOR_F icon;
 };
 
-// A class a custom module declares, as its style colors it (#weather.sunny, #weather.sunny .icon).
+// A class a custom module declares, as its style colors it (weather > sunny, weather > sunny > icon).
 struct ClassColors {
     std::string name;
     StateColors colors;
 };
 
-// One module's style, cascaded from every style.css rule that matches it.
+// One module's style, from its own style.conf block over the module block.
 struct ModuleStyle {
     BoxStyle     box;
     Spacing      margin;               // around the box, which it shrinks across the bar and spaces from its neighbours along it
@@ -192,10 +192,10 @@ struct ModuleStyle {
     Transition   backgroundTransition; // between the background and the hover
     D2D1_COLOR_F color;
     D2D1_COLOR_F alertColor; // text in a state that needs attention, such as a failed command
-    // A battery discharging at or under warning_at (.warning) and critical_at (.critical).
+    // A battery discharging at or under warning_at (warning) and critical_at (critical).
     StateColors warning;
     StateColors critical;
-    StateColors muted; // an audio output that is muted (.muted)
+    StateColors muted; // an audio output that is muted
     // A custom module's declared classes, in the order its classes key lists them.
     std::vector<ClassColors> classes;
     IconStyle                icon;
@@ -205,9 +205,9 @@ struct ModuleStyle {
     ItemStyle focused;
     ItemStyle occupied;
     ItemStyle empty;
-    ItemStyle toggle; // a tray's toggle, from .item.toggle rules over its .item rules
+    ItemStyle toggle; // a tray's toggle, from item > toggle over item
     // A tray's or group's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
-    // (.expanded).
+    // (expanded).
     Transition transition;
     float      expandedIconRotationDegrees;
 };
@@ -230,7 +230,7 @@ enum class ModuleKind : std::uint8_t {
     Group
 };
 
-// A module type as the config's type key and style.css's type selectors write it.
+// A module type as the config's type key writes it.
 struct ModuleTypeName {
     std::string_view name;
     ModuleKind       kind;
@@ -388,7 +388,7 @@ struct BatteryConfig {
     std::vector<std::wstring>  icons; // emptiest to fullest while discharging, the range split evenly between them
     std::wstring               iconCharging;
     std::wstring               iconPlugged;
-    // Discharging at or under these charges draws the module in .warning, then .critical, colors.
+    // Discharging at or under these charges draws the module in warning, then critical, colors.
     std::int32_t  warningAtPercent;
     std::int32_t  criticalAtPercent; // under warningAtPercent
     ModuleActions actions;
@@ -471,11 +471,11 @@ class ConfigError : public std::runtime_error {
 // %USERPROFILE%\.config\intarsia\config.lua
 std::filesystem::path DefaultConfigPath();
 
-// style.css beside the config.
+// style.conf beside the config.
 std::filesystem::path StylePath(const std::filesystem::path& configPath);
 
 // Runs the file as Lua and reads the table it returns, then styles its modules from StylePath. Every config key is
-// required, and unknown keys, selectors and properties are rejected.
+// required, and unknown keys, blocks and properties are rejected.
 Config LoadConfig(const std::filesystem::path& path);
 
 // The sections of the last layout whose minimum edgeLengthDips reaches, or the config's own lists when none does.

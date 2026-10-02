@@ -16,7 +16,7 @@
 #include <vector>
 
 // One icon per window on the displayed workspace of this bar's monitor, in the window manager's order, each an item in
-// the module's .item style, .item.focused for the focused one. The icon is the module's .icon font-size. A click
+// the module's item style, item focused for the focused one. The icon is the module's icon size. A click
 // focuses the window under it.
 class WindowList final : public IModule {
   public:

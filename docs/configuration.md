@@ -1,7 +1,7 @@
 # Configuration
 
 The bar reads `%USERPROFILE%\.config\intarsia\config.lua`, a Lua file that returns one table. Appearance lives in
-`style.css` instead (see [Styling](styling.md)).
+`style.conf` instead (see [Styling](styling.md)).
 
 Every key listed here is required unless it's marked optional, and unknown keys are errors. A mistake stops the bar
 with a message naming the line.
@@ -66,7 +66,7 @@ A monitor uses the last layout it qualifies for, so list them in increasing `min
 ## modules
 
 Each entry is a name you choose and a table with a `type`. You can define the same type several times under different
-names, and `style.css` can target each one by name (`#work_clock`).
+names, and `style.conf` styles each one in a block named after it (`work_clock:`).
 
 ### Common keys
 
@@ -225,7 +225,7 @@ battery = {
 
 - `plugged` means on AC but not charging (full, or held by a charge limit).
 - `icons` runs from emptiest to fullest and is used on battery.
-- At or below `warning_at` and `critical_at` percent on battery, the module takes its `.warning` or `.critical` style.
+- At or below `warning_at` and `critical_at` percent on battery, the module takes its `warning` or `critical` style.
   `critical_at` must be below `warning_at`.
 - `{capacity}` is a percent. `{time}` is time left as `1:05`, empty until Windows estimates it. `{health}` is current
   full capacity against design capacity, empty if the battery doesn't report it.
@@ -287,8 +287,8 @@ These need `window_manager = "glazewm"`.
 
 | Module | Shows |
 | --- | --- |
-| `{ type = "workspaces" }` | One item per workspace on the monitor (`.focused`, `.occupied`, `.empty`). Click to switch. Shows why when GlazeWM is disconnected. |
-| `{ type = "windows" }` | One icon per window on the current workspace (`.focused`). Click to focus. |
+| `{ type = "workspaces" }` | One item per workspace on the monitor (`focused`, `occupied`, `empty`). Click to switch. Shows why when GlazeWM is disconnected. |
+| `{ type = "windows" }` | One icon per window on the current workspace (`focused`). Click to focus. |
 | `{ type = "binding_mode" }` | Each active binding mode's name. Nothing when none is active. |
 | `{ type = "tiling_direction", horizontal = "\u{E8AB}", vertical = "\u{E8CB}" }` | The next tiling direction, as one of the two icons. Click to flip it. |
 
@@ -296,4 +296,4 @@ These need `window_manager = "glazewm"`.
 
 The starter configs use Segoe MDL2 Assets, which ships with Windows (Segoe Fluent Icons on Windows 11 has the same
 codes). Look up codes in `charmap` and write `U+E823` as `"\u{E823}"`. Any installed font works, Nerd Fonts included.
-Set the font on `.icon` in `style.css`.
+Set the font in an `icon` block in `style.conf`.

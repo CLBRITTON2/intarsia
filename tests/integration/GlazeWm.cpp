@@ -41,11 +41,22 @@ return {
     }
 
     constexpr std::string_view kStyle = R"(
-* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-.module { padding: 0 8px; }
-.item { padding: 2px 6px; margin: 0 1px; }
-.item.focused { color: #191724; background: #9ccfd8; }
+bar:
+  font: Segoe UI
+  size: 13
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+module:
+  padding: 0 8
+  item:
+    padding: 2 6
+    margin: 0 1
+    focused:
+      color: #191724
+      background: #9ccfd8
 )";
 
     // The ids the test server gives the windows it lists, in its order (tests/support/GlazeWmServer.cpp).
@@ -71,10 +82,20 @@ return {
     constexpr std::uint32_t    kFocusedColor = 0x2E86C1;
 
     constexpr std::string_view kFocusedStyle = R"(
-* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-.item { padding: 2px 6px; margin: 0 1px; }
-.item.focused { background: #2e86c1; }
+bar:
+  font: Segoe UI
+  size: 13
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+module:
+  item:
+    padding: 2 6
+    margin: 0 1
+    focused:
+      background: #2e86c1
 )";
 
     constexpr std::string_view kWorkspacesConfig = R"(
@@ -94,9 +115,17 @@ return {
 
     // Large text, so glyph stems cover whole pixels in the exact color.
     constexpr std::string_view kAlertStyle = R"(
-* { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-.alert { color: #e74c3c; }
+bar:
+  font: Segoe UI
+  size: 24
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+module:
+  alert:
+    color: #e74c3c
 )";
 
     // The test server shows the binding mode "resize" and the vertical direction while the focus index is odd.
@@ -119,29 +148,59 @@ return {
     constexpr std::uint32_t    kTilingColor = 0x2E86C1;
 
     constexpr std::string_view kModesStyle = R"(
-* { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-binding_mode .item { background: #f39c12; }
-#tiling { background: #2e86c1; }
+bar:
+  font: Segoe UI
+  size: 24
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+modes:
+  item:
+    background: #f39c12
+tiling:
+  background: #2e86c1
 )";
 
     constexpr std::uint32_t    kEmptyColor = 0xF39C12;
 
     constexpr std::string_view kStatesStyle = R"(
-* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-.item { padding: 2px 6px; margin: 0 1px; }
-.item.empty { background: #f39c12; }
-.item.focused { background: #2e86c1; }
+bar:
+  font: Segoe UI
+  size: 13
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+module:
+  item:
+    padding: 2 6
+    margin: 0 1
+    empty:
+      background: #f39c12
+    focused:
+      background: #2e86c1
 )";
 
     // A tiling module the rejecting server never gives a direction, styled so any drawing of it shows.
     constexpr std::string_view  kRejectedStyle = R"(
-* { font-family: "Segoe UI"; font-size: 13px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-.module { padding: 0 8px; }
-.item { padding: 2px 6px; margin: 0 1px; }
-#tiling { background: #2e86c1; }
+bar:
+  font: Segoe UI
+  size: 13
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+module:
+  padding: 0 8
+  item:
+    padding: 2 6
+    margin: 0 1
+tiling:
+  background: #2e86c1
 )";
 
     std::optional<std::int32_t> TilingSpan(const integration::RunningBar& bar) {

@@ -10,7 +10,7 @@
 #include <string>
 
 // A group's toggle: its icon, which folds the group's members away or unfolds them after it. Starts folded. The bar
-// owns and places the members, widening the group's box by Revealed() of theirs, and the toggle turns to the .expanded
+// owns and places the members, widening the group's box by Revealed() of theirs, and the toggle turns to the expanded
 // icon's rotation over the icon's transition.
 class Group final : public IModule {
   public:

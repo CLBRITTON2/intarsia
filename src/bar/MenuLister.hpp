@@ -19,7 +19,7 @@
 struct MenuEntry {
     std::string                id; // the argument on_select gets when the entry is picked
     std::string                text;
-    bool                       active;  // drawn in menu .item.active colors, such as the profile already connected
+    bool                       active;  // drawn in the menu item active block colors, such as the profile already connected
     std::optional<std::string> tooltip; // shown beside the menu while the cursor rests on the entry
 
     bool                       operator==(const MenuEntry&) const = default;

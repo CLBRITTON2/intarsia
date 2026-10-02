@@ -2,75 +2,49 @@
 
 #include "config/Config.hpp"
 
-#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
-// What a selector styles, from its last part.
-enum class StyleTarget : std::uint8_t {
-    Bar,          // *: the bar-wide font and color
-    Section,      // section
-    Tooltip,      // tooltip
-    Module,       // a module's box: by type (clock), id (its name in the config, #time) or .module, with a state or :hover
-    Icon,         // .icon, alone or inside a module selector
-    Item,         // .item with an optional .focused, .occupied, .empty or .toggle and :hover, alone or inside a module selector
-    Menu,         // menu
-    MenuItem,     // menu .item with an optional .active and :hover
-    MenuScrollbar // menu .scrollbar
-};
-
-// One part of a selector, as workspaces, #cpu.alert or .item.focused.
-struct Compound {
-    std::string              type;
-    std::string              id;
-    std::vector<std::string> classes;
-    bool                     hover;
-};
-
-struct Selector {
-    std::vector<Compound>        compounds; // one, or a module then its .icon or .item, or menu then .item
-    StyleTarget                  target;
-    std::array<std::uint32_t, 3> specificity; // ids, then classes and :hover, then types, as CSS ranks them
-};
-
-struct Declaration {
-    std::string   property;
-    std::string   value; // var() already replaced
-    std::uint32_t line;
-};
-
-struct StyleRule {
-    Selector                 selector;
-    std::vector<Declaration> declarations;
-    std::uint32_t            line;
+// One line of style.conf: a property (key: value), or a block (key:) holding the lines indented beneath it.
+struct StyleNode {
+    std::string            key;
+    std::string            value; // $names already replaced, empty for a block
+    std::uint32_t          line;
+    std::vector<StyleNode> children;
 };
 
 struct StyleSheet {
     std::string            source; // the file, for error messages
-    std::vector<StyleRule> rules;  // one per selector of a selector list, in file order
+    std::vector<StyleNode> blocks; // every top-level block but vars, in file order
 };
 
-// A subset of CSS: rules of simple selectors, :root custom properties read through var(), and /* comments */.
-// Everything outside the subset is a ConfigError naming the line, never a rule that silently does nothing.
+// Blocks of key: value lines nested by two-space indents, with // comments and $names from the vars block. Every line
+// is checked against the block it is in, and anything outside the format is a ConfigError naming the line, never a
+// line that silently does nothing.
 StyleSheet ParseStyleSheet(std::string_view text, std::string source);
 
-// The * rules, which must set font-family, font-size and color, and the section, tooltip and menu rules.
+// The bar block, which must set font, size and color, and the section, tooltip and menu blocks.
 StyleConfig ResolveBarStyle(const StyleSheet& sheet);
 
-// Every rule matching one module, by specificity and then file order, as CSS cascades. Color and font inherit from the
-// bar, and the icon's and items' colors from the module. classes are those a custom module declares, colored in turn.
+// The block named for the module over the module block, each one's states over both one's base. Color, font and size
+// that neither sets inherit from the bar, and the icon's and items' color from the module. classes are those a custom
+// module declares, each a block of the module's own that colors it.
 ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes);
 
-// Every #id names a module the config defines, so a misspelled name is an error rather than a rule that never applies.
-void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& names);
+// Every top-level block that is not bar, section, module, tooltip or menu names a module the config defines, so a
+// misspelled name is an error rather than a block that never applies.
+void RequireKnownModules(const StyleSheet& sheet, const std::vector<std::string>& names);
 
-// Letters, digits, '_' and '-': a CSS identifier's characters, which module and class names are written in.
+// Whether name is a top-level block of the style's own (bar, section ...), which a module's name would collide with.
+bool IsReservedModuleName(std::string_view name);
+
+// Letters, digits, '_' and '-': what module names, class names and style keys are written in.
 bool IsIdentCharacter(char character);
 
-// Whether name is one of the classes intarsia styles itself (.module, .alert, .icon ...), which a custom module cannot
-// declare.
+// Whether name is a block every module may hold (icon, item, hover ...), which a custom module's class would collide
+// with.
 bool IsStyledClass(std::string_view name);
 
 // The classes one custom module declares.
@@ -79,6 +53,6 @@ struct DeclaredClasses {
     std::vector<std::string> classes;
 };
 
-// Every class a rule names that intarsia does not style itself must be one a custom module declares and the rule
-// matches, so a misspelled class is an error rather than a rule that never applies.
+// Every class block under module must be one some custom module declares, so a misspelled class is an error rather
+// than a block that never applies. A module's own block checks its classes as it resolves.
 void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<DeclaredClasses>& declared);

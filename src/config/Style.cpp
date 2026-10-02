@@ -8,9 +8,13 @@
 #include <cmath>
 #include <cstdint>
 #include <format>
+#include <functional>
+#include <initializer_list>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -21,7 +25,7 @@
 namespace {
 
     constexpr D2D1_COLOR_F     kTransparent{.r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 0.0f};
-    constexpr std::string_view kSpace = " \t\r\n";
+    constexpr std::string_view kSpace = " \r";
 
     ConfigError                StyleError(std::string_view source, std::uint32_t line, std::string_view message) {
         return ConfigError(std::format("{}:{}: {}", source, line, message));
@@ -35,54 +39,12 @@ namespace {
         return text.substr(first, text.find_last_not_of(kSpace) - first + 1);
     }
 
-    std::uint32_t LineAt(std::string_view text, size_t offset) {
-        return static_cast<std::uint32_t>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(offset), '\n')) + 1;
-    }
-
-    // Comments become spaces, newlines kept, so every offset keeps its line.
-    std::string BlankComments(std::string_view text, std::string_view source) {
-        std::string blanked(text);
-        size_t      start = blanked.find("/*");
-        while (start != std::string::npos) {
-            const size_t end = blanked.find("*/", start + 2);
-            if (end == std::string::npos) {
-                throw StyleError(source, LineAt(text, start), "this /* comment is never closed with */");
-            }
-            std::replace_if(
-                blanked.begin() + static_cast<std::ptrdiff_t>(start), blanked.begin() + static_cast<std::ptrdiff_t>(end + 2), [](char character) { return character != '\n'; },
-                ' ');
-            start = blanked.find("/*", end + 2);
-        }
-        return blanked;
-    }
-
-    // The first of stops at or after start that is outside quotes and parentheses, or npos.
-    size_t FindOutside(std::string_view text, size_t start, std::string_view stops) {
-        char         quote = 0;
-        std::int32_t depth = 0;
-        for (size_t index = start; index < text.size(); ++index) {
-            const char character = text[index];
-            if (quote != 0) {
-                quote = character == quote ? 0 : quote;
-            } else if (character == '"' || character == '\'') {
-                quote = character;
-            } else if (character == '(') {
-                ++depth;
-            } else if (character == ')') {
-                --depth;
-            } else if (depth == 0 && stops.find(character) != std::string_view::npos) {
-                return index;
-            }
-        }
-        return std::string_view::npos;
-    }
-
-    // Splits on separator outside quotes and parentheses, trimming each part and dropping empty ones.
-    std::vector<std::string_view> SplitOutside(std::string_view text, std::string_view separators) {
+    // Splits on any of separators, trimming each part and dropping empty ones.
+    std::vector<std::string_view> Split(std::string_view text, std::string_view separators) {
         std::vector<std::string_view> parts;
         size_t                        start = 0;
         while (start <= text.size()) {
-            const size_t           end  = FindOutside(text, start, separators);
+            const size_t           end  = text.find_first_of(separators, start);
             const std::string_view part = Trim(text.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start));
             if (!part.empty()) {
                 parts.push_back(part);
@@ -93,6 +55,16 @@ namespace {
             start = end + 1;
         }
         return parts;
+    }
+
+    // The words from index on, rejoined by single spaces.
+    std::string JoinFrom(const std::vector<std::string_view>& words, size_t index) {
+        std::string joined;
+        for (size_t word = index; word < words.size(); ++word) {
+            joined += joined.empty() ? "" : " ";
+            joined += words[word];
+        }
+        return joined;
     }
 
     // from_chars also reads inf and nan, which every range check below would let through.
@@ -112,98 +84,34 @@ namespace {
             return {};
         }
         std::vector<Value> values;
-        for (const std::string_view entry : SplitOutside(text, ",")) {
+        for (const std::string_view entry : Split(text, ",")) {
             values.push_back(readEntry(entry));
         }
-        size_t separators = 0;
-        for (size_t comma = FindOutside(text, 0, ","); comma != std::string_view::npos; comma = FindOutside(text, comma + 1, ",")) {
-            ++separators;
-        }
-        if (values.empty() || separators != values.size() - 1) {
+        if (values.empty() || static_cast<size_t>(std::ranges::count(text, ',')) != values.size() - 1) {
             throw std::invalid_argument(std::string(form));
         }
         return values;
     }
 
-    // What a declaration's value is checked and read as.
-    enum class ValueKind : std::uint8_t {
-        Color,
-        Length,
-        PositiveLength,
-        Spacing,
-        Family,
-        Weight,
-        Transition,
-        Rotation,
-        Shadows,
-        Backdrop
-    };
-
-    struct PropertyKind {
-        std::string_view property;
-        ValueKind        kind;
-    };
-
-    constexpr std::array<PropertyKind, 32> kProperties{{
-        {.property = "color", .kind = ValueKind::Color},
-        {.property = "background", .kind = ValueKind::Color},
-        {.property = "border-top-width", .kind = ValueKind::Length},
-        {.property = "border-right-width", .kind = ValueKind::Length},
-        {.property = "border-bottom-width", .kind = ValueKind::Length},
-        {.property = "border-left-width", .kind = ValueKind::Length},
-        {.property = "border-top-color", .kind = ValueKind::Color},
-        {.property = "border-right-color", .kind = ValueKind::Color},
-        {.property = "border-bottom-color", .kind = ValueKind::Color},
-        {.property = "border-left-color", .kind = ValueKind::Color},
-        {.property = "border-radius", .kind = ValueKind::Length},
-        {.property = "box-shadow", .kind = ValueKind::Shadows},
-        {.property = "padding", .kind = ValueKind::Spacing},
-        {.property = "margin", .kind = ValueKind::Spacing},
-        {.property = "margin-right", .kind = ValueKind::Length},
-        {.property = "font-family", .kind = ValueKind::Family},
-        {.property = "font-size", .kind = ValueKind::PositiveLength},
-        {.property = "font-weight", .kind = ValueKind::Weight},
-        {.property = "width", .kind = ValueKind::PositiveLength},
-        {.property = "transition", .kind = ValueKind::Transition},
-        {.property = "transform", .kind = ValueKind::Rotation},
-        {.property = "max-width", .kind = ValueKind::PositiveLength},
-        {.property = "max-height", .kind = ValueKind::PositiveLength},
-        {.property = "backdrop-filter", .kind = ValueKind::Backdrop},
-        // Shorthands, expanded into the longhands above as they are read.
-        {.property = "border", .kind = ValueKind::Color},
-        {.property = "border-top", .kind = ValueKind::Color},
-        {.property = "border-right", .kind = ValueKind::Color},
-        {.property = "border-bottom", .kind = ValueKind::Color},
-        {.property = "border-left", .kind = ValueKind::Color},
-        {.property = "border-width", .kind = ValueKind::Length},
-        {.property = "border-color", .kind = ValueKind::Color},
-        {.property = "background-color", .kind = ValueKind::Color},
-    }};
-
-    std::optional<ValueKind>               KindOf(std::string_view property) {
-        const auto entry = std::ranges::find(kProperties, property, &PropertyKind::property);
-        return entry == kProperties.end() ? std::nullopt : std::optional<ValueKind>(entry->kind);
-    }
-
     // The value readers throw std::invalid_argument with what the value should look like. The caller adds where.
     // Far past any monitor, and small enough that every length scaled to device pixels fits the integers it is cast to.
-    constexpr float kLongestLengthDips = 10000.0f;
+    constexpr float kLargestNumber = 10000.0f;
 
-    float           ReadSignedLength(std::string_view text) {
-        const std::optional<float> value = text == "0" ? std::optional<float>(0.0f) : text.ends_with("px") ? ParseNumber(text.substr(0, text.size() - 2)) : std::nullopt;
+    float           ReadSignedNumber(std::string_view text) {
+        const std::optional<float> value = ParseNumber(text);
         if (!value.has_value()) {
-            throw std::invalid_argument("must be a length in px, as 4px");
+            throw std::invalid_argument(std::format("must be a number with no unit, as 4, not '{}'", text));
         }
-        if (std::abs(*value) > kLongestLengthDips) {
-            throw std::invalid_argument(std::format("must be a length no longer than {}px", kLongestLengthDips));
+        if (std::abs(*value) > kLargestNumber) {
+            throw std::invalid_argument(std::format("must be a number from -{} to {}", kLargestNumber, kLargestNumber));
         }
         return *value;
     }
 
     float ReadLength(std::string_view text) {
-        const float value = ReadSignedLength(text);
+        const float value = ReadSignedNumber(text);
         if (value < 0.0f) {
-            throw std::invalid_argument("must be 0px or more");
+            throw std::invalid_argument("must be 0 or more");
         }
         return value;
     }
@@ -211,29 +119,25 @@ namespace {
     float ReadPositiveLength(std::string_view text) {
         const float value = ReadLength(text);
         if (value <= 0.0f) {
-            throw std::invalid_argument("must be more than 0px");
+            throw std::invalid_argument("must be more than 0");
         }
         return value;
     }
 
-    Spacing ReadSpacing(std::string_view text) {
-        const std::vector<std::string_view> lengths = SplitOutside(text, kSpace);
-        if (lengths.size() == 1) {
-            const float both = ReadLength(lengths[0]);
-            return Spacing{.yDips = both, .xDips = both};
-        }
-        if (lengths.size() == 2) {
-            return Spacing{.yDips = ReadLength(lengths[0]), .xDips = ReadLength(lengths[1])};
-        }
-        throw std::invalid_argument("takes one length for every side, or two: above and below, then left and right, as 2px 6px");
+    std::optional<float> ReadCap(std::string_view text) {
+        return ReadPositiveLength(text);
     }
 
-    float ReadChannel(std::string_view text, float maximum) {
-        const std::optional<float> value = ParseNumber(Trim(text));
-        if (!value.has_value() || *value < 0.0f || *value > maximum) {
-            throw std::invalid_argument(std::format("has a channel '{}' outside 0 to {}", Trim(text), maximum));
+    Spacing ReadSpacing(std::string_view text) {
+        const std::vector<std::string_view> numbers = Split(text, kSpace);
+        if (numbers.size() == 1) {
+            const float both = ReadLength(numbers[0]);
+            return Spacing{.yDips = both, .xDips = both};
         }
-        return *value;
+        if (numbers.size() == 2) {
+            return Spacing{.yDips = ReadLength(numbers[0]), .xDips = ReadLength(numbers[1])};
+        }
+        throw std::invalid_argument("takes one number for every side, or two: above and below, then left and right, as 2 6");
     }
 
     std::uint32_t HexDigit(char digit) {
@@ -244,52 +148,51 @@ namespace {
         return value;
     }
 
-    // #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(r, g, b), rgba(r, g, b, a) or transparent.
+    constexpr std::string_view kColorForm = "must be a color: #rrggbb, #rrggbbaa, #rgb or #rgba, optionally followed by an opacity as #191724 90%, or transparent";
+
+    D2D1_COLOR_F               ReadHex(std::string_view text) {
+        const std::string_view digits = text.substr(1);
+        if (digits.size() != 3 && digits.size() != 4 && digits.size() != 6 && digits.size() != 8) {
+            throw std::invalid_argument(std::string(kColorForm));
+        }
+        const bool           shortForm = digits.size() <= 4;
+        const size_t         count     = shortForm ? digits.size() : digits.size() / 2;
+        std::array<float, 4> channels{0.0f, 0.0f, 0.0f, 1.0f};
+        for (size_t channel = 0; channel < count; ++channel) {
+            const std::uint32_t value = shortForm ? HexDigit(digits[channel]) * 17 : (HexDigit(digits[channel * 2]) * 16) + HexDigit(digits[(channel * 2) + 1]);
+            channels.at(channel)      = static_cast<float>(value) / 255.0f;
+        }
+        return D2D1_COLOR_F{.r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3]};
+    }
+
+    // A hex color, optionally followed by an opacity percentage that multiplies its alpha, or transparent.
     D2D1_COLOR_F ReadColor(std::string_view text) {
-        constexpr std::string_view kForms = "must be a color: #rrggbb, #rrggbbaa, #rgb, rgb(r, g, b), rgba(r, g, b, a) or transparent";
-        if (text == "transparent") {
+        const std::vector<std::string_view> words = Split(text, kSpace);
+        if (words.size() == 1 && words[0] == "transparent") {
             return kTransparent;
         }
-        if (text.starts_with('#')) {
-            const std::string_view digits = text.substr(1);
-            if (digits.size() != 3 && digits.size() != 4 && digits.size() != 6 && digits.size() != 8) {
-                throw std::invalid_argument(std::string(kForms));
-            }
-            const bool           shortForm = digits.size() <= 4;
-            const size_t         count     = shortForm ? digits.size() : digits.size() / 2;
-            std::array<float, 4> channels{0.0f, 0.0f, 0.0f, 1.0f};
-            for (size_t channel = 0; channel < count; ++channel) {
-                const std::uint32_t value = shortForm ? HexDigit(digits[channel]) * 17 : (HexDigit(digits[channel * 2]) * 16) + HexDigit(digits[(channel * 2) + 1]);
-                channels.at(channel)      = static_cast<float>(value) / 255.0f;
-            }
-            return D2D1_COLOR_F{.r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3]};
+        if (words.empty() || words.size() > 2 || !words[0].starts_with('#')) {
+            throw std::invalid_argument(std::string(kColorForm));
         }
-        const bool alpha = text.starts_with("rgba(");
-        if ((alpha || text.starts_with("rgb(")) && text.ends_with(')')) {
-            const std::string_view              inside = text.substr(alpha ? 5 : 4, text.size() - (alpha ? 6 : 5));
-            const std::vector<std::string_view> parts  = SplitOutside(inside, ",");
-            if (parts.size() != (alpha ? 4u : 3u)) {
-                throw std::invalid_argument(alpha ? "rgba takes four values: red, green and blue from 0 to 255, then alpha from 0 to 1" :
-                                                    "rgb takes three values: red, green and blue from 0 to 255");
+        D2D1_COLOR_F color = ReadHex(words[0]);
+        if (words.size() == 2) {
+            const std::optional<float> percent = words[1].ends_with('%') ? ParseNumber(words[1].substr(0, words[1].size() - 1)) : std::nullopt;
+            if (!percent.has_value() || *percent < 0.0f || *percent > 100.0f) {
+                throw std::invalid_argument(std::format("has the opacity '{}', which must be a percentage from 0% to 100%, as #191724 90%", words[1]));
             }
-            return D2D1_COLOR_F{.r = ReadChannel(parts[0], 255.0f) / 255.0f,
-                                .g = ReadChannel(parts[1], 255.0f) / 255.0f,
-                                .b = ReadChannel(parts[2], 255.0f) / 255.0f,
-                                .a = alpha ? ReadChannel(parts[3], 1.0f) : 1.0f};
+            color.a *= *percent / 100.0f;
         }
-        throw std::invalid_argument(std::string(kForms));
+        return color;
     }
 
     std::wstring ReadFamily(std::string_view text) {
-        if (FindOutside(text, 0, ",") != std::string_view::npos) {
+        if (text.starts_with('"') || text.starts_with('\'')) {
+            throw std::invalid_argument("takes the family unquoted, as font: Segoe UI");
+        }
+        if (text.find(',') != std::string_view::npos) {
             throw std::invalid_argument("must name one font family, not a list: every font the bar uses must be installed");
         }
-        const bool             quoted = text.size() >= 2 && (text.front() == '"' || text.front() == '\'') && text.back() == text.front();
-        const std::string_view family = quoted ? text.substr(1, text.size() - 2) : text;
-        if (family.empty()) {
-            throw std::invalid_argument("must name a font family, as \"Segoe UI\"");
-        }
-        return ToWide(family);
+        return ToWide(text);
     }
 
     DWRITE_FONT_WEIGHT ReadWeight(std::string_view text) {
@@ -304,6 +207,13 @@ namespace {
             throw std::invalid_argument("must be normal, bold, or a weight from 100 to 900 in steps of 100");
         }
         return static_cast<DWRITE_FONT_WEIGHT>(static_cast<std::int32_t>(*value));
+    }
+
+    bool ReadSwitch(std::string_view text) {
+        if (text != "on" && text != "off") {
+            throw std::invalid_argument("must be on or off");
+        }
+        return text == "on";
     }
 
     // A transition as written: the property it animates, then the transition. none animates nothing.
@@ -342,9 +252,9 @@ namespace {
     constexpr std::string_view kTransitionForm =
         "must be none, or transitions separated by commas, each a property, a duration and a timing function, as width 400ms ease-out, background 150ms ease";
 
-    // A property, a duration and an optional timing function (ease when left out, as in CSS).
+    // A property, a duration and an optional timing function (ease when left out).
     TransitionValue ReadTransitionValue(std::string_view text) {
-        const std::vector<std::string_view> parts = SplitOutside(text, kSpace);
+        const std::vector<std::string_view> parts = Split(text, kSpace);
         if (parts.size() != 2 && parts.size() != 3) {
             throw std::invalid_argument(std::string(kTransitionForm));
         }
@@ -363,7 +273,7 @@ namespace {
         return ReadCommaList<TransitionValue>(text, kTransitionForm, ReadTransitionValue);
     }
 
-    // The transition a list gives property, the last one naming it as in CSS, or none.
+    // The transition a list gives property, the last one naming it, or none.
     Transition TransitionOf(std::string_view text, std::string_view property) {
         Transition found = kNoTransition;
         for (const TransitionValue& value : ReadTransitionValues(text)) {
@@ -374,240 +284,536 @@ namespace {
         return found;
     }
 
-    // A reader of one property's transition, for Cascaded::Read.
+    // A reader of one property's transition, for Read.
     auto TransitionReader(std::string_view property) {
         return [property](std::string_view text) { return TransitionOf(text, property); };
     }
 
-    // none, or rotate(<degrees>deg).
-    float ReadRotation(std::string_view text) {
-        if (text == "none") {
-            return 0.0f;
-        }
-        const std::optional<float> degrees = text.starts_with("rotate(") && text.ends_with("deg)") ? ParseNumber(Trim(text.substr(7, text.size() - 11))) : std::nullopt;
-        if (!degrees.has_value()) {
-            throw std::invalid_argument("must be none or a rotation in degrees, as rotate(180deg)");
-        }
-        return *degrees;
-    }
+    constexpr std::string_view kShadowForm = "must be none, or shadows separated by commas, each an x and y offset, an optional blur and spread, and a color, "
+                                             "as 0 1 2 #ffffff 18%";
 
-    constexpr std::string_view kShadowForm = "must be none, or inset shadows separated by commas, each inset, an x and y offset, an optional blur and spread, and a color, "
-                                             "as inset 0 1px 2px rgba(255, 255, 255, 0.18)";
-
-    InsetShadow                ReadShadow(std::string_view text) {
-        bool                        inset = false;
-        std::vector<float>          lengths;
-        std::optional<D2D1_COLOR_F> color;
-        for (const std::string_view part : SplitOutside(text, kSpace)) {
-            if (part == "inset" && !inset) {
-                inset = true;
-            } else if (part == "0" || part.ends_with("px")) {
-                lengths.push_back(ReadSignedLength(part));
-            } else if (!color.has_value()) {
-                color = ReadColor(part);
-            } else {
-                throw std::invalid_argument(std::string(kShadowForm));
-            }
+    // Numbers, then a color.
+    InsetShadow ReadShadow(std::string_view text) {
+        const std::vector<std::string_view> words = Split(text, kSpace);
+        std::vector<float>                  numbers;
+        while (numbers.size() < words.size() && ParseNumber(words[numbers.size()]).has_value()) {
+            numbers.push_back(ReadSignedNumber(words[numbers.size()]));
         }
-        if (!inset) {
-            throw std::invalid_argument("draws inside the box only, so every shadow starts with inset, as inset 0 1px 2px rgba(255, 255, 255, 0.18)");
-        }
-        if (lengths.size() < 2 || lengths.size() > 4 || !color.has_value()) {
+        if (numbers.size() < 2 || numbers.size() > 4 || numbers.size() == words.size()) {
             throw std::invalid_argument(std::string(kShadowForm));
         }
-        const float blur = lengths.size() > 2 ? lengths[2] : 0.0f;
+        const float blur = numbers.size() > 2 ? numbers[2] : 0.0f;
         if (blur < 0.0f) {
-            throw std::invalid_argument("has a negative blur, which must be 0px or more");
+            throw std::invalid_argument("has a negative blur, which must be 0 or more");
         }
-        return InsetShadow{.xDips = lengths[0], .yDips = lengths[1], .blurDips = blur, .spreadDips = lengths.size() > 3 ? lengths[3] : 0.0f, .color = *color};
+        return InsetShadow{
+            .xDips = numbers[0], .yDips = numbers[1], .blurDips = blur, .spreadDips = numbers.size() > 3 ? numbers[3] : 0.0f, .color = ReadColor(JoinFrom(words, numbers.size()))};
     }
 
     std::vector<InsetShadow> ReadShadows(std::string_view text) {
         return ReadCommaList<InsetShadow>(text, kShadowForm, ReadShadow);
     }
 
-    constexpr std::string_view kBackdropForm = "must be none, or blur (the system's, whose radius is its own) then optionally brightness() and saturate() once each, "
-                                               "as blur brightness(0.4) saturate(180%)";
+    constexpr BorderSide kNoBorder{.widthDips = 0.0f, .color = kTransparent};
 
-    constexpr Backdrop         kNoBackdrop{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
-
-    // The amount of name(<n>) or name(<n>%), or none when text is not that function.
-    std::optional<float> FilterAmount(std::string_view text, std::string_view name) {
-        if (!text.starts_with(name) || !text.substr(name.size()).starts_with('(') || !text.ends_with(')')) {
-            return std::nullopt;
-        }
-        const std::string_view     inside  = Trim(text.substr(name.size() + 1, text.size() - name.size() - 2));
-        const bool                 percent = inside.ends_with('%');
-        const std::optional<float> amount  = ParseNumber(percent ? inside.substr(0, inside.size() - 1) : inside);
-        if (!amount.has_value() || *amount < 0.0f) {
-            throw std::invalid_argument(std::format("has {}, whose amount must be a number or percentage of 0 or more, as {}(0.4) or {}(40%)", text, name, name));
-        }
-        return percent ? *amount / 100.0f : *amount;
-    }
-
-    Backdrop ReadBackdrop(std::string_view text) {
+    // none, or a width then a color.
+    BorderSide ReadBorderSide(std::string_view text) {
         if (text == "none") {
-            return kNoBackdrop;
+            return kNoBorder;
         }
-        const std::vector<std::string_view> parts = SplitOutside(text, kSpace);
-        if (parts.empty() || parts[0] != "blur") {
-            throw std::invalid_argument(std::string(kBackdropForm));
+        const std::vector<std::string_view> words = Split(text, kSpace);
+        if (words.size() < 2) {
+            throw std::invalid_argument("must be none, or a width and a color, as 1 #6e6a86");
         }
-        std::optional<float> brightness;
-        std::optional<float> saturation;
-        for (size_t index = 1; index < parts.size(); ++index) {
-            const std::optional<float> brightnessAmount = FilterAmount(parts[index], "brightness");
-            const std::optional<float> saturationAmount = FilterAmount(parts[index], "saturate");
-            if (brightnessAmount.has_value() && !brightness.has_value()) {
-                brightness = brightnessAmount;
-            } else if (saturationAmount.has_value() && !saturation.has_value()) {
-                saturation = saturationAmount;
-            } else {
-                throw std::invalid_argument(std::string(kBackdropForm));
-            }
-        }
-        return Backdrop{.blur = true, .brightness = brightness.value_or(1.0f), .saturation = saturation.value_or(1.0f)};
+        return BorderSide{.widthDips = ReadLength(words[0]), .color = ReadColor(JoinFrom(words, 1))};
     }
 
-    void CheckValue(ValueKind kind, std::string_view value) {
-        switch (kind) {
+    // What a property's value is checked and read as. A key means the same in every block that takes it.
+    enum class ValueKind : std::uint8_t {
+        Color,
+        Border,
+        Length,
+        SignedNumber,
+        PositiveLength,
+        Spacing,
+        Family,
+        Weight,
+        Transition,
+        Shadows,
+        Switch
+    };
+
+    struct PropertyKind {
+        std::string_view key;
+        ValueKind        kind;
+    };
+
+    constexpr std::array<PropertyKind, 23> kProperties{{
+        {.key = "color", .kind = ValueKind::Color},
+        {.key = "background", .kind = ValueKind::Color},
+        {.key = "border", .kind = ValueKind::Border},
+        {.key = "border-top", .kind = ValueKind::Border},
+        {.key = "border-right", .kind = ValueKind::Border},
+        {.key = "border-bottom", .kind = ValueKind::Border},
+        {.key = "border-left", .kind = ValueKind::Border},
+        {.key = "radius", .kind = ValueKind::Length},
+        {.key = "shadow", .kind = ValueKind::Shadows},
+        {.key = "padding", .kind = ValueKind::Spacing},
+        {.key = "margin", .kind = ValueKind::Spacing},
+        {.key = "margin-right", .kind = ValueKind::Length},
+        {.key = "font", .kind = ValueKind::Family},
+        {.key = "size", .kind = ValueKind::PositiveLength},
+        {.key = "weight", .kind = ValueKind::Weight},
+        {.key = "width", .kind = ValueKind::PositiveLength},
+        {.key = "max-width", .kind = ValueKind::PositiveLength},
+        {.key = "max-height", .kind = ValueKind::PositiveLength},
+        {.key = "transition", .kind = ValueKind::Transition},
+        {.key = "rotate", .kind = ValueKind::SignedNumber},
+        {.key = "blur", .kind = ValueKind::Switch},
+        {.key = "brightness", .kind = ValueKind::Length},
+        {.key = "saturate", .kind = ValueKind::Length},
+    }};
+
+    void                                   CheckValue(std::string_view key, std::string_view value) {
+        const auto entry = std::ranges::find(kProperties, key, &PropertyKind::key);
+        if (entry == kProperties.end()) {
+            throw std::invalid_argument(std::format("unknown property {}", key));
+        }
+        switch (entry->kind) {
             case ValueKind::Color: ReadColor(value); return;
+            case ValueKind::Border: ReadBorderSide(value); return;
             case ValueKind::Length: ReadLength(value); return;
+            case ValueKind::SignedNumber: ReadSignedNumber(value); return;
             case ValueKind::PositiveLength: ReadPositiveLength(value); return;
             case ValueKind::Spacing: ReadSpacing(value); return;
             case ValueKind::Family: ReadFamily(value); return;
             case ValueKind::Weight: ReadWeight(value); return;
             case ValueKind::Transition: ReadTransitionValues(value); return;
-            case ValueKind::Rotation: ReadRotation(value); return;
             case ValueKind::Shadows: ReadShadows(value); return;
-            case ValueKind::Backdrop: ReadBackdrop(value); return;
+            case ValueKind::Switch: ReadSwitch(value); return;
         }
-        throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(kind)));
+        throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(entry->kind)));
     }
 
-    constexpr std::array<std::string_view, 4> kSides{"top", "right", "bottom", "left"};
+    // What one block may hold: its properties, its blocks by key, and what its transition may animate. A module's block
+    // also holds its custom module's classes, any other block, each of the shape classes points to.
+    struct BlockShape;
 
-    // One longhand per side, as border-width sets border-top-width and the other three.
-    std::vector<Declaration> ExpandSides(std::string_view part, const std::string& value, std::uint32_t line) {
-        std::vector<Declaration> sides;
-        sides.reserve(kSides.size());
-        for (const std::string_view side : kSides) {
-            sides.push_back(Declaration{.property = std::format("border-{}-{}", side, part), .value = value, .line = line});
-        }
-        return sides;
+    struct ChildBlock {
+        std::string_view  key;
+        const BlockShape* shape;
+    };
+
+    struct BlockShape {
+        std::span<const std::string_view> properties;
+        std::span<const ChildBlock>       blocks;
+        std::span<const std::string_view> animated;
+        const BlockShape*                 classes = nullptr;
+    };
+
+    constexpr std::array<std::string_view, 2>  kColors{"color", "background"};
+    constexpr std::array<std::string_view, 1>  kColor{"color"};
+    constexpr std::array<std::string_view, 1>  kBackground{"background"};
+    constexpr std::array<std::string_view, 1>  kRotate{"rotate"};
+    constexpr std::array<std::string_view, 2>  kBackgroundAndWidth{"background", "width"};
+    constexpr std::array<std::string_view, 3>  kBarProperties{"font", "size", "color"};
+    constexpr std::array<std::string_view, 13> kSectionProperties{"background", "border", "border-top", "border-right", "border-bottom", "border-left", "radius",
+                                                                  "padding",    "shadow", "margin",     "blur",         "brightness",    "saturate"};
+    constexpr std::array<std::string_view, 13> kTooltipProperties{"background", "border", "border-top", "border-right", "border-bottom", "border-left", "radius",
+                                                                  "padding",    "shadow", "color",      "blur",         "brightness",    "saturate"};
+    constexpr std::array<std::string_view, 15> kMenuProperties{"background", "border", "border-top", "border-right", "border-bottom", "border-left", "radius",    "padding",
+                                                               "shadow",     "color",  "blur",       "brightness",   "saturate",      "max-width",   "max-height"};
+    constexpr std::array<std::string_view, 12> kModuleProperties{"background", "border",  "border-top", "border-right", "border-bottom", "border-left",
+                                                                 "radius",     "padding", "shadow",     "margin",       "color",         "transition"};
+    constexpr std::array<std::string_view, 7>  kMenuItemProperties{"color", "background", "weight", "padding", "margin", "radius", "shadow"};
+    constexpr std::array<std::string_view, 8>  kItemProperties{"color", "background", "weight", "padding", "margin", "radius", "shadow", "transition"};
+    constexpr std::array<std::string_view, 4>  kScrollbarProperties{"width", "background", "radius", "margin"};
+    constexpr std::array<std::string_view, 6>  kIconProperties{"font", "size", "color", "margin-right", "rotate", "transition"};
+    constexpr std::array<std::string_view, 4>  kDefaultIconProperties{"font", "size", "color", "margin-right"};
+
+    constexpr BlockShape                       kBar{.properties = kBarProperties, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kSection{.properties = kSectionProperties, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kTooltip{.properties = kTooltipProperties, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kScrollbar{.properties = kScrollbarProperties, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kItemHover{.properties = kColors, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr std::array<ChildBlock, 1>        kMenuActiveBlocks{{{.key = "hover", .shape = &kItemHover}}};
+    constexpr BlockShape                       kMenuActive{.properties = kMenuItemProperties, .blocks = kMenuActiveBlocks, .animated = {}, .classes = nullptr};
+    constexpr std::array<ChildBlock, 2>        kMenuItemBlocks{{{.key = "hover", .shape = &kItemHover}, {.key = "active", .shape = &kMenuActive}}};
+    constexpr BlockShape                       kMenuItem{.properties = kMenuItemProperties, .blocks = kMenuItemBlocks, .animated = {}, .classes = nullptr};
+    constexpr std::array<ChildBlock, 2>        kMenuBlocks{{{.key = "item", .shape = &kMenuItem}, {.key = "scrollbar", .shape = &kScrollbar}}};
+    constexpr BlockShape                       kMenu{.properties = kMenuProperties, .blocks = kMenuBlocks, .animated = {}, .classes = nullptr};
+
+    constexpr BlockShape                       kIcon{.properties = kIconProperties, .blocks = {}, .animated = kRotate, .classes = nullptr};
+    constexpr BlockShape                       kDefaultIcon{.properties = kDefaultIconProperties, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kItemState{.properties = kItemProperties, .blocks = {}, .animated = kColors, .classes = nullptr};
+    constexpr std::array<ChildBlock, 5>        kItemBlocks{{{.key = "hover", .shape = &kItemHover},
+                                                            {.key = "focused", .shape = &kItemState},
+                                                            {.key = "occupied", .shape = &kItemState},
+                                                            {.key = "empty", .shape = &kItemState},
+                                                            {.key = "toggle", .shape = &kItemState}}};
+    constexpr BlockShape                       kItem{.properties = kItemProperties, .blocks = kItemBlocks, .animated = kColors, .classes = nullptr};
+    constexpr BlockShape                       kHover{.properties = kBackground, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kAlert{.properties = kColor, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kStateIcon{.properties = kColor, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr std::array<ChildBlock, 1>        kStateBlocks{{{.key = "icon", .shape = &kStateIcon}}};
+    constexpr BlockShape                       kState{.properties = kColor, .blocks = kStateBlocks, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kExpandedIcon{.properties = kRotate, .blocks = {}, .animated = {}, .classes = nullptr};
+    constexpr std::array<ChildBlock, 1>        kExpandedBlocks{{{.key = "icon", .shape = &kExpandedIcon}}};
+    constexpr BlockShape                       kExpanded{.properties = {}, .blocks = kExpandedBlocks, .animated = {}, .classes = nullptr};
+    constexpr std::array<ChildBlock, 8>        kModuleBlocks{{{.key = "icon", .shape = &kIcon},
+                                                              {.key = "item", .shape = &kItem},
+                                                              {.key = "hover", .shape = &kHover},
+                                                              {.key = "alert", .shape = &kAlert},
+                                                              {.key = "warning", .shape = &kState},
+                                                              {.key = "critical", .shape = &kState},
+                                                              {.key = "muted", .shape = &kState},
+                                                              {.key = "expanded", .shape = &kExpanded}}};
+    constexpr BlockShape                       kModule{.properties = kModuleProperties, .blocks = kModuleBlocks, .animated = kBackgroundAndWidth, .classes = &kState};
+    // The module block styles every module, so it holds nothing only a tray, a group, a battery or an audio module draws.
+    constexpr std::array<ChildBlock, 4> kDefaultModuleBlocks{
+        {{.key = "icon", .shape = &kDefaultIcon}, {.key = "item", .shape = &kItem}, {.key = "hover", .shape = &kHover}, {.key = "alert", .shape = &kAlert}}};
+    constexpr BlockShape kDefaultModule{.properties = kModuleProperties, .blocks = kDefaultModuleBlocks, .animated = kBackground, .classes = &kState};
+
+    struct TopBlock {
+        std::string_view  key;
+        const BlockShape* shape;
+    };
+
+    constexpr std::array<TopBlock, 5> kTopBlocks{{{.key = "bar", .shape = &kBar},
+                                                  {.key = "section", .shape = &kSection},
+                                                  {.key = "module", .shape = &kDefaultModule},
+                                                  {.key = "tooltip", .shape = &kTooltip},
+                                                  {.key = "menu", .shape = &kMenu}}};
+
+    bool                              IsBlock(const StyleNode& node) {
+        return node.value.empty();
     }
 
-    // border or border-<side>: none, or a width, solid and a color in any order, as CSS writes it.
-    std::vector<Declaration> ExpandBorder(const Declaration& border, const std::vector<std::string_view>& sides) {
-        std::vector<Declaration> longhands;
-        if (border.value == "none") {
-            for (const std::string_view side : sides) {
-                longhands.push_back(Declaration{.property = std::format("border-{}-width", side), .value = "0", .line = border.line});
+    std::string KeysOf(std::span<const ChildBlock> blocks) {
+        return JoinNames(blocks | std::views::transform(&ChildBlock::key));
+    }
+
+    // A block as an error names it, as module > item > focused.
+    std::string PathOf(std::string_view parent, std::string_view key) {
+        return parent.empty() ? std::string(key) : std::format("{} > {}", parent, key);
+    }
+
+    // brightness and saturate tone the system's blur, so either without blur: on would do nothing.
+    void RequireBlurForTone(const StyleNode& block, std::string_view path, std::string_view source) {
+        const auto blur = std::ranges::find(block.children, std::string_view("blur"), &StyleNode::key);
+        const bool on   = blur != block.children.end() && blur->value == "on";
+        for (const StyleNode& child : block.children) {
+            if ((child.key == "brightness" || child.key == "saturate") && !on) {
+                throw StyleError(source, child.line, std::format("{}: {} tones the system's blur, so it takes blur: on beside it", path, child.key));
             }
-            return longhands;
         }
-        std::optional<std::string> width;
-        std::optional<std::string> color;
-        bool                       solid = false;
-        for (const std::string_view part : SplitOutside(border.value, kSpace)) {
-            if (part == "solid") {
-                solid = true;
-            } else if (part == "0" || part.ends_with("px")) {
-                width = std::string(part);
-            } else {
-                color = std::string(part);
-            }
-        }
-        if (!solid || !width.has_value() || !color.has_value()) {
-            throw std::invalid_argument("must be none, or a width, solid and a color, as 1px solid #6e6a8640");
-        }
-        for (const std::string_view side : sides) {
-            longhands.push_back(Declaration{.property = std::format("border-{}-width", side), .value = *width, .line = border.line});
-            longhands.push_back(Declaration{.property = std::format("border-{}-color", side), .value = *color, .line = border.line});
-        }
-        return longhands;
     }
 
-    std::vector<Declaration> ExpandShorthand(const Declaration& declaration) {
-        if (declaration.property == "border") {
-            return ExpandBorder(declaration, {kSides.begin(), kSides.end()});
-        }
-        for (const std::string_view side : kSides) {
-            if (declaration.property == std::format("border-{}", side)) {
-                return ExpandBorder(declaration, {side});
-            }
-        }
-        if (declaration.property == "border-width") {
-            return ExpandSides("width", declaration.value, declaration.line);
-        }
-        if (declaration.property == "border-color") {
-            return ExpandSides("color", declaration.value, declaration.line);
-        }
-        return {declaration};
-    }
-
-    // A menu entry's .active is matched by the menu's own selector form, so a custom module may still declare it.
-    constexpr std::array<std::string_view, 12> kClasses{"module", "alert", "warning", "critical", "muted", "expanded", "icon", "item", "focused", "occupied", "empty", "toggle"};
-
-    bool                                       IsModuleType(std::string_view type) {
-        return std::ranges::find(kModuleTypes, type, &ModuleTypeName::name) != kModuleTypes.end();
-    }
-
-    std::string KnownTypes() {
-        return "section, tooltip, menu, " + JoinNames(kModuleTypes | std::views::transform(&ModuleTypeName::name));
-    }
-
-    // Reads one identifier from start, throwing when there is none.
-    std::string_view ReadIdent(std::string_view text, size_t start, std::string_view what) {
-        size_t end = start;
-        while (end < text.size() && IsIdentCharacter(text[end])) {
-            ++end;
-        }
-        if (end == start) {
-            throw std::invalid_argument(std::format("'{}' has a {} with no name", text, what));
-        }
-        return text.substr(start, end - start);
-    }
-
-    Compound ParseCompound(std::string_view text) {
-        Compound compound{.type = {}, .id = {}, .classes = {}, .hover = false};
-        size_t   index = 0;
-        if (text.starts_with('*')) {
-            compound.type = "*";
-            index         = 1;
-        } else if (IsIdentCharacter(text.front())) {
-            compound.type = std::string(ReadIdent(text, 0, "type"));
-            index         = compound.type.size();
-            if (compound.type != "section" && compound.type != "tooltip" && compound.type != "menu" && !IsModuleType(compound.type)) {
-                throw std::invalid_argument(std::format("'{}' is not a type intarsia styles, known types are: {}", compound.type, KnownTypes()));
-            }
-        }
-        while (index < text.size()) {
-            const char marker = text[index];
-            if (marker != '#' && marker != '.' && marker != ':') {
-                throw std::invalid_argument(std::format("'{}' has '{}' where #, . or : should be", text, marker));
-            }
-            const std::string_view name = ReadIdent(text, index + 1, marker == '#' ? "#id" : marker == '.' ? ".class" : ":state");
-            index += 1 + name.size();
-            if (marker == '#') {
-                if (!compound.id.empty()) {
-                    throw std::invalid_argument(std::format("'{}' has two ids", text));
+    void CheckBlock(const StyleNode& block, const BlockShape& shape, std::string_view path, std::string_view source) {
+        for (const StyleNode& child : block.children) {
+            const bool property = std::ranges::find(shape.properties, child.key) != shape.properties.end();
+            const auto nested   = std::ranges::find(shape.blocks, child.key, &ChildBlock::key);
+            const bool isClass  = nested == shape.blocks.end() && shape.classes != nullptr && !IsStyledClass(child.key);
+            const auto where    = PathOf(path, child.key);
+            if (IsBlock(child)) {
+                if (property) {
+                    throw StyleError(source, child.line, std::format("{}: {} is a property, written as {}: value", path, child.key, child.key));
                 }
-                compound.id = std::string(name);
-            } else if (marker == '.') {
-                // A class intarsia does not style is a custom module's, checked against the config by RequireDeclaredClasses.
-                compound.classes.emplace_back(name);
-            } else if (name == "hover") {
-                compound.hover = true;
-            } else {
-                throw std::invalid_argument(std::format("':{}' is not supported, :hover is the only state", name));
+                if (nested == shape.blocks.end() && !isClass) {
+                    throw StyleError(
+                        source, child.line,
+                        std::format("{}: {} is not a block {} holds, which are: {}", path, child.key, path,
+                                    shape.blocks.empty() ? std::string("none") : KeysOf(shape.blocks) + (shape.classes != nullptr ? ", or a custom module's class" : "")));
+                }
+                CheckBlock(child, nested != shape.blocks.end() ? *nested->shape : *shape.classes, where, source);
+                continue;
             }
+            if (nested != shape.blocks.end()) {
+                throw StyleError(source, child.line, std::format("{}: {} is a block, with its lines indented beneath it", path, child.key));
+            }
+            if (!property) {
+                throw StyleError(source, child.line,
+                                 std::format("{}: {} is not a property {} takes, which are: {}", path, child.key, path,
+                                             shape.properties.empty() ? std::string("none") : JoinNames(shape.properties)));
+            }
+            try {
+                CheckValue(child.key, child.value);
+                if (child.key == "transition") {
+                    for (const TransitionValue& transition : ReadTransitionValues(child.value)) {
+                        if (std::ranges::find(shape.animated, transition.property) == shape.animated.end()) {
+                            throw std::invalid_argument(std::format("animates {} here, not {}", JoinNames(shape.animated), transition.property));
+                        }
+                    }
+                }
+            } catch (const std::invalid_argument& error) { throw StyleError(source, child.line, std::format("{}: {} {}", path, child.key, error.what())); }
         }
-        return compound;
+        RequireBlurForTone(block, path, source);
     }
 
-    bool HasClass(const Compound& compound, std::string_view name) {
-        return std::ranges::find(compound.classes, name) != compound.classes.end();
+    // The last rule of the format left for once the tree is built: a block must hold something.
+    void RequireFilledBlocks(const std::vector<StyleNode>& nodes, std::string_view source) {
+        for (const StyleNode& node : nodes) {
+            if (IsBlock(node) && node.children.empty()) {
+                throw StyleError(source, node.line, std::format("{}: has no value and nothing indented beneath it", node.key));
+            }
+            RequireFilledBlocks(node.children, source);
+        }
+    }
+
+    // One line's key and value, its depth from its indent.
+    struct Line {
+        std::uint32_t    number;
+        size_t           level;
+        std::string_view key;
+        std::string_view value;
+    };
+
+    std::optional<Line> ReadLine(std::string_view raw, std::uint32_t number, std::string_view source) {
+        const std::string_view text = raw.substr(0, raw.find("//"));
+        if (text.find('\t') != std::string_view::npos) {
+            throw StyleError(source, number, "has a tab: indent by two spaces per level");
+        }
+        const std::string_view content = Trim(text);
+        if (content.empty()) {
+            return std::nullopt;
+        }
+        const size_t indent = text.find_first_not_of(' ');
+        if (indent % 2 != 0) {
+            throw StyleError(source, number, std::format("is indented by {} spaces: indent by two spaces per level", indent));
+        }
+        const size_t colon = content.find(':');
+        if (colon == std::string_view::npos) {
+            throw StyleError(source, number, std::format("'{}' must be key: value, or key: alone to open a block", content));
+        }
+        const std::string_view key = content.substr(0, colon);
+        if (key.empty() || !std::ranges::all_of(key, IsIdentCharacter)) {
+            throw StyleError(source, number, std::format("'{}' is not a key: write letters, digits, '_' and '-', then a colon", key));
+        }
+        return Line{.number = number, .level = indent / 2, .key = key, .value = Trim(content.substr(colon + 1))};
+    }
+
+    std::vector<StyleNode> ParseTree(std::string_view text, std::string_view source) {
+        std::vector<StyleNode>  roots;
+        std::vector<StyleNode*> open; // open[n] is the block a line at level n + 1 goes into
+        std::uint32_t           number = 0;
+        for (const auto piece : text | std::views::split('\n')) {
+            ++number;
+            const std::optional<Line> line = ReadLine(std::string_view(piece.begin(), piece.end()), number, source);
+            if (!line.has_value()) {
+                continue;
+            }
+            if (line->level > open.size()) {
+                throw StyleError(source, line->number,
+                                 std::format("{}: is indented past the block above it: a block's lines sit one level deeper than its key, and a property holds none", line->key));
+            }
+            open.resize(line->level);
+            std::vector<StyleNode>& siblings = open.empty() ? roots : open.back()->children;
+            const auto              earlier  = std::ranges::find(siblings, line->key, &StyleNode::key);
+            if (earlier != siblings.end()) {
+                throw StyleError(source, line->number, std::format("{}: is already set on line {} of the same block", line->key, earlier->line));
+            }
+            siblings.push_back(StyleNode{.key = std::string(line->key), .value = std::string(line->value), .line = line->number, .children = {}});
+            if (line->value.empty()) {
+                open.push_back(&siblings.back());
+            }
+        }
+        RequireFilledBlocks(roots, source);
+        return roots;
+    }
+
+    using Variables = std::map<std::string, std::string, std::less<>>;
+
+    Variables ReadVariables(const std::vector<StyleNode>& roots, std::string_view source) {
+        Variables  variables;
+        const auto vars = std::ranges::find(roots, std::string_view("vars"), &StyleNode::key);
+        if (vars == roots.end()) {
+            return variables;
+        }
+        if (!IsBlock(*vars)) {
+            throw StyleError(source, vars->line, "vars: is a block of name: value lines");
+        }
+        for (const StyleNode& variable : vars->children) {
+            if (IsBlock(variable)) {
+                throw StyleError(source, variable.line, std::format("vars > {}: vars holds name: value lines, not blocks", variable.key));
+            }
+            if (variable.value.find('$') != std::string::npos) {
+                throw StyleError(source, variable.line, std::format("vars > {}: a var cannot use another var: give it a value", variable.key));
+            }
+            variables.emplace(variable.key, variable.value);
+        }
+        return variables;
+    }
+
+    // Every $name in value replaced with its vars value.
+    std::string Substitute(const StyleNode& property, const Variables& variables, std::string_view source) {
+        std::string value;
+        size_t      start = 0;
+        for (size_t dollar = property.value.find('$'); dollar != std::string::npos; dollar = property.value.find('$', start)) {
+            size_t end = dollar + 1;
+            while (end < property.value.size() && IsIdentCharacter(property.value[end])) {
+                ++end;
+            }
+            const std::string_view name  = std::string_view(property.value).substr(dollar + 1, end - dollar - 1);
+            const auto             found = variables.find(name);
+            if (found == variables.end()) {
+                throw StyleError(source, property.line,
+                                 name.empty() ? std::format("{}: $ must be followed by the name of a var", property.key) :
+                                                std::format("{}: ${} names no var: define it in vars, as vars:\n  {}: #e0def4", property.key, name, name));
+            }
+            value += std::string_view(property.value).substr(start, dollar - start);
+            value += found->second;
+            start = end;
+        }
+        value += std::string_view(property.value).substr(start);
+        return value;
+    }
+
+    std::vector<StyleNode> SubstituteAll(const std::vector<StyleNode>& nodes, const Variables& variables, std::string_view source) {
+        std::vector<StyleNode> substituted;
+        substituted.reserve(nodes.size());
+        for (const StyleNode& node : nodes) {
+            substituted.push_back(StyleNode{.key      = node.key,
+                                            .value    = IsBlock(node) ? std::string() : Substitute(node, variables, source),
+                                            .line     = node.line,
+                                            .children = SubstituteAll(node.children, variables, source)});
+        }
+        return substituted;
+    }
+
+    const StyleNode* Child(const StyleNode* block, std::string_view key) {
+        if (block == nullptr) {
+            return nullptr;
+        }
+        const auto found = std::ranges::find(block->children, key, &StyleNode::key);
+        return found == block->children.end() ? nullptr : &*found;
+    }
+
+    const StyleNode* TopLevel(const StyleSheet& sheet, std::string_view key) {
+        const auto found = std::ranges::find(sheet.blocks, key, &StyleNode::key);
+        return found == sheet.blocks.end() ? nullptr : &*found;
+    }
+
+    // Blocks that set the same thing, the one that wins first, with no null entries.
+    using Chain = std::vector<const StyleNode*>;
+
+    Chain ChainOf(std::initializer_list<const StyleNode*> blocks) {
+        Chain chain;
+        std::ranges::copy_if(blocks, std::back_inserter(chain), [](const StyleNode* block) { return block != nullptr; });
+        return chain;
+    }
+
+    // Each block's child block named key, in the chain's order.
+    Chain Children(const Chain& chain, std::string_view key) {
+        Chain children;
+        for (const StyleNode* block : chain) {
+            if (const StyleNode* child = Child(block, key); child != nullptr && IsBlock(*child)) {
+                children.push_back(child);
+            }
+        }
+        return children;
+    }
+
+    Chain Concat(const Chain& first, const Chain& then) {
+        Chain joined = first;
+        joined.insert(joined.end(), then.begin(), then.end());
+        return joined;
+    }
+
+    // The first property named key in the chain.
+    const StyleNode* FirstSet(const Chain& chain, std::string_view key) {
+        for (const StyleNode* block : chain) {
+            if (const StyleNode* property = Child(block, key); property != nullptr && !IsBlock(*property)) {
+                return property;
+            }
+        }
+        return nullptr;
+    }
+
+    template <typename Reader>
+    auto Read(const Chain& chain, std::string_view key, Reader reader, decltype(reader(std::string_view())) inherited) -> decltype(reader(std::string_view())) {
+        const StyleNode* property = FirstSet(chain, key);
+        return property == nullptr ? std::move(inherited) : reader(property->value);
+    }
+
+    D2D1_COLOR_F ColorOf(const Chain& chain, std::string_view key, const D2D1_COLOR_F& inherited) {
+        return Read(chain, key, ReadColor, inherited);
+    }
+
+    constexpr Spacing kNoSpace{.yDips = 0.0f, .xDips = 0.0f};
+
+    Spacing           SpacingOf(const Chain& chain, std::string_view key) {
+        return Read(chain, key, ReadSpacing, kNoSpace);
+    }
+
+    // A side's own border wins over its block's border, and a more specific block's border over either.
+    BorderSide ReadSide(const Chain& chain, std::string_view side) {
+        const std::string own = std::format("border-{}", side);
+        for (const StyleNode* block : chain) {
+            const StyleNode* sideBorder = Child(block, own);
+            const StyleNode* property   = sideBorder != nullptr ? sideBorder : Child(block, "border");
+            if (property != nullptr) {
+                return ReadBorderSide(property->value);
+            }
+        }
+        return kNoBorder;
+    }
+
+    BoxStyle ReadBox(const Chain& chain) {
+        return BoxStyle{.background = ColorOf(chain, "background", kTransparent),
+                        .border     = {.top = ReadSide(chain, "top"), .right = ReadSide(chain, "right"), .bottom = ReadSide(chain, "bottom"), .left = ReadSide(chain, "left")},
+                        .radiusDips = Read(chain, "radius", ReadLength, 0.0f),
+                        .padding    = SpacingOf(chain, "padding"),
+                        .shadows    = Read(chain, "shadow", ReadShadows, std::vector<InsetShadow>{})};
+    }
+
+    constexpr Backdrop kNoBackdrop{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
+
+    Backdrop           ReadBackdrop(const StyleNode* block) {
+        const Chain chain = ChainOf({block});
+        if (!Read(chain, "blur", ReadSwitch, false)) {
+            return kNoBackdrop;
+        }
+        return Backdrop{.blur = true, .brightness = Read(chain, "brightness", ReadLength, 1.0f), .saturation = Read(chain, "saturate", ReadLength, 1.0f)};
+    }
+
+    // An item from its blocks, and its colors under the cursor from hover's.
+    ItemStyle ReadItem(const Chain& item, const Chain& hover, const D2D1_COLOR_F& color) {
+        const D2D1_COLOR_F itemColor  = ColorOf(item, "color", color);
+        const D2D1_COLOR_F background = ColorOf(item, "background", kTransparent);
+        return ItemStyle{.color                = itemColor,
+                         .background           = background,
+                         .weight               = Read(item, "weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
+                         .padding              = SpacingOf(item, "padding"),
+                         .margin               = SpacingOf(item, "margin"),
+                         .radiusDips           = Read(item, "radius", ReadLength, 0.0f),
+                         .shadows              = Read(item, "shadow", ReadShadows, std::vector<InsetShadow>{}),
+                         .hoverColor           = ColorOf(hover, "color", itemColor),
+                         .hoverBackground      = ColorOf(hover, "background", background),
+                         .backgroundTransition = Read(item, "transition", TransitionReader("background"), kNoTransition),
+                         .colorTransition      = Read(item, "transition", TransitionReader("color"), kNoTransition)};
+    }
+
+    // An item in one state: the state's blocks over the item's, and under the cursor the state's colors over the item's
+    // hover, so a state such as focused keeps the colors it sets.
+    ItemStyle ReadItemState(const Chain& items, std::string_view state, const D2D1_COLOR_F& color) {
+        const Chain states = Children(items, state);
+        return ReadItem(Concat(states, items), Concat(states, Children(items, "hover")), color);
+    }
+
+    // A module's text and icon colors in one state: the state's blocks win over the module's own, and the icon inherits
+    // the state's text color.
+    StateColors ReadStateColors(const Chain& module, std::string_view state, const D2D1_COLOR_F& color) {
+        const Chain        states = Children(module, state);
+        const D2D1_COLOR_F text   = ColorOf(states, "color", color);
+        return StateColors{.text = text, .icon = ColorOf(Concat(Children(states, "icon"), Children(module, "icon")), "color", text)};
+    }
+
+    std::string_view TypeName(ModuleKind kind) {
+        const auto entry = std::ranges::find(kModuleTypes, kind, &ModuleTypeName::kind);
+        if (entry == kModuleTypes.end()) {
+            throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
+        }
+        return entry->name;
     }
 
     // A state that colors a module's icon as well as its text, and the one module type that draws it.
@@ -619,609 +825,150 @@ namespace {
     constexpr std::array<OwnedState, 3> kOwnedStates{
         {{.name = "warning", .owner = ModuleKind::Battery}, {.name = "critical", .owner = ModuleKind::Battery}, {.name = "muted", .owner = ModuleKind::Audio}}};
 
-    bool IsOwnedState(std::string_view name) {
-        return std::ranges::find(kOwnedStates, name, &OwnedState::name) != kOwnedStates.end();
-    }
-
-    // An owned state or a custom module's class: either colors a module's text and its .icon.
-    bool IsColoringState(std::string_view name) {
-        return IsOwnedState(name) || !IsStyledClass(name);
-    }
-
-    bool HasColoringState(const Compound& compound) {
-        return std::ranges::any_of(compound.classes, [](const std::string& name) { return IsColoringState(name); });
-    }
-
-    bool IsState(std::string_view name) {
-        return name == "alert" || name == "expanded" || IsColoringState(name);
-    }
-
-    // The classes naming a state a module is in, of which it is in one at a time.
-    std::int64_t StateCount(const Compound& compound) {
-        return std::ranges::count_if(compound.classes, [](const std::string& name) { return IsState(name); });
-    }
-
-    // A module's box: a module type, an id, .module or a state, and :hover.
-    bool IsModuleCompound(const Compound& compound) {
-        const bool onlyModuleClasses = std::ranges::all_of(compound.classes, [](const std::string& name) { return name == "module" || IsState(name); });
-        const bool typed             = compound.type.empty() || IsModuleType(compound.type);
-        return onlyModuleClasses && typed && (!compound.type.empty() || !compound.id.empty() || !compound.classes.empty());
-    }
-
-    // .icon, or .item with at most one of .focused, .occupied, .empty and .toggle, and optionally :hover.
-    std::optional<StyleTarget> PartTarget(const Compound& compound) {
-        if (!compound.type.empty() || !compound.id.empty()) {
-            return std::nullopt;
-        }
-        if (compound.classes == std::vector<std::string>{"icon"} && !compound.hover) {
-            return StyleTarget::Icon;
-        }
-        const auto states =
-            std::ranges::count_if(compound.classes, [](const std::string& name) { return name == "focused" || name == "occupied" || name == "empty" || name == "toggle"; });
-        if (HasClass(compound, "item") && states <= 1 && static_cast<size_t>(states) + 1 == compound.classes.size()) {
-            return StyleTarget::Item;
-        }
-        return std::nullopt;
-    }
-
-    StyleTarget TargetOf(const std::vector<Compound>& compounds, std::string_view text) {
-        const Compound& last = compounds.back();
-        if (compounds.size() == 1 && last.type == "*") {
-            if (!last.id.empty() || !last.classes.empty() || last.hover) {
-                throw std::invalid_argument("* stands alone: it sets the bar-wide font-family, font-size and color");
-            }
-            return StyleTarget::Bar;
-        }
-        if (compounds.size() == 1 && (last.type == "section" || last.type == "tooltip" || last.type == "menu")) {
-            if (!last.id.empty() || !last.classes.empty() || last.hover) {
-                throw std::invalid_argument(std::format("{} takes no id, class or :hover", last.type));
-            }
-            return last.type == "section" ? StyleTarget::Section : last.type == "tooltip" ? StyleTarget::Tooltip : StyleTarget::Menu;
-        }
-        if (compounds.front().type == "menu") {
-            const Compound& menu      = compounds.front();
-            const bool      plainMenu = menu.id.empty() && menu.classes.empty() && !menu.hover;
-            const bool      bare      = last.type.empty() && last.id.empty();
-            const bool      entry     = bare &&
-                (last.classes == std::vector<std::string>{"item"} || last.classes == std::vector<std::string>{"item", "active"} ||
-                 last.classes == std::vector<std::string>{"active", "item"});
-            if (plainMenu && bare && last.classes == std::vector<std::string>{"scrollbar"} && !last.hover) {
-                return StyleTarget::MenuScrollbar;
-            }
-            if (!plainMenu || !entry) {
-                throw std::invalid_argument(
-                    std::format("'{}': a menu's entries are menu .item, with .active and :hover, as menu .item.active:hover, and its scroll bar is menu .scrollbar", text));
-            }
-            return StyleTarget::MenuItem;
-        }
-        if (!compounds.empty() && StateCount(compounds.front()) > 1) {
-            throw std::invalid_argument(
-                std::format("'{}' combines two of .alert, .warning, .critical, .muted, .expanded and a custom module's classes, and a module is in one at a time", text));
-        }
-        if (const std::optional<StyleTarget> part = PartTarget(last)) {
-            if (compounds.size() == 2 && (!IsModuleCompound(compounds[0]) || compounds[0].hover || HasClass(compounds[0], "alert"))) {
-                throw std::invalid_argument(std::format("'{}' must start with a module, as #cpu .icon, without .alert or :hover", text));
-            }
-            if (compounds.size() == 2 && HasClass(compounds[0], "expanded") && *part != StyleTarget::Icon) {
-                throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's or group's .icon only, as #tray.expanded .icon", text));
-            }
-            if (compounds.size() == 2 && HasColoringState(compounds[0]) && *part != StyleTarget::Icon) {
-                throw std::invalid_argument(
-                    std::format("'{}': .warning, .critical, .muted and a custom module's classes style a module's text and .icon only, as #battery.warning .icon", text));
-            }
-            return *part;
-        }
-        if (compounds.size() == 1 && IsModuleCompound(last) && HasClass(last, "expanded")) {
-            throw std::invalid_argument(std::format("'{}': .expanded styles an unfolded tray's or group's .icon only, as #tray.expanded .icon", text));
-        }
-        if (compounds.size() == 1 && IsModuleCompound(last)) {
-            if (last.hover && StateCount(last) > 0) {
-                throw std::invalid_argument(std::format("'{}' combines a state with :hover, which style different things: text color and background", text));
-            }
-            return StyleTarget::Module;
-        }
-        throw std::invalid_argument(std::format("'{}' matches nothing intarsia draws: style *, section, tooltip, menu, a module (clock, #time, .module), "
-                                                "a module's .icon or .item, or a menu's .item",
-                                                text));
-    }
-
-    std::array<std::uint32_t, 3> SpecificityOf(const std::vector<Compound>& compounds) {
-        std::array<std::uint32_t, 3> specificity{0, 0, 0};
-        for (const Compound& compound : compounds) {
-            specificity[0] += compound.id.empty() ? 0 : 1;
-            specificity[1] += static_cast<std::uint32_t>(compound.classes.size()) + (compound.hover ? 1 : 0);
-            specificity[2] += compound.type.empty() || compound.type == "*" ? 0 : 1;
-        }
-        return specificity;
-    }
-
-    Selector ParseSelector(std::string_view text) {
-        if (text.find_first_of(">+~") != std::string_view::npos) {
-            throw std::invalid_argument(std::format("'{}' uses a combinator: only a space, as in #cpu .icon, is supported", text));
-        }
-        std::vector<Compound> compounds;
-        for (const std::string_view part : SplitOutside(text, kSpace)) {
-            compounds.push_back(ParseCompound(part));
-        }
-        if (compounds.empty() || compounds.size() > 2) {
-            throw std::invalid_argument(std::format("'{}' must be one part, or a module then its .icon or .item", text));
-        }
-        const StyleTarget target = TargetOf(compounds, text);
-        return Selector{.compounds = compounds, .target = target, .specificity = SpecificityOf(compounds)};
-    }
-
-    // What each target takes. :hover takes background only and a state color only: each changes one thing, and none
-    // changes a size.
-    std::vector<std::string_view> AllowedProperties(const Selector& selector) {
-        constexpr std::array<std::string_view, 11> kBox{"background",    "border",      "border-width",  "border-color", "border-top", "border-right",
-                                                        "border-bottom", "border-left", "border-radius", "padding",      "box-shadow"};
-        std::vector<std::string_view>              allowed;
-        switch (selector.target) {
-            case StyleTarget::Bar: return {"font-family", "font-size", "color"};
-            case StyleTarget::Section:
-                allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"margin", "backdrop-filter"});
-                return allowed;
-            case StyleTarget::Tooltip:
-                allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"color", "backdrop-filter"});
-                return allowed;
-            case StyleTarget::Menu:
-                allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"color", "backdrop-filter", "max-width", "max-height"});
-                return allowed;
-            case StyleTarget::MenuScrollbar: return {"width", "background", "border-radius", "margin"};
-            case StyleTarget::Icon:
-                // An unfolded tray's or group's icon turns and nothing else, so its size never changes as it unfolds.
-                if (selector.compounds.size() == 2 && HasClass(selector.compounds.front(), "expanded")) {
-                    return {"transform"};
-                }
-                if (selector.compounds.size() == 2 && HasColoringState(selector.compounds.front())) {
-                    return {"color"};
-                }
-                return {"font-family", "font-size", "color", "margin-right", "transform", "transition"};
-            case StyleTarget::Item:
-            case StyleTarget::MenuItem:
-                // An item under the cursor changes color only: a change of size would move every item after it.
-                if (selector.compounds.back().hover) {
-                    return {"color", "background"};
-                }
-                allowed = {"color", "background", "font-weight", "padding", "margin", "border-radius", "box-shadow"};
-                if (selector.target == StyleTarget::Item) {
-                    allowed.emplace_back("transition");
-                }
-                return allowed;
-            case StyleTarget::Module: {
-                const Compound& compound = selector.compounds.front();
-                if (compound.hover) {
-                    return {"background"};
-                }
-                if (HasClass(compound, "alert") || HasColoringState(compound)) {
-                    return {"color"};
-                }
-                allowed.assign(kBox.begin(), kBox.end());
-                allowed.insert(allowed.end(), {"margin", "color", "transition"});
-                return allowed;
-            }
-        }
-        throw std::invalid_argument(std::format("unknown style target {}", static_cast<std::int32_t>(selector.target)));
-    }
-
-    // One rule block as written, before its selector list is split and its values checked.
-    struct RawRule {
-        std::string_view         selectors;
-        std::vector<Declaration> declarations;
-        std::uint32_t            line;
-    };
-
-    std::vector<Declaration> ParseDeclarations(std::string_view text, std::string_view body, size_t bodyOffset, std::string_view source) {
-        std::vector<Declaration> declarations;
-        size_t                   start = 0;
-        while (start < body.size()) {
-            const size_t           end     = FindOutside(body, start, ";");
-            const std::string_view piece   = body.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
-            const std::string_view trimmed = Trim(piece);
-            if (!trimmed.empty()) {
-                const std::uint32_t line  = LineAt(text, bodyOffset + start + piece.find(trimmed.front()));
-                const size_t        colon = trimmed.find(':');
-                if (colon == std::string_view::npos) {
-                    throw StyleError(source, line, std::format("'{}' must be property: value", trimmed));
-                }
-                const std::string_view value = Trim(trimmed.substr(colon + 1));
-                if (value.find("!important") != std::string_view::npos) {
-                    throw StyleError(source, line, "!important is not supported: a more specific selector wins instead");
-                }
-                declarations.push_back(Declaration{.property = std::string(Trim(trimmed.substr(0, colon))), .value = std::string(value), .line = line});
-            }
-            if (end == std::string_view::npos) {
-                break;
-            }
-            start = end + 1;
-        }
-        return declarations;
-    }
-
-    std::vector<RawRule> ParseBlocks(std::string_view text, std::string_view source) {
-        std::vector<RawRule> rules;
-        size_t               position = 0;
-        while (true) {
-            position = text.find_first_not_of(kSpace, position);
-            if (position == std::string_view::npos) {
-                return rules;
-            }
-            const std::uint32_t line = LineAt(text, position);
-            if (text[position] == '@') {
-                throw StyleError(source, line, "at-rules such as @import and @media are not supported");
-            }
-            const size_t open = FindOutside(text, position, "{};");
-            if (open == std::string_view::npos || text[open] != '{') {
-                throw StyleError(source, line, "a selector must be followed by { and its declarations }");
-            }
-            const size_t close = FindOutside(text, open + 1, "{}");
-            if (close == std::string_view::npos) {
-                throw StyleError(source, line, "this rule's { is never closed with }");
-            }
-            if (text[close] == '{') {
-                throw StyleError(source, LineAt(text, close), "rules cannot nest: close the rule above with } first");
-            }
-            rules.push_back(RawRule{.selectors    = Trim(text.substr(position, open - position)),
-                                    .declarations = ParseDeclarations(text, text.substr(open + 1, close - open - 1), open + 1, source),
-                                    .line         = line});
-            position = close + 1;
-        }
-    }
-
-    using Variables = std::map<std::string, std::string, std::less<>>;
-
-    // Every var(--name) in value replaced with the :root value of --name.
-    std::string Substitute(const Declaration& declaration, const Variables& variables, std::string_view source) {
-        std::string value = declaration.value;
-        size_t      start = value.find("var(");
-        while (start != std::string::npos) {
-            const size_t end = value.find(')', start);
-            if (end == std::string::npos) {
-                throw StyleError(source, declaration.line, "var( is never closed with )");
-            }
-            const std::string name  = std::string(Trim(std::string_view(value).substr(start + 4, end - start - 4)));
-            const auto        found = variables.find(name);
-            if (found == variables.end()) {
-                throw StyleError(source, declaration.line, std::format("var({}) names no custom property: define it in :root, as :root {{ {}: #e0def4; }}", name, name));
-            }
-            value.replace(start, end - start + 1, found->second);
-            start = value.find("var(", start + found->second.size());
-        }
-        return value;
-    }
-
-    Variables ReadVariables(const std::vector<RawRule>& raw, std::string_view source) {
-        Variables variables;
-        for (const RawRule& rule : raw) {
-            if (rule.selectors != ":root") {
-                continue;
-            }
-            for (const Declaration& declaration : rule.declarations) {
-                if (!declaration.property.starts_with("--")) {
-                    throw StyleError(source, declaration.line,
-                                     std::format("{} does not belong in :root, which only defines custom properties such as --foreground", declaration.property));
-                }
-                if (declaration.value.find("var(") != std::string::npos) {
-                    throw StyleError(source, declaration.line, "a custom property cannot use var(): give it a value");
-                }
-                variables.insert_or_assign(declaration.property, declaration.value);
-            }
-        }
-        return variables;
-    }
-
-    // A module's box animates its background and, a tray's or group's, its width as it unfolds, an icon its rotation and
-    // an item its colors.
-    std::vector<std::string_view> AnimatedProperties(StyleTarget target) {
-        if (target == StyleTarget::Icon) {
-            return {"transform"};
-        }
-        if (target == StyleTarget::Item) {
-            return {"background", "color"};
-        }
-        return {"background", "width"};
-    }
-
-    void RequireTransitionedProperties(StyleTarget target, std::string_view value) {
-        const std::vector<std::string_view> animated = AnimatedProperties(target);
-        for (const TransitionValue& transition : ReadTransitionValues(value)) {
-            if (std::ranges::find(animated, transition.property) == animated.end()) {
-                throw std::invalid_argument(std::format("animates {} here, not {}, as transition: {} 300ms ease", JoinNames(animated), transition.property, animated.front()));
-            }
-        }
-    }
-
-    // Declarations with var() replaced, shorthands expanded and every value checked against what the selector takes.
-    std::vector<Declaration> CheckDeclarations(const Selector& selector, std::string_view selectorText, const std::vector<Declaration>& declarations, const Variables& variables,
-                                               std::string_view source) {
-        const std::vector<std::string_view> allowed = AllowedProperties(selector);
-        std::vector<Declaration>            checked;
-        for (const Declaration& written : declarations) {
-            const Declaration declaration{.property = written.property == "background-color" ? std::string("background") : written.property,
-                                          .value    = Substitute(written, variables, source),
-                                          .line     = written.line};
-            try {
-                if (!KindOf(declaration.property).has_value()) {
-                    throw std::invalid_argument("is not a property intarsia draws");
-                }
-                if (std::ranges::find(allowed, declaration.property) == allowed.end()) {
-                    throw std::invalid_argument(std::format("does not apply to {}, which takes: {}", selectorText, JoinNames(allowed)));
-                }
-                for (const Declaration& longhand : ExpandShorthand(declaration)) {
-                    CheckValue(*KindOf(longhand.property), longhand.value);
-                    if (longhand.property == "transition") {
-                        RequireTransitionedProperties(selector.target, longhand.value);
-                    }
-                    checked.push_back(longhand);
-                }
-            } catch (const std::invalid_argument& error) { throw StyleError(source, declaration.line, std::format("{}: {} {}", selectorText, declaration.property, error.what())); }
-        }
-        return checked;
-    }
-
-    // One element a selector part is matched against: a module's box, or its icon or an item.
-    struct Element {
-        std::string_view              type;
-        std::string_view              id;
-        std::vector<std::string_view> classes;
-        bool                          hover;
-    };
-
-    bool Matches(const Compound& compound, const Element& element) {
-        return (compound.type.empty() || compound.type == element.type) && (compound.id.empty() || compound.id == element.id) && (!compound.hover || element.hover) &&
-            std::ranges::all_of(compound.classes, [&element](const std::string& name) { return std::ranges::find(element.classes, name) != element.classes.end(); });
-    }
-
-    // The winning declaration of each property for one element, and where it came from for errors.
-    class Cascaded {
-      public:
-        Cascaded(const StyleSheet& sheet, StyleTarget target, const Element* module, const Element* part) : _source(sheet.source) {
-            std::vector<const StyleRule*> matching;
-            for (const StyleRule& rule : sheet.rules) {
-                const std::vector<Compound>& compounds = rule.selector.compounds;
-                if (rule.selector.target != target) {
-                    continue;
-                }
-                const bool matches = part == nullptr ? module == nullptr || Matches(compounds.front(), *module) :
-                                                       Matches(compounds.back(), *part) && (compounds.size() == 1 || Matches(compounds.front(), *module));
-                if (matches) {
-                    matching.push_back(&rule);
-                }
-            }
-            // Later rules of equal specificity win, as in CSS, so the sort keeps file order.
-            std::ranges::stable_sort(matching, {}, [](const StyleRule* rule) { return rule->selector.specificity; });
-            for (const StyleRule* rule : matching) {
-                for (const Declaration& declaration : rule->declarations) {
-                    _winners.insert_or_assign(declaration.property, &declaration);
-                }
-            }
-        }
-
-        const Declaration* Find(std::string_view property) const {
-            const auto found = _winners.find(property);
-            return found == _winners.end() ? nullptr : found->second;
-        }
-
-        template <typename Reader>
-        auto Read(std::string_view property, Reader reader, decltype(reader(std::string_view())) inherited) const -> decltype(reader(std::string_view())) {
-            const Declaration* declaration = Find(property);
-            return declaration == nullptr ? std::move(inherited) : reader(declaration->value);
-        }
-
-        D2D1_COLOR_F Color(std::string_view property, const D2D1_COLOR_F& inherited) const {
-            return Read(property, ReadColor, inherited);
-        }
-        float Length(std::string_view property, float inherited) const {
-            return Read(property, ReadLength, inherited);
-        }
-        Spacing Space(std::string_view property, const Spacing& inherited) const {
-            return Read(property, ReadSpacing, inherited);
-        }
-
-        const std::string& Source() const {
-            return _source;
-        }
-
-      private:
-        std::string                                            _source;
-        std::map<std::string, const Declaration*, std::less<>> _winners;
-    };
-
-    constexpr Spacing kNoSpace{.yDips = 0.0f, .xDips = 0.0f};
-
-    BorderSide        ReadSide(const Cascaded& box, std::string_view side) {
-        return BorderSide{.widthDips = box.Length(std::format("border-{}-width", side), 0.0f), .color = box.Color(std::format("border-{}-color", side), kTransparent)};
-    }
-
-    BoxStyle ReadBox(const Cascaded& box) {
-        return BoxStyle{.background = box.Color("background", kTransparent),
-                        .border     = {.top = ReadSide(box, "top"), .right = ReadSide(box, "right"), .bottom = ReadSide(box, "bottom"), .left = ReadSide(box, "left")},
-                        .radiusDips = box.Length("border-radius", 0.0f),
-                        .padding    = box.Space("padding", kNoSpace),
-                        .shadows    = box.Read("box-shadow", ReadShadows, std::vector<InsetShadow>{})};
-    }
-
-    // An item of owner, a module or the menu, in one state or none.
-    ItemStyle ReadItem(const StyleSheet& sheet, StyleTarget target, const Element& owner, std::string_view state, const D2D1_COLOR_F& color) {
-        const std::vector<std::string_view> classes = state.empty() ? std::vector<std::string_view>{"item"} : std::vector<std::string_view>{"item", state};
-        const Element                       item{.type = {}, .id = {}, .classes = classes, .hover = false};
-        const Element                       hovered{.type = {}, .id = {}, .classes = classes, .hover = true};
-        const Cascaded                      cascaded(sheet, target, &owner, &item);
-        const Cascaded                      hover(sheet, target, &owner, &hovered);
-        const D2D1_COLOR_F                  itemColor  = cascaded.Color("color", color);
-        const D2D1_COLOR_F                  background = cascaded.Color("background", kTransparent);
-        return ItemStyle{.color                = itemColor,
-                         .background           = background,
-                         .weight               = cascaded.Read("font-weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
-                         .padding              = cascaded.Space("padding", kNoSpace),
-                         .margin               = cascaded.Space("margin", kNoSpace),
-                         .radiusDips           = cascaded.Length("border-radius", 0.0f),
-                         .shadows              = cascaded.Read("box-shadow", ReadShadows, std::vector<InsetShadow>{}),
-                         .hoverColor           = hover.Color("color", itemColor),
-                         .hoverBackground      = hover.Color("background", background),
-                         .backgroundTransition = cascaded.Read("transition", TransitionReader("background"), kNoTransition),
-                         .colorTransition      = cascaded.Read("transition", TransitionReader("color"), kNoTransition)};
-    }
-
-    std::string_view TypeName(ModuleKind kind) {
-        const auto entry = std::ranges::find(kModuleTypes, kind, &ModuleTypeName::kind);
-        if (entry == kModuleTypes.end()) {
-            throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
-        }
-        return entry->name;
-    }
-
-    // A module's text and icon colors in one state: rules for the state win over the module's own by specificity, and
-    // the icon inherits the state's text color.
-    StateColors ReadStateColors(const StyleSheet& sheet, std::string_view type, std::string_view name, std::string_view state, const D2D1_COLOR_F& color) {
-        const Element      module{.type = type, .id = name, .classes = {"module", state}, .hover = false};
-        const Element      icon{.type = {}, .id = {}, .classes = {"icon"}, .hover = false};
-        const D2D1_COLOR_F text = Cascaded(sheet, StyleTarget::Module, &module, nullptr).Color("color", color);
-        return StateColors{.text = text, .icon = Cascaded(sheet, StyleTarget::Icon, &module, &icon).Color("color", text)};
-    }
-
-    // A rule for a state only another type draws, such as .muted on a clock, would do nothing.
-    void RequireOwnStates(const StyleSheet& sheet, ModuleKind kind, std::string_view type, std::string_view name) {
+    // What a module's own block holds that only some module types draw.
+    void RequireDrawnBlocks(const StyleNode& own, ModuleKind kind, const std::vector<std::string>& classes, std::string_view source) {
+        const std::string_view type = TypeName(kind);
         for (const OwnedState& state : kOwnedStates) {
-            if (state.owner == kind) {
-                continue;
+            if (const StyleNode* block = Child(&own, state.name); block != nullptr && kind != state.owner) {
+                throw StyleError(source, block->line,
+                                 std::format("{} > {}: {} colors only {} modules, and {} is a {} module", own.key, state.name, state.name, TypeName(state.owner), own.key, type));
             }
-            const Element module{.type = type, .id = name, .classes = {"module", state.name}, .hover = false};
-            for (const StyleRule& rule : sheet.rules) {
-                const Compound& first = rule.selector.compounds.front();
-                if (HasClass(first, state.name) && Matches(first, module)) {
-                    throw StyleError(sheet.source, rule.line, std::format(".{} colors only {} modules, and {} is a {} module", state.name, TypeName(state.owner), name, type));
+        }
+        if (kind != ModuleKind::Tray && kind != ModuleKind::Group) {
+            const StyleNode* icon = Child(&own, "icon");
+            for (const StyleNode* drawn : {Child(&own, "expanded"), Child(icon, "rotate"), Child(icon, "transition")}) {
+                if (drawn != nullptr) {
+                    throw StyleError(source, drawn->line, std::format("{}: {} animates a tray or group as it unfolds, and {} is a {} module", own.key, drawn->key, own.key, type));
                 }
+            }
+            const StyleNode* transition = Child(&own, "transition");
+            if (transition != nullptr && std::ranges::any_of(ReadTransitionValues(transition->value), [](const TransitionValue& value) { return value.property == "width"; })) {
+                throw StyleError(source, transition->line,
+                                 std::format("{}: transition: width animates a tray or group as it unfolds, and {} is a {} module", own.key, own.key, type));
+            }
+        }
+        for (const StyleNode& child : own.children) {
+            const bool known = std::ranges::find(kModuleBlocks, child.key, &ChildBlock::key) != kModuleBlocks.end();
+            if (IsBlock(child) && !known && std::ranges::find(classes, child.key) == classes.end()) {
+                throw StyleError(source, child.line,
+                                 std::format("{}: {} is not a block a module holds ({}), nor a class {} lists in its classes", own.key, child.key, KeysOf(kModuleBlocks), own.key));
             }
         }
     }
 
-    const Declaration& Required(const Cascaded& bar, std::string_view property, std::string_view example) {
-        const Declaration* declaration = bar.Find(property);
-        if (declaration == nullptr) {
-            throw ConfigError(std::format("{}: * must set {}, as * {{ {}: {}; }}", bar.Source(), property, property, example));
+    const StyleNode& Required(const StyleSheet& sheet, const StyleNode& bar, std::string_view key, std::string_view example) {
+        const StyleNode* property = Child(&bar, key);
+        if (property == nullptr) {
+            throw StyleError(sheet.source, bar.line, std::format("bar must set {}, as {}: {}", key, key, example));
         }
-        return *declaration;
+        return *property;
     }
 
 } // namespace
 
 StyleSheet ParseStyleSheet(std::string_view text, std::string source) {
-    const std::string          blanked   = BlankComments(text, source);
-    const std::vector<RawRule> raw       = ParseBlocks(blanked, source);
-    const Variables            variables = ReadVariables(raw, source);
-    StyleSheet                 sheet{.source = std::move(source), .rules = {}};
-    for (const RawRule& rule : raw) {
-        if (rule.selectors == ":root") {
+    const std::vector<StyleNode> tree      = ParseTree(text, source);
+    const Variables              variables = ReadVariables(tree, source);
+    StyleSheet                   sheet{.source = std::move(source), .blocks = {}};
+    for (StyleNode& block : SubstituteAll(tree, variables, sheet.source)) {
+        if (block.key == "vars") {
             continue;
         }
-        for (const std::string_view selectorText : SplitOutside(rule.selectors, ",")) {
-            Selector selector{};
-            try {
-                selector = ParseSelector(selectorText);
-            } catch (const std::invalid_argument& error) { throw StyleError(sheet.source, rule.line, error.what()); }
-            std::vector<Declaration> declarations = CheckDeclarations(selector, selectorText, rule.declarations, variables, sheet.source);
-            sheet.rules.push_back(StyleRule{.selector = std::move(selector), .declarations = std::move(declarations), .line = rule.line});
+        if (!IsBlock(block)) {
+            throw StyleError(sheet.source, block.line, std::format("{}: the top level holds blocks, as {}: with its lines indented beneath it", block.key, block.key));
         }
+        const auto top = std::ranges::find(kTopBlocks, block.key, &TopBlock::key);
+        CheckBlock(block, top != kTopBlocks.end() ? *top->shape : kModule, block.key, sheet.source);
+        sheet.blocks.push_back(std::move(block));
     }
     return sheet;
 }
 
 StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
-    const Cascaded     bar(sheet, StyleTarget::Bar, nullptr, nullptr);
-    const Cascaded     section(sheet, StyleTarget::Section, nullptr, nullptr);
-    const Cascaded     tooltip(sheet, StyleTarget::Tooltip, nullptr, nullptr);
-    const Cascaded     menu(sheet, StyleTarget::Menu, nullptr, nullptr);
-    const Cascaded     scrollbar(sheet, StyleTarget::MenuScrollbar, nullptr, nullptr);
-    const Element      menuElement{.type = "menu", .id = {}, .classes = {}, .hover = false};
-    const D2D1_COLOR_F color     = ReadColor(Required(bar, "color", "#e0def4").value);
-    const D2D1_COLOR_F menuColor = menu.Color("color", color);
-    const auto         readCap   = [](std::string_view text) { return std::optional<float>(ReadPositiveLength(text)); };
-    return StyleConfig{.font         = ReadFamily(Required(bar, "font-family", "\"Segoe UI\"").value),
-                       .fontSizeDips = ReadPositiveLength(Required(bar, "font-size", "14px").value),
+    const StyleNode* bar = TopLevel(sheet, "bar");
+    if (bar == nullptr) {
+        throw ConfigError(std::format("{}: must have a bar block that sets font, size and color, as bar:\n  font: Segoe UI\n  size: 13\n  color: #e0def4", sheet.source));
+    }
+    const StyleNode*   section   = TopLevel(sheet, "section");
+    const StyleNode*   tooltip   = TopLevel(sheet, "tooltip");
+    const StyleNode*   menu      = TopLevel(sheet, "menu");
+    const Chain        menuChain = ChainOf({menu});
+    const Chain        items     = Children(menuChain, "item");
+    const Chain        active    = Children(items, "active");
+    const D2D1_COLOR_F color     = ReadColor(Required(sheet, *bar, "color", "#e0def4").value);
+    const D2D1_COLOR_F menuColor = ColorOf(menuChain, "color", color);
+    const Chain        scrollbar = Children(menuChain, "scrollbar");
+    return StyleConfig{.font         = ReadFamily(Required(sheet, *bar, "font", "Segoe UI").value),
+                       .fontSizeDips = ReadPositiveLength(Required(sheet, *bar, "size", "13").value),
                        .color        = color,
-                       .section = {.box = ReadBox(section), .margin = section.Space("margin", kNoSpace), .backdrop = section.Read("backdrop-filter", ReadBackdrop, kNoBackdrop)},
-                       .tooltip = {.box = ReadBox(tooltip), .color = tooltip.Color("color", color), .backdrop = tooltip.Read("backdrop-filter", ReadBackdrop, kNoBackdrop)},
-                       .menu    = {.box           = ReadBox(menu),
-                                   .color         = menuColor,
-                                   .backdrop      = menu.Read("backdrop-filter", ReadBackdrop, kNoBackdrop),
-                                   .maxWidthDips  = menu.Read("max-width", readCap, std::nullopt),
-                                   .maxHeightDips = menu.Read("max-height", readCap, std::nullopt),
-                                   .item          = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "", menuColor),
-                                   .active        = ReadItem(sheet, StyleTarget::MenuItem, menuElement, "active", menuColor),
-                                   .scrollbar     = {.widthDips  = scrollbar.Read("width", ReadPositiveLength, 0.0f),
-                                                     .background = scrollbar.Color("background", kTransparent),
-                                                     .radiusDips = scrollbar.Length("border-radius", 0.0f),
-                                                     .margin     = scrollbar.Space("margin", kNoSpace)}}};
+                       .section      = {.box = ReadBox(ChainOf({section})), .margin = SpacingOf(ChainOf({section}), "margin"), .backdrop = ReadBackdrop(section)},
+                       .tooltip      = {.box = ReadBox(ChainOf({tooltip})), .color = ColorOf(ChainOf({tooltip}), "color", color), .backdrop = ReadBackdrop(tooltip)},
+                       .menu         = {.box           = ReadBox(menuChain),
+                                        .color         = menuColor,
+                                        .backdrop      = ReadBackdrop(menu),
+                                        .maxWidthDips  = Read(menuChain, "max-width", ReadCap, std::nullopt),
+                                        .maxHeightDips = Read(menuChain, "max-height", ReadCap, std::nullopt),
+                                        .item          = ReadItem(items, Children(items, "hover"), menuColor),
+                                        .active        = ReadItem(Concat(active, items), Concat(Children(active, "hover"), Concat(active, Children(items, "hover"))), menuColor),
+                                        .scrollbar     = {.widthDips  = Read(scrollbar, "width", ReadPositiveLength, 0.0f),
+                                                          .background = ColorOf(scrollbar, "background", kTransparent),
+                                                          .radiusDips = Read(scrollbar, "radius", ReadLength, 0.0f),
+                                                          .margin     = SpacingOf(scrollbar, "margin")}}};
 }
 
 ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes) {
-    const std::string_view type = TypeName(kind);
-    const Element          normal{.type = type, .id = name, .classes = {"module"}, .hover = false};
-    const Element          hovered{.type = type, .id = name, .classes = {"module"}, .hover = true};
-    const Element          alerted{.type = type, .id = name, .classes = {"module", "alert"}, .hover = false};
-    const Cascaded         box(sheet, StyleTarget::Module, &normal, nullptr);
-    const BoxStyle         boxStyle = ReadBox(box);
-    const D2D1_COLOR_F     color    = box.Color("color", bar.color);
-    const Element          icon{.type = {}, .id = {}, .classes = {"icon"}, .hover = false};
-    const Element          expanded{.type = type, .id = name, .classes = {"module", "expanded"}, .hover = false};
-    const Cascaded         iconRules(sheet, StyleTarget::Icon, &normal, &icon);
-    const Cascaded         expandedIconRules(sheet, StyleTarget::Icon, &expanded, &icon);
-    if (kind != ModuleKind::Tray && kind != ModuleKind::Group) {
-        for (const auto& [rules, property] : {std::pair{&iconRules, "transform"}, std::pair{&iconRules, "transition"}, std::pair{&expandedIconRules, "transform"}}) {
-            if (const Declaration* declaration = rules->Find(property)) {
-                throw StyleError(sheet.source, declaration->line, std::format("{} animates a tray or group as it unfolds, and {} is a {} module", property, name, type));
-            }
-        }
-        const Declaration* transition = box.Find("transition");
-        if (transition != nullptr && std::ranges::any_of(ReadTransitionValues(transition->value), [](const TransitionValue& value) { return value.property == "width"; })) {
-            throw StyleError(sheet.source, transition->line, std::format("transition: width animates a tray or group as it unfolds, and {} is a {} module", name, type));
-        }
+    const StyleNode* own = TopLevel(sheet, name);
+    if (own != nullptr) {
+        RequireDrawnBlocks(*own, kind, classes, sheet.source);
     }
-    RequireOwnStates(sheet, kind, type, name);
-    const float              rotation = iconRules.Read("transform", ReadRotation, 0.0f);
+    const Chain              module   = ChainOf({own, TopLevel(sheet, "module")});
+    const BoxStyle           box      = ReadBox(module);
+    const D2D1_COLOR_F       color    = ColorOf(module, "color", bar.color);
+    const Chain              icon     = Children(module, "icon");
+    const Chain              items    = Children(module, "item");
+    const float              rotation = Read(icon, "rotate", ReadSignedNumber, 0.0f);
     std::vector<ClassColors> classColors;
     classColors.reserve(classes.size());
     for (const std::string& declared : classes) {
-        classColors.push_back(ClassColors{.name = declared, .colors = ReadStateColors(sheet, type, name, declared, color)});
+        classColors.push_back(ClassColors{.name = declared, .colors = ReadStateColors(module, declared, color)});
     }
-    return ModuleStyle{.box                         = boxStyle,
-                       .margin                      = box.Space("margin", kNoSpace),
-                       .hover                       = Cascaded(sheet, StyleTarget::Module, &hovered, nullptr).Color("background", boxStyle.background),
-                       .backgroundTransition        = box.Read("transition", TransitionReader("background"), kNoTransition),
+    return ModuleStyle{.box                         = box,
+                       .margin                      = SpacingOf(module, "margin"),
+                       .hover                       = ColorOf(Children(module, "hover"), "background", box.background),
+                       .backgroundTransition        = Read(module, "transition", TransitionReader("background"), kNoTransition),
                        .color                       = color,
-                       .alertColor                  = Cascaded(sheet, StyleTarget::Module, &alerted, nullptr).Color("color", color),
-                       .warning                     = ReadStateColors(sheet, type, name, "warning", color),
-                       .critical                    = ReadStateColors(sheet, type, name, "critical", color),
-                       .muted                       = ReadStateColors(sheet, type, name, "muted", color),
+                       .alertColor                  = ColorOf(Children(module, "alert"), "color", color),
+                       .warning                     = ReadStateColors(module, "warning", color),
+                       .critical                    = ReadStateColors(module, "critical", color),
+                       .muted                       = ReadStateColors(module, "muted", color),
                        .classes                     = std::move(classColors),
-                       .icon                        = {.font            = iconRules.Read("font-family", ReadFamily, bar.font),
-                                                       .sizeDips        = iconRules.Read("font-size", ReadPositiveLength, bar.fontSizeDips),
-                                                       .color           = iconRules.Color("color", color),
-                                                       .gapDips         = iconRules.Length("margin-right", 0.0f),
+                       .icon                        = {.font            = Read(icon, "font", ReadFamily, bar.font),
+                                                       .sizeDips        = Read(icon, "size", ReadPositiveLength, bar.fontSizeDips),
+                                                       .color           = ColorOf(icon, "color", color),
+                                                       .gapDips         = Read(icon, "margin-right", ReadLength, 0.0f),
                                                        .rotationDegrees = rotation,
-                                                       .transition      = iconRules.Read("transition", TransitionReader("transform"), kNoTransition)},
-                       .item                        = ReadItem(sheet, StyleTarget::Item, normal, "", color),
-                       .focused                     = ReadItem(sheet, StyleTarget::Item, normal, "focused", color),
-                       .occupied                    = ReadItem(sheet, StyleTarget::Item, normal, "occupied", color),
-                       .empty                       = ReadItem(sheet, StyleTarget::Item, normal, "empty", color),
-                       .toggle                      = ReadItem(sheet, StyleTarget::Item, normal, "toggle", color),
-                       .transition                  = box.Read("transition", TransitionReader("width"), kNoTransition),
-                       .expandedIconRotationDegrees = expandedIconRules.Read("transform", ReadRotation, rotation)};
+                                                       .transition      = Read(icon, "transition", TransitionReader("rotate"), kNoTransition)},
+                       .item                        = ReadItem(items, Children(items, "hover"), color),
+                       .focused                     = ReadItemState(items, "focused", color),
+                       .occupied                    = ReadItemState(items, "occupied", color),
+                       .empty                       = ReadItemState(items, "empty", color),
+                       .toggle                      = ReadItemState(items, "toggle", color),
+                       .transition                  = Read(module, "transition", TransitionReader("width"), kNoTransition),
+                       .expandedIconRotationDegrees = Read(Children(Children(module, "expanded"), "icon"), "rotate", ReadSignedNumber, rotation)};
 }
 
-void RequireKnownIds(const StyleSheet& sheet, const std::vector<std::string>& names) {
-    for (const StyleRule& rule : sheet.rules) {
-        for (const Compound& compound : rule.selector.compounds) {
-            if (!compound.id.empty() && std::ranges::find(names, compound.id) == names.end()) {
-                throw StyleError(sheet.source, rule.line,
-                                 std::format("#{} names no module: the config's modules table defines {}", compound.id, names.empty() ? std::string("none") : JoinNames(names)));
-            }
+void RequireKnownModules(const StyleSheet& sheet, const std::vector<std::string>& names) {
+    for (const StyleNode& block : sheet.blocks) {
+        if (!IsReservedModuleName(block.key) && std::ranges::find(names, block.key) == names.end()) {
+            throw StyleError(sheet.source, block.line,
+                             std::format("{}: names no module, and the top level holds vars, bar, section, module, tooltip, menu and the modules the config defines: {}", block.key,
+                                         names.empty() ? std::string("none") : JoinNames(names)));
         }
     }
+}
+
+bool IsReservedModuleName(std::string_view name) {
+    return name == "vars" || std::ranges::find(kTopBlocks, name, &TopBlock::key) != kTopBlocks.end();
 }
 
 bool IsIdentCharacter(char character) {
@@ -1229,27 +976,21 @@ bool IsIdentCharacter(char character) {
 }
 
 bool IsStyledClass(std::string_view name) {
-    return std::ranges::find(kClasses, name) != kClasses.end();
+    return std::ranges::find(kModuleBlocks, name, &ChildBlock::key) != kModuleBlocks.end();
 }
 
-// Only a rule's first part holds a module's classes: a later part's are .icon or .item ones, which parsing checked.
 void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<DeclaredClasses>& declared) {
-    for (const StyleRule& rule : sheet.rules) {
-        const Compound& first = rule.selector.compounds.front();
-        for (const std::string& name : first.classes) {
-            if (IsStyledClass(name)) {
-                continue;
-            }
-            const bool matchesADeclarer = std::ranges::any_of(declared, [&first, &name](const DeclaredClasses& module) {
-                const Element element{.type = TypeName(ModuleKind::Custom), .id = module.module, .classes = {"module", name}, .hover = false};
-                return std::ranges::find(module.classes, name) != module.classes.end() && Matches(first, element);
-            });
-            if (!matchesADeclarer) {
-                throw StyleError(sheet.source, rule.line,
-                                 std::format("'.{}' is not a class intarsia styles, known classes are: .module, .alert, .warning, .critical, .muted, .expanded, .icon, .item, "
-                                             ".focused, .occupied, .empty, .toggle, or one a custom module this rule matches lists in its classes",
-                                             name));
-            }
+    const StyleNode* module = TopLevel(sheet, "module");
+    if (module == nullptr) {
+        return;
+    }
+    for (const StyleNode& child : module->children) {
+        const bool known = std::ranges::find(kDefaultModuleBlocks, child.key, &ChildBlock::key) != kDefaultModuleBlocks.end();
+        const bool declares =
+            std::ranges::any_of(declared, [&child](const DeclaredClasses& custom) { return std::ranges::find(custom.classes, child.key) != custom.classes.end(); });
+        if (IsBlock(child) && !known && !declares) {
+            throw StyleError(sheet.source, child.line,
+                             std::format("module: {} is not a block module holds ({}), nor a class a custom module lists in its classes", child.key, KeysOf(kDefaultModuleBlocks)));
         }
     }
 }

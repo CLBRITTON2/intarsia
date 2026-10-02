@@ -553,7 +553,7 @@ namespace integration {
         Log("work_directory", std::format("path={}", LogValue(_work.string())));
         const std::filesystem::path configPath = _work / "config.lua";
         WriteText(configPath, config);
-        WriteText(_work / "style.css", style);
+        WriteText(_work / "style.conf", style);
         StartServer();
         const auto started = std::chrono::steady_clock::now();
         _bar.emplace(Executable(INTARSIA_EXE),
@@ -784,8 +784,8 @@ namespace integration {
     }
 
     void RunningBar::SaveStyle(std::string_view style) const {
-        WriteText(_work / "style.css", style);
-        Log("file_saved", "file=style.css");
+        WriteText(_work / "style.conf", style);
+        Log("file_saved", "file=style.conf");
     }
 
     // The child is killed with its job when it is reset still running.

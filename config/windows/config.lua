@@ -1,5 +1,5 @@
 -- A plain bar that needs nothing but Windows: no window manager, and icons from Segoe MDL2 Assets, which Windows ships.
--- Copy this file and style.css beside it to %USERPROFILE%\.config\intarsia\. config/glazewm documents every key and
+-- Copy this file and style.conf beside it to %USERPROFILE%\.config\intarsia\. config/glazewm documents every key and
 -- module.
 return {
     bar = {

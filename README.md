@@ -1,7 +1,7 @@
 # intarsia
 
 A native status bar for Windows. Every monitor gets a bar docked to one screen edge, built
-from small modules that a Lua config places into left, center and right sections and a CSS file styles. It draws with
+from small modules that a Lua config places into left, center and right sections and a style file styles. It draws with
 Direct2D and DirectWrite, and runs alongside GlazeWM or on plain Windows.
 
 ## Docs
@@ -94,22 +94,23 @@ section. It refuses uncommitted changes and a version the changelog lacks. The R
 
 ## Run
 
-The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.css` beside it for how it
+The bar reads `%USERPROFILE%\.config\intarsia\config.lua` for what it shows and `style.conf` beside it for how it
 looks. Start from `config\windows`, a plain bar that needs nothing but Windows, or `config\glazewm`, which runs with
-GlazeWM and documents every key and selector:
+GlazeWM and documents every key:
 
 ```powershell
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\intarsia | Out-Null
-Copy-Item config\windows\config.lua, config\windows\style.css $env:USERPROFILE\.config\intarsia
+Copy-Item config\windows\config.lua, config\windows\style.conf $env:USERPROFILE\.config\intarsia
 Start-Process build\release\intarsia.exe -RedirectStandardError $env:TEMP\intarsia.log
 ```
 
-`style.css` is a subset of CSS: `*` for the bar-wide font and color, `section` and `tooltip` for their boxes, and each
-module by `.module`, its type (`clock`) or its name in the config (`#date`), with its `.icon` and `.item`s inside. The
-example lists every selector it takes. `--config <path>` reads another config and the `style.css` beside it, and
+`style.conf` is indented `key: value` blocks: `bar` for the bar-wide font and color, `section` and `tooltip` for their
+boxes, `module` for every module and a module's name in the config (`date`) for one, with its `icon` and `item` blocks
+inside. [Styling](docs/styling.md) lists every block. `--config <path>` reads another config and the `style.conf`
+beside it, and
 `--glazewm-port <port>` connects to GlazeWM on a port other than 6123. `--log <path>` writes the log file somewhere
 other than `%LOCALAPPDATA%\intarsia\intarsia.log`, which a running bar keeps open. Saving either file rebuilds the bars. A wrong
-key, selector or property stops the bar with a message naming the file and where in it. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
+key, block or property stops the bar with a message naming the file and where in it. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
 with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen space back.
 
 ## Layout
@@ -123,7 +124,7 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
 | `config/windows/` | a plain config and style that need nothing but Windows |
-| `config/glazewm/` | a config and style for GlazeWM that document every key and selector |
+| `config/glazewm/` | a config and style for GlazeWM that document every key and block |
 | `tests/` | unit tests mirroring `src/`, `tests/integration/`, `tests/soak/`, and `tests/support/` for the test GlazeWM server both use |
 | `CHANGELOG.md` | what each release changed |
 | `scripts/` | build, test, soak test, lint, changelog and release |

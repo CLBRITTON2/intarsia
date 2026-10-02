@@ -64,7 +64,7 @@ With `output = "json"`, the command prints one object:
 | --- | --- |
 | `text` | Required. Fills `{text}`. |
 | `tooltip` | Optional. May span lines. |
-| `alert` | Optional. `true` draws the module in its `.alert` color. |
+| `alert` | Optional. `true` draws the module in its `alert` color. |
 | `class` | Optional. One of the module's `classes`, drawn in that class's color. |
 
 Other fields are errors, and so is `alert: true` together with a `class`.
@@ -88,14 +88,16 @@ List the classes in the module, then style them:
 classes = { "rain", "sun" },
 ```
 
-```css
-#weather.rain, #weather.rain .icon {
-    color: #60a5fa;
-}
-
-#weather.sun, #weather.sun .icon {
-    color: #facc15;
-}
+```
+weather:
+  rain:
+    color: #60a5fa
+    icon:
+      color: #60a5fa
+  sun:
+    color: #facc15
+    icon:
+      color: #facc15
 ```
 
 Classes only set color. Printing a class the list doesn't have fails the run, and styling one it doesn't have is a
@@ -165,7 +167,7 @@ The command runs each time the menu opens and prints:
 | --- | --- |
 | `id` | Required. Passed to `on_select`. Can't be empty or start with `-` or `/`. |
 | `text` | Required. The row's label. |
-| `active` | Optional. Styles the row with `menu .item.active`. |
+| `active` | Optional. Styles the row with the `active` block under `menu > item`. |
 | `tooltip` | Optional. Shown beside the menu while hovering the row. |
 
 `{"separator": true}` adds a gap. A menu holds up to 50 entries.

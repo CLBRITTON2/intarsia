@@ -50,10 +50,10 @@ const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32
 // Which of a module's colors a line draws in.
 enum class TextState : std::uint8_t {
     Normal,
-    Alert,    // .alert text, for a value that needs attention such as a failed command
-    Warning,  // .warning text and icon, a battery running low
-    Critical, // .critical text and icon, a battery nearly empty
-    Muted,    // .muted text and icon, a muted audio output
+    Alert,    // alert text, for a value that needs attention such as a failed command
+    Warning,  // warning text and icon, a battery running low
+    Critical, // critical text and icon, a battery nearly empty
+    Muted,    // muted text and icon, a muted audio output
     Classed   // a custom module's declared class, by ModuleText::classIndex
 };
 

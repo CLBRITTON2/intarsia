@@ -1,5 +1,5 @@
 -- intarsia reads this from %USERPROFILE%\.config\intarsia\config.lua. Every key is required. How the bar looks lives in
--- style.css beside it. This config runs with GlazeWM and takes its icons from Segoe MDL2 Assets, which Windows ships.
+-- style.conf beside it. This config runs with GlazeWM and takes its icons from Segoe MDL2 Assets, which Windows ships.
 return {
     bar = {
         edge = "top", -- top, bottom, left or right
@@ -17,8 +17,8 @@ return {
     window_manager = "glazewm",
 
     -- The lists show modules by the names defined in modules below, left to right. A name in a list that modules
-    -- does not define, or a module no list or group shows, is an error. style.css styles a module by its name, as
-    -- #clock.
+    -- does not define, or a module no list or group shows, is an error. style.conf styles a module in a block
+    -- named after it, as clock.
     modules_left = { "workspaces", "apps", "mode" },
     modules_center = {},
     modules_right = { "tray", "tiling", "net", "cpu", "memory", "volume", "battery", "clock" },
@@ -55,9 +55,9 @@ return {
     -- They also take an optional tooltip: a second format for the same value, shown while the cursor rests on the
     -- module. The workspaces module shows why the window manager is disconnected, with no key needed.
     modules = {
-        -- One item per workspace on this monitor: .focused, .occupied (has windows) or .empty. Click one to focus it.
+        -- One item per workspace on this monitor: focused, occupied (has windows) or empty. Click one to focus it.
         workspaces = { type = "workspaces" },
-        -- One item per window on the displayed workspace, .focused for the focused one. Click one to focus it.
+        -- One item per window on the displayed workspace, focused for the focused one. Click one to focus it.
         apps = { type = "windows" },
         -- One item per active binding mode, nothing while none is active.
         mode = { type = "binding_mode" },
@@ -135,7 +135,7 @@ return {
             icons = { "\u{E850}", "\u{E853}", "\u{E856}", "\u{E859}", "\u{E83F}" },
             icon_charging = "\u{E83E}",
             icon_plugged = "\u{EA93}",
-            -- Discharging at or under these percents draws the module in its .warning, then .critical, colors.
+            -- Discharging at or under these percents draws the module in its warning, then critical, colors.
             warning_at = 30,
             critical_at = 15,
             tooltip = "{capacity}% {time}\nHealth {health}%",
@@ -143,7 +143,7 @@ return {
         },
         -- The notification area: every app's tray icons in the order the apps added them, folded away behind a
         -- toggle showing icon until it is clicked. Click an icon for its app's window, right click it for its menu.
-        -- How it unfolds and how the toggle turns is style.css's. While a tray module shows, the bar receives the
+        -- How it unfolds and how the toggle turns is style.conf's. While a tray module shows, the bar receives the
         -- icons in the taskbar's place and passes each on to it, so the taskbar still has them all once the bar exits.
         tray = { type = "tray", icon = "\u{E76C}" },
         -- A window module shows the focused window's title. Add "title" to a list to show it.
@@ -159,8 +159,8 @@ return {
         -- prints replaces the shown value, and when it exits its exit code shows as an alert and it starts again
         -- interval seconds later. output = "text" shows the first line. output = "json" reads one object, { "text": "...", "tooltip": "...",
         -- "alert": true, "class": "..." }, where only text is required, tooltip may span lines, alert draws the text
-        -- in the module's .alert color, and class draws it in the color style.css gives that class, as
-        -- #weather.rain. A class must be one the module's classes list, and style.css may style only those.
+        -- in the module's alert color, and class draws it in the color style.conf gives that class, as
+        -- weather > rain. A class must be one the module's classes list, and style.conf may style only those.
         -- Control characters (other than line breaks in a tooltip) fail the run, as does a failed command or an
         -- unlisted class, and each shows its reason as an alert. Add "weather" to a list to show it.
         -- weather = {
@@ -192,7 +192,7 @@ return {
 
         -- A group module folds its members away behind its icon, and a click on the icon unfolds them after it. It
         -- starts folded. Each member is a module of its own, with its own style, tooltip and actions, that no list and
-        -- no other group shows, and none is a group. How it unfolds and how the icon turns is style.css's, as for the
+        -- no other group shows, and none is a group. How it unfolds and how the icon turns is style.conf's, as for the
         -- tray. Add "more" to a list, with the gpu and weather examples above, to show it.
         -- more = {
         --     type = "group",

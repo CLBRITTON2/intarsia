@@ -55,9 +55,17 @@ return {{
     // Large text, so glyph stems cover whole pixels in the exact color.
     std::string StyleWithRules(std::string_view rules) {
         return std::string(R"(
-* { font-family: "Segoe UI"; font-size: 24px; color: #e0def4; }
-section { margin: 4px; padding: 3px; background: #191724; }
-.alert { color: #e74c3c; }
+bar:
+  font: Segoe UI
+  size: 24
+  color: #e0def4
+section:
+  margin: 4
+  padding: 3
+  background: #191724
+module:
+  alert:
+    color: #e74c3c
 )") + std::string(rules);
     }
 
@@ -66,7 +74,7 @@ section { margin: 4px; padding: 3px; background: #191724; }
 TEST(Custom, DrawsTheColorOfTheClassItsJsonNames) {
     constexpr std::string_view    kTestName = "custom-class";
     const integration::RunningBar bar(kTestName, CustomConfig(R"("probe")", RecorderModule(kTestName, "probe", "json", R"("good")", R"([[{"text":"WWWW","class":"good"}]])")),
-                                      StyleWithRules("#probe { color: #27ae60; } #probe.good { color: #f39c12; }"));
+                                      StyleWithRules("probe:\n  color: #27ae60\n  good:\n    color: #f39c12\n"));
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the class the output names never drew its color";
     EXPECT_EQ(bar.PixelsOf(kGreen), size_t{0}) << "the module's own color drew beside its class's";
 }
@@ -87,7 +95,7 @@ TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
     const std::string module = std::format(R"(probe = {{ type = "custom", command = {{ {}, "/c", {} }}, run = "continuous", output = "json", classes = {{ "one", "two" }},
                   format = "{{text}}", icon = "", interval = 2 }},)",
                                            integration::LuaString(R"(C:\Windows\System32\cmd.exe)"), integration::LuaPath(script));
-    const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module), StyleWithRules("#probe.one { color: #27ae60; } #probe.two { color: #f39c12; }"));
+    const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module), StyleWithRules("probe:\n  one:\n    color: #27ae60\n  two:\n    color: #f39c12\n"));
 
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";
     ASSERT_TRUE(bar.Draws(kOrange, kDrawn)) << "the second line's class never drew";
