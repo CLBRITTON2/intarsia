@@ -53,8 +53,9 @@ struct AppState {
 // lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.
 class Bar {
   public:
+    // graphics is the device on output's adapter.
     Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
-        AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage);
+        const MonitorOutput& output, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -85,7 +86,7 @@ class Bar {
     LRESULT Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
     // Everything the constructor does once the window exists.
-    void Build(HINSTANCE instance);
+    void Build(HINSTANCE instance, const MonitorOutput& output);
     void Dock();
     void PlaceInZOrder(HWND insertAfter);
     // What a module lays out and draws with: the bar's fonts and the module's own colors.

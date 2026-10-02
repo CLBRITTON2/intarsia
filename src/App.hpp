@@ -45,7 +45,8 @@ class App {
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    // One bar for each monitor present.
+    // One bar for each monitor present, drawn on its monitor's adapter. A device that cannot be made is retried as a lost
+    // one is.
     void CreateBars();
     void HandleConfigChanged();
     void ReloadConfig();
@@ -54,7 +55,7 @@ class App {
     void        MatchSourcesToConfig();
     AppBarRoute AppBarRouteForTray() const;
     void        RebuildBarsIfMonitorsChanged();
-    // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
+    // Destroys the bars and schedules new graphics devices, which RecreateDevice builds the bars on.
     void HandleDeviceLost();
     // Twice the last wait, up to kLongestDeviceRetry.
     std::chrono::milliseconds LongerDeviceRetry() const;
@@ -70,14 +71,15 @@ class App {
     std::unique_ptr<Config> _config;
     // Outlives every compositor the graphics devices hold.
     CompositionThread _compositionThread;
-    // Replaced when the device is lost, after the bars that draw with it are destroyed.
-    GraphicsDevice            _graphics;
-    std::chrono::milliseconds _deviceRetry;
-    bool                      _recovering    = false; // no bars exist until the new device is ready
-    AppState                  _state         = {.error = nullptr};
-    bool                      _redrawPending = false;
-    std::exception_ptr        _configError; // the last reload's failure, fatal unless another save follows soon
-    UniqueOwnedWindow         _control;
+    // One for each adapter showing a monitor, all replaced when one is lost, after the bars that draw with them are
+    // destroyed. Bars hold references, so each lives on the heap.
+    std::vector<std::unique_ptr<GraphicsDevice>> _devices;
+    std::chrono::milliseconds                    _deviceRetry;
+    bool                                         _recovering    = false; // no bars exist until new devices are ready
+    AppState                                     _state         = {.error = nullptr};
+    bool                                         _redrawPending = false;
+    std::exception_ptr                           _configError; // the last reload's failure, fatal unless another save follows soon
+    UniqueOwnedWindow                            _control;
     // Shared by every source of module data, which outlive none of it: declared before them all.
     ChangeSignal                 _changes;
     std::unique_ptr<FileWatcher> _watcher;

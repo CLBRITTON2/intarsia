@@ -17,8 +17,10 @@
 // Holds C++/WinRT types, which only render/ sources include (render/Composition.hpp).
 struct CompositionDevice;
 
-// Shared by every bar: one D3D device feeds all swap chains and one compositor holds all visuals.
+// One per adapter showing a monitor, shared by the bars on that adapter's monitors: a bar drawn on another adapter has
+// every frame copied across to its monitor's.
 struct GraphicsDevice {
+    LUID                                   adapterId;
     Microsoft::WRL::ComPtr<ID3D11Device>   d3d;
     Microsoft::WRL::ComPtr<IDXGIFactory2>  dxgiFactory;
     Microsoft::WRL::ComPtr<ID2D1Factory1>  d2dFactory;
@@ -27,14 +29,17 @@ struct GraphicsDevice {
     std::shared_ptr<CompositionDevice>     composition;
 };
 
-// Logs the adapter it renders on, which may not be the one showing a given monitor. Needs a CompositionThread on the
-// calling thread.
-GraphicsDevice CreateGraphicsDevice();
+// Needs a CompositionThread on the calling thread.
+GraphicsDevice CreateGraphicsDevice(IDXGIAdapter1* adapter);
+
+bool           SameAdapter(const LUID& first, const LUID& second);
 
 struct MonitorOutput {
-    Microsoft::WRL::ComPtr<IDXGIOutput> output;
-    std::wstring                        adapter; // the adapter showing the monitor, not always the one rendering
-    std::uint32_t                       refreshHz;
+    Microsoft::WRL::ComPtr<IDXGIOutput>   output;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter; // the adapter showing the monitor
+    std::wstring                          adapterName;
+    LUID                                  adapterId;
+    std::uint32_t                         refreshHz;
 };
 
 // The DXGI output showing monitor, read from a new factory so a monitor attached since the device was made is listed.

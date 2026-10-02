@@ -2,6 +2,7 @@
 
 #include "platform/Errors.hpp"
 #include "render/CompositionThread.hpp"
+#include "support/FirstAdapter.hpp"
 
 #include <gtest/gtest.h>
 
@@ -22,7 +23,7 @@ namespace {
 // The tooltip releases its surface on every hide and makes a new one on the next show, on the same window.
 TEST(Surface, AWindowTakesANewSurfaceOnlyOnceTheOldOneIsGone) {
     const CompositionThread compositionThread;
-    const GraphicsDevice    graphics = CreateGraphicsDevice();
+    const GraphicsDevice    graphics = CreateGraphicsDevice(FirstAdapter().Get());
     HWND                    window   = CreatePopup();
 
     auto                    first = std::make_unique<Surface>(graphics, window, 64, 32, USER_DEFAULT_SCREEN_DPI);
@@ -37,7 +38,7 @@ TEST(Surface, AWindowTakesANewSurfaceOnlyOnceTheOldOneIsGone) {
 // every brush.
 TEST(Surface, BackdropsFollowTheBoxesAndToneOfEachCall) {
     const CompositionThread compositionThread;
-    const GraphicsDevice    graphics = CreateGraphicsDevice();
+    const GraphicsDevice    graphics = CreateGraphicsDevice(FirstAdapter().Get());
     HWND                    window   = CreatePopup();
 
     Surface                 surface(graphics, window, 200, 40, USER_DEFAULT_SCREEN_DPI);

@@ -179,7 +179,7 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 }
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
-         AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
+         const MonitorOutput& output, AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
     _graphics(graphics), _config(config), _axis(AxisOf(config.bar.edge)), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control),
     _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
     _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)), _taskbarCreated(TaskbarCreatedMessage()),
@@ -187,7 +187,7 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
     // strip would outlive the failed bar.
     try {
-        Build(instance);
+        Build(instance, output);
     } catch (...) {
         // The clock's thread posts to the window, so it stops first.
         _frames.reset();
@@ -196,19 +196,18 @@ Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& confi
     }
 }
 
-void Bar::Build(HINSTANCE instance) {
+void Bar::Build(HINSTANCE instance, const MonitorOutput& output) {
     RequireFontFamily(_graphics.dwrite.Get(), _config.style.font.c_str());
     ForEachEntry(_modules, [this](const ModuleEntry& entry) { RequireFontFamily(_graphics.dwrite.Get(), entry.style.icon.font.c_str()); });
     ThrowIfFailed(_graphics.dwrite->CreateTextFormat(_config.style.font.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                      _config.style.fontSizeDips, L"en-us", &_textFormat),
                   "IDWriteFactory::CreateTextFormat");
 
-    const MonitorOutput output = OutputForMonitor(_placement.monitor);
     Log(LogLevel::Info, "bar", "placed",
         {{.key = "monitor", .value = RectText(_placement.monitorRect)},
          {.key = "dpi", .value = std::to_string(_placement.dpi)},
          {.key = "refresh_hz", .value = std::to_string(output.refreshHz)},
-         {.key = "adapter", .value = ToUtf8(output.adapter)}});
+         {.key = "adapter", .value = ToUtf8(output.adapterName)}});
     _frames = std::make_unique<FrameClock>(_window, kAnimationFrame, kFrameClockFailed, output.output);
     RegisterAppBar(_window, kAppBarCallback);
     Dock();

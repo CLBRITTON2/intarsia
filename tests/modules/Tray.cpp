@@ -6,6 +6,7 @@
 #include "render/BrushCache.hpp"
 #include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
+#include "support/FirstAdapter.hpp"
 
 #include <gtest/gtest.h>
 
@@ -39,7 +40,7 @@ namespace {
     // Bitmaps need a device, and the toggle's text needs DirectWrite.
     class TrayModule : public testing::Test {
       public:
-        TrayModule() : _graphics(CreateGraphicsDevice()) {
+        TrayModule() : _graphics(CreateGraphicsDevice(FirstAdapter().Get())) {
             ThrowIfFailed(_graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &_context), "CreateDeviceContext");
             ThrowIfFailed(_context->CreateBitmap(D2D1::SizeU(200, 64), nullptr, 0,
                                                  D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),

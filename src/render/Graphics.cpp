@@ -19,10 +19,10 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-    std::wstring AdapterName(IDXGIAdapter* adapter) {
-        DXGI_ADAPTER_DESC description{};
-        ThrowIfFailed(adapter->GetDesc(&description), "IDXGIAdapter::GetDesc");
-        return description.Description;
+    DXGI_ADAPTER_DESC1 AdapterDescription(IDXGIAdapter1* adapter) {
+        DXGI_ADAPTER_DESC1 description{};
+        ThrowIfFailed(adapter->GetDesc1(&description), "IDXGIAdapter1::GetDesc1");
+        return description;
     }
 
     std::wstring DisplayName(HMONITOR monitor) {
@@ -45,20 +45,22 @@ namespace {
 
 } // namespace
 
-GraphicsDevice CreateGraphicsDevice() {
-    GraphicsDevice device;
+GraphicsDevice CreateGraphicsDevice(IDXGIAdapter1* adapter) {
+    const DXGI_ADAPTER_DESC1 description = AdapterDescription(adapter);
+    GraphicsDevice           device{};
+    device.adapterId = description.AdapterLuid;
 
     // A driver's worker thread gains nothing on frames this small, and one driver's threaded path keeps about 50 KB for
     // good of every bitmap released while two swap chains present.
     constexpr UINT kDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;
-    ThrowIfFailed(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, kDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &device.d3d, nullptr, nullptr), "D3D11CreateDevice");
+    // An explicit adapter takes the unknown driver type.
+    ThrowIfFailed(D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, kDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &device.d3d, nullptr, nullptr), "D3D11CreateDevice");
 
     ComPtr<IDXGIDevice> dxgiDevice;
     ThrowIfFailed(device.d3d.As(&dxgiDevice), "ID3D11Device::QueryInterface(IDXGIDevice)");
-    ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&device.dxgiFactory)), "CreateDXGIFactory2");
-    ComPtr<IDXGIAdapter> adapter;
-    ThrowIfFailed(dxgiDevice->GetAdapter(&adapter), "IDXGIDevice::GetAdapter");
-    Log(LogLevel::Info, "graphics", "device_created", {{.key = "adapter", .value = ToUtf8(AdapterName(adapter.Get()))}});
+    // Swap chains come from the factory that listed the device's adapter.
+    ThrowIfFailed(adapter->GetParent(IID_PPV_ARGS(&device.dxgiFactory)), "IDXGIAdapter1::GetParent(IDXGIFactory2)");
+    Log(LogLevel::Info, "graphics", "device_created", {{.key = "adapter", .value = ToUtf8(description.Description)}});
 
     ThrowIfFailed(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, device.d2dFactory.GetAddressOf()), "D2D1CreateFactory");
     ThrowIfFailed(device.d2dFactory->CreateDevice(dxgiDevice.Get(), &device.d2d), "ID2D1Factory1::CreateDevice");
@@ -91,10 +93,19 @@ MonitorOutput OutputForMonitor(HMONITOR monitor) {
             DXGI_OUTPUT_DESC description{};
             ThrowIfFailed(output->GetDesc(&description), "IDXGIOutput::GetDesc");
             if (description.Monitor == monitor) {
-                return MonitorOutput{.output = output, .adapter = AdapterName(adapter.Get()), .refreshHz = RefreshHz(display)};
+                const DXGI_ADAPTER_DESC1 adapterDescription = AdapterDescription(adapter.Get());
+                return MonitorOutput{.output      = output,
+                                     .adapter     = adapter,
+                                     .adapterName = adapterDescription.Description,
+                                     .adapterId   = adapterDescription.AdapterLuid,
+                                     .refreshHz   = RefreshHz(display)};
             }
         }
     }
+}
+
+bool SameAdapter(const LUID& first, const LUID& second) {
+    return first.LowPart == second.LowPart && first.HighPart == second.HighPart;
 }
 
 void ThrowIfDeviceFailed(HRESULT result, std::string_view call) {
