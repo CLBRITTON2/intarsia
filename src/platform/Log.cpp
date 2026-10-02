@@ -8,6 +8,7 @@
 
 #include <shlobj.h>
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
@@ -22,16 +23,33 @@
 
 namespace {
 
-    constexpr size_t         kValueExcerptBytes = 300;
+    constexpr size_t         kValueExcerptBytes = 1000;
+    constexpr size_t         kComponentWidth    = 12;
     constexpr std::uintmax_t kMaxLogBytes       = std::uintmax_t{8} * 1024 * 1024;
 
     std::string_view         LevelName(LogLevel level) {
         switch (level) {
-            case LogLevel::Info: return "info";
-            case LogLevel::Warning: return "warning";
-            case LogLevel::Error: return "error";
+            case LogLevel::Info: return "INFO";
+            case LogLevel::Warning: return "WARN";
+            case LogLevel::Error: return "ERROR";
         }
-        return "unknown";
+        return "UNKNOWN";
+    }
+
+    // Plain ASCII with nothing that could end the field, so it reads as written, backslashes included.
+    bool PrintsBare(std::string_view value) {
+        return !value.empty() && value.size() <= kValueExcerptBytes && std::ranges::none_of(value, [](char character) {
+            return character == ' ' || character == '"' || character == '=' || IsControlByte(character) || static_cast<std::uint8_t>(character) >= 0x80u;
+        });
+    }
+
+    std::string FormatLine(LogLevel level, std::string_view component, std::string_view event, std::initializer_list<LogField> fields) {
+        std::string line = LogHead(level, component, event);
+        for (const LogField& field : fields) {
+            line += PrintsBare(field.value) ? std::format(" {}={}", field.key, field.value) : std::format(" {}=\"{}\"", field.key, LogExcerpt(field.value, kValueExcerptBytes));
+        }
+        line += '\n';
+        return line;
     }
 
     struct LogFile {
@@ -74,10 +92,9 @@ namespace {
         if (sink.file == nullptr) {
             return;
         }
-        const std::string stamped = std::format("{:%FT%T}Z {}", std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now()), line);
-        std::fputs(stamped.c_str(), sink.file);
+        std::fputs(line.c_str(), sink.file);
         std::fflush(sink.file);
-        sink.bytes += stamped.size();
+        sink.bytes += line.size();
         if (sink.bytes <= kMaxLogBytes) {
             return;
         }
@@ -88,17 +105,8 @@ namespace {
                 std::fclose(sink.file);
                 sink.file = nullptr;
             }
-            std::fputs(std::format("intarsia: error component=log event=file_stopped reason=\"{}\"\n", LogExcerpt(error.what(), kValueExcerptBytes)).c_str(), stderr);
+            std::fputs(FormatLine(LogLevel::Error, "log", "file_stopped", {{.key = "reason", .value = error.what()}}).c_str(), stderr);
         }
-    }
-
-    std::string FormatLine(LogLevel level, std::string_view component, std::string_view event, std::initializer_list<LogField> fields) {
-        std::string line = std::format("intarsia: {} component={} event={}", LevelName(level), component, event);
-        for (const LogField& field : fields) {
-            line += std::format(" {}=\"{}\"", field.key, LogExcerpt(field.value, kValueExcerptBytes));
-        }
-        line += '\n';
-        return line;
     }
 
     // A crash can come while its own thread holds the mutex, so the crash path never waits for it.
@@ -147,6 +155,11 @@ namespace {
     }
 
 } // namespace
+
+std::string LogHead(LogLevel level, std::string_view component, std::string_view event) {
+    return std::format("[{:%FT%T}Z] {:>5} {:<{}} {}", std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now()), LevelName(level), component, kComponentWidth,
+                       event);
+}
 
 void Log(LogLevel level, std::string_view component, std::string_view event, std::initializer_list<LogField> fields) {
     const std::string line = FormatLine(level, component, event, fields);

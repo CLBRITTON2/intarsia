@@ -56,7 +56,7 @@ namespace integration {
         HWND _window;
     };
 
-    // Prints "<local time> event=<event> <fields>" to stdout, the fields as key=value pairs.
+    // Prints a line in the bar's log layout to stdout, component harness, the fields as key=value pairs.
     void Log(std::string_view event, std::string_view fields);
 
     // Where NewWorkDirectory(name), and so a RunningBar named name, keeps its files, known before either makes it.
@@ -132,11 +132,11 @@ namespace integration {
     // Each run of equal lines folded into one.
     std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);
 
-    // The server a RunningBar starts and the bar log line that shows the bar has reached it.
+    // The server a RunningBar starts and the bar log event that shows the bar has reached it.
     struct TestServer {
         std::filesystem::path program;
         std::wstring          scenario;
-        std::string           readyLog;
+        std::string           readyEvent;
     };
 
     // tests/support/GlazeWmServer.cpp, run with its scenario of that name, which the bar trusts and connects to.
@@ -177,6 +177,8 @@ namespace integration {
         std::vector<std::string> CommandsFromSweep() const;
         // Lines of the bar's structured stderr log that contain text.
         std::vector<std::string> LogLines(std::string_view text) const;
+        // Lines of the bar's structured stderr log whose event is event.
+        std::vector<std::string> Events(std::string_view event) const;
         void                     StopServer();
         void                     StartServer();
         // Has the server focus its indexth listed window and waits until it has sent the bar the events for it.

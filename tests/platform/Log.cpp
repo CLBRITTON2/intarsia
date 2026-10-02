@@ -32,7 +32,25 @@ TEST(Log, TheFileKeepsTheLastRunsLogAndGetsEveryLineStamped) {
 
     EXPECT_EQ(ReadAll(directory / "intarsia.1.log"), "the last run\n");
     const std::string written = ReadAll(path);
-    // 2026-09-28T17:38:07.062Z, then the line as stderr has it, its value escaped onto one line.
-    EXPECT_EQ(written.find('Z'), 23u);
-    EXPECT_NE(written.find(R"(Z intarsia: warning component=test event=written value="one\x0atwo")"), std::string::npos);
+    // [2026-09-28T17:38:07.062Z], then the line as stderr has it, its value escaped onto one line.
+    EXPECT_EQ(written.find("Z]"), 24u);
+    EXPECT_NE(written.find(R"(Z]  WARN test         written value="one\x0atwo")"), std::string::npos);
+}
+
+TEST(Log, PrintsAPlainValueAsWrittenAndQuotesAnyOther) {
+    const std::string line = LogHead(LogLevel::Error, "app", "fatal");
+    EXPECT_EQ(line.substr(27), "ERROR app          fatal");
+
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() / ("intarsia-log-values-" + std::to_string(GetCurrentProcessId()));
+    std::filesystem::create_directories(directory);
+    LogToFile(directory / "intarsia.log");
+    Log(LogLevel::Info, "test", "values",
+        {{.key = "path", .value = R"(C:\Temp\bar.log)"},
+         {.key = "spaced", .value = R"(C:\Program Files)"},
+         {.key = "quote", .value = R"(say "hi")"},
+         {.key = "empty", .value = ""}});
+
+    // Named outside the macro, since MSVC's preprocessor misreads this raw string as a macro argument.
+    const std::string expected = R"(values path=C:\Temp\bar.log spaced="C:\\Program Files" quote="say \"hi\"" empty="")";
+    EXPECT_NE(ReadAll(directory / "intarsia.log").find(expected), std::string::npos);
 }

@@ -89,7 +89,7 @@ TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
     const integration::SavedCursor saved;
     bar.MoveCursorTo(*probe);
     EXPECT_TRUE(bar.Draws(kHoverColor, kLimit)) << "the hover background never drew under the cursor";
-    EXPECT_TRUE(integration::Eventually([&] { return !bar.LogLines("event=animation_frames").empty(); }, kLimit)) << "the hover transition logged no frames";
+    EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("animation_frames").empty(); }, kLimit)) << "the hover transition logged no frames";
 
     bar.MoveCursorTo(EmptyEnd(bar));
     EXPECT_TRUE(bar.StopsDrawing(kHoverColor, kLimit)) << "the hover background still drew after the cursor moved off";

@@ -179,12 +179,11 @@ TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
 
     // The direction has no text and takes no room, so no click reaches the toggle.
     EXPECT_THAT(bar.CommandsFromSweep(), ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace"));
-    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=command_failed").empty(); }, std::chrono::seconds(5)))
-        << "the rejected focus --workspace 1 was never logged";
-    for (const std::string& line : bar.LogLines("event=command_failed")) {
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("command_failed").empty(); }, std::chrono::seconds(5))) << "the rejected focus --workspace 1 was never logged";
+    for (const std::string& line : bar.Events("command_failed")) {
         EXPECT_NE(line.find("focus --workspace 1"), std::string::npos) << line;
     }
-    EXPECT_THAT(bar.LogLines("event=disconnected"), testing::IsEmpty());
+    EXPECT_THAT(bar.Events("disconnected"), testing::IsEmpty());
     EXPECT_EQ(bar.PixelsOf(kTilingColor), size_t{0});
 }
 
@@ -192,20 +191,20 @@ TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
     const std::filesystem::path impostor = integration::NewWorkDirectory("impostor-server") / "impostor.exe";
     std::filesystem::copy_file(integration::GlazeWmTestServer(L"integration").program, impostor, std::filesystem::copy_options::overwrite_existing);
     const integration::RunningBar  bar("impostor", ClicksConfig("top"), kStyle,
-                                       integration::TestServer{.program = impostor, .scenario = L"integration", .readyLog = "event=disconnected"});
+                                       integration::TestServer{.program = impostor, .scenario = L"integration", .readyEvent = "disconnected"});
 
-    const std::vector<std::string> refused = bar.LogLines("event=disconnected");
+    const std::vector<std::string> refused = bar.Events("disconnected");
     ASSERT_FALSE(refused.empty());
     EXPECT_NE(refused.front().find("not glazewm.exe"), std::string::npos) << refused.front();
 
     const std::uint32_t clicks = integration::SweepClicks(bar.PrimaryBar());
-    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=command_dropped").empty(); }, std::chrono::seconds(2)))
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("command_dropped").empty(); }, std::chrono::seconds(2)))
         << "the clock's click was not dropped for want of a connection";
     // Long enough for a command sent anyway to reach the server's output.
     integration::Eventually([] { return false; }, std::chrono::seconds(1));
     integration::Log("sweep", std::format("clicks={} commands={}", clicks, bar.Commands().size()));
     EXPECT_THAT(bar.Commands(), testing::IsEmpty());
-    EXPECT_THAT(bar.LogLines("event=connected"), testing::IsEmpty());
+    EXPECT_THAT(bar.Events("connected"), testing::IsEmpty());
 }
 
 TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActive) {
@@ -262,12 +261,12 @@ TEST(GlazeWm, StylesAnEmptyWorkspaceApartFromTheFocusedOne) {
 TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
     integration::RunningBar bar("reconnect", ClicksConfig("top"), kStyle);
     bar.StopServer();
-    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.LogLines("event=disconnected").empty(); }, std::chrono::seconds(5)));
-    integration::Log("bar_logged", std::format("text=event=disconnected lines={}", bar.LogLines("event=disconnected").size()));
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("disconnected").empty(); }, std::chrono::seconds(5)));
+    integration::Log("bar_logged", std::format("event=disconnected lines={}", bar.Events("disconnected").size()));
 
     bar.StartServer();
-    EXPECT_TRUE(integration::Eventually([&bar] { return bar.LogLines("event=connected").size() == 2; }, std::chrono::seconds(15)));
-    integration::Log("bar_logged", std::format("text=event=connected lines={}", bar.LogLines("event=connected").size()));
+    EXPECT_TRUE(integration::Eventually([&bar] { return bar.Events("connected").size() == 2; }, std::chrono::seconds(15)));
+    integration::Log("bar_logged", std::format("event=connected lines={}", bar.Events("connected").size()));
     EXPECT_THAT(bar.CommandsFromSweep(),
                 ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace", "command toggle-tiling-direction"));
 }

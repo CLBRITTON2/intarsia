@@ -2,6 +2,7 @@
 
 #include "../platform/Loopback.hpp"
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
 #include <gtest/gtest.h>
@@ -124,7 +125,20 @@ namespace integration {
         }
 
         std::string LogValue(std::string_view value) {
-            return std::format("\"{}\"", value);
+            return !value.empty() && value.find(' ') == std::string_view::npos ? std::string(value) : std::format("\"{}\"", value);
+        }
+
+        // The event of a bar log line, the word after its time, level and component.
+        std::string_view EventOf(std::string_view line) {
+            size_t at = 0;
+            for (std::uint32_t skipped = 0; skipped < 3; ++skipped) {
+                at = line.find(' ', line.find_first_not_of(' ', at));
+            }
+            at = line.find_first_not_of(' ', at);
+            if (at == std::string_view::npos) {
+                return {};
+            }
+            return line.substr(at, line.find(' ', at) - at);
         }
 
         std::string WindowHandle(HWND window) {
@@ -162,9 +176,7 @@ namespace integration {
     } // namespace
 
     void Log(std::string_view event, std::string_view fields) {
-        SYSTEMTIME now{};
-        GetLocalTime(&now);
-        std::cout << std::format("{:02}:{:02}:{:02}.{:03} event={} {}", now.wHour, now.wMinute, now.wSecond, now.wMilliseconds, event, fields) << std::endl;
+        std::cout << LogHead(LogLevel::Info, "harness", event) << " " << fields << std::endl;
     }
 
     ChildProcess::ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
@@ -515,7 +527,7 @@ namespace integration {
     }
 
     TestServer GlazeWmTestServer(std::wstring_view scenario) {
-        return TestServer{.program = Executable(INTARSIA_GLAZEWM_SERVER), .scenario = std::wstring(scenario), .readyLog = "event=connected"};
+        return TestServer{.program = Executable(INTARSIA_GLAZEWM_SERVER), .scenario = std::wstring(scenario), .readyEvent = "connected"};
     }
 
     RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style) : RunningBar(testName, config, style, GlazeWmTestServer(L"integration")) {}
@@ -533,10 +545,10 @@ namespace integration {
                                                L"--tray-class", std::wstring(kTrayClass)},
                      _work / "bar.out", _work / "bar.err");
         Log("bar_started", std::format("pid={} program={}", _bar->Id(), LogValue(INTARSIA_EXE)));
-        if (!Eventually([this] { return !LogLines(_serverKind.readyLog).empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
+        if (!Eventually([this] { return !Events(_serverKind.readyEvent).empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
             PrintLogs();
-            throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _serverKind.readyLog, kStartLimit.count(),
-                                                 (_work / "bar.err").string()));
+            throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _serverKind.readyEvent,
+                                                 kStartLimit.count(), (_work / "bar.err").string()));
         }
         RECT client{};
         GetClientRect(PrimaryBar(), &client);
@@ -560,13 +572,13 @@ namespace integration {
     }
 
     void RunningBar::PrintLogs() const {
-        std::vector<std::filesystem::path> files{_work / "bar.err"};
-        for (std::uint32_t start = 1; start <= _serverStarts; ++start) {
-            files.push_back(_work / std::format("server-{}.err", start));
+        // The bar's lines name their component, the server's plain text needs its source.
+        for (const std::string& line : ReadLines(_work / "bar.err")) {
+            std::cout << "    " << line << std::endl;
         }
-        for (const std::filesystem::path& file : files) {
-            for (const std::string& line : ReadLines(file)) {
-                std::cout << file.filename().string() << "| " << line << std::endl;
+        for (std::uint32_t start = 1; start <= _serverStarts; ++start) {
+            for (const std::string& line : ReadLines(_work / std::format("server-{}.err", start))) {
+                std::cout << std::format("    server-{}: ", start) << line << std::endl;
             }
         }
     }
@@ -692,6 +704,12 @@ namespace integration {
     std::vector<std::string> RunningBar::LogLines(std::string_view text) const {
         std::vector<std::string> matching;
         std::ranges::copy_if(ReadLines(_work / "bar.err"), std::back_inserter(matching), [text](const std::string& line) { return line.find(text) != std::string::npos; });
+        return matching;
+    }
+
+    std::vector<std::string> RunningBar::Events(std::string_view event) const {
+        std::vector<std::string> matching;
+        std::ranges::copy_if(ReadLines(_work / "bar.err"), std::back_inserter(matching), [event](const std::string& line) { return EventOf(line) == event; });
         return matching;
     }
 

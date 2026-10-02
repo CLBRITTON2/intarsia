@@ -79,7 +79,7 @@ TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
                   format = "{text}", icon = "", interval = 30 },)"),
         StyleWithRules(""));
     EXPECT_TRUE(bar.Draws(kRed, kDrawn)) << "the failing command never drew the alert color";
-    EXPECT_FALSE(bar.LogLines("event=command_failed").empty()) << "the bar logged no command_failed";
+    EXPECT_FALSE(bar.Events("command_failed").empty()) << "the bar logged no command_failed";
 }
 
 TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {

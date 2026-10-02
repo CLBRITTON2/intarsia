@@ -114,20 +114,19 @@ TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
     // Cut short, as a reload can read a file an editor is still writing.
     const std::string valid = OneModuleConfig(R"("mark")", "");
     bar.SaveConfig(std::string_view(valid).substr(0, valid.size() / 2));
-    ASSERT_TRUE(integration::Eventually([&] { return !bar.LogLines("event=config_invalid").empty(); }, kDrawn)) << "the cut-short save was not logged as invalid";
+    ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("config_invalid").empty(); }, kDrawn)) << "the cut-short save was not logged as invalid";
     bar.SaveStyle(StyleWithRules("#mark { background: #f39c12; }"));
     bar.SaveConfig(valid);
 
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the replacing save never drew";
     // Past the second an invalid file must stay unchanged before it ends the bar.
     integration::Eventually([] { return false; }, std::chrono::seconds(2));
-    EXPECT_THAT(bar.LogLines("event=fatal"), testing::IsEmpty());
+    EXPECT_THAT(bar.Events("fatal"), testing::IsEmpty());
     EXPECT_NE(bar.PrimaryBar(), nullptr) << "the bar closed although a valid save replaced the invalid one";
 }
 
 TEST(Config, DrawsARightBorderPastTheBackground) {
-    const integration::RunningBar bar("config-border", OneModuleConfig(R"("mark")", ""),
-                                      StyleWithRules("#mark { background: #27ae60; border-right: 8px solid #2e86c1; }"));
+    const integration::RunningBar bar("config-border", OneModuleConfig(R"("mark")", ""), StyleWithRules("#mark { background: #27ae60; border-right: 8px solid #2e86c1; }"));
     std::optional<double>         background;
     std::optional<double>         border;
     EXPECT_TRUE(integration::Eventually(
@@ -212,9 +211,9 @@ TEST(Config, EndsWithExitCode1AfterAnInvalidSave) {
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     bar.SaveConfig(OneModuleConfig(R"("mark", "missing")", ""));
-    ASSERT_TRUE(integration::Eventually([&] { return !bar.LogLines("event=fatal").empty(); }, kDrawn)) << "the bar logged no fatal error after the invalid save";
-    const std::vector<std::string> fatal = bar.LogLines("event=fatal");
-    integration::Log("bar_logged", std::format("text=event=fatal lines={}", fatal.size()));
+    ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("fatal").empty(); }, kDrawn)) << "the bar logged no fatal error after the invalid save";
+    const std::vector<std::string> fatal = bar.Events("fatal");
+    integration::Log("bar_logged", std::format("event=fatal lines={}", fatal.size()));
     EXPECT_THAT(fatal.front(), HasSubstr("missing"));
     EXPECT_EQ(bar.PrimaryBar(), nullptr) << "a bar still showed after the fatal error";
     EXPECT_EQ(bar.Close(), std::optional<std::uint32_t>(1));

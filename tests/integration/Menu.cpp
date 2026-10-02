@@ -152,6 +152,6 @@ TEST(Menu, LogsACommandThatFails) {
     }
 
     bar.ClickAt(*column);
-    EXPECT_TRUE(integration::Eventually([&] { return !bar.LogLines("event=menu_failed").empty(); }, kLimit)) << "the failed command was never logged";
+    EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("menu_failed").empty(); }, kLimit)) << "the failed command was never logged";
     EXPECT_TRUE(MenuShown(bar)) << "the failure showed no menu row";
 }

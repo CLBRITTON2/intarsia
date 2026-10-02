@@ -18,9 +18,13 @@ struct LogField {
     std::string      value;
 };
 
-// One structured line on stderr: intarsia: <level> component=<component> event=<event> key="value" ..., and after
-// LogToFile the same line with a UTC timestamp before it in the log file. Every value is escaped and cut with
-// LogExcerpt, so text from a peer or a file can neither break the line nor flood the log. Safe from any thread.
+// "[<UTC time>] <level> <component> <event>", the level right-aligned and the component padded, so the events of
+// successive lines start in one column.
+std::string LogHead(LogLevel level, std::string_view component, std::string_view event);
+
+// One structured line on stderr, and after LogToFile in the log file too: the LogHead, then key=value for each field.
+// A value of plain ASCII with no space, quote or equals sign prints as written, any other is quoted, escaped and cut
+// with LogExcerpt, so text from a peer or a file can neither break the line nor flood the log. Safe from any thread.
 void Log(LogLevel level, std::string_view component, std::string_view event, std::initializer_list<LogField> fields);
 
 // %LOCALAPPDATA%\intarsia\intarsia.log
@@ -32,7 +36,7 @@ std::filesystem::path DefaultLogPath();
 // the directory or file cannot be made.
 void LogToFile(const std::filesystem::path& path);
 
-// Logs, as event=fatal, an exception that escapes a thread (std::terminate) and a crash no handler catches, such as an
+// Logs, as the event fatal, an exception that escapes a thread (std::terminate) and a crash no handler catches, such as an
 // access violation, before the process ends as it would have.
 void LogCrashes();
 

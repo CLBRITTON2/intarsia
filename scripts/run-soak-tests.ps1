@@ -419,7 +419,7 @@ function Invoke-Scenario([string] $name) {
                 break
             }
             # Quoted in the result, since a CI runner's log directory is gone once the job ends.
-            $fatal = Select-String -Path $barLog -Pattern 'event=fatal' | Select-Object -First 1
+            $fatal = Select-String -Path $barLog -Pattern '^\[\S+\]\s+ERROR\s+\S+\s+fatal\b' | Select-Object -First 1
             if ($fatal) {
                 $failures.Add("logged a fatal error: $($fatal.Line)")
                 break
