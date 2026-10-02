@@ -169,22 +169,40 @@ namespace {
         context->PopLayer();
     }
 
-    // From a side's outer corners to its inner ones, where CSS splits a corner between two sides' colors. The outer
-    // corners sit a DIP out so the mask never softens the ring's own outer edge.
-    std::array<D2D1_POINT_2F, 4> Wedge(const D2D1_RECT_F& box, const D2D1_RECT_F& inner, size_t side) {
-        const D2D1_RECT_F outer = D2D1::RectF(box.left - 1.0f, box.top - 1.0f, box.right + 1.0f, box.bottom + 1.0f);
+    // CSS splits a corner between two sides' colors on the line from its outer corner through its inner one. Stopped at
+    // the inner corner, the wedges on either side of that line miss most of a curve wider than the border, which then
+    // draws in neither color: it runs on as deep as the radius, but never past the box's middle.
+    D2D1_POINT_2F SplitEnd(const D2D1_POINT_2F& outer, const D2D1_POINT_2F& inner, float radius, const D2D1_SIZE_F& half) {
+        const float across = std::abs(inner.x - outer.x);
+        const float down   = std::abs(inner.y - outer.y);
+        const float widest = std::max(across, down);
+        if (widest <= 0.0f) {
+            return inner;
+        }
+        float reach = std::max(radius, widest) / widest;
+        if (across > 0.0f) {
+            reach = std::min(reach, half.width / across);
+        }
+        if (down > 0.0f) {
+            reach = std::min(reach, half.height / down);
+        }
+        return D2D1::Point2F(outer.x + ((inner.x - outer.x) * reach), outer.y + ((inner.y - outer.y) * reach));
+    }
+
+    // One side's share of the ring, between the corner splits at its two ends. The outer corners sit a DIP out so the
+    // mask never softens the ring's own outer edge.
+    std::array<D2D1_POINT_2F, 4> Wedge(const D2D1_RECT_F& box, const D2D1_RECT_F& inner, float radius, size_t side) {
+        const D2D1_RECT_F   outer       = D2D1::RectF(box.left - 1.0f, box.top - 1.0f, box.right + 1.0f, box.bottom + 1.0f);
+        const D2D1_SIZE_F   half        = D2D1::SizeF((box.right - box.left) / 2.0f, (box.bottom - box.top) / 2.0f);
+        const D2D1_POINT_2F topLeft     = SplitEnd(D2D1::Point2F(box.left, box.top), D2D1::Point2F(inner.left, inner.top), radius, half);
+        const D2D1_POINT_2F topRight    = SplitEnd(D2D1::Point2F(box.right, box.top), D2D1::Point2F(inner.right, inner.top), radius, half);
+        const D2D1_POINT_2F bottomRight = SplitEnd(D2D1::Point2F(box.right, box.bottom), D2D1::Point2F(inner.right, inner.bottom), radius, half);
+        const D2D1_POINT_2F bottomLeft  = SplitEnd(D2D1::Point2F(box.left, box.bottom), D2D1::Point2F(inner.left, inner.bottom), radius, half);
         switch (side) {
-            case 0:
-                return {D2D1::Point2F(outer.left, outer.top), D2D1::Point2F(outer.right, outer.top), D2D1::Point2F(inner.right, inner.top), D2D1::Point2F(inner.left, inner.top)};
-            case 1:
-                return {D2D1::Point2F(outer.right, outer.top), D2D1::Point2F(outer.right, outer.bottom), D2D1::Point2F(inner.right, inner.bottom),
-                        D2D1::Point2F(inner.right, inner.top)};
-            case 2:
-                return {D2D1::Point2F(outer.right, outer.bottom), D2D1::Point2F(outer.left, outer.bottom), D2D1::Point2F(inner.left, inner.bottom),
-                        D2D1::Point2F(inner.right, inner.bottom)};
-            default:
-                return {D2D1::Point2F(outer.left, outer.bottom), D2D1::Point2F(outer.left, outer.top), D2D1::Point2F(inner.left, inner.top),
-                        D2D1::Point2F(inner.left, inner.bottom)};
+            case 0: return {D2D1::Point2F(outer.left, outer.top), D2D1::Point2F(outer.right, outer.top), topRight, topLeft};
+            case 1: return {D2D1::Point2F(outer.right, outer.top), D2D1::Point2F(outer.right, outer.bottom), bottomRight, topRight};
+            case 2: return {D2D1::Point2F(outer.right, outer.bottom), D2D1::Point2F(outer.left, outer.bottom), bottomLeft, bottomRight};
+            default: return {D2D1::Point2F(outer.left, outer.bottom), D2D1::Point2F(outer.left, outer.top), topLeft, bottomLeft};
         }
     }
 
@@ -215,7 +233,7 @@ namespace {
             if (!IsDrawn(sides.at(side))) {
                 continue;
             }
-            const ComPtr<ID2D1PathGeometry> wedge = CreatePolygon(factory.Get(), Wedge(outer.rect, inner.rect, side));
+            const ComPtr<ID2D1PathGeometry> wedge = CreatePolygon(factory.Get(), Wedge(outer.rect, inner.rect, outer.radii.topLeft.width, side));
             context->PushLayer(D2D1::LayerParameters1(D2D1::InfiniteRect(), wedge.Get()), nullptr);
             context->FillGeometry(ring.Get(), brushes.Get(sides.at(side).color));
             context->PopLayer();
