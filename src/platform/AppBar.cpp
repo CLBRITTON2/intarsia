@@ -51,19 +51,22 @@ namespace {
     // Sends the request as shell32 does and copies the taskbar's answer back into data.
     void SendToTaskbar(HWND taskbar, DWORD taskbarProcess, std::uint32_t message, APPBARDATA& data) {
         // The taskbar reads the request from the block it answers in, since shell32 sets only the block's size.
-        AppBarData32                            answer = AppBarRequest(message, data, 0, 0).data;
-        const std::unique_ptr<void, FreeShared> block(SHAllocShared(&answer, sizeof(answer), taskbarProcess), FreeShared{.process = taskbarProcess});
+        AppBarData32 answer = AppBarRequest(message, data, 0, 0).data;
+        HANDLE       block  = SHAllocShared(&answer, sizeof(answer), taskbarProcess);
         if (block == nullptr) {
             ThrowLastError("SHAllocShared(appbar result)");
         }
-        AppBarCommand  request = AppBarRequest(message, data, reinterpret_cast<std::uint64_t>(block.get()), taskbarProcess);
+        AppBarCommand  request = AppBarRequest(message, data, reinterpret_cast<std::uint64_t>(block), taskbarProcess);
         COPYDATASTRUCT copy{.dwData = kAppBarCopyData, .cbData = sizeof(request), .lpData = &request};
         DWORD_PTR      result = 0;
         if (SendMessageTimeoutW(taskbar, WM_COPYDATA, reinterpret_cast<WPARAM>(data.hWnd), reinterpret_cast<LPARAM>(&copy), SMTO_ABORTIFHUNG, kTaskbarTimeoutMs, &result) == 0) {
             Log(LogLevel::Warning, "bar", "taskbar_unanswered", {{.key = "message", .value = std::to_string(message)}, {.key = "error", .value = std::to_string(GetLastError())}});
+            // A timed-out send can still reach Explorer, which then writes its answer through the block: freeing it
+            // could let that write land in whatever reuses the handle, so the block stays Explorer's.
             return;
         }
-        void* view = SHLockShared(block.get(), taskbarProcess);
+        const std::unique_ptr<void, FreeShared> answered(block, FreeShared{.process = taskbarProcess});
+        void*                                   view = SHLockShared(block, taskbarProcess);
         if (view == nullptr) {
             ThrowLastError("SHLockShared(appbar result)");
         }
