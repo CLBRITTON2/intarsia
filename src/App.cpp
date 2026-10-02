@@ -5,7 +5,6 @@
 #include "network/IpHelper.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
-#include "platform/Text.hpp"
 #include "platform/Win32Cast.hpp"
 #include "platform/Win32Window.hpp"
 #include "platform/WindowProc.hpp"
@@ -14,7 +13,6 @@
 
 #include <shellscalingapi.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <algorithm>
 #include <chrono>
@@ -22,11 +20,9 @@
 #include <format>
 #include <functional>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <variant>
-#include <vector>
 
 namespace {
 
@@ -120,51 +116,6 @@ namespace {
         } catch (const MonitorGoneError&) { return true; }
     }
 
-    std::vector<MonitorOutput> OutputsFor(const std::vector<BarPlacement>& placements) {
-        std::vector<MonitorOutput> outputs;
-        outputs.reserve(placements.size());
-        for (const BarPlacement& placement : placements) {
-            outputs.push_back(OutputForMonitor(placement.monitor));
-        }
-        return outputs;
-    }
-
-    // Keeps each device whose adapter still shows a monitor and makes one for each adapter that has none.
-    std::vector<std::unique_ptr<GraphicsDevice>> DevicesForOutputs(std::vector<std::unique_ptr<GraphicsDevice>> devices, const std::vector<MonitorOutput>& outputs) {
-        std::vector<std::unique_ptr<GraphicsDevice>> matched;
-        for (const MonitorOutput& output : outputs) {
-            const auto onAdapter = [&output](const std::unique_ptr<GraphicsDevice>& device) { return SameAdapter(device->adapterId, output.adapterId); };
-            if (std::ranges::any_of(matched, onAdapter)) {
-                continue;
-            }
-            const auto kept = std::ranges::find_if(devices, onAdapter);
-            if (kept != devices.end()) {
-                matched.push_back(std::move(*kept));
-                devices.erase(kept);
-                continue;
-            }
-            auto created = std::make_unique<GraphicsDevice>(CreateGraphicsDevice(output.adapter.Get()));
-            matched.push_back(std::move(created));
-        }
-        return matched;
-    }
-
-    const GraphicsDevice& DeviceOn(const std::vector<std::unique_ptr<GraphicsDevice>>& devices, const MonitorOutput& output) {
-        const auto found = std::ranges::find_if(devices, [&output](const std::unique_ptr<GraphicsDevice>& device) { return SameAdapter(device->adapterId, output.adapterId); });
-        if (found == devices.end()) {
-            throw std::logic_error(std::format("no graphics device was made for adapter {}", ToUtf8(output.adapterName)));
-        }
-        return **found;
-    }
-
-    std::string RemovedReasons(const std::vector<std::unique_ptr<GraphicsDevice>>& devices) {
-        std::string reasons;
-        for (const std::unique_ptr<GraphicsDevice>& device : devices) {
-            reasons += std::format("{}0x{:08X}", reasons.empty() ? "" : ",", static_cast<std::uint32_t>(device->d3d->GetDeviceRemovedReason()));
-        }
-        return reasons;
-    }
-
     // Receives the worker threads' messages and survives the bars being rebuilt. A hidden top-level window rather than a
     // message-only one, because only top-level windows get the WM_DISPLAYCHANGE broadcast.
     HWND CreateControlWindow(HINSTANCE instance, void* owner, WNDPROC procedure) {
@@ -176,8 +127,8 @@ namespace {
 
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),
-    _config(std::make_unique<Config>(LoadConfig(_configPath))), _deviceRetry(kFirstDeviceRetry), _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)),
-    _changes(_control.get(), kSourcesChanged),
+    _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry),
+    _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control.get(), kConfigChanged, kWatcherFailed, kConfigSettle)),
     _windowManager(CreateWindowManager(*_config, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
@@ -269,19 +220,9 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 void App::CreateBars() {
     try {
-        _placements                              = PlacementsForAllMonitors();
-        const std::vector<MonitorOutput> outputs = OutputsFor(_placements);
-        try {
-            _devices = DevicesForOutputs(std::move(_devices), outputs);
-        } catch (const Win32Error& error) {
-            // No adapter ready yet, as at sign-in or while one comes back.
-            _devices.clear();
-            RetryDeviceLater("device_unavailable", error.what(), LongerDeviceRetry());
-            return;
-        }
-        for (size_t index = 0; index < _placements.size(); ++index) {
-            const BarPlacement& placement = _placements[index];
-            _bars.push_back(std::make_unique<Bar>(_instance, DeviceOn(_devices, outputs[index]), *_config,
+        _placements = PlacementsForAllMonitors();
+        for (const BarPlacement& placement : _placements) {
+            _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                                   ModuleSources{.windowManager   = *_windowManager,
                                                                 .commandPollers  = *_commandPollers,
                                                                 .counterSamplers = *_counterSamplers,
@@ -292,7 +233,7 @@ void App::CreateBars() {
                                                                 .battery         = _battery.get(),
                                                                 .tray            = _tray.get(),
                                                                 .monitor         = placement.monitor},
-                                                  _launcher, placement, outputs[index], AppBarRouteForTray(), _state, _control.get(), kDeviceLost));
+                                                  _launcher, placement, AppBarRouteForTray(), _state, _control.get(), kDeviceLost));
             if (_state.error) {
                 std::rethrow_exception(_state.error);
             }
@@ -388,7 +329,8 @@ void App::HandleDeviceLost() {
     // A device that drew a frame was working, so the wait starts short again.
     const bool drew = std::ranges::any_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->HasPresented(); });
     _bars.clear();
-    RetryDeviceLater("recovering_device", RemovedReasons(_devices), drew ? kFirstDeviceRetry : LongerDeviceRetry());
+    RetryDeviceLater("recovering_device", std::format("0x{:08X}", static_cast<std::uint32_t>(_graphics.d3d->GetDeviceRemovedReason())),
+                     drew ? kFirstDeviceRetry : LongerDeviceRetry());
 }
 
 std::chrono::milliseconds App::LongerDeviceRetry() const {
@@ -402,11 +344,18 @@ void App::RetryDeviceLater(std::string_view event, std::string_view reason, std:
     StartTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), "device");
 }
 
-// Every device is made again, since one adapter's loss can leave the others' devices in doubt. Creating one fails while no
-// adapter is ready, and is lost when the adapter goes again mid-creation (back to back losses on re-enabling an
-// adapter): CreateBars waits longer and tries again for both.
+// Creating the device fails while no adapter is ready, and is lost when the adapter goes again mid-creation (back to back
+// losses on re-enabling an adapter): both wait longer and try again.
 void App::RecreateDevice() {
-    _devices.clear();
+    try {
+        _graphics = CreateGraphicsDevice();
+    } catch (const Win32Error& error) {
+        RetryDeviceLater("device_unavailable", error.what(), LongerDeviceRetry());
+        return;
+    } catch (const DeviceLostError& error) {
+        RetryDeviceLater("device_unavailable", error.what(), LongerDeviceRetry());
+        return;
+    }
     _recovering = false;
     CreateBars();
 }

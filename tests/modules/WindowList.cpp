@@ -5,7 +5,6 @@
 #include "render/BrushCache.hpp"
 #include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
-#include "support/FirstAdapter.hpp"
 #include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
@@ -91,7 +90,7 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     _windowManager.windows = {{.id = "a", .handle = reinterpret_cast<std::intptr_t>(iconWindow.Get()), .focused = true, .monitor = 10}};
 
     const CompositionThread                    compositionThread;
-    const GraphicsDevice                       graphics = CreateGraphicsDevice(FirstAdapter().Get());
+    const GraphicsDevice                       graphics = CreateGraphicsDevice();
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
     ASSERT_TRUE(SUCCEEDED(graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &context)));
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> target;
