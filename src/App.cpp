@@ -135,7 +135,7 @@ namespace {
 
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),
-    _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetry(kFirstDeviceRetry),
+    _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetryWait(kFirstDeviceRetry),
     _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged),
     _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
                                            _control.get(), kConfigChanged, kWatcherFailed, kConfigSettle)),
@@ -168,8 +168,8 @@ std::int32_t App::Run() {
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
-    if (_state.error) {
-        std::rethrow_exception(_state.error);
+    if (_windowProcError.error) {
+        std::rethrow_exception(_windowProcError.error);
     }
     return static_cast<std::int32_t>(message.wParam);
 }
@@ -241,9 +241,9 @@ void App::CreateBars() {
                                                                 .battery         = _battery.get(),
                                                                 .tray            = _tray.get(),
                                                                 .monitor         = placement.monitor},
-                                                  _launcher, placement, AppBarRouteForTray(), _state, _control.get(), kDeviceLost));
-            if (_state.error) {
-                std::rethrow_exception(_state.error);
+                                                  _launcher, placement, AppBarRouteForTray(), _windowProcError, _control.get(), kDeviceLost));
+            if (_windowProcError.error) {
+                std::rethrow_exception(_windowProcError.error);
             }
         }
     } catch (const DeviceLostError& error) {
@@ -347,14 +347,14 @@ void App::HandleDeviceLost() {
 }
 
 std::chrono::milliseconds App::LongerDeviceRetry() const {
-    return std::min(_deviceRetry * 2, kLongestDeviceRetry);
+    return std::min(_deviceRetryWait * 2, kLongestDeviceRetry);
 }
 
 void App::RetryDeviceLater(std::string_view event, std::string_view reason, std::chrono::milliseconds wait) {
-    _deviceRetry = wait;
-    _recovering  = true;
-    Log(LogLevel::Warning, "app", event, {{.key = "reason", .value = std::string(reason)}, {.key = "retry_ms", .value = std::to_string(_deviceRetry.count())}});
-    StartTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetry.count()), "device");
+    _deviceRetryWait = wait;
+    _recovering      = true;
+    Log(LogLevel::Warning, "app", event, {{.key = "reason", .value = std::string(reason)}, {.key = "retry_ms", .value = std::to_string(_deviceRetryWait.count())}});
+    StartTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetryWait.count()), "device");
 }
 
 // Creating the device fails while no adapter is ready, and is lost when the adapter goes again mid-creation (back to back

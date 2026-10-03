@@ -179,9 +179,9 @@ void Bar::RegisterWindowClass(HINSTANCE instance) {
 }
 
 Bar::Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
-         AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage) :
-    _graphics(graphics), _config(config), _axis(AxisOf(config.bar.edge)), _launcher(launcher), _windowManager(sources.windowManager), _state(state), _control(control),
-    _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
+         AppBarRoute route, WindowProcError& windowProcError, HWND control, std::uint32_t deviceLostMessage) :
+    _graphics(graphics), _config(config), _axis(AxisOf(config.bar.edge)), _launcher(launcher), _windowManager(sources.windowManager), _windowProcError(windowProcError),
+    _control(control), _deviceLostMessage(deviceLostMessage), _placement(placement), _route(route),
     _modules(CreateModules(ModulesForEdgeLength(config, EdgeLengthDips(placement, config.bar.edge)), sources)), _taskbarCreated(TaskbarCreatedMessage()),
     _window(CreateBarWindow(instance, this)) {
     // No destructor runs for a constructor that throws, and App survives a lost device, so the window and its appbar
@@ -223,9 +223,9 @@ void Bar::Build(HINSTANCE instance) {
     BuildContexts();
     _boxFades = RestingBoxFades(_modules);
     _tooltip  = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
-    _menu =
-        std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _state, *_tooltip, [this](const DeviceLostError& error) { ReportDeviceLost(error); });
-    _lister = std::make_unique<MenuLister>(_window, kMenuListed);
+    _menu     = std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _windowProcError, *_tooltip,
+                                       [this](const DeviceLostError& error) { ReportDeviceLost(error); });
+    _lister   = std::make_unique<MenuLister>(_window, kMenuListed);
     ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
@@ -296,15 +296,15 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         case kFrameClockFailed: _frames->RethrowFailure(); return 0;
         case kMenuListed: ShowMenu(); return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
-        case WM_MOUSEMOVE: PointAt(ClientPoint(lParam)); return 0;
+        case WM_MOUSEMOVE: MoveCursor(ClientPoint(lParam)); return 0;
         case WM_MOUSEHOVER: ShowTooltip(); return 0;
         case WM_MOUSELEAVE:
-            if (_pointed != nullptr) {
-                _pointed->Hover(std::nullopt);
+            if (_hovered != nullptr) {
+                _hovered->Hover(std::nullopt);
             }
-            _pointed = nullptr;
+            _hovered = nullptr;
             _cursor  = std::nullopt;
-            FollowPointer();
+            FadeBoxesToHover();
             _tooltip->Hide();
             // Draws the box that was under the cursor without its hover.
             Redraw();
@@ -488,27 +488,27 @@ void Bar::Draw() {
     const Sections<PlacedEntry> placed{.left   = PlaceSection(_modules.left, lengths.left, layout.left),
                                        .center = PlaceSection(_modules.center, lengths.center, layout.center),
                                        .right  = PlaceSection(_modules.right, lengths.right, layout.right)};
-    RECT                        window{};
-    if (!GetWindowRect(_window, &window)) {
+    RECT                        windowRect{};
+    if (!GetWindowRect(_window, &windowRect)) {
         ThrowLastError("GetWindowRect");
     }
     _hitBoxes.clear();
-    ForEachInSections(placed, [this](const PlacedEntry& entry) {
+    ForEachInSections(placed, [this](const PlacedEntry& placed) {
         // Only what the fold uncovers of a member takes the cursor.
-        for (const HitBox& member : entry.members) {
-            const D2D1_RECT_F shown = Intersection(member.bounds, entry.shown);
+        for (const HitBox& member : placed.members) {
+            const D2D1_RECT_F shown = Intersection(member.bounds, placed.shownBounds);
             if (shown.right > shown.left && shown.bottom > shown.top) {
                 _hitBoxes.push_back(HitBox{.module = member.module, .bounds = shown, .contentOrigin = member.contentOrigin});
             }
         }
-        _hitBoxes.push_back(entry.box);
+        _hitBoxes.push_back(placed.box);
     });
     for (const HitBox& box : _hitBoxes) {
-        box.module->Place(ModulePlacement{.window = window, .contentOrigin = box.contentOrigin, .dpi = _placement.dpi});
+        box.module->Place(ModulePlacement{.windowRect = windowRect, .contentOrigin = box.contentOrigin, .dpi = _placement.dpi});
     }
     // Items move under a cursor that stays still, as a tray unfolds, and no WM_MOUSEMOVE says so.
     if (_cursor.has_value()) {
-        Point(*_cursor);
+        HoverAt(*_cursor);
     }
 
     context->BeginDraw();
@@ -563,18 +563,18 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
     placed.reserve(entries.size());
     for (size_t index = 0; index < entries.size(); ++index) {
         const ModuleEntry& entry = entries[index];
-        PlacedEntry        one{.entry = &entry, .box = PlaceInRoom(entry, layout.offsets[index], lengths[index]), .toggle = {}, .members = {}, .shown = {}};
+        PlacedEntry        placedEntry{.entry = &entry, .box = PlaceInRoom(entry, layout.offsets[index], lengths[index]), .toggleBounds = {}, .members = {}, .shownBounds = {}};
         if (entry.group != nullptr) {
             const float              start         = layout.offsets[index] + MainOf(entry.style.margin, _axis);
             const std::vector<float> memberLengths = BoxLengths(entry.members);
             const GroupLayout        group         = ArrangeMembers(entry, memberLengths);
-            one.toggle                             = PlaceBox(entry, start, group.toggleLength).bounds;
-            one.shown                              = PlaceBox(entry, start + group.shownStart, group.shownLength).bounds;
+            placedEntry.toggleBounds               = PlaceBox(entry, start, group.toggleLength).bounds;
+            placedEntry.shownBounds                = PlaceBox(entry, start + group.shownStart, group.shownLength).bounds;
             for (size_t member = 0; member < entry.members.size(); ++member) {
-                one.members.push_back(PlaceInRoom(entry.members[member], start + group.offsets[member], memberLengths[member]));
+                placedEntry.members.push_back(PlaceInRoom(entry.members[member], start + group.offsets[member], memberLengths[member]));
             }
         }
-        placed.push_back(std::move(one));
+        placed.push_back(std::move(placedEntry));
     }
     return placed;
 }
@@ -589,12 +589,12 @@ void Bar::DrawGroup(const PlacedEntry& placed) {
     const ModuleStyle&  style   = placed.entry->style;
     DrawBox(context, *_brushes, *_boxes, placed.box.bounds, style.box, style.box.background);
     // The toggle's box at rest is the group's own, drawn once already with its border and shadows.
-    const D2D1_COLOR_F toggle = _boxFades.at(placed.box.module).Color(std::chrono::steady_clock::now());
-    if (toggle.a > 0.0f) {
-        DrawBox(context, *_brushes, *_boxes, placed.toggle, style.box, toggle);
+    const D2D1_COLOR_F toggleFill = _boxFades.at(placed.box.module).Color(std::chrono::steady_clock::now());
+    if (toggleFill.a > 0.0f) {
+        DrawBox(context, *_brushes, *_boxes, placed.toggleBounds, style.box, toggleFill);
     }
     placed.box.module->Draw(ContextFor(style), placed.box.contentOrigin);
-    context->PushAxisAlignedClip(placed.shown, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    context->PushAxisAlignedClip(placed.shownBounds, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t member = 0; member < placed.members.size(); ++member) {
         DrawModule(placed.members[member], placed.entry->members[member].style);
     }
@@ -676,10 +676,10 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
     }
 }
 
-void Bar::FollowPointer() {
+void Bar::FadeBoxesToHover() {
     const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     ForEachEntry(_modules, [this, now](const ModuleEntry& entry) {
-        _boxFades.at(entry.module.get()).Retarget(BoxFill(entry, entry.module.get() == _pointed), entry.style.backgroundTransition, now);
+        _boxFades.at(entry.module.get()).Retarget(BoxFill(entry, entry.module.get() == _hovered), entry.style.backgroundTransition, now);
     });
 }
 
@@ -711,10 +711,10 @@ D2D1_POINT_2F Bar::ContentPoint(POINT client, const HitBox& box) const {
     return D2D1::Point2F(point.x - box.contentOrigin.x, point.y - box.contentOrigin.y);
 }
 
-bool Bar::Point(POINT client) {
+bool Bar::HoverAt(POINT client) {
     const HitBox* box    = BoxAt(client);
     IModule*      module = box == nullptr ? nullptr : box->module;
-    if (module == _pointed) {
+    if (module == _hovered) {
         // Within one module the cursor can still move to another of its items, which can have its own tooltip.
         if (module != nullptr && module->Hover(ContentPoint(client, *box))) {
             RestartHover();
@@ -722,21 +722,21 @@ bool Bar::Point(POINT client) {
         }
         return false;
     }
-    if (_pointed != nullptr) {
-        _pointed->Hover(std::nullopt);
+    if (_hovered != nullptr) {
+        _hovered->Hover(std::nullopt);
     }
-    _pointed = module;
+    _hovered = module;
     if (module != nullptr) {
         module->Hover(ContentPoint(client, *box));
     }
-    FollowPointer();
+    FadeBoxesToHover();
     RestartHover();
     return true;
 }
 
-void Bar::PointAt(POINT client) {
+void Bar::MoveCursor(POINT client) {
     _cursor = client;
-    if (Point(client)) {
+    if (HoverAt(client)) {
         Redraw();
     }
 }
@@ -750,28 +750,28 @@ void Bar::RestartHover() {
 }
 
 void Bar::ShowTooltip() {
-    const auto box = std::ranges::find(_hitBoxes, _pointed, &HitBox::module);
-    if (_pointed == nullptr || box == _hitBoxes.end()) {
+    const auto box = std::ranges::find(_hitBoxes, _hovered, &HitBox::module);
+    if (_hovered == nullptr || box == _hitBoxes.end()) {
         return;
     }
-    const std::optional<std::wstring> text = _pointed->TooltipText();
+    const std::optional<std::wstring> text = _hovered->TooltipText();
     if (!text.has_value() || text->empty()) {
         return;
     }
     // Against the item the text describes, such as one tray icon, or else the whole module.
-    const std::optional<D2D1_RECT_F> item   = _pointed->TooltipItem();
-    const D2D1_POINT_2F              origin = box->contentOrigin;
-    const D2D1_RECT_F                span   = item.has_value() ? Offset(*item, origin) : box->bounds;
+    const std::optional<D2D1_RECT_F> itemBox = _hovered->TooltipItemBox();
+    const D2D1_POINT_2F              origin  = box->contentOrigin;
+    const D2D1_RECT_F                span    = itemBox.has_value() ? Offset(*itemBox, origin) : box->bounds;
     _tooltip->Show(*text, AnchorFor(span));
 }
 
 TooltipAnchor Bar::AnchorFor(const D2D1_RECT_F& span) const {
-    RECT bar{};
-    if (!GetWindowRect(_window, &bar)) {
+    RECT barRect{};
+    if (!GetWindowRect(_window, &barRect)) {
         ThrowLastError("GetWindowRect");
     }
     const std::uint32_t dpi = _placement.dpi;
-    return TooltipAnchor{.module = DipsToScreen(bar, span, dpi), .bar = bar, .monitor = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi};
+    return TooltipAnchor{.target = DipsToScreen(barRect, span, dpi), .barRect = barRect, .monitorRect = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi};
 }
 
 void Bar::ShowMenu() {

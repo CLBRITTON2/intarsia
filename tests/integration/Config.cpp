@@ -180,7 +180,7 @@ TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
     std::optional<double>   left;
     ASSERT_TRUE(integration::Eventually(
         [&] {
-            left = bar.ColumnOf(kGreen);
+            left = bar.MeanColumnOf(kGreen);
             return left.has_value();
         },
         kDrawn))
@@ -195,7 +195,7 @@ TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
     std::optional<double> right;
     EXPECT_TRUE(integration::Eventually(
         [&] {
-            right = bar.ColumnOf(kGreen);
+            right = bar.MeanColumnOf(kGreen);
             return right.value_or(0) > middle;
         },
         kDrawn))
@@ -233,6 +233,6 @@ TEST(Config, ShowsTheLastLayoutTheMonitorsLengthReaches) {
     integration::Log("layouts", std::format("primary_length_dips={:.2f} reached_min_length={} beyond_min_length={}", length, reached, reached + 1));
 
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the layout the monitor reaches never drew";
-    EXPECT_EQ(bar.PixelsOf(kGreen), size_t{0}) << "the top-level lists drew";
-    EXPECT_EQ(bar.PixelsOf(kBlue), size_t{0}) << "the layout past the monitor's length drew";
+    EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the top-level lists drew";
+    EXPECT_EQ(bar.PixelCount(kBlue), size_t{0}) << "the layout past the monitor's length drew";
 }

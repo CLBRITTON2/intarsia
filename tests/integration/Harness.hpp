@@ -170,9 +170,9 @@ namespace integration {
         HWND Menu() const;
         // Each is nullopt while the primary bar has no window, as between the bars a reload replaces and their new
         // ones.
-        std::optional<size_t> PixelsOf(std::uint32_t rgb) const;
-        std::optional<double> ColumnOf(std::uint32_t rgb) const;
-        // ColumnOf rounded to a pixel once the primary bar draws rgb, or nullopt when it does not within limit.
+        std::optional<size_t> PixelCount(std::uint32_t rgb) const;
+        std::optional<double> MeanColumnOf(std::uint32_t rgb) const;
+        // MeanColumnOf rounded to a pixel once the primary bar draws rgb, or nullopt when it does not within limit.
         std::optional<std::int32_t> DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         // Each waits until the primary bar draws some pixel in rgb, or none, within limit and logs the count.
         bool Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const;
@@ -204,8 +204,8 @@ namespace integration {
         void                        PrintLogs() const;
         std::filesystem::path       ServerOutput(std::uint32_t start) const;
 
-        std::filesystem::path       _work;
-        TestServer                  _serverKind;
+        std::filesystem::path       _workDirectory;
+        TestServer                  _testServer;
         std::uint16_t               _port;
         std::uint32_t               _serverStarts;
         std::optional<ChildProcess> _server;

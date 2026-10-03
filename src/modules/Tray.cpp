@@ -26,7 +26,7 @@ namespace {
 Tray::Tray(TrayConfig config, ITray& tray, ModuleStyle style) : _config(std::move(config)), _tray(tray), _style(std::move(style)), _fold(_style), _toggle(EmptyIconText()) {}
 
 Tray::~Tray() {
-    _tray.ShowRects(this, {});
+    _tray.ReportIconRects(this, {});
 }
 
 bool Tray::Layout(const RenderContext& render) {
@@ -39,14 +39,14 @@ bool Tray::Layout(const RenderContext& render) {
 
 bool Tray::LayOutItems(const RenderContext& render) {
     const FoldPosition position = _fold.At(std::chrono::steady_clock::now());
-    const float        reveal   = position.reveal;
-    bool               changed  = !_laidOut || reveal != _revealShown || position.angleDegrees != _angleShown;
-    _revealShown                = reveal;
+    const float        revealed = position.revealed;
+    bool               changed  = !_laidOut || revealed != _revealedShown || position.angleDegrees != _angleShown;
+    _revealedShown              = revealed;
     _angleShown                 = position.angleDegrees;
 
     // Folded, the icons wait out of sight as last shown, so unfolding uploads only those that are new or redrawn since.
     const size_t count = _slots.size();
-    if (reveal > 0.0f) {
+    if (revealed > 0.0f) {
         const std::vector<TrayIcon> shown = ShownIcons(_tray.Icons());
         if (!std::ranges::equal(shown, _slots, {}, {}, &Slot::icon)) {
             changed = changed || shown.size() != _slots.size();
@@ -96,11 +96,12 @@ void Tray::Place(const ModulePlacement& placement) {
     const D2D1_POINT_2F       origin   = placement.contentOrigin;
     for (size_t index = 0; index < _slots.size() && MainEnd(_row.boxes[index], _row.axis) <= revealed; ++index) {
         const D2D1_RECT_F& box = _row.boxes[index];
-        rects.push_back(TrayIconRect{.owner = _slots[index].icon.owner, .id = _slots[index].icon.id, .rect = DipsToScreen(placement.window, Offset(box, origin), placement.dpi)});
+        rects.push_back(
+            TrayIconRect{.owner = _slots[index].icon.owner, .id = _slots[index].icon.id, .rect = DipsToScreen(placement.windowRect, Offset(box, origin), placement.dpi)});
     }
     if (!std::ranges::equal(rects, _placed, SamePlace)) {
         _placed = rects;
-        _tray.ShowRects(this, std::move(rects));
+        _tray.ReportIconRects(this, std::move(rects));
     }
 }
 
@@ -108,7 +109,7 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle&                            style = _style.item;
     const float                                 icon  = _style.icon.sizeDips;
     const std::chrono::steady_clock::time_point now   = std::chrono::steady_clock::now();
-    if (_revealShown > 0.0f) {
+    if (_revealedShown > 0.0f) {
         // The icons stay where the unfolded row puts them, and the box's edge uncovers them.
         const D2D1_SIZE_F revealed = MainCrossSize(_row.axis, RevealedLength(), CrossLength(_row.size, _row.axis));
         render.context->PushAxisAlignedClip(D2D1::RectF(origin.x, origin.y, origin.x + revealed.width, origin.y + revealed.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -192,7 +193,7 @@ std::optional<std::wstring> Tray::TooltipText() {
     return icon.tooltip;
 }
 
-std::optional<D2D1_RECT_F> Tray::TooltipItem() const {
+std::optional<D2D1_RECT_F> Tray::TooltipItemBox() const {
     const std::optional<size_t> hovered = _hovered.Get();
     if (!hovered.has_value() || *hovered >= _slots.size()) {
         return std::nullopt;
@@ -206,7 +207,7 @@ float Tray::IconsLength() const {
 }
 
 float Tray::RevealedLength() const {
-    return IconsLength() * _revealShown;
+    return IconsLength() * _revealedShown;
 }
 
 float Tray::ToggleShift() const {

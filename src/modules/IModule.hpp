@@ -17,7 +17,7 @@ enum class ScrollDirection : std::uint8_t {
 
 // Where a bar put a module's content for the frame it is about to draw.
 struct ModulePlacement {
-    RECT          window;        // the bar's window, in screen pixels
+    RECT          windowRect;    // the bar's window, in screen pixels
     D2D1_POINT_2F contentOrigin; // in DIPs from the window's top left corner
     std::uint32_t dpi;
 };
@@ -72,7 +72,7 @@ class IModule {
 
     // The item TooltipText describes, as its box in DIPs from the module's content origin as last drawn, so the tooltip
     // sits against that item. Nullopt when it describes the whole module.
-    virtual std::optional<D2D1_RECT_F> TooltipItem() const {
+    virtual std::optional<D2D1_RECT_F> TooltipItemBox() const {
         return std::nullopt;
     }
 };

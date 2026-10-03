@@ -32,21 +32,21 @@ namespace {
 } // namespace
 
 RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
-    const RECT&  module  = anchor.module;
-    const RECT&  bar     = anchor.bar;
-    const RECT&  monitor = anchor.monitor;
-    std::int32_t left    = 0;
-    std::int32_t top     = 0;
+    const RECT&  targetRect  = anchor.target;
+    const RECT&  barRect     = anchor.barRect;
+    const RECT&  monitorRect = anchor.monitorRect;
+    std::int32_t left        = 0;
+    std::int32_t top         = 0;
     switch (anchor.edge) {
         case Edge::Top:
         case Edge::Bottom:
-            left = KeepWithin(((module.left + module.right) / 2) - (size.cx / 2), size.cx, monitor.left, monitor.right);
-            top  = anchor.edge == Edge::Top ? bar.bottom : bar.top - size.cy;
+            left = KeepWithin(((targetRect.left + targetRect.right) / 2) - (size.cx / 2), size.cx, monitorRect.left, monitorRect.right);
+            top  = anchor.edge == Edge::Top ? barRect.bottom : barRect.top - size.cy;
             break;
         case Edge::Left:
         case Edge::Right:
-            top  = KeepWithin(((module.top + module.bottom) / 2) - (size.cy / 2), size.cy, monitor.top, monitor.bottom);
-            left = KeepWithin(anchor.edge == Edge::Left ? bar.right : bar.left - size.cx, size.cx, monitor.left, monitor.right);
+            top  = KeepWithin(((targetRect.top + targetRect.bottom) / 2) - (size.cy / 2), size.cy, monitorRect.top, monitorRect.bottom);
+            left = KeepWithin(anchor.edge == Edge::Left ? barRect.right : barRect.left - size.cx, size.cx, monitorRect.left, monitorRect.right);
             break;
     }
     return RECT{.left = left, .top = top, .right = left + size.cx, .bottom = top + size.cy};
@@ -69,8 +69,8 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     // and a surface past the GPU's texture size limit cannot be created.
     const BoxStyle&           style         = _config.style.tooltip.box;
     const Insets              insets        = ContentInsets(style);
-    const std::int32_t        monitorWidth  = anchor.monitor.right - anchor.monitor.left;
-    const std::int32_t        monitorHeight = anchor.monitor.bottom - anchor.monitor.top;
+    const std::int32_t        monitorWidth  = anchor.monitorRect.right - anchor.monitorRect.left;
+    const std::int32_t        monitorHeight = anchor.monitorRect.bottom - anchor.monitorRect.top;
     const float               widthDips     = PixelsToDips(static_cast<float>(monitorWidth), anchor.dpi);
     ComPtr<IDWriteTextLayout> layout;
     ThrowIfFailed(_graphics.dwrite->CreateTextLayout(text.data(), static_cast<std::uint32_t>(text.size()), _textFormat, std::max(widthDips - insets.left - insets.right, 1.0f),

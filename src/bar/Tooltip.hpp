@@ -14,9 +14,9 @@
 
 // Where a tooltip goes: beside the hovered module, on the side of the bar that faces the desktop. Screen pixels.
 struct TooltipAnchor {
-    RECT          module;
-    RECT          bar;
-    RECT          monitor;
+    RECT          target; // the hovered module or item
+    RECT          barRect;
+    RECT          monitorRect;
     Edge          edge;
     std::uint32_t dpi;
 };

@@ -73,11 +73,11 @@ namespace {
         return MAKEWPARAM(Signed16(cursor.x), Signed16(cursor.y));
     }
 
-    // Squared, and 0 inside the rect.
-    std::int64_t DistanceToRect(const RECT& rect, POINT point) {
-        const std::int64_t x = std::max({static_cast<std::int64_t>(rect.left) - point.x, std::int64_t{0}, static_cast<std::int64_t>(point.x) - rect.right});
-        const std::int64_t y = std::max({static_cast<std::int64_t>(rect.top) - point.y, std::int64_t{0}, static_cast<std::int64_t>(point.y) - rect.bottom});
-        return (x * x) + (y * y);
+    // 0 inside the rect.
+    std::int64_t SquaredDistanceToRect(const RECT& rect, POINT point) {
+        const std::int64_t gapX = std::max({static_cast<std::int64_t>(rect.left) - point.x, std::int64_t{0}, static_cast<std::int64_t>(point.x) - rect.right});
+        const std::int64_t gapY = std::max({static_cast<std::int64_t>(rect.top) - point.y, std::int64_t{0}, static_cast<std::int64_t>(point.y) - rect.bottom});
+        return (gapX * gapX) + (gapY * gapY);
     }
 
 } // namespace
@@ -129,7 +129,7 @@ std::optional<RECT> QueriedIconRect(const IconRectQuery& query, const std::vecto
     }
     std::optional<RECT> nearest;
     for (const TrayIconRect& shown : rects) {
-        if (shown.owner == icon->owner && shown.id == icon->id && (!nearest.has_value() || DistanceToRect(shown.rect, cursor) < DistanceToRect(*nearest, cursor))) {
+        if (shown.owner == icon->owner && shown.id == icon->id && (!nearest.has_value() || SquaredDistanceToRect(shown.rect, cursor) < SquaredDistanceToRect(*nearest, cursor))) {
             nearest = shown.rect;
         }
     }

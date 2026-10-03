@@ -33,7 +33,7 @@ class Group final : public IModule {
   private:
     std::wstring _icon;
     Fold         _fold;
-    FoldPosition _shown{.reveal = 0.0f, .angleDegrees = 0.0f}; // as of the last layout, so drawing and placing agree
+    FoldPosition _shown{.revealed = 0.0f, .angleDegrees = 0.0f}; // as of the last layout, so drawing and placing agree
     IconText     _toggle;
     bool         _laidOut = false;
 };

@@ -43,19 +43,19 @@ namespace {
 
 } // namespace
 
-float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& monitor, std::uint32_t dpi) {
+float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& monitorRect, std::uint32_t dpi) {
     const Insets insets = ContentInsets(style.box);
     // Leaves room for the scroll bar whether or not the rows overflow, so a cut row never grows once they do.
-    return CappedDips(monitor.right - monitor.left, dpi, style.maxWidthDips) - GutterDips(style.scrollbar) - insets.left - insets.right -
+    return CappedDips(monitorRect.right - monitorRect.left, dpi, style.maxWidthDips) - GutterDips(style.scrollbar) - insets.left - insets.right -
         (2.0f * (row.margin.xDips + row.padding.xDips));
 }
 
-MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitor, std::uint32_t dpi) {
+MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitorRect, std::uint32_t dpi) {
     const ScrollbarStyle& scrollbar     = style.scrollbar;
     const Insets          insets        = ContentInsets(style.box);
     const float           gutter        = GutterDips(scrollbar);
-    const std::int32_t    monitorWidth  = monitor.right - monitor.left;
-    const std::int32_t    monitorHeight = monitor.bottom - monitor.top;
+    const std::int32_t    monitorWidth  = monitorRect.right - monitorRect.left;
+    const std::int32_t    monitorHeight = monitorRect.bottom - monitorRect.top;
     const float           maxHeight     = CappedDips(monitorHeight, dpi, style.maxHeightDips);
 
     float                 inner = 0.0f;
@@ -129,10 +129,10 @@ std::optional<size_t> EntryAt(const std::vector<MenuRow>& rows, const MenuScroll
     return row == rows.end() ? std::nullopt : row->entry;
 }
 
-TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitor, std::uint32_t dpi) {
+TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitorRect, std::uint32_t dpi) {
     // The tooltip's rect treats the row as a bar on the monitor's top or bottom edge, placing it below or above the row.
-    const Edge edge = monitor.bottom - row.bottom >= row.top - monitor.top ? Edge::Top : Edge::Bottom;
-    return TooltipAnchor{.module = row, .bar = row, .monitor = monitor, .edge = edge, .dpi = dpi};
+    const Edge edge = monitorRect.bottom - row.bottom >= row.top - monitorRect.top ? Edge::Top : Edge::Bottom;
+    return TooltipAnchor{.target = row, .barRect = row, .monitorRect = monitorRect, .edge = edge, .dpi = dpi};
 }
 
 std::optional<size_t> StepHighlight(std::optional<size_t> current, size_t count, MenuStep step) {
@@ -152,9 +152,10 @@ void Menu::RegisterWindowClass(HINSTANCE instance) {
     ::RegisterWindowClass(instance, kWindowClass, OwnedWindowProc<Menu>, LoadCursorW(nullptr, IDC_ARROW), "menu");
 }
 
-Menu::Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, AppState& state, Tooltip& tooltip,
-           std::function<void(const DeviceLostError&)> onDeviceLost) :
-    _graphics(graphics), _config(config), _textFormat(textFormat), _launcher(launcher), _state(state), _tooltip(tooltip), _onDeviceLost(std::move(onDeviceLost)),
+Menu::Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, WindowProcError& windowProcError,
+           Tooltip& tooltip, std::function<void(const DeviceLostError&)> onDeviceLost) :
+    _graphics(graphics), _config(config), _textFormat(textFormat), _launcher(launcher), _windowProcError(windowProcError), _tooltip(tooltip),
+    _onDeviceLost(std::move(onDeviceLost)),
     _window(CreatePopupWindow(instance, kWindowClass, L"intarsia menu", WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, this, "menu")) {}
 
 LRESULT Menu::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -250,7 +251,7 @@ MenuRow Menu::LayOutRow(std::wstring_view text, const ItemStyle& style, std::opt
 
 void Menu::Show(const MenuListing& listing, const Command& onSelect, const TooltipAnchor& anchor) {
     const MenuStyle&            style     = _config.style.menu;
-    const auto                  textWidth = [&style, &anchor](const ItemStyle& row) { return MenuTextWidth(style, row, anchor.monitor, anchor.dpi); };
+    const auto                  textWidth = [&style, &anchor](const ItemStyle& row) { return MenuTextWidth(style, row, anchor.monitorRect, anchor.dpi); };
 
     ComPtr<IDWriteInlineObject> ellipsis;
     ThrowIfFailed(_graphics.dwrite->CreateEllipsisTrimmingSign(_textFormat, &ellipsis), "IDWriteFactory::CreateEllipsisTrimmingSign(menu)");
@@ -273,7 +274,7 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
         }
     }
 
-    MenuLayout layout = LayOutMenu(std::move(rows), style, anchor.monitor, anchor.dpi);
+    MenuLayout layout = LayOutMenu(std::move(rows), style, anchor.monitorRect, anchor.dpi);
     const SIZE size   = layout.size;
     // A window takes one composition target at a time, so the old surface goes before the new one is made.
     ReleaseSurface();
@@ -292,8 +293,8 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     _shown   = true;
     Draw();
 
-    _rect    = TooltipRect(anchor, size);
-    _monitor = anchor.monitor;
+    _rect        = TooltipRect(anchor, size);
+    _monitorRect = anchor.monitorRect;
     if (!SetWindowPos(_window.get(), HWND_TOPMOST, _rect.left, _rect.top, size.cx, size.cy, SWP_SHOWWINDOW)) {
         ThrowLastError("SetWindowPos(menu)");
     }
@@ -341,11 +342,11 @@ void Menu::Draw() {
         if (row.text == nullptr || row.box.bottom - offset < _scroll.viewport.top || row.box.top - offset > _scroll.viewport.bottom) {
             continue;
         }
-        const ItemStyle& item        = *row.style;
+        const ItemStyle& itemStyle   = *row.style;
         const bool       highlighted = row.entry.has_value() && row.entry == _highlight;
-        const BoxStyle   box{.background = item.background, .border = {}, .radiusDips = item.radiusDips, .padding = item.padding, .shadows = item.shadows};
-        DrawBox(context, *_brushes, *_boxes, row.box, box, highlighted ? item.hoverBackground : item.background);
-        context->DrawTextLayout(row.textOrigin, row.text.Get(), _brushes->Get(highlighted ? item.hoverColor : item.color));
+        const BoxStyle   box{.background = itemStyle.background, .border = {}, .radiusDips = itemStyle.radiusDips, .padding = itemStyle.padding, .shadows = itemStyle.shadows};
+        DrawBox(context, *_brushes, *_boxes, row.box, box, highlighted ? itemStyle.hoverBackground : itemStyle.background);
+        context->DrawTextLayout(row.textOrigin, row.text.Get(), _brushes->Get(highlighted ? itemStyle.hoverColor : itemStyle.color));
     }
     context->SetTransform(D2D1::Matrix3x2F::Identity());
     context->PopAxisAlignedClip();
@@ -449,7 +450,7 @@ void Menu::ShowTooltip() {
         return;
     }
     const D2D1_RECT_F shown = Offset(row->box, D2D1::Point2F(0.0f, -_scroll.offsetDips));
-    _tooltip.Show(ToWide(*_entries[*_highlight].tooltip), RowTooltipAnchor(DipsToScreen(_rect, shown, _dpi), _monitor, _dpi));
+    _tooltip.Show(ToWide(*_entries[*_highlight].tooltip), RowTooltipAnchor(DipsToScreen(_rect, shown, _dpi), _monitorRect, _dpi));
 }
 
 void Menu::ReleaseSurface() {

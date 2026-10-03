@@ -7,7 +7,7 @@
 
 // How far a fold has opened and its toggle has turned at one moment.
 struct FoldPosition {
-    float reveal;       // 0 folded, 1 unfolded
+    float revealed;     // 0 folded, 1 unfolded
     float angleDegrees; // from the icon rotation folded to the expanded icon one unfolded
 };
 
@@ -25,8 +25,8 @@ class Fold {
     Transition    _revealTransition;
     Transition    _turnTransition;
     float         _foldedDegrees;
-    float         _expandedDegrees;
-    bool          _expanded = false;
+    float         _unfoldedDegrees;
+    bool          _unfolded = false;
     AnimatedValue _reveal{0.0f};
     AnimatedValue _turn{0.0f};
 };

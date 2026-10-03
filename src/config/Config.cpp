@@ -390,7 +390,7 @@ namespace {
     // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
     void RejectUnshownModules(const TableReader& definitions, const Config& config) {
         for (const std::string& name : definitions.Keys()) {
-            if (name.empty() || !std::ranges::all_of(name, IsIdentCharacter)) {
+            if (name.empty() || !std::ranges::all_of(name, IsNameCharacter)) {
                 throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
             }
             if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
@@ -569,8 +569,9 @@ namespace {
         std::vector<std::string> classes = module.StringList(key);
         for (size_t index = 0; index < classes.size(); ++index) {
             const std::string& name = classes[index];
-            const bool ident = !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, IsIdentCharacter);
-            if (!ident) {
+            const bool         wellFormed =
+                !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, IsNameCharacter);
+            if (!wellFormed) {
                 throw module.Error(
                     std::format("{} lists '{}', which is not a class name: use letters, digits, '_' or '-', starting with a letter or '_'", module.KeyPath(key), name));
             }

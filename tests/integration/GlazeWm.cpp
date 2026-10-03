@@ -243,7 +243,7 @@ TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
         EXPECT_NE(line.find("focus --workspace 1"), std::string::npos) << line;
     }
     EXPECT_THAT(bar.Events("disconnected"), testing::IsEmpty());
-    EXPECT_EQ(bar.PixelsOf(kTilingColor), size_t{0});
+    EXPECT_EQ(bar.PixelCount(kTilingColor), size_t{0});
 }
 
 TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
@@ -269,7 +269,7 @@ TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
 TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActive) {
     integration::RunningBar bar("binding-mode", kModesConfig, kModesStyle);
     ASSERT_TRUE(bar.Draws(kTilingColor, std::chrono::seconds(5))) << "the tiling direction never drew, so the bar has no answers yet";
-    EXPECT_EQ(bar.PixelsOf(kModeColor), size_t{0}) << "a binding mode drew while none is active";
+    EXPECT_EQ(bar.PixelCount(kModeColor), size_t{0}) << "a binding mode drew while none is active";
 
     bar.PushFocus(1);
     EXPECT_TRUE(bar.Draws(kModeColor, std::chrono::seconds(5))) << "the active binding mode never drew";

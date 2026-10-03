@@ -71,5 +71,5 @@ class ITray {
 
     // Where view, one tray module, shows its icons now, replacing what it said before, so an app asking where its icon
     // is (Shell_NotifyIconGetRect) learns its place on a bar. A view reports none once it is gone.
-    virtual void ShowRects(const void* view, std::vector<TrayIconRect> rects) = 0;
+    virtual void ReportIconRects(const void* view, std::vector<TrayIconRect> rects) = 0;
 };

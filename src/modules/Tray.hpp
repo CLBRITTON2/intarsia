@@ -44,7 +44,7 @@ class Tray final : public IModule {
     // The tooltip of the icon the cursor rests on. An icon whose app draws its own popup has none: its popup opens.
     std::optional<std::wstring> TooltipText() override;
     // The icon under the cursor.
-    std::optional<D2D1_RECT_F> TooltipItem() const override;
+    std::optional<D2D1_RECT_F> TooltipItemBox() const override;
 
   private:
     // One shown icon. The bitmap is made from its pixels on this bar's device.
@@ -73,8 +73,8 @@ class Tray final : public IModule {
     ModuleStyle                   _style;
     Fold                          _fold;
     // What the last layout read of them, so drawing and hit tests agree with one frame.
-    float             _revealShown = 0.0f;
-    float             _angleShown  = 0.0f;
+    float             _revealedShown = 0.0f;
+    float             _angleShown    = 0.0f;
     std::vector<Slot> _slots; // as last laid out with any icon in sight
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.

@@ -20,7 +20,7 @@
 #include <optional>
 #include <vector>
 
-struct AppState;
+struct WindowProcError;
 
 // One row of a shown menu, in DIPs from the menu's top left.
 struct MenuRow {
@@ -53,12 +53,12 @@ struct MenuLayout {
     D2D1_RECT_F          track;
 };
 
-// The widest row's text may lay out in a menu on monitor before its ellipsis, capped by style's max-width.
-float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& monitor, std::uint32_t dpi);
+// The widest row's text may lay out in a menu on monitorRect before its ellipsis, capped by style's max-width.
+float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& monitorRect, std::uint32_t dpi);
 
 // rows, each sized to its text with its box at the origin, stacked inside style's box. Past max-height or the monitor's
 // height the window stops growing, the rows scroll and the scroll bar takes its gutter.
-MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitor, std::uint32_t dpi);
+MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitorRect, std::uint32_t dpi);
 
 // scroll at offsetDips, kept between the top and the offset that brings the last row to the viewport's bottom.
 MenuScroll ScrolledTo(const MenuScroll& scroll, float offsetDips);
@@ -81,7 +81,7 @@ std::optional<size_t> StepHighlight(std::optional<size_t> current, size_t count,
 
 // Where an entry's tooltip goes: over the menu, centered on the row and against its side with more of the monitor
 // below or above it.
-TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitor, std::uint32_t dpi);
+TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitorRect, std::uint32_t dpi);
 
 // A popup listing a menu command's entries beside the module that opened it. It takes focus while shown, so the arrow
 // keys, Enter and Esc work, and hides once another window takes it. Picking an entry runs on_select with the entry's
@@ -91,8 +91,8 @@ TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitor, std::uint32
 class Menu {
   public:
     // onDeviceLost receives a lost device met while drawing from the menu's own messages.
-    Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, AppState& state, Tooltip& tooltip,
-         std::function<void(const DeviceLostError&)> onDeviceLost);
+    Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, WindowProcError& windowProcError,
+         Tooltip& tooltip, std::function<void(const DeviceLostError&)> onDeviceLost);
     Menu(const Menu&)                  = delete;
     Menu&       operator=(const Menu&) = delete;
 
@@ -128,13 +128,13 @@ class Menu {
     const Config&                               _config;
     IDWriteTextFormat*                          _textFormat;
     Launcher&                                   _launcher;
-    AppState&                                   _state;
+    WindowProcError&                            _windowProcError;
     Tooltip&                                    _tooltip;
     std::function<void(const DeviceLostError&)> _onDeviceLost;
     bool                                        _shown = false;
     std::uint32_t                               _dpi   = USER_DEFAULT_SCREEN_DPI;
     RECT                                        _rect{}; // the shown menu, in screen pixels
-    RECT                                        _monitor{};
+    RECT                                        _monitorRect{};
     std::vector<MenuEntry>                      _entries;
     std::vector<MenuRow>                        _rows;
     std::optional<size_t>                       _highlight; // the entry under the cursor or picked with the arrow keys

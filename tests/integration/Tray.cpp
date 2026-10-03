@@ -137,21 +137,21 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
     std::optional<double> column;
     ASSERT_TRUE(integration::Eventually(
         [&] {
-            column = bar.ColumnOf(kGreen);
+            column = bar.MeanColumnOf(kGreen);
             return column.has_value() && app.IconRect().has_value();
         },
         kDrawn))
         << "the icon never drew with a rect";
     const RECT rect = app.IconRect().value_or(RECT{});
-    RECT       window{};
-    GetWindowRect(bar.PrimaryBar(), &window);
+    RECT       barRect{};
+    GetWindowRect(bar.PrimaryBar(), &barRect);
     integration::Log("icon_rect",
                      std::format("left={} top={} right={} bottom={} bar_left={} bar_top={} bar_bottom={} icon_column={:.1f}", rect.left, rect.top, rect.right, rect.bottom,
-                                 window.left, window.top, window.bottom, column.value_or(-1)));
-    EXPECT_LE(rect.left - window.left, column.value_or(-1));
-    EXPECT_GE(rect.right - window.left, column.value_or(-1));
-    EXPECT_GE(rect.top, window.top);
-    EXPECT_LE(rect.bottom, window.bottom);
+                                 barRect.left, barRect.top, barRect.bottom, column.value_or(-1)));
+    EXPECT_LE(rect.left - barRect.left, column.value_or(-1));
+    EXPECT_GE(rect.right - barRect.left, column.value_or(-1));
+    EXPECT_GE(rect.top, barRect.top);
+    EXPECT_LE(rect.bottom, barRect.bottom);
     EXPECT_GT(rect.bottom, rect.top);
 }
 

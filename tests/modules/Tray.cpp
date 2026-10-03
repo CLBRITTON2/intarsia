@@ -222,9 +222,9 @@ TEST_F(TrayModule, TheIconUnderTheCursorGivesTheTooltip) {
     EXPECT_TRUE(module.Hover(At(module, 57.0f)));
     EXPECT_EQ(module.TooltipText(), L"fourth");
     // The tooltip sits against the second icon's box, not the whole module.
-    const D2D1_RECT_F item = module.TooltipItem().value_or(D2D1::RectF(0.0f, 0.0f, 0.0f, 0.0f));
-    EXPECT_FLOAT_EQ(item.left, 43.0f);
-    EXPECT_FLOAT_EQ(item.right, 71.0f);
+    const D2D1_RECT_F itemBox = module.TooltipItemBox().value_or(D2D1::RectF(0.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(itemBox.left, 43.0f);
+    EXPECT_FLOAT_EQ(itemBox.right, 71.0f);
     EXPECT_FALSE(module.Hover(At(module, 60.0f)));
     EXPECT_TRUE(module.Hover(std::nullopt));
     EXPECT_EQ(module.TooltipText(), std::nullopt);
@@ -258,7 +258,7 @@ TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeavi
 }
 
 TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
-    const ModulePlacement placement{.window = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 192};
+    const ModulePlacement placement{.windowRect = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 192};
     {
         Tray module(kConfig, _tray, TestModuleStyle());
         module.Layout(_render);
@@ -280,7 +280,7 @@ TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
 }
 
 TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
-    const ModulePlacement placement{.window = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 96};
+    const ModulePlacement placement{.windowRect = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 96};
     Tray                  module(kConfig, _tray, TestModuleStyle());
     module.Layout(_render);
     module.Click(At(module, module.Size().width / 2.0f));
@@ -290,7 +290,7 @@ TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
     const size_t calls = _tray.showCalls;
     module.Place(placement);
     EXPECT_EQ(_tray.showCalls, calls);
-    module.Place(ModulePlacement{.window = placement.window, .contentOrigin = D2D1::Point2F(120.0f, 4.0f), .dpi = 96});
+    module.Place(ModulePlacement{.windowRect = placement.windowRect, .contentOrigin = D2D1::Point2F(120.0f, 4.0f), .dpi = 96});
     EXPECT_EQ(_tray.showCalls, calls + 1);
 }
 
@@ -308,7 +308,7 @@ TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     _tray.icons[0].pixels = Pixels();
     EXPECT_FALSE(module.Layout(_render));
     EXPECT_FLOAT_EQ(module.Size().width, folded);
-    module.Place(ModulePlacement{.window = RECT{.left = 0, .top = 0, .right = 2000, .bottom = 60}, .contentOrigin = D2D1::Point2F(0.0f, 0.0f), .dpi = 96});
+    module.Place(ModulePlacement{.windowRect = RECT{.left = 0, .top = 0, .right = 2000, .bottom = 60}, .contentOrigin = D2D1::Point2F(0.0f, 0.0f), .dpi = 96});
     EXPECT_TRUE(_tray.rects.empty());
 
     module.Click(At(module, folded / 2.0f));

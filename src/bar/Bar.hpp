@@ -45,8 +45,9 @@ struct BarPlacement {
     bool          operator==(const BarPlacement& other) const;
 };
 
-// Process-wide state the window procedures report into, since exceptions cannot unwind through user32.
-struct AppState {
+// The exception a window procedure caught, held for the message loop to rethrow, since exceptions cannot unwind through
+// user32.
+struct WindowProcError {
     std::exception_ptr error;
 };
 
@@ -55,7 +56,7 @@ struct AppState {
 class Bar {
   public:
     Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
-        AppBarRoute route, AppState& state, HWND control, std::uint32_t deviceLostMessage);
+        AppBarRoute route, WindowProcError& windowProcError, HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
     Bar(const Bar&)                   = delete;
     Bar&        operator=(const Bar&) = delete;
@@ -112,9 +113,9 @@ class Bar {
     struct PlacedEntry {
         const ModuleEntry*  entry;
         HitBox              box;
-        D2D1_RECT_F         toggle;
+        D2D1_RECT_F         toggleBounds;
         std::vector<HitBox> members;
-        D2D1_RECT_F         shown;
+        D2D1_RECT_F         shownBounds;
     };
 
     HitBox                   PlaceBox(const ModuleEntry& entry, float start, float length) const;
@@ -129,7 +130,7 @@ class Bar {
     // The group's box, its hover fading in over the toggle's span alone under the cursor, the toggle, then its members.
     void DrawGroup(const PlacedEntry& placed);
     // Fades every box toward its fill for where the cursor now is.
-    void FollowPointer();
+    void FadeBoxesToHover();
     bool BoxFading() const;
     void ScheduleNextChange();
     // Stops drawing and posts to control, once.
@@ -143,9 +144,9 @@ class Bar {
     void HandleInput(POINT client, ModuleInput input);
     // Hovers the module and item under the cursor, restarting hover tracking and hiding any tooltip whenever either
     // changes. Returns whether one did, and the bar needs drawing.
-    bool Point(POINT client);
+    bool HoverAt(POINT client);
     // A cursor move: hovers what it is over and draws the bar if that changed.
-    void PointAt(POINT client);
+    void MoveCursor(POINT client);
     // Hides the tooltip and waits for the cursor to rest again before showing the next one.
     void RestartHover();
     void ShowTooltip();
@@ -168,7 +169,7 @@ class Bar {
     bool                        _animating = false;
     std::optional<FrameStats>   _animationFrames; // null while no animation runs
     IWindowManager&             _windowManager;   // takes the window_manager actions
-    AppState&                   _state;
+    WindowProcError&            _windowProcError;
     HWND                        _control;
     std::uint32_t               _deviceLostMessage;
     bool                        _deviceLost = false;
@@ -177,7 +178,7 @@ class Bar {
     AppBarRoute                 _route;
     Sections<ModuleEntry>       _modules;
     std::vector<HitBox>         _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
-    IModule*                    _pointed = nullptr; // the module under the cursor, null when there is none
+    IModule*                    _hovered = nullptr; // the module under the cursor, null when there is none
     std::optional<POINT>        _cursor;            // client pixels where the cursor last moved, null once it left
     std::uint32_t               _taskbarCreated;
     std::optional<MenuOwner>    _menuOwner; // null once any other input came after the menu's

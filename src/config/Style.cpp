@@ -78,14 +78,14 @@ namespace {
     }
 
     // Splitting drops empty entries, so a stray comma shows only in the count.
-    template <typename Value, typename ReadEntry>
-    std::vector<Value> ReadCommaList(std::string_view text, std::string_view form, ReadEntry readEntry) {
+    template <typename Value, typename ParseEntry>
+    std::vector<Value> ParseCommaList(std::string_view text, std::string_view form, ParseEntry parseEntry) {
         if (text == "none") {
             return {};
         }
         std::vector<Value> values;
         for (const std::string_view entry : Split(text, ",")) {
-            values.push_back(readEntry(entry));
+            values.push_back(parseEntry(entry));
         }
         if (values.empty() || static_cast<size_t>(std::ranges::count(text, ',')) != values.size() - 1) {
             throw std::invalid_argument(std::string(form));
@@ -97,7 +97,7 @@ namespace {
     // Far past any monitor, and small enough that every length scaled to device pixels fits the integers it is cast to.
     constexpr float kLargestNumber = 10000.0f;
 
-    float           ReadSignedNumber(std::string_view text) {
+    float           ParseSignedNumber(std::string_view text) {
         const std::optional<float> value = ParseNumber(text);
         if (!value.has_value()) {
             throw std::invalid_argument(std::format("must be a number with no unit, as 4, not '{}'", text));
@@ -108,34 +108,34 @@ namespace {
         return *value;
     }
 
-    float ReadLength(std::string_view text) {
-        const float value = ReadSignedNumber(text);
+    float ParseLength(std::string_view text) {
+        const float value = ParseSignedNumber(text);
         if (value < 0.0f) {
             throw std::invalid_argument("must be 0 or more");
         }
         return value;
     }
 
-    float ReadPositiveLength(std::string_view text) {
-        const float value = ReadLength(text);
+    float ParsePositiveLength(std::string_view text) {
+        const float value = ParseLength(text);
         if (value <= 0.0f) {
             throw std::invalid_argument("must be more than 0");
         }
         return value;
     }
 
-    std::optional<float> ReadCap(std::string_view text) {
-        return ReadPositiveLength(text);
+    std::optional<float> ParseCap(std::string_view text) {
+        return ParsePositiveLength(text);
     }
 
-    Spacing ReadSpacing(std::string_view text) {
+    Spacing ParseSpacing(std::string_view text) {
         const std::vector<std::string_view> numbers = Split(text, kSpace);
         if (numbers.size() == 1) {
-            const float both = ReadLength(numbers[0]);
+            const float both = ParseLength(numbers[0]);
             return Spacing{.yDips = both, .xDips = both};
         }
         if (numbers.size() == 2) {
-            return Spacing{.yDips = ReadLength(numbers[0]), .xDips = ReadLength(numbers[1])};
+            return Spacing{.yDips = ParseLength(numbers[0]), .xDips = ParseLength(numbers[1])};
         }
         throw std::invalid_argument("takes one number for every side, or two: above and below, then left and right, as 2 6");
     }
@@ -150,7 +150,7 @@ namespace {
 
     constexpr std::string_view kColorForm = "must be a color: #rrggbb, #rrggbbaa, #rgb or #rgba, optionally followed by an opacity as #191724 90%, or transparent";
 
-    D2D1_COLOR_F               ReadHex(std::string_view text) {
+    D2D1_COLOR_F               ParseHex(std::string_view text) {
         const std::string_view digits = text.substr(1);
         if (digits.size() != 3 && digits.size() != 4 && digits.size() != 6 && digits.size() != 8) {
             throw std::invalid_argument(std::string(kColorForm));
@@ -166,7 +166,7 @@ namespace {
     }
 
     // A hex color, optionally followed by an opacity percentage that multiplies its alpha, or transparent.
-    D2D1_COLOR_F ReadColor(std::string_view text) {
+    D2D1_COLOR_F ParseColor(std::string_view text) {
         const std::vector<std::string_view> words = Split(text, kSpace);
         if (words.size() == 1 && words[0] == "transparent") {
             return kTransparent;
@@ -174,7 +174,7 @@ namespace {
         if (words.empty() || words.size() > 2 || !words[0].starts_with('#')) {
             throw std::invalid_argument(std::string(kColorForm));
         }
-        D2D1_COLOR_F color = ReadHex(words[0]);
+        D2D1_COLOR_F color = ParseHex(words[0]);
         if (words.size() == 2) {
             const std::optional<float> percent = words[1].ends_with('%') ? ParseNumber(words[1].substr(0, words[1].size() - 1)) : std::nullopt;
             if (!percent.has_value() || *percent < 0.0f || *percent > 100.0f) {
@@ -185,7 +185,7 @@ namespace {
         return color;
     }
 
-    std::wstring ReadFamily(std::string_view text) {
+    std::wstring ParseFamily(std::string_view text) {
         if (text.starts_with('"') || text.starts_with('\'')) {
             throw std::invalid_argument("takes the family unquoted, as font: Segoe UI");
         }
@@ -195,7 +195,7 @@ namespace {
         return ToWide(text);
     }
 
-    DWRITE_FONT_WEIGHT ReadWeight(std::string_view text) {
+    DWRITE_FONT_WEIGHT ParseWeight(std::string_view text) {
         if (text == "normal") {
             return DWRITE_FONT_WEIGHT_NORMAL;
         }
@@ -209,7 +209,7 @@ namespace {
         return static_cast<DWRITE_FONT_WEIGHT>(static_cast<std::int32_t>(*value));
     }
 
-    bool ReadSwitch(std::string_view text) {
+    bool ParseSwitch(std::string_view text) {
         if (text != "on" && text != "off") {
             throw std::invalid_argument("must be on or off");
         }
@@ -237,7 +237,7 @@ namespace {
         {.name = "ease-in-out", .timing = TimingFunction::EaseInOut},
     }};
 
-    std::chrono::milliseconds           ReadDuration(std::string_view text) {
+    std::chrono::milliseconds           ParseDuration(std::string_view text) {
         const bool                 milliseconds = text.ends_with("ms");
         const std::optional<float> value        = milliseconds ? ParseNumber(text.substr(0, text.size() - 2)) :
                              text.ends_with('s')                         ? ParseNumber(text.substr(0, text.size() - 1)) :
@@ -253,7 +253,7 @@ namespace {
         "must be none, or transitions separated by commas, each a property, a duration and a timing function, as width 400ms ease-out, background 150ms ease";
 
     // A property, a duration and an optional timing function (ease when left out).
-    TransitionValue ReadTransitionValue(std::string_view text) {
+    TransitionValue ParseTransitionValue(std::string_view text) {
         const std::vector<std::string_view> parts = Split(text, kSpace);
         if (parts.size() != 2 && parts.size() != 3) {
             throw std::invalid_argument(std::string(kTransitionForm));
@@ -266,17 +266,17 @@ namespace {
             }
             timing = entry->timing;
         }
-        return TransitionValue{.property = parts[0], .transition = Transition{.duration = ReadDuration(parts[1]), .timing = timing}};
+        return TransitionValue{.property = parts[0], .transition = Transition{.duration = ParseDuration(parts[1]), .timing = timing}};
     }
 
-    std::vector<TransitionValue> ReadTransitionValues(std::string_view text) {
-        return ReadCommaList<TransitionValue>(text, kTransitionForm, ReadTransitionValue);
+    std::vector<TransitionValue> ParseTransitionValues(std::string_view text) {
+        return ParseCommaList<TransitionValue>(text, kTransitionForm, ParseTransitionValue);
     }
 
     // The transition a list gives property, the last one naming it, or none.
-    Transition TransitionOf(std::string_view text, std::string_view property) {
+    Transition ParseTransition(std::string_view text, std::string_view property) {
         Transition found = kNoTransition;
-        for (const TransitionValue& value : ReadTransitionValues(text)) {
+        for (const TransitionValue& value : ParseTransitionValues(text)) {
             if (value.property == property) {
                 found = value.transition;
             }
@@ -286,18 +286,18 @@ namespace {
 
     // A reader of one property's transition, for Read.
     auto TransitionReader(std::string_view property) {
-        return [property](std::string_view text) { return TransitionOf(text, property); };
+        return [property](std::string_view text) { return ParseTransition(text, property); };
     }
 
     constexpr std::string_view kShadowForm = "must be none, or shadows separated by commas, each an x and y offset, an optional blur and spread, and a color, "
                                              "as 0 1 2 #ffffff 18%";
 
     // Numbers, then a color.
-    InsetShadow ReadShadow(std::string_view text) {
+    InsetShadow ParseShadow(std::string_view text) {
         const std::vector<std::string_view> words = Split(text, kSpace);
         std::vector<float>                  numbers;
         while (numbers.size() < words.size() && ParseNumber(words[numbers.size()]).has_value()) {
-            numbers.push_back(ReadSignedNumber(words[numbers.size()]));
+            numbers.push_back(ParseSignedNumber(words[numbers.size()]));
         }
         if (numbers.size() < 2 || numbers.size() > 4 || numbers.size() == words.size()) {
             throw std::invalid_argument(std::string(kShadowForm));
@@ -307,17 +307,17 @@ namespace {
             throw std::invalid_argument("has a negative blur, which must be 0 or more");
         }
         return InsetShadow{
-            .xDips = numbers[0], .yDips = numbers[1], .blurDips = blur, .spreadDips = numbers.size() > 3 ? numbers[3] : 0.0f, .color = ReadColor(JoinFrom(words, numbers.size()))};
+            .xDips = numbers[0], .yDips = numbers[1], .blurDips = blur, .spreadDips = numbers.size() > 3 ? numbers[3] : 0.0f, .color = ParseColor(JoinFrom(words, numbers.size()))};
     }
 
-    std::vector<InsetShadow> ReadShadows(std::string_view text) {
-        return ReadCommaList<InsetShadow>(text, kShadowForm, ReadShadow);
+    std::vector<InsetShadow> ParseShadows(std::string_view text) {
+        return ParseCommaList<InsetShadow>(text, kShadowForm, ParseShadow);
     }
 
     constexpr BorderSide kNoBorder{.widthDips = 0.0f, .color = kTransparent};
 
     // none, or a width then a color.
-    BorderSide ReadBorderSide(std::string_view text) {
+    BorderSide ParseBorderSide(std::string_view text) {
         if (text == "none") {
             return kNoBorder;
         }
@@ -325,7 +325,7 @@ namespace {
         if (words.size() < 2) {
             throw std::invalid_argument("must be none, or a width and a color, as 1 #6e6a86");
         }
-        return BorderSide{.widthDips = ReadLength(words[0]), .color = ReadColor(JoinFrom(words, 1))};
+        return BorderSide{.widthDips = ParseLength(words[0]), .color = ParseColor(JoinFrom(words, 1))};
     }
 
     // What a property's value is checked and read as. A key means the same in every block that takes it.
@@ -380,17 +380,17 @@ namespace {
             throw std::invalid_argument(std::format("unknown property {}", key));
         }
         switch (entry->kind) {
-            case ValueKind::Color: ReadColor(value); return;
-            case ValueKind::Border: ReadBorderSide(value); return;
-            case ValueKind::Length: ReadLength(value); return;
-            case ValueKind::SignedNumber: ReadSignedNumber(value); return;
-            case ValueKind::PositiveLength: ReadPositiveLength(value); return;
-            case ValueKind::Spacing: ReadSpacing(value); return;
-            case ValueKind::Family: ReadFamily(value); return;
-            case ValueKind::Weight: ReadWeight(value); return;
-            case ValueKind::Transition: ReadTransitionValues(value); return;
-            case ValueKind::Shadows: ReadShadows(value); return;
-            case ValueKind::Switch: ReadSwitch(value); return;
+            case ValueKind::Color: ParseColor(value); return;
+            case ValueKind::Border: ParseBorderSide(value); return;
+            case ValueKind::Length: ParseLength(value); return;
+            case ValueKind::SignedNumber: ParseSignedNumber(value); return;
+            case ValueKind::PositiveLength: ParsePositiveLength(value); return;
+            case ValueKind::Spacing: ParseSpacing(value); return;
+            case ValueKind::Family: ParseFamily(value); return;
+            case ValueKind::Weight: ParseWeight(value); return;
+            case ValueKind::Transition: ParseTransitionValues(value); return;
+            case ValueKind::Shadows: ParseShadows(value); return;
+            case ValueKind::Switch: ParseSwitch(value); return;
         }
         throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(entry->kind)));
     }
@@ -500,10 +500,10 @@ namespace {
 
     // brightness and saturate tone the system's blur, so either without blur: on would do nothing.
     void RequireBlurForTone(const StyleNode& block, std::string_view path, std::string_view source) {
-        const auto blur = std::ranges::find(block.children, std::string_view("blur"), &StyleNode::key);
-        const bool on   = blur != block.children.end() && blur->value == "on";
+        const auto blur   = std::ranges::find(block.children, std::string_view("blur"), &StyleNode::key);
+        const bool blurOn = blur != block.children.end() && blur->value == "on";
         for (const StyleNode& child : block.children) {
-            if ((child.key == "brightness" || child.key == "saturate") && !on) {
+            if ((child.key == "brightness" || child.key == "saturate") && !blurOn) {
                 throw StyleError(source, child.line, std::format("{}: {} tones the system's blur, so it takes blur: on beside it", path, child.key));
             }
         }
@@ -539,7 +539,7 @@ namespace {
             try {
                 CheckValue(child.key, child.value);
                 if (child.key == "transition") {
-                    for (const TransitionValue& transition : ReadTransitionValues(child.value)) {
+                    for (const TransitionValue& transition : ParseTransitionValues(child.value)) {
                         if (std::ranges::find(shape.animated, transition.property) == shape.animated.end()) {
                             throw std::invalid_argument(std::format("animates {} here, not {}", JoinNames(shape.animated), transition.property));
                         }
@@ -568,7 +568,7 @@ namespace {
         std::string_view value;
     };
 
-    std::optional<Line> ReadLine(std::string_view raw, std::uint32_t number, std::string_view source) {
+    std::optional<Line> ParseLine(std::string_view raw, std::uint32_t number, std::string_view source) {
         const std::string_view text = raw.substr(0, raw.find("//"));
         if (text.find('\t') != std::string_view::npos) {
             throw StyleError(source, number, "has a tab: indent by two spaces per level");
@@ -586,7 +586,7 @@ namespace {
             throw StyleError(source, number, std::format("'{}' must be key: value, or key: alone to open a block", content));
         }
         const std::string_view key = content.substr(0, colon);
-        if (key.empty() || !std::ranges::all_of(key, IsIdentCharacter)) {
+        if (key.empty() || !std::ranges::all_of(key, IsNameCharacter)) {
             throw StyleError(source, number, std::format("'{}' is not a key: write letters, digits, '_' and '-', then a colon", key));
         }
         return Line{.number = number, .level = indent / 2, .key = key, .value = Trim(content.substr(colon + 1))};
@@ -602,7 +602,7 @@ namespace {
         std::uint32_t                                          number = 0;
         for (const auto piece : text | std::views::split('\n')) {
             ++number;
-            const std::optional<Line> line = ReadLine(std::string_view(piece.begin(), piece.end()), number, source);
+            const std::optional<Line> line = ParseLine(std::string_view(piece.begin(), piece.end()), number, source);
             if (!line.has_value()) {
                 continue;
             }
@@ -632,7 +632,7 @@ namespace {
 
     using Variables = std::map<std::string, std::string, std::less<>>;
 
-    Variables ReadVariables(const std::vector<StyleNode>& roots, std::string_view source) {
+    Variables ResolveVariables(const std::vector<StyleNode>& roots, std::string_view source) {
         Variables  variables;
         const auto vars = std::ranges::find(roots, std::string_view("vars"), &StyleNode::key);
         if (vars == roots.end()) {
@@ -662,7 +662,7 @@ namespace {
         size_t      start = 0;
         for (size_t dollar = property.value.find('$'); dollar != std::string::npos; dollar = property.value.find('$', start)) {
             size_t end = dollar + 1;
-            while (end < property.value.size() && IsIdentCharacter(property.value[end])) {
+            while (end < property.value.size() && IsNameCharacter(property.value[end])) {
                 ++end;
             }
             const std::string_view name  = std::string_view(property.value).substr(dollar + 1, end - dollar - 1);
@@ -728,9 +728,9 @@ namespace {
         return children;
     }
 
-    Chain Concat(const Chain& first, const Chain& then) {
+    Chain Concat(const Chain& first, const Chain& second) {
         Chain joined = first;
-        joined.insert(joined.end(), then.begin(), then.end());
+        joined.insert(joined.end(), second.begin(), second.end());
         return joined;
     }
 
@@ -750,77 +750,80 @@ namespace {
         return property == nullptr ? std::move(inherited) : reader(property->value);
     }
 
-    D2D1_COLOR_F ColorOf(const Chain& chain, std::string_view key, const D2D1_COLOR_F& inherited) {
-        return Read(chain, key, ReadColor, inherited);
+    D2D1_COLOR_F ResolveColor(const Chain& chain, std::string_view key, const D2D1_COLOR_F& inherited) {
+        return Read(chain, key, ParseColor, inherited);
     }
 
     constexpr Spacing kNoSpace{.yDips = 0.0f, .xDips = 0.0f};
 
-    Spacing           SpacingOf(const Chain& chain, std::string_view key) {
-        return Read(chain, key, ReadSpacing, kNoSpace);
+    Spacing           ResolveSpacing(const Chain& chain, std::string_view key) {
+        return Read(chain, key, ParseSpacing, kNoSpace);
     }
 
     // A side's own border wins over its block's border, and a more specific block's border over either.
-    BorderSide ReadSide(const Chain& chain, std::string_view side) {
+    BorderSide ResolveBorderSide(const Chain& chain, std::string_view side) {
         const std::string own = std::format("border-{}", side);
         for (const StyleNode* block : chain) {
             const StyleNode* sideBorder = Child(block, own);
             const StyleNode* property   = sideBorder != nullptr ? sideBorder : Child(block, "border");
             if (property != nullptr) {
-                return ReadBorderSide(property->value);
+                return ParseBorderSide(property->value);
             }
         }
         return kNoBorder;
     }
 
-    BoxStyle ReadBox(const Chain& chain) {
-        return BoxStyle{.background = ColorOf(chain, "background", kTransparent),
-                        .border     = {.top = ReadSide(chain, "top"), .right = ReadSide(chain, "right"), .bottom = ReadSide(chain, "bottom"), .left = ReadSide(chain, "left")},
-                        .radiusDips = Read(chain, "radius", ReadLength, 0.0f),
-                        .padding    = SpacingOf(chain, "padding"),
-                        .shadows    = Read(chain, "shadow", ReadShadows, std::vector<InsetShadow>{})};
+    BoxStyle ResolveBox(const Chain& chain) {
+        return BoxStyle{.background = ResolveColor(chain, "background", kTransparent),
+                        .border     = {.top    = ResolveBorderSide(chain, "top"),
+                                       .right  = ResolveBorderSide(chain, "right"),
+                                       .bottom = ResolveBorderSide(chain, "bottom"),
+                                       .left   = ResolveBorderSide(chain, "left")},
+                        .radiusDips = Read(chain, "radius", ParseLength, 0.0f),
+                        .padding    = ResolveSpacing(chain, "padding"),
+                        .shadows    = Read(chain, "shadow", ParseShadows, std::vector<InsetShadow>{})};
     }
 
     constexpr Backdrop kNoBackdrop{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
 
-    Backdrop           ReadBackdrop(const StyleNode* block) {
+    Backdrop           ResolveBackdrop(const StyleNode* block) {
         const Chain chain = ChainOf({block});
-        if (!Read(chain, "blur", ReadSwitch, false)) {
+        if (!Read(chain, "blur", ParseSwitch, false)) {
             return kNoBackdrop;
         }
-        return Backdrop{.blur = true, .brightness = Read(chain, "brightness", ReadLength, 1.0f), .saturation = Read(chain, "saturate", ReadLength, 1.0f)};
+        return Backdrop{.blur = true, .brightness = Read(chain, "brightness", ParseLength, 1.0f), .saturation = Read(chain, "saturate", ParseLength, 1.0f)};
     }
 
     // An item from its blocks, and its colors under the cursor from hover's.
-    ItemStyle ReadItem(const Chain& item, const Chain& hover, const D2D1_COLOR_F& color) {
-        const D2D1_COLOR_F itemColor  = ColorOf(item, "color", color);
-        const D2D1_COLOR_F background = ColorOf(item, "background", kTransparent);
+    ItemStyle ResolveItem(const Chain& item, const Chain& hover, const D2D1_COLOR_F& color) {
+        const D2D1_COLOR_F itemColor  = ResolveColor(item, "color", color);
+        const D2D1_COLOR_F background = ResolveColor(item, "background", kTransparent);
         return ItemStyle{.color                = itemColor,
                          .background           = background,
-                         .weight               = Read(item, "weight", ReadWeight, DWRITE_FONT_WEIGHT_NORMAL),
-                         .padding              = SpacingOf(item, "padding"),
-                         .margin               = SpacingOf(item, "margin"),
-                         .radiusDips           = Read(item, "radius", ReadLength, 0.0f),
-                         .shadows              = Read(item, "shadow", ReadShadows, std::vector<InsetShadow>{}),
-                         .hoverColor           = ColorOf(hover, "color", itemColor),
-                         .hoverBackground      = ColorOf(hover, "background", background),
+                         .weight               = Read(item, "weight", ParseWeight, DWRITE_FONT_WEIGHT_NORMAL),
+                         .padding              = ResolveSpacing(item, "padding"),
+                         .margin               = ResolveSpacing(item, "margin"),
+                         .radiusDips           = Read(item, "radius", ParseLength, 0.0f),
+                         .shadows              = Read(item, "shadow", ParseShadows, std::vector<InsetShadow>{}),
+                         .hoverColor           = ResolveColor(hover, "color", itemColor),
+                         .hoverBackground      = ResolveColor(hover, "background", background),
                          .backgroundTransition = Read(item, "transition", TransitionReader("background"), kNoTransition),
                          .colorTransition      = Read(item, "transition", TransitionReader("color"), kNoTransition)};
     }
 
     // An item in one state: the state's blocks over the item's, and under the cursor the state's colors over the item's
     // hover, so a state such as focused keeps the colors it sets.
-    ItemStyle ReadItemState(const Chain& items, std::string_view state, const D2D1_COLOR_F& color) {
+    ItemStyle ResolveItemState(const Chain& items, std::string_view state, const D2D1_COLOR_F& color) {
         const Chain states = Children(items, state);
-        return ReadItem(Concat(states, items), Concat(states, Children(items, "hover")), color);
+        return ResolveItem(Concat(states, items), Concat(states, Children(items, "hover")), color);
     }
 
     // A module's text and icon colors in one state: the state's blocks win over the module's own, and the icon inherits
     // the state's text color.
-    StateColors ReadStateColors(const Chain& module, std::string_view state, const D2D1_COLOR_F& color) {
+    StateColors ResolveStateColors(const Chain& module, std::string_view state, const D2D1_COLOR_F& color) {
         const Chain        states = Children(module, state);
-        const D2D1_COLOR_F text   = ColorOf(states, "color", color);
-        return StateColors{.text = text, .icon = ColorOf(Concat(Children(states, "icon"), Children(module, "icon")), "color", text)};
+        const D2D1_COLOR_F text   = ResolveColor(states, "color", color);
+        return StateColors{.text = text, .icon = ResolveColor(Concat(Children(states, "icon"), Children(module, "icon")), "color", text)};
     }
 
     std::string_view TypeName(ModuleKind kind) {
@@ -857,7 +860,7 @@ namespace {
                 }
             }
             const StyleNode* transition = Child(&own, "transition");
-            if (transition != nullptr && std::ranges::any_of(ReadTransitionValues(transition->value), [](const TransitionValue& value) { return value.property == "width"; })) {
+            if (transition != nullptr && std::ranges::any_of(ParseTransitionValues(transition->value), [](const TransitionValue& value) { return value.property == "width"; })) {
                 throw StyleError(source, transition->line,
                                  std::format("{}: transition: width animates a tray or group as it unfolds, and {} is a {} module", own.key, own.key, type));
             }
@@ -883,7 +886,7 @@ namespace {
 
 StyleSheet ParseStyleSheet(std::string_view text, std::string source) {
     const std::vector<StyleNode> tree      = ParseTree(text, source);
-    const Variables              variables = ReadVariables(tree, source);
+    const Variables              variables = ResolveVariables(tree, source);
     StyleSheet                   sheet{.source = std::move(source), .blocks = {}};
     for (StyleNode& block : SubstituteAll(tree, variables, sheet.source)) {
         if (block.key == "vars") {
@@ -910,25 +913,25 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     const Chain        menuChain = ChainOf({menu});
     const Chain        items     = Children(menuChain, "item");
     const Chain        active    = Children(items, "active");
-    const D2D1_COLOR_F color     = ReadColor(Required(sheet, *bar, "color", "#e0def4").value);
-    const D2D1_COLOR_F menuColor = ColorOf(menuChain, "color", color);
+    const D2D1_COLOR_F color     = ParseColor(Required(sheet, *bar, "color", "#e0def4").value);
+    const D2D1_COLOR_F menuColor = ResolveColor(menuChain, "color", color);
     const Chain        scrollbar = Children(menuChain, "scrollbar");
-    return StyleConfig{.font         = ReadFamily(Required(sheet, *bar, "font", "Segoe UI").value),
-                       .fontSizeDips = ReadPositiveLength(Required(sheet, *bar, "size", "13").value),
+    return StyleConfig{.font         = ParseFamily(Required(sheet, *bar, "font", "Segoe UI").value),
+                       .fontSizeDips = ParsePositiveLength(Required(sheet, *bar, "size", "13").value),
                        .color        = color,
-                       .section      = {.box = ReadBox(ChainOf({section})), .margin = SpacingOf(ChainOf({section}), "margin"), .backdrop = ReadBackdrop(section)},
-                       .tooltip      = {.box = ReadBox(ChainOf({tooltip})), .color = ColorOf(ChainOf({tooltip}), "color", color), .backdrop = ReadBackdrop(tooltip)},
-                       .menu         = {.box           = ReadBox(menuChain),
+                       .section      = {.box = ResolveBox(ChainOf({section})), .margin = ResolveSpacing(ChainOf({section}), "margin"), .backdrop = ResolveBackdrop(section)},
+                       .tooltip      = {.box = ResolveBox(ChainOf({tooltip})), .color = ResolveColor(ChainOf({tooltip}), "color", color), .backdrop = ResolveBackdrop(tooltip)},
+                       .menu         = {.box           = ResolveBox(menuChain),
                                         .color         = menuColor,
-                                        .backdrop      = ReadBackdrop(menu),
-                                        .maxWidthDips  = Read(menuChain, "max-width", ReadCap, std::nullopt),
-                                        .maxHeightDips = Read(menuChain, "max-height", ReadCap, std::nullopt),
-                                        .item          = ReadItem(items, Children(items, "hover"), menuColor),
-                                        .active        = ReadItem(Concat(active, items), Concat(Children(active, "hover"), Concat(active, Children(items, "hover"))), menuColor),
-                                        .scrollbar     = {.widthDips  = Read(scrollbar, "width", ReadPositiveLength, 0.0f),
-                                                          .background = ColorOf(scrollbar, "background", kTransparent),
-                                                          .radiusDips = Read(scrollbar, "radius", ReadLength, 0.0f),
-                                                          .margin     = SpacingOf(scrollbar, "margin")}}};
+                                        .backdrop      = ResolveBackdrop(menu),
+                                        .maxWidthDips  = Read(menuChain, "max-width", ParseCap, std::nullopt),
+                                        .maxHeightDips = Read(menuChain, "max-height", ParseCap, std::nullopt),
+                                        .item          = ResolveItem(items, Children(items, "hover"), menuColor),
+                                        .active        = ResolveItem(Concat(active, items), Concat(Children(active, "hover"), Concat(active, Children(items, "hover"))), menuColor),
+                                        .scrollbar     = {.widthDips  = Read(scrollbar, "width", ParsePositiveLength, 0.0f),
+                                                          .background = ResolveColor(scrollbar, "background", kTransparent),
+                                                          .radiusDips = Read(scrollbar, "radius", ParseLength, 0.0f),
+                                                          .margin     = ResolveSpacing(scrollbar, "margin")}}};
 }
 
 ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes) {
@@ -937,39 +940,39 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
         RequireDrawnBlocks(*own, kind, classes, sheet.source);
     }
     const Chain              module   = ChainOf({own, TopLevel(sheet, "module")});
-    const BoxStyle           box      = ReadBox(module);
-    const D2D1_COLOR_F       color    = ColorOf(module, "color", bar.color);
+    const BoxStyle           box      = ResolveBox(module);
+    const D2D1_COLOR_F       color    = ResolveColor(module, "color", bar.color);
     const Chain              icon     = Children(module, "icon");
     const Chain              items    = Children(module, "item");
-    const float              rotation = Read(icon, "rotate", ReadSignedNumber, 0.0f);
+    const float              rotation = Read(icon, "rotate", ParseSignedNumber, 0.0f);
     std::vector<ClassColors> classColors;
     classColors.reserve(classes.size());
     for (const std::string& declared : classes) {
-        classColors.push_back(ClassColors{.name = declared, .colors = ReadStateColors(module, declared, color)});
+        classColors.push_back(ClassColors{.name = declared, .colors = ResolveStateColors(module, declared, color)});
     }
     return ModuleStyle{.box                         = box,
-                       .margin                      = SpacingOf(module, "margin"),
-                       .hover                       = ColorOf(Children(module, "hover"), "background", box.background),
+                       .margin                      = ResolveSpacing(module, "margin"),
+                       .hover                       = ResolveColor(Children(module, "hover"), "background", box.background),
                        .backgroundTransition        = Read(module, "transition", TransitionReader("background"), kNoTransition),
                        .color                       = color,
-                       .alertColor                  = ColorOf(Children(module, "alert"), "color", color),
-                       .warning                     = ReadStateColors(module, "warning", color),
-                       .critical                    = ReadStateColors(module, "critical", color),
-                       .muted                       = ReadStateColors(module, "muted", color),
+                       .alertColor                  = ResolveColor(Children(module, "alert"), "color", color),
+                       .warning                     = ResolveStateColors(module, "warning", color),
+                       .critical                    = ResolveStateColors(module, "critical", color),
+                       .muted                       = ResolveStateColors(module, "muted", color),
                        .classes                     = std::move(classColors),
-                       .icon                        = {.font            = Read(icon, "font", ReadFamily, bar.font),
-                                                       .sizeDips        = Read(icon, "size", ReadPositiveLength, bar.fontSizeDips),
-                                                       .color           = ColorOf(icon, "color", color),
-                                                       .gapDips         = Read(icon, "margin-right", ReadLength, 0.0f),
+                       .icon                        = {.font            = Read(icon, "font", ParseFamily, bar.font),
+                                                       .sizeDips        = Read(icon, "size", ParsePositiveLength, bar.fontSizeDips),
+                                                       .color           = ResolveColor(icon, "color", color),
+                                                       .gapDips         = Read(icon, "margin-right", ParseLength, 0.0f),
                                                        .rotationDegrees = rotation,
                                                        .transition      = Read(icon, "transition", TransitionReader("rotate"), kNoTransition)},
-                       .item                        = ReadItem(items, Children(items, "hover"), color),
-                       .focused                     = ReadItemState(items, "focused", color),
-                       .occupied                    = ReadItemState(items, "occupied", color),
-                       .empty                       = ReadItemState(items, "empty", color),
-                       .toggle                      = ReadItemState(items, "toggle", color),
+                       .item                        = ResolveItem(items, Children(items, "hover"), color),
+                       .focused                     = ResolveItemState(items, "focused", color),
+                       .occupied                    = ResolveItemState(items, "occupied", color),
+                       .empty                       = ResolveItemState(items, "empty", color),
+                       .toggle                      = ResolveItemState(items, "toggle", color),
                        .transition                  = Read(module, "transition", TransitionReader("width"), kNoTransition),
-                       .expandedIconRotationDegrees = Read(Children(Children(module, "expanded"), "icon"), "rotate", ReadSignedNumber, rotation)};
+                       .expandedIconRotationDegrees = Read(Children(Children(module, "expanded"), "icon"), "rotate", ParseSignedNumber, rotation)};
 }
 
 void RequireKnownModules(const StyleSheet& sheet, const std::vector<std::string>& names) {
@@ -986,7 +989,7 @@ bool IsReservedModuleName(std::string_view name) {
     return name == "vars" || std::ranges::find(kTopBlocks, name, &TopBlock::key) != kTopBlocks.end();
 }
 
-bool IsIdentCharacter(char character) {
+bool IsNameCharacter(char character) {
     return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-';
 }
 

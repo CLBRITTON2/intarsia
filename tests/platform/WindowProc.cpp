@@ -12,7 +12,7 @@ namespace {
 
     constexpr wchar_t kOwnerClass[] = L"IntarsiaWindowProcTest";
 
-    struct OwnerState {
+    struct OwnerWindowProcError {
         std::exception_ptr error;
     };
 
@@ -38,9 +38,9 @@ namespace {
             return DefWindowProcW(window, message, wParam, lParam);
         }
 
-        std::int32_t&     _messages;
-        OwnerState        _state;
-        UniqueOwnedWindow _window;
+        std::int32_t&        _messages;
+        OwnerWindowProcError _windowProcError;
+        UniqueOwnedWindow    _window;
     };
 
 } // namespace

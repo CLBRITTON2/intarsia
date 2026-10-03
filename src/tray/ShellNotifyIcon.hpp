@@ -44,7 +44,7 @@ class ShellNotifyIcon final : public ITray {
     void Move(const TrayIcon& icon) override;
     void OpenPopup(const TrayIcon& icon) override;
     void ClosePopup(const TrayIcon& icon) override;
-    void ShowRects(const void* view, std::vector<TrayIconRect> rects) override;
+    void ReportIconRects(const void* view, std::vector<TrayIconRect> rects) override;
 
     // On failedMessage, rethrows the error that stopped the thread.
     void RethrowFailure();
@@ -96,11 +96,11 @@ class ShellNotifyIcon final : public ITray {
     // Guards _icons and _views. Only the tray's thread writes _icons, so it reads them without the lock.
     mutable std::mutex    _mutex;
     std::vector<TrayIcon> _icons;
-    struct View {
+    struct ViewRects {
         const void*               view;
         std::vector<TrayIconRect> rects;
     };
-    std::vector<View> _views;
+    std::vector<ViewRects> _views;
     // Started by the constructor once every member above exists.
     std::thread _thread;
 };

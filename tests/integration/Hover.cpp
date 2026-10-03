@@ -92,7 +92,7 @@ TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
     if (!probe.has_value()) {
         FAIL() << "the module never drew its background at rest";
     }
-    EXPECT_EQ(bar.PixelsOf(kHoverColor), size_t{0}) << "the hover background drew with no cursor over the module";
+    EXPECT_EQ(bar.PixelCount(kHoverColor), size_t{0}) << "the hover background drew with no cursor over the module";
 
     const integration::SavedCursor saved;
     bar.MoveCursorTo(*probe);

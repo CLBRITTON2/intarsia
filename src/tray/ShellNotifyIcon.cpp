@@ -162,11 +162,11 @@ void ShellNotifyIcon::ClosePopup(const TrayIcon& icon) {
     }
 }
 
-void ShellNotifyIcon::ShowRects(const void* view, std::vector<TrayIconRect> rects) {
+void ShellNotifyIcon::ReportIconRects(const void* view, std::vector<TrayIconRect> rects) {
     const std::scoped_lock lock(_mutex);
-    std::erase_if(_views, [view](const View& shown) { return shown.view == view; });
+    std::erase_if(_views, [view](const ViewRects& reported) { return reported.view == view; });
     if (!rects.empty()) {
-        _views.push_back(View{.view = view, .rects = std::move(rects)});
+        _views.push_back(ViewRects{.view = view, .rects = std::move(rects)});
     }
 }
 
@@ -311,8 +311,8 @@ LRESULT ShellNotifyIcon::AnswerIconRect(const COPYDATASTRUCT& data) {
     _rectLog.Succeeded();
     std::vector<TrayIconRect> rects;
     const std::scoped_lock    lock(_mutex);
-    for (const View& view : _views) {
-        rects.insert(rects.end(), view.rects.begin(), view.rects.end());
+    for (const ViewRects& reported : _views) {
+        rects.insert(rects.end(), reported.rects.begin(), reported.rects.end());
     }
     const std::optional<RECT> rect = QueriedIconRect(query, _icons, rects, cursor);
     return rect.has_value() ? IconRectAnswer(query.part, *rect) : 0;

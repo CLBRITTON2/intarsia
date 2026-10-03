@@ -14,7 +14,7 @@ namespace {
         return std::visit([&pattern](const auto& value) { return std::vformat(pattern, std::make_format_args(value)); }, placeholder.value);
     }
 
-    std::string Names(const std::vector<Placeholder>& placeholders) {
+    std::string PlaceholderList(const std::vector<Placeholder>& placeholders) {
         std::string names;
         for (const Placeholder& placeholder : placeholders) {
             names += names.empty() ? "{" : ", {";
@@ -96,7 +96,9 @@ std::string FormatRate(double bytesPerSecond) {
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples) {
     try {
         FormatPlaceholders(format, samples);
-    } catch (const std::format_error& error) { throw ConfigError(std::format("{} '{}' is not a valid format: {}. It can use {}", key, format, error.what(), Names(samples))); }
+    } catch (const std::format_error& error) {
+        throw ConfigError(std::format("{} '{}' is not a valid format: {}. It can use {}", key, format, error.what(), PlaceholderList(samples)));
+    }
 }
 
 void RequireOptionalPlaceholders(std::string_view key, const std::optional<std::string>& format, const std::vector<Placeholder>& samples) {

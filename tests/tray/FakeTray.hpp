@@ -41,7 +41,7 @@ class FakeTray final : public ITray {
         closed.push_back(icon.id);
     }
 
-    void ShowRects(const void* /*view*/, std::vector<TrayIconRect> shown) override {
+    void ReportIconRects(const void* /*view*/, std::vector<TrayIconRect> shown) override {
         rects = std::move(shown);
         ++showCalls;
     }

@@ -76,7 +76,7 @@ TEST(Custom, DrawsTheColorOfTheClassItsJsonNames) {
     const integration::RunningBar bar(kTestName, CustomConfig(R"("probe")", RecorderModule(kTestName, "probe", "json", R"("good")", R"([[{"text":"WWWW","class":"good"}]])")),
                                       StyleWithRules("probe:\n  color: #27ae60\n  good:\n    color: #f39c12\n"));
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the class the output names never drew its color";
-    EXPECT_EQ(bar.PixelsOf(kGreen), size_t{0}) << "the module's own color drew beside its class's";
+    EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the module's own color drew beside its class's";
 }
 
 TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
@@ -99,7 +99,7 @@ TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
 
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";
     ASSERT_TRUE(bar.Draws(kOrange, kDrawn)) << "the second line's class never drew";
-    EXPECT_EQ(bar.PixelsOf(kGreen), size_t{0}) << "the first line's class still drew beside the second's";
+    EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the first line's class still drew beside the second's";
     ASSERT_TRUE(bar.Draws(kRed, kDrawn)) << "the command's exit never drew the alert color";
     EXPECT_FALSE(bar.LogLines("exited with code 3").empty()) << "the bar logged no exit code";
     EXPECT_TRUE(bar.Draws(kGreen, kDrawn)) << "the command never restarted after its interval";

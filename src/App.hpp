@@ -72,10 +72,10 @@ class App {
     CompositionThread _compositionThread;
     // Replaced when the device is lost, after the bars that draw with it are destroyed.
     GraphicsDevice            _graphics;
-    std::chrono::milliseconds _deviceRetry;
-    bool                      _recovering    = false; // no bars exist until the new device is ready
-    AppState                  _state         = {.error = nullptr};
-    bool                      _redrawPending = false;
+    std::chrono::milliseconds _deviceRetryWait;
+    bool                      _recovering      = false; // no bars exist until the new device is ready
+    WindowProcError           _windowProcError = {.error = nullptr};
+    bool                      _redrawPending   = false;
     std::exception_ptr        _configError; // the last reload's failure, fatal unless another save follows soon
     UniqueOwnedWindow         _control;
     // Shared by every source of module data, which outlive none of it: declared before them all.

@@ -100,7 +100,7 @@ TEST(NotifyIconProtocol, ATipWithNoNullStopsAtItsBuffer) {
     EXPECT_EQ(ParseNotifyIconMessage(Bytes(data, kSentBytes)).tip, std::wstring(128, L'x'));
 }
 
-TEST(NotifyIconProtocol, AddThenModifyThenDelete) {
+TEST(NotifyIconProtocol, AddModifyAndDeleteEachChangeTheTraysIcons) {
     NotifyIconMessage add             = Message(NIM_ADD, 5, 1, NIF_MESSAGE | NIF_TIP | NIF_ICON);
     add.callbackMessage               = WM_APP + 1;
     add.tip                           = L"first";

@@ -66,7 +66,7 @@ TEST(Group, UnfoldsItsMembersOnAClickAndTakesNoClickForThemWhileFolded) {
     if (!toggle.has_value()) {
         FAIL() << "the folded group never drew";
     }
-    EXPECT_EQ(bar.PixelsOf(kMemberColor), size_t{0}) << "a member drew while the group starts folded";
+    EXPECT_EQ(bar.PixelCount(kMemberColor), size_t{0}) << "a member drew while the group starts folded";
 
     bar.ClickAt(*toggle);
     const std::optional<std::int32_t> member = bar.DrawnColumn(kMemberColor, kLimit);

@@ -549,22 +549,22 @@ namespace integration {
     RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style) : RunningBar(testName, config, style, GlazeWmTestServer(L"integration")) {}
 
     RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style, TestServer server) :
-        _work(NewWorkDirectory(testName)), _serverKind(std::move(server)), _port(FreePort()), _serverStarts(0) {
-        Log("work_directory", std::format("path={}", LogValue(_work.string())));
-        const std::filesystem::path configPath = _work / "config.lua";
+        _workDirectory(NewWorkDirectory(testName)), _testServer(std::move(server)), _port(FreePort()), _serverStarts(0) {
+        Log("work_directory", std::format("path={}", LogValue(_workDirectory.string())));
+        const std::filesystem::path configPath = _workDirectory / "config.lua";
         WriteText(configPath, config);
-        WriteText(_work / "style.conf", style);
+        WriteText(_workDirectory / "style.conf", style);
         StartServer();
         const auto started = std::chrono::steady_clock::now();
         _bar.emplace(Executable(INTARSIA_EXE),
-                     std::vector<std::wstring>{L"--config", configPath.wstring(), L"--log", (_work / "intarsia-file.log").wstring(), L"--glazewm-port", std::to_wstring(_port),
-                                               L"--tray-class", std::wstring(kTrayClass)},
-                     _work / "bar.out", _work / "bar.err");
+                     std::vector<std::wstring>{L"--config", configPath.wstring(), L"--log", (_workDirectory / "intarsia-file.log").wstring(), L"--glazewm-port",
+                                               std::to_wstring(_port), L"--tray-class", std::wstring(kTrayClass)},
+                     _workDirectory / "bar.out", _workDirectory / "bar.err");
         Log("bar_started", std::format("pid={} program={}", _bar->Id(), LogValue(INTARSIA_EXE)));
-        if (!Eventually([this] { return !Events(_serverKind.readyEvent).empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
+        if (!Eventually([this] { return !Events(_testServer.readyEvent).empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
             PrintLogs();
-            throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _serverKind.readyEvent,
-                                                 kStartLimit.count(), (_work / "bar.err").string()));
+            throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _testServer.readyEvent,
+                                                 kStartLimit.count(), (_workDirectory / "bar.err").string()));
         }
         const RECT client = ClientRect(PrimaryBar());
         Log("bar_ready",
@@ -577,22 +577,22 @@ namespace integration {
             if (_bar.has_value()) {
                 const std::optional<std::uint32_t> code = Close();
                 if (!code.has_value()) {
-                    ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
+                    ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (bar log " << (_workDirectory / "bar.err").string() << ")";
                 } else if (*code != 0) {
-                    ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << (_work / "bar.err").string() << ")";
+                    ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << (_workDirectory / "bar.err").string() << ")";
                 }
             }
             PrintLogs();
-        } catch (const std::exception& error) { ADD_FAILURE() << "closing the bar failed: " << error.what() << " (logs in " << _work.string() << ")"; }
+        } catch (const std::exception& error) { ADD_FAILURE() << "closing the bar failed: " << error.what() << " (logs in " << _workDirectory.string() << ")"; }
     }
 
     void RunningBar::PrintLogs() const {
         // The bar's lines name their component, the server's plain text needs its source.
-        for (const std::string& line : ReadLines(_work / "bar.err")) {
+        for (const std::string& line : ReadLines(_workDirectory / "bar.err")) {
             std::cout << "    " << line << std::endl;
         }
         for (std::uint32_t start = 1; start <= _serverStarts; ++start) {
-            for (const std::string& line : ReadLines(_work / std::format("server-{}.err", start))) {
+            for (const std::string& line : ReadLines(_workDirectory / std::format("server-{}.err", start))) {
                 std::cout << std::format("    server-{}: ", start) << line << std::endl;
             }
         }
@@ -640,7 +640,7 @@ namespace integration {
         return VisibleWindow(_bar->Id(), L"IntarsiaMenu");
     }
 
-    std::optional<size_t> RunningBar::PixelsOf(std::uint32_t rgb) const {
+    std::optional<size_t> RunningBar::PixelCount(std::uint32_t rgb) const {
         HWND window = PrimaryBar();
         if (window == nullptr) {
             return std::nullopt;
@@ -648,7 +648,7 @@ namespace integration {
         return CountPixels(CaptureScreenOver(window), rgb);
     }
 
-    std::optional<double> RunningBar::ColumnOf(std::uint32_t rgb) const {
+    std::optional<double> RunningBar::MeanColumnOf(std::uint32_t rgb) const {
         HWND window = PrimaryBar();
         if (window == nullptr) {
             return std::nullopt;
@@ -660,7 +660,7 @@ namespace integration {
         std::optional<double> column;
         if (!Eventually(
                 [&] {
-                    column = ColumnOf(rgb);
+                    column = MeanColumnOf(rgb);
                     return column.has_value();
                 },
                 limit)) {
@@ -673,7 +673,7 @@ namespace integration {
         std::optional<size_t> count;
         const bool            drawn = Eventually(
             [&] {
-                count = PixelsOf(rgb);
+                count = PixelCount(rgb);
                 return count.value_or(0) > 0;
             },
             limit);
@@ -685,7 +685,7 @@ namespace integration {
         std::optional<size_t> count;
         const bool            gone = Eventually(
             [&] {
-                count = PixelsOf(rgb);
+                count = PixelCount(rgb);
                 return count == size_t{0};
             },
             limit);
@@ -731,13 +731,13 @@ namespace integration {
 
     std::vector<std::string> RunningBar::LogLines(std::string_view text) const {
         std::vector<std::string> matching;
-        std::ranges::copy_if(ReadLines(_work / "bar.err"), std::back_inserter(matching), [text](const std::string& line) { return line.find(text) != std::string::npos; });
+        std::ranges::copy_if(ReadLines(_workDirectory / "bar.err"), std::back_inserter(matching), [text](const std::string& line) { return line.find(text) != std::string::npos; });
         return matching;
     }
 
     std::vector<std::string> RunningBar::Events(std::string_view event) const {
         std::vector<std::string> matching;
-        std::ranges::copy_if(ReadLines(_work / "bar.err"), std::back_inserter(matching), [event](const std::string& line) { return EventOf(line) == event; });
+        std::ranges::copy_if(ReadLines(_workDirectory / "bar.err"), std::back_inserter(matching), [event](const std::string& line) { return EventOf(line) == event; });
         return matching;
     }
 
@@ -754,11 +754,12 @@ namespace integration {
     void RunningBar::StartServer() {
         ++_serverStarts;
         const auto started = std::chrono::steady_clock::now();
-        _server.emplace(_serverKind.program, std::vector<std::wstring>{L"--port", std::to_wstring(_port), L"--scenario", _serverKind.scenario}, ServerOutput(_serverStarts),
-                        _work / std::format("server-{}.err", _serverStarts));
+        _server.emplace(_testServer.program, std::vector<std::wstring>{L"--port", std::to_wstring(_port), L"--scenario", _testServer.scenario}, ServerOutput(_serverStarts),
+                        _workDirectory / std::format("server-{}.err", _serverStarts));
         if (!Eventually([this] { return !ReadLines(ServerOutput(_serverStarts)).empty(); }, kStartLimit)) {
             PrintLogs();
-            throw std::runtime_error(std::format("the test GlazeWM server did not listen on port {} within {} s (logs in {})", _port, kStartLimit.count(), _work.string()));
+            throw std::runtime_error(
+                std::format("the test GlazeWM server did not listen on port {} within {} s (logs in {})", _port, kStartLimit.count(), _workDirectory.string()));
         }
         Log("server_listening", std::format("pid={} port={} start={} after_ms={}", _server->Id(), _port, _serverStarts, MillisecondsSince(started)));
     }
@@ -773,18 +774,18 @@ namespace integration {
         _server->WriteLine(std::format("focus {}", index));
         if (!Eventually([&] { return static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed)) > before; }, kStartLimit)) {
             PrintLogs();
-            throw std::runtime_error(std::format("the test GlazeWM server did not push focus {} within {} s (logs in {})", index, kStartLimit.count(), _work.string()));
+            throw std::runtime_error(std::format("the test GlazeWM server did not push focus {} within {} s (logs in {})", index, kStartLimit.count(), _workDirectory.string()));
         }
         Log("focus_pushed", std::format("index={} after_ms={}", index, MillisecondsSince(started)));
     }
 
     void RunningBar::SaveConfig(std::string_view config) const {
-        WriteText(_work / "config.lua", config);
+        WriteText(_workDirectory / "config.lua", config);
         Log("file_saved", "file=config.lua");
     }
 
     void RunningBar::SaveStyle(std::string_view style) const {
-        WriteText(_work / "style.conf", style);
+        WriteText(_workDirectory / "style.conf", style);
         Log("file_saved", "file=style.conf");
     }
 
@@ -806,7 +807,7 @@ namespace integration {
     }
 
     std::filesystem::path RunningBar::ServerOutput(std::uint32_t start) const {
-        return _work / std::format("server-{}.out", start);
+        return _workDirectory / std::format("server-{}.out", start);
     }
 
 } // namespace integration

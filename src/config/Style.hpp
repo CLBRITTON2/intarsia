@@ -41,7 +41,7 @@ void RequireKnownModules(const StyleSheet& sheet, const std::vector<std::string>
 bool IsReservedModuleName(std::string_view name);
 
 // Letters, digits, '_' and '-': what module names, class names and style keys are written in.
-bool IsIdentCharacter(char character);
+bool IsNameCharacter(char character);
 
 // Whether name is a block every module may hold (icon, item, hover ...), which a custom module's class would collide
 // with.

@@ -35,13 +35,13 @@ namespace {
         return CpuTimes{.idle = Ticks(idle), .kernel = Ticks(kernel), .user = Ticks(user)};
     }
 
-    bool Names(const TextModuleConfig& config, std::string_view name) {
+    bool AnyFormatNames(const TextModuleConfig& config, std::string_view name) {
         return FormatNames(config.format, name) || (config.tooltip.has_value() && FormatNames(*config.tooltip, name));
     }
 
     // Started with a first sample, so a rate has its value from the next one.
     std::unique_ptr<PerformanceCounter> CounterIfNamed(const TextModuleConfig& config, std::initializer_list<std::string_view> names, const wchar_t* path) {
-        if (std::ranges::none_of(names, [&config](std::string_view name) { return Names(config, name); })) {
+        if (std::ranges::none_of(names, [&config](std::string_view name) { return AnyFormatNames(config, name); })) {
             return nullptr;
         }
         auto counter = std::make_unique<PerformanceCounter>(path);
