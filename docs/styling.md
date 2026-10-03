@@ -20,8 +20,9 @@ clock:
 
 - Each line is blank, a comment, a block (`key:`) or a property (`key: value`).
 - A block's lines are indented two spaces deeper than its key. Tabs, odd indents and lines indented more than one
-  level past their block are errors. A block must hold at least one line.
+  level past their block are errors. A block must hold at least one line. Blocks nest at most 8 levels deep.
 - A key appears once per block.
+- The file is at most 64 KiB, and a value is at most 1024 characters once its vars are filled in.
 - Keys are letters, digits, `_` and `-`. A value runs to the end of the line or its comment.
 
 ## Values

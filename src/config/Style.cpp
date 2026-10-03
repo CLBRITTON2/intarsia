@@ -592,29 +592,38 @@ namespace {
         return Line{.number = number, .level = indent / 2, .key = key, .value = Trim(content.substr(colon + 1))};
     }
 
+    // Past the deepest block any shape holds, so the passes that recurse once per level stay shallow.
+    constexpr size_t       kMaxLevels = 8;
+
     std::vector<StyleNode> ParseTree(std::string_view text, std::string_view source) {
-        std::vector<StyleNode>  roots;
-        std::vector<StyleNode*> open; // open[n] is the block a line at level n + 1 goes into
-        std::uint32_t           number = 0;
+        std::vector<StyleNode>                                 roots;
+        std::vector<std::vector<StyleNode>*>                   open{&roots}; // open[n] takes the lines at level n
+        std::vector<std::map<std::string_view, std::uint32_t>> keyLines(1);  // keyLines[n] holds open[n]'s keys by line
+        std::uint32_t                                          number = 0;
         for (const auto piece : text | std::views::split('\n')) {
             ++number;
             const std::optional<Line> line = ReadLine(std::string_view(piece.begin(), piece.end()), number, source);
             if (!line.has_value()) {
                 continue;
             }
-            if (line->level > open.size()) {
+            if (line->level >= open.size()) {
                 throw StyleError(source, line->number,
                                  std::format("{}: is indented past the block above it: a block's lines sit one level deeper than its key, and a property holds none", line->key));
             }
-            open.resize(line->level);
-            std::vector<StyleNode>& siblings = open.empty() ? roots : open.back()->children;
-            const auto              earlier  = std::ranges::find(siblings, line->key, &StyleNode::key);
-            if (earlier != siblings.end()) {
-                throw StyleError(source, line->number, std::format("{}: is already set on line {} of the same block", line->key, earlier->line));
+            if (line->level >= kMaxLevels) {
+                throw StyleError(source, line->number, std::format("{}: is nested {} levels deep, and a style nests at most {}", line->key, line->level + 1, kMaxLevels));
             }
+            open.resize(line->level + 1);
+            keyLines.resize(line->level + 1);
+            const auto [earlier, added] = keyLines.back().try_emplace(line->key, line->number);
+            if (!added) {
+                throw StyleError(source, line->number, std::format("{}: is already set on line {} of the same block", line->key, earlier->second));
+            }
+            std::vector<StyleNode>& siblings = *open.back();
             siblings.push_back(StyleNode{.key = std::string(line->key), .value = std::string(line->value), .line = line->number, .children = {}});
             if (line->value.empty()) {
-                open.push_back(&siblings.back());
+                open.push_back(&siblings.back().children);
+                keyLines.emplace_back();
             }
         }
         RequireFilledBlocks(roots, source);
@@ -644,6 +653,9 @@ namespace {
         return variables;
     }
 
+    // Many times any real value, and it bounds what vars can multiply a file into.
+    constexpr size_t kMaxSubstitutedLength = 1024;
+
     // Every $name in value replaced with its vars value.
     std::string Substitute(const StyleNode& property, const Variables& variables, std::string_view source) {
         std::string value;
@@ -662,6 +674,9 @@ namespace {
             }
             value += std::string_view(property.value).substr(start, dollar - start);
             value += found->second;
+            if (value.size() > kMaxSubstitutedLength) {
+                throw StyleError(source, property.line, std::format("{}: is longer than {} characters once its vars are filled in", property.key, kMaxSubstitutedLength));
+            }
             start = end;
         }
         value += std::string_view(property.value).substr(start);

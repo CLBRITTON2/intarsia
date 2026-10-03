@@ -242,6 +242,13 @@ TEST(Config, ConfigFilesMustBeUtf8) {
     EXPECT_THAT([] { return LoadStyled(kValidConfig, "// \xC0\xAF"); }, ConfigErrorWith("style file"));
 }
 
+TEST(Config, FilesPastTheirSizeCapAreAnError) {
+    EXPECT_THAT([] { return LoadText(std::string(kValidConfig) + "-- " + std::string(size_t{1} << 20, 'x')); }, ConfigErrorWith("is larger than 1024 KiB"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "// " + std::string(size_t{64} << 10, 'x')); }, ConfigErrorWith("is larger than 64 KiB"));
+    const std::string atTheCap = std::string(kValidStyle) + "// " + std::string((size_t{64} << 10) - kValidStyle.size() - 3, 'x');
+    EXPECT_NO_THROW(LoadStyled(kValidConfig, atTheCap));
+}
+
 // Lua escapes in valid UTF-8 source still build any bytes.
 TEST(Config, ConfigStringsMustBeUtf8) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(icon = "x")", R"(icon = "\xff")")); }, ConfigErrorWith("modules.time.icon is not valid UTF-8"));

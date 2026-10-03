@@ -500,6 +500,28 @@ TEST(Style, AnythingOutsideTheFormatIsAnErrorNamingTheLine) {
     EXPECT_THAT([] { return Parse("module:\n  item:\n    weight: 450\n"); }, ConfigErrorWith("in steps of 100"));
 }
 
+TEST(Style, AKeyIsCheckedAgainstItsOwnBlockOnceANestedBlockCloses) {
+    EXPECT_THAT([] { return Parse("cpu:\n  icon:\n    color: #fff\n  color: #fff\n  icon:\n    color: #000\n"); },
+                ConfigErrorWith("style.conf:5: icon: is already set on line 2 of the same block"));
+    EXPECT_NO_THROW(Parse("cpu:\n  icon:\n    color: #fff\n  color: #fff\nmemory:\n  icon:\n    color: #000\n"));
+}
+
+TEST(Style, NestingPastEightLevelsIsAnError) {
+    std::string nested;
+    for (size_t level = 0; level < 9; ++level) {
+        nested += std::string(level * 2, ' ') + "block:\n";
+    }
+    nested += std::string(18, ' ') + "color: #fff\n";
+    EXPECT_THAT([&nested] { return Parse(nested); }, ConfigErrorWith("style.conf:9: block: is nested 9 levels deep, and a style nests at most 8"));
+}
+
+TEST(Style, AValueLongerThan1024CharactersOnceItsVarsAreFilledInIsAnError) {
+    const std::string vars = "vars:\n  long: " + std::string(600, 'x') + "\n";
+    EXPECT_THAT([&vars] { return Parse(vars + "cpu:\n  color: $long$long\n"); },
+                ConfigErrorWith("style.conf:4: color: is longer than 1024 characters once its vars are filled in"));
+    EXPECT_THAT([&vars] { return Parse(vars + "cpu:\n  color: $long\n"); }, ConfigErrorWith("color must be a color"));
+}
+
 TEST(Style, ATopLevelBlockMustNameAModuleTheConfigDefines) {
     EXPECT_NO_THROW(RequireKnownModules(WithBar("cpu:\n  color: #fff\nmodule:\n  color: #fff\n"), {"cpu"}));
     EXPECT_THAT(

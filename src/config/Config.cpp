@@ -25,7 +25,6 @@
 #include <map>
 #include <memory>
 #include <ranges>
-#include <sstream>
 #include <string_view>
 #include <stdexcept>
 #include <utility>
@@ -702,20 +701,29 @@ namespace {
 
     // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
     // converting one later cannot fail.
-    std::string ReadFile(const std::filesystem::path& path, std::string_view what) {
-        const std::ifstream file(path, std::ios::binary);
+    std::string ReadFile(const std::filesystem::path& path, std::string_view what, size_t largestBytes) {
+        std::ifstream file(path, std::ios::binary);
         if (!file) {
             throw ConfigError(std::format("cannot open {} file {}", what, ToUtf8(path.wstring())));
         }
-        std::ostringstream contents;
-        contents << file.rdbuf();
-        std::string text = contents.str();
+        std::string text(largestBytes + 1, '\0');
+        file.read(text.data(), static_cast<std::streamsize>(text.size()));
+        if (file.bad()) {
+            throw ConfigError(std::format("cannot read {} file {}", what, ToUtf8(path.wstring())));
+        }
+        text.resize(static_cast<size_t>(file.gcount()));
+        if (text.size() > largestBytes) {
+            throw ConfigError(std::format("{} file {} is larger than {} KiB", what, ToUtf8(path.wstring()), largestBytes >> 10));
+        }
         if (!IsValidUtf8(text)) {
             throw ConfigError(std::format("{} file {} is not valid UTF-8", what, ToUtf8(path.wstring())));
         }
         return text;
     }
 
+    // Many times any real file. The style's is smaller because vars multiply it (each value is capped, not the sheet).
+    constexpr size_t kMaxConfigFileBytes = size_t{1} << 20;
+    constexpr size_t kMaxStyleFileBytes  = size_t{64} << 10;
     // Far more than any real config needs (a few thousand instructions), and still under a second to reach.
     constexpr std::int32_t kMaxConfigInstructions = 50'000'000;
     // Far more than any real config allocates (a few hundred KiB with the libraries), and a string built in one C call
@@ -805,7 +813,7 @@ std::filesystem::path StylePath(const std::filesystem::path& configPath) {
 
 Config LoadConfig(const std::filesystem::path& path) {
     const std::string source = ToUtf8(path.wstring());
-    const std::string chunk  = ReadFile(path, "config");
+    const std::string chunk  = ReadFile(path, "config", kMaxConfigFileBytes);
 
     // Declared before the state, whose close frees through the limited allocator.
     LuaLimits      limits{.allocate = nullptr, .allocateData = nullptr, .usedBytes = 0, .limitBytes = kMaxConfigBytes, .runaway = false};
@@ -856,7 +864,7 @@ Config LoadConfig(const std::filesystem::path& path) {
     root.RejectUnknownKeys({"bar", "window_manager", "modules_left", "modules_center", "modules_right", "layouts", "modules"});
 
     const std::filesystem::path stylePath   = StylePath(path);
-    const StyleSheet            sheet       = ParseStyleSheet(ReadFile(stylePath, "style"), ToUtf8(stylePath.wstring()));
+    const StyleSheet            sheet       = ParseStyleSheet(ReadFile(stylePath, "style", kMaxStyleFileBytes), ToUtf8(stylePath.wstring()));
     StyleConfig                 style       = ResolveBarStyle(sheet);
     const TableReader           definitions = root.Table("modules");
     RejectReservedModuleNames(definitions);
