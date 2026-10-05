@@ -9,6 +9,9 @@ return {
         -- keeps the bar's strip, as for a plain window, so the window manager's gap has to make room for it.
         space = "reserve",
         thickness = 44, -- DIPs, scaled by each monitor's DPI
+        -- Which monitors get a bar, any entry matching: "*" alone for every monitor, "primary", "internal" for a
+        -- laptop's own panel, or a monitor id, which intarsia.exe --monitors lists.
+        monitors = { "*" },
     },
 
     -- glazewm: workspaces and focus over GlazeWM's IPC, retried while GlazeWM is down

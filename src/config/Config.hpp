@@ -3,6 +3,7 @@
 #include "audio/IAudio.hpp"
 #include "bar/Sections.hpp"
 #include "platform/AppBar.hpp"
+#include "platform/Monitors.hpp"
 #include "platform/Process.hpp"
 
 #include <d2d1.h>
@@ -32,11 +33,29 @@ enum class Space : std::uint8_t {
     Share    // the work area keeps the strip, as for a plain window, so a window manager's gap has to make room
 };
 
+// The entries of bar.monitors, each naming monitors that get a bar.
+struct AllMonitors {
+    bool operator==(const AllMonitors& other) const = default;
+};
+struct PrimaryMonitor {
+    bool operator==(const PrimaryMonitor& other) const = default;
+};
+struct InternalMonitor {
+    bool operator==(const InternalMonitor& other) const = default;
+};
+struct MonitorWithId {
+    std::string id; // MonitorId's form
+
+    bool        operator==(const MonitorWithId& other) const = default;
+};
+using MonitorMatch = std::variant<AllMonitors, PrimaryMonitor, InternalMonitor, MonitorWithId>;
+
 struct BarConfig {
-    Edge  edge;
-    Layer layer;
-    Space space;
-    float thicknessDips;
+    Edge                      edge;
+    Layer                     layer;
+    Space                     space;
+    float                     thicknessDips;
+    std::vector<MonitorMatch> monitors;
 };
 
 // Space inside or around a box on screen: y above and below, x left and right.
@@ -480,6 +499,9 @@ Config LoadConfig(const std::filesystem::path& path);
 
 // The sections of the last layout whose minimum edgeLengthDips reaches, or the config's own lists when none does.
 const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float edgeLengthDips);
+
+// Whether any of bar.monitors matches monitor.
+bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& monitor);
 
 // Whether any bar can show a module of kind (AnyModuleInConfig).
 bool ShowsKind(const Config& config, ModuleKind kind);

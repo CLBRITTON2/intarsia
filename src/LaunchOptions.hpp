@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-// The command line: intarsia.exe [--config <path>] [--log <path>] [--glazewm-port <port>] [--tray-class <name>].
+// The command line: intarsia.exe [--config <path>] [--log <path>] [--glazewm-port <port>] [--tray-class <name>]
+// [--monitors].
 struct LaunchOptions {
     std::filesystem::path configPath;
     // The soak tests log beside their config, since a running bar keeps the default log open.
@@ -16,6 +17,7 @@ struct LaunchOptions {
     std::uint16_t         glazeWmPort; // the soak tests point the bar at its own server while GlazeWM holds 6123
     // The soak tests give the tray a class no app sends to, so it never takes the desktop's icons.
     std::wstring trayClass;
+    bool         listMonitors; // print each monitor's id and whether the config gives it a bar, then exit
 };
 
 class LaunchOptionsError : public std::runtime_error {

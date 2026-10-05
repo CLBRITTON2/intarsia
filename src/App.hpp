@@ -11,6 +11,7 @@
 #include "network/IpHelper.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/FileWatcher.hpp"
+#include "platform/Monitors.hpp"
 #include "platform/Process.hpp"
 #include "platform/WindowProc.hpp"
 #include "render/CompositionThread.hpp"
@@ -29,7 +30,7 @@
 #include <string_view>
 #include <vector>
 
-// Owns the config, the graphics devices and one bar per monitor, and rebuilds the bars when the config file changes.
+// Owns the config, the graphics devices and one bar per matched monitor, and rebuilds the bars when the config file changes.
 class App {
   public:
     App(HINSTANCE instance, LaunchOptions options);
@@ -45,7 +46,7 @@ class App {
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    // One bar for each monitor present.
+    // One bar for each monitor present that bar.monitors matches.
     void CreateBars();
     void HandleConfigChanged();
     void ReloadConfig();
@@ -98,7 +99,8 @@ class App {
     std::unique_ptr<IpHelper>        _network;
     std::unique_ptr<IBattery>        _battery;
     std::unique_ptr<ShellNotifyIcon> _tray;
-    // The monitors the bars were built for, compared on WM_DISPLAYCHANGE.
+    // Every monitor present when the bars were built, shown or not, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;
+    std::vector<MonitorDescription>   _monitors;
     std::vector<std::unique_ptr<Bar>> _bars;
 };

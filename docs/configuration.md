@@ -8,7 +8,7 @@ with a message naming the line.
 
 ```lua
 return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = 36 },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = 36, monitors = { "*" } },
     window_manager = "windows",
     modules_left = { "title" },
     modules_center = {},
@@ -31,6 +31,32 @@ return {
 | `layer` | `top`, `bottom` | `top` stays above windows and drops behind fullscreen apps. `bottom` lets windows cover it. |
 | `space` | `reserve`, `share` | `reserve` shrinks the work area so maximized windows stop at the bar. `share` leaves it alone, for window managers that leave their own gap. |
 | `thickness` | number up to 10000 | Height (or width on a side edge) in DIPs, scaled by each monitor's DPI. |
+| `monitors` | list of entries | Which monitors get a bar. See below. |
+
+### monitors
+
+A monitor gets a bar when any entry matches it:
+
+- `"*"`: every monitor. It must be the only entry.
+- `"primary"`: the primary monitor.
+- `"internal"`: a laptop's own panel.
+- a monitor id such as `DEL41A8-7XYZ123`: that one monitor, on any port, adapter or dock.
+
+The list may not be empty or name an entry twice. An id names no monitor until one with it is connected, so a list can
+match none at first, and bars appear and go as monitors come and go.
+
+A monitor id is the manufacturer and product code from the monitor's EDID, then its serial: `DEL41A8-7XYZ123`. A
+monitor with no serial, as many laptop panels have, gets the first part alone (`BOE0B4D`), which every monitor of
+that model shares. `intarsia.exe --monitors` lists each connected monitor's id and whether the config gives it a bar:
+
+```
+id               name         connection   primary  bar
+BOE0B4D          none         internal     yes      yes
+DEL41A8-7XYZ123  DELL U2720Q  DisplayPort  no       no
+```
+
+A monitor mirrored onto several screens gets one row per screen and a bar when any of their ids matches. A screen with
+no EDID, such as a virtual display, has no id. The bar's log names each monitor on every build (`app monitor`).
 
 ## window_manager
 

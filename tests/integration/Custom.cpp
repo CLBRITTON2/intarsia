@@ -30,7 +30,7 @@ namespace {
     std::string CustomConfig(std::string_view left, std::string_view modules) {
         return std::format(R"(
 return {{
-    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40 }},
+    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
     window_manager = "glazewm",
     modules_left = {{ {} }},
     modules_center = {{}},

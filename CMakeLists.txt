@@ -50,6 +50,7 @@ target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
 add_library(intarsia_core STATIC
   src/App.cpp
   src/LaunchOptions.cpp
+  src/MonitorTable.cpp
   src/audio/CoreAudio.cpp
   src/bar/Bar.cpp
   src/bar/Box.cpp
@@ -91,12 +92,15 @@ add_library(intarsia_core STATIC
   src/platform/AppBar.cpp
   src/platform/ChangeSignal.cpp
   src/platform/ComScope.cpp
+  src/platform/Console.cpp
+  src/platform/Edid.cpp
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
   src/platform/FrameClock.cpp
   src/platform/Handle.cpp
   src/platform/KnownFolder.cpp
   src/platform/Log.cpp
+  src/platform/Monitors.cpp
   src/platform/PeerProcess.cpp
   src/platform/PerformanceCounter.cpp
   src/platform/Process.cpp
@@ -160,6 +164,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
   add_executable(intarsia_gtests
     tests/LaunchOptions.cpp
+    tests/MonitorTable.cpp
     tests/bar/Box.cpp
     tests/bar/Layout.cpp
     tests/bar/Menu.cpp
@@ -196,6 +201,7 @@ if(BUILD_TESTING)
     tests/platform/AppBar.cpp
     tests/platform/ChangeSignal.cpp
     tests/platform/ComScope.cpp
+    tests/platform/Edid.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/KnownFolder.cpp
     tests/platform/Log.cpp

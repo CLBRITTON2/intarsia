@@ -3,7 +3,9 @@
 #include "config/Style.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
+#include "platform/Edid.hpp"
 #include "platform/KnownFolder.hpp"
+#include "platform/Monitors.hpp"
 #include "platform/PerformanceCounter.hpp"
 #include "platform/Text.hpp"
 
@@ -235,6 +237,38 @@ namespace {
             throw bar.Error(std::format("{} must be at most {}, got {}", bar.KeyPath("thickness"), kThickestBarDips, value));
         }
         return value;
+    }
+
+    std::vector<MonitorMatch> ReadMonitorMatches(const TableReader& bar) {
+        const std::vector<std::string> entries = bar.StringList("monitors");
+        if (entries.empty()) {
+            throw bar.Error(std::format(R"({} is empty: list "*" for every monitor, "primary", "internal" or a monitor id)", bar.KeyPath("monitors")));
+        }
+        std::vector<MonitorMatch> matches;
+        matches.reserve(entries.size());
+        for (size_t index = 0; index < entries.size(); ++index) {
+            const std::string& entry = entries[index];
+            if (std::ranges::find(entries.begin(), entries.begin() + static_cast<std::ptrdiff_t>(index), entry) != entries.begin() + static_cast<std::ptrdiff_t>(index)) {
+                throw bar.Error(std::format("{} lists '{}' twice", bar.KeyPath("monitors"), entry));
+            }
+            if (entry == "*") {
+                if (entries.size() != 1) {
+                    throw bar.Error(std::format("{} lists '*' beside other entries, and '*' alone already matches every monitor", bar.KeyPath("monitors")));
+                }
+                matches.emplace_back(AllMonitors{});
+            } else if (entry == "primary") {
+                matches.emplace_back(PrimaryMonitor{});
+            } else if (entry == "internal") {
+                matches.emplace_back(InternalMonitor{});
+            } else if (IsMonitorId(entry)) {
+                matches.emplace_back(MonitorWithId{.id = entry});
+            } else {
+                throw bar.Error(std::format(R"({} lists '{}', which is not "*", "primary", "internal" or a monitor id such as DEL41A8-7XYZ123 (intarsia.exe )"
+                                            "--monitors lists each monitor's id)",
+                                            bar.KeyPath("monitors"), entry));
+            }
+        }
+        return matches;
     }
 
     // One word a config key accepts and the value it stands for.
@@ -910,16 +944,17 @@ Config LoadConfig(const std::filesystem::path& path) {
     std::vector<LayoutConfig> layouts = ReadLayouts(root, definitions, sheet, style);
 
     const TableReader         bar = root.Table("bar");
-    bar.RejectUnknownKeys({"edge", "layer", "space", "thickness"});
-    const BarConfig barConfig{
+    bar.RejectUnknownKeys({"edge", "layer", "space", "thickness", "monitors"});
+    BarConfig barConfig{
         .edge          = ParseKeyword(bar, "edge", kEdges),
         .layer         = ParseKeyword(bar, "layer", kLayers),
         .space         = ParseKeyword(bar, "space", kSpaces),
         .thicknessDips = BarThickness(bar),
+        .monitors      = ReadMonitorMatches(bar),
     };
 
     Config config{
-        .bar           = barConfig,
+        .bar           = std::move(barConfig),
         .style         = std::move(style),
         .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
         .modules       = std::move(modules),
@@ -963,6 +998,22 @@ const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float
         }
     }
     return *chosen;
+}
+
+bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& monitor) {
+    return std::ranges::any_of(bar.monitors, [&monitor](const MonitorMatch& match) {
+        if (std::holds_alternative<AllMonitors>(match)) {
+            return true;
+        }
+        if (std::holds_alternative<PrimaryMonitor>(match)) {
+            return monitor.primary;
+        }
+        if (std::holds_alternative<InternalMonitor>(match)) {
+            return std::ranges::any_of(monitor.targets, &DisplayTarget::internal);
+        }
+        const std::string& id = std::get<MonitorWithId>(match).id;
+        return std::ranges::any_of(monitor.targets, [&id](const DisplayTarget& target) { return target.id == id; });
+    });
 }
 
 bool ShowsKind(const Config& config, ModuleKind kind) {

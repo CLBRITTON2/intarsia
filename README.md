@@ -109,7 +109,8 @@ boxes, `module` for every module and a module's name in the config (`date`) for 
 inside. [Styling](docs/styling.md) lists every block. `--config <path>` reads another config and the `style.conf`
 beside it, and
 `--glazewm-port <port>` connects to GlazeWM on a port other than 6123. `--log <path>` writes the log file somewhere
-other than `%LOCALAPPDATA%\intarsia\intarsia.log`, which a running bar keeps open. Saving either file rebuilds the bars. A wrong
+other than `%LOCALAPPDATA%\intarsia\intarsia.log`, which a running bar keeps open. `--monitors` prints each monitor's
+id for `bar.monitors`, which picks the monitors that get a bar. Saving either file rebuilds the bars. A wrong
 key, block or property stops the bar with a message naming the file and where in it. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
 with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen space back.
 

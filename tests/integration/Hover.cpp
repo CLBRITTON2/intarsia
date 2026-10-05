@@ -19,7 +19,7 @@ namespace {
 
     constexpr std::string_view kModuleConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "probe" },
     modules_center = {},
@@ -54,7 +54,7 @@ probe {
 
     constexpr std::string_view kItemConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "apps" },
     modules_center = {},

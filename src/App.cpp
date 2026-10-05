@@ -6,7 +6,7 @@
 #include "network/IpHelper.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
-#include "platform/Win32Cast.hpp"
+#include "platform/Monitors.hpp"
 #include "platform/Win32Window.hpp"
 #include "platform/WindowProc.hpp"
 #include "tray/ShellNotifyIcon.hpp"
@@ -81,12 +81,6 @@ namespace {
         return create();
     }
 
-    // Only collects handles: throwing out of an EnumDisplayMonitors callback would unwind through user32.
-    BOOL CALLBACK CollectMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
-        IntToPointer<std::vector<HMONITOR>>(data)->push_back(monitor);
-        return TRUE;
-    }
-
     BarPlacement PlacementForMonitor(HMONITOR monitor) {
         MONITORINFO info{};
         info.cbSize = sizeof(info);
@@ -107,12 +101,7 @@ namespace {
         };
     }
 
-    std::vector<BarPlacement> PlacementsForAllMonitors() {
-        std::vector<HMONITOR> monitors;
-        if (!EnumDisplayMonitors(nullptr, nullptr, CollectMonitor, reinterpret_cast<LPARAM>(&monitors))) {
-            ThrowLastError("EnumDisplayMonitors");
-        }
-
+    std::vector<BarPlacement> PlacementsFor(const std::vector<HMONITOR>& monitors) {
         std::vector<BarPlacement> placements;
         placements.reserve(monitors.size());
         for (HMONITOR monitor : monitors) {
@@ -121,11 +110,31 @@ namespace {
         return placements;
     }
 
-    // A monitor that goes while it is read has changed too.
-    bool MonitorsDiffer(const std::vector<BarPlacement>& placements) {
+    // A monitor swapped for another at the same place and scale changes only its description. A monitor that goes
+    // while it is read has changed too.
+    bool MonitorsDiffer(const std::vector<BarPlacement>& placements, const std::vector<MonitorDescription>& descriptions) {
         try {
-            return PlacementsForAllMonitors() != placements;
+            const std::vector<HMONITOR> monitors = ListMonitors();
+            return PlacementsFor(monitors) != placements || DescribeMonitors(monitors) != descriptions;
         } catch (const MonitorGoneError&) { return true; }
+    }
+
+    // One line per target, so a user finds the id to write in bar.monitors.
+    void LogMonitor(const MonitorDescription& monitor, bool shown) {
+        const std::string primary = monitor.primary ? "yes" : "no";
+        const std::string bar     = shown ? "yes" : "no";
+        if (monitor.targets.empty()) {
+            Log(LogLevel::Info, "app", "monitor", {{.key = "id", .value = "none"}, {.key = "primary", .value = primary}, {.key = "bar", .value = bar}});
+            return;
+        }
+        for (const DisplayTarget& target : monitor.targets) {
+            Log(LogLevel::Info, "app", "monitor",
+                {{.key = "id", .value = target.id.value_or("none")},
+                 {.key = "name", .value = target.name.value_or("none")},
+                 {.key = "connection", .value = target.connection},
+                 {.key = "primary", .value = primary},
+                 {.key = "bar", .value = bar}});
+        }
     }
 
     // Receives the worker threads' messages and survives the bars being rebuilt. A hidden top-level window rather than a
@@ -232,8 +241,16 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
 void App::CreateBars() {
     try {
-        _placements = PlacementsForAllMonitors();
-        for (const BarPlacement& placement : _placements) {
+        const std::vector<HMONITOR> monitors = ListMonitors();
+        _placements                          = PlacementsFor(monitors);
+        _monitors                            = DescribeMonitors(monitors);
+        for (size_t index = 0; index < monitors.size(); ++index) {
+            const BarPlacement& placement = _placements[index];
+            const bool          shown     = ShowsBarOn(_config->bar, _monitors[index]);
+            LogMonitor(_monitors[index], shown);
+            if (!shown) {
+                continue;
+            }
             _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                                   ModuleSources{
                                                       .windowManager   = *_windowManager,
@@ -331,7 +348,7 @@ void App::RebuildBarsIfMonitorsChanged() {
     if (_recovering) {
         return;
     }
-    if (!MonitorsDiffer(_placements)) {
+    if (!MonitorsDiffer(_placements, _monitors)) {
         return;
     }
     Log(LogLevel::Info, "app", "monitors_changed", {{.key = "from", .value = std::to_string(_placements.size())}});

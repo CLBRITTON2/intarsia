@@ -367,7 +367,7 @@ function New-SoakConfig([string] $path, [int] $revision, [string[]] $optional) {
     $config = @"
 -- soak revision $revision
 return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "stats", "workspaces", "mode", "apps", "title" },
     modules_center = { "clock" },
@@ -397,7 +397,7 @@ $definitions
 function New-RetitleConfig([string] $path) {
     $config = @"
 return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips, monitors = { "*" } },
     window_manager = "windows",
     modules_left = { "stats", "title" },
     modules_center = { "clock" },
@@ -423,7 +423,7 @@ function New-PopupConfig([string] $path) {
     $items      = '''{\"items\":[{\"id\":\"one\",\"text\":\"One\"},{\"id\":\"two\",\"text\":\"Two\"}]}'''
     $config = @"
 return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips, monitors = { "*" } },
     window_manager = "windows",
     modules_left = { "stats", "title" },
     modules_center = { "clock" },

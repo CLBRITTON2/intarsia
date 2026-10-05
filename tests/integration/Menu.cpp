@@ -29,7 +29,7 @@ namespace {
     std::string MenuConfig(std::string_view command, const std::filesystem::path& selected) {
         return std::format(R"(
 return {{
-    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40 }},
+    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
     window_manager = "glazewm",
     modules_left = {{ "probe" }},
     modules_center = {{}},

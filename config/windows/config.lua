@@ -7,6 +7,7 @@ return {
         layer = "top",
         space = "reserve",
         thickness = 44,
+        monitors = { "*" },
     },
 
     window_manager = "windows",

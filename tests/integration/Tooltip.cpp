@@ -21,7 +21,7 @@ namespace {
     // The ruler prints the probe's tooltip text in the bar, so the two spans can be compared.
     constexpr std::string_view kConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "ruler" },
     modules_center = { "probe" },

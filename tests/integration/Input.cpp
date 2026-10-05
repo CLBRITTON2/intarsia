@@ -26,7 +26,7 @@ namespace {
         const std::string file     = integration::LuaPath(record);
         return std::format(R"(
 return {{
-    bar = {{ edge = "bottom", layer = "top", space = "share", thickness = 40 }},
+    bar = {{ edge = "bottom", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
     window_manager = "glazewm",
     modules_left = {{ "probe" }},
     modules_center = {{}},

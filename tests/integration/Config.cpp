@@ -24,7 +24,7 @@ namespace {
     std::string OneModuleConfig(std::string_view left, std::string_view right) {
         return std::format(R"(
 return {{
-    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40 }},
+    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
     window_manager = "glazewm",
     modules_left = {{ {} }},
     modules_center = {{}},
@@ -78,7 +78,7 @@ module {
     std::string LayoutsConfig(std::uint32_t reachedLength) {
         return std::format(R"(
 return {{
-    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40 }},
+    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
     window_manager = "glazewm",
     modules_left = {{ "low" }},
     modules_center = {{}},
@@ -101,7 +101,7 @@ return {{
     std::string ClickableConfig(const std::filesystem::path& record) {
         return std::format(R"(
 return {{
-    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40 }},
+    bar = {{ edge = "top", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
     window_manager = "glazewm",
     modules_left = {{ "mark" }},
     modules_center = {{}},

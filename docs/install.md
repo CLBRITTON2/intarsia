@@ -61,6 +61,7 @@ is. Check `CHANGELOG.md` for changed settings first.
 | `--config <path>` | Read another `config.lua`, and the `style.conf` beside it. |
 | `--log <path>` | Log somewhere other than `%LOCALAPPDATA%\intarsia\intarsia.log`. |
 | `--glazewm-port <port>` | Connect to GlazeWM on a port other than 6123. |
+| `--monitors` | Print each monitor's id and whether the config gives it a bar, then exit (see [Configuration](configuration.md#monitors)). |
 
 ## Troubleshooting
 

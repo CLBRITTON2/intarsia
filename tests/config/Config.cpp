@@ -9,10 +9,12 @@
 #include <format>
 #include <fstream>
 #include <initializer_list>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -20,7 +22,7 @@ namespace {
 
     constexpr std::string_view kValidConfig = R"lua(
 return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = 54 },
+    bar = { edge = "top", layer = "top", space = "reserve", thickness = 54, monitors = { "*" } },
     window_manager = "windows",
     modules_left = { "title" },
     modules_center = { "time" },
@@ -135,6 +137,53 @@ TEST(Config, ValidConfigParsesIntoTypedValues) {
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).interval, std::chrono::seconds(60));
     EXPECT_EQ(Kinds(config.modules.left), std::vector<ModuleKind>{ModuleKind::Window});
     EXPECT_EQ(SettingsOf<WindowConfig>(config.modules.left, 0).maxLength, 80u);
+}
+
+TEST(Config, MonitorsReadsEachEntryKind) {
+    const Config config = LoadText(Replace(kValidConfig, R"(monitors = { "*" })", R"(monitors = { "primary", "internal", "DEL41A8-7XYZ123", "BOE0B4D" })"));
+    EXPECT_EQ(config.bar.monitors, (std::vector<MonitorMatch>{PrimaryMonitor{}, InternalMonitor{}, MonitorWithId{.id = "DEL41A8-7XYZ123"}, MonitorWithId{.id = "BOE0B4D"}}));
+    EXPECT_EQ(LoadText(kValidConfig).bar.monitors, std::vector<MonitorMatch>{AllMonitors{}});
+}
+
+TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
+    const auto withMonitors = [](std::string_view list) { return Replace(kValidConfig, R"(monitors = { "*" })", "monitors = " + std::string(list)); };
+    EXPECT_THAT([&] { return LoadText(Replace(kValidConfig, R"(, monitors = { "*" })", "")); }, ConfigErrorWith("bar.monitors is missing"));
+    EXPECT_THAT([&] { return LoadText(withMonitors("{}")); }, ConfigErrorWith("bar.monitors is empty"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ConfigErrorWith("lists 'primary' twice"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ConfigErrorWith("lists '*' beside other entries"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ConfigErrorWith("lists 'Primary', which is not"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ConfigErrorWith("intarsia.exe --monitors lists each monitor's id"));
+}
+
+TEST(Config, ShowsBarOnMatchesAnyEntry) {
+    const auto bar = [](std::vector<MonitorMatch> monitors) {
+        return BarConfig{
+            .edge          = Edge::Top,
+            .layer         = Layer::Top,
+            .space         = Space::Reserve,
+            .thicknessDips = 32.0F,
+            .monitors      = std::move(monitors),
+        };
+    };
+    const MonitorDescription laptop{
+        .monitor = nullptr,
+        .primary = true,
+        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal", .internal = true}},
+    };
+    const MonitorDescription desk{
+        .monitor = nullptr,
+        .primary = false,
+        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort", .internal = false}},
+    };
+    const MonitorDescription pathless{.monitor = nullptr, .primary = false, .targets = {}};
+    EXPECT_TRUE(ShowsBarOn(bar({AllMonitors{}}), pathless));
+    EXPECT_TRUE(ShowsBarOn(bar({PrimaryMonitor{}}), laptop));
+    EXPECT_FALSE(ShowsBarOn(bar({PrimaryMonitor{}}), desk));
+    EXPECT_TRUE(ShowsBarOn(bar({InternalMonitor{}}), laptop));
+    EXPECT_FALSE(ShowsBarOn(bar({InternalMonitor{}}), desk));
+    EXPECT_TRUE(ShowsBarOn(bar({PrimaryMonitor{}, MonitorWithId{.id = "DEL41A8-7XYZ123"}}), desk));
+    EXPECT_FALSE(ShowsBarOn(bar({MonitorWithId{.id = "DEL41A8"}}), desk));
+    EXPECT_FALSE(ShowsBarOn(bar({MonitorWithId{.id = "DEL41A8"}}), pathless));
 }
 
 TEST(Config, MissingFileIsAnError) {

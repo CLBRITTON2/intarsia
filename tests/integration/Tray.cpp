@@ -21,7 +21,7 @@ namespace {
 
     constexpr std::string_view kConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "tray" },
     modules_center = {},

@@ -23,7 +23,7 @@ namespace {
 return {
     bar = { edge = ")") +
             std::string(edge) +
-            R"(", layer = "top", space = "share", thickness = 40 },
+            R"(", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "workspaces", "apps" },
     modules_center = { "clock" },
@@ -74,7 +74,7 @@ module {
 
     constexpr std::string_view kWindowsConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "apps" },
     modules_center = {},
@@ -110,7 +110,7 @@ module {
 
     constexpr std::string_view kWorkspacesConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "workspaces" },
     modules_center = {},
@@ -145,7 +145,7 @@ module {
     // The test server shows the binding mode "resize" and the vertical direction while the focus index is odd.
     constexpr std::string_view kModesConfig = R"(
 return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40 },
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
     window_manager = "glazewm",
     modules_left = { "modes", "tiling" },
     modules_center = {},
