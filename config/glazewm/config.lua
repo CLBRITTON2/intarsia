@@ -10,7 +10,7 @@ return {
         space = "reserve",
         thickness = 44, -- DIPs, scaled by each monitor's DPI
         -- Which monitors get a bar, any entry matching: "*" alone for every monitor, "primary", "internal" for a
-        -- laptop's own panel, or a monitor id, which intarsia.exe --monitors lists.
+        -- laptop's own panel, or a monitor id, which intarsia-cli monitors lists.
         monitors = { "*" },
     },
 

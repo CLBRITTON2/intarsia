@@ -1,8 +1,9 @@
 #pragma once
 
+#include <windows.h>
+
 #include <string_view>
 
-// Writes text to wherever the caller reads this process's output: stdout when it was redirected to a pipe or file, else
-// the console of the process that started this one. The bar is a GUI program, so it has neither by default. Throws
-// Win32Error when there is no such console, as for a bar started from Explorer.
-void WriteToCaller(std::string_view utf8);
+// Writes UTF-8 text to a standard handle: as UTF-16 to a console, whose code page need not be UTF-8, and as the bytes
+// themselves to a pipe or file. Throws Win32Error when a write fails.
+void WriteUtf8(HANDLE output, std::string_view utf8);

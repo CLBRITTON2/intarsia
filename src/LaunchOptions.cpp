@@ -21,27 +21,21 @@ namespace {
 LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, const std::filesystem::path& defaultLogPath,
                                  std::uint16_t defaultGlazeWmPort, const std::wstring& defaultTrayClass) {
     LaunchOptions options{
-        .configPath   = defaultConfigPath,
-        .logPath      = defaultLogPath,
-        .glazeWmPort  = defaultGlazeWmPort,
-        .trayClass    = defaultTrayClass,
-        .listMonitors = false,
+        .configPath  = defaultConfigPath,
+        .logPath     = defaultLogPath,
+        .glazeWmPort = defaultGlazeWmPort,
+        .trayClass   = defaultTrayClass,
     };
-    for (size_t index = 0; index < arguments.size(); ++index) {
+    for (size_t index = 0; index < arguments.size(); index += 2) {
         const std::wstring& name = arguments[index];
-        if (name == L"--monitors") {
-            options.listMonitors = true;
-            continue;
-        }
         if (index + 1 >= arguments.size()) {
             throw LaunchOptionsError(std::format("{} needs a value", ToUtf8(name)));
         }
-        ++index;
-        const std::string value = ToUtf8(arguments[index]);
+        const std::string value = ToUtf8(arguments[index + 1]);
         if (name == L"--config") {
-            options.configPath = arguments[index];
+            options.configPath = arguments[index + 1];
         } else if (name == L"--log") {
-            options.logPath = arguments[index];
+            options.logPath = arguments[index + 1];
         } else if (name == L"--glazewm-port") {
             std::uint32_t port      = 0;
             const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), port);
@@ -50,14 +44,13 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, con
             }
             options.glazeWmPort = static_cast<std::uint16_t>(port);
         } else if (name == L"--tray-class") {
-            const std::wstring& trayClass = arguments[index];
+            const std::wstring& trayClass = arguments[index + 1];
             if (trayClass.empty() || trayClass.size() > kMaxClassNameLength) {
                 throw LaunchOptionsError(std::format("--tray-class must be a window class name of 1 to {} characters, got {}", kMaxClassNameLength, trayClass.size()));
             }
             options.trayClass = trayClass;
         } else {
-            throw LaunchOptionsError(
-                std::format("unknown option '{}', intarsia takes --config <path>, --log <path>, --glazewm-port <port>, --tray-class <name> and --monitors", ToUtf8(name)));
+            throw LaunchOptionsError(std::format("unknown option '{}', intarsia takes --config <path>, --log <path>, --glazewm-port <port> and --tray-class <name>", ToUtf8(name)));
         }
     }
     return options;

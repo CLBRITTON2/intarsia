@@ -42,10 +42,3 @@ TEST(LaunchOptions, RejectsBadArguments) {
     EXPECT_THROW(Parse({L"--tray-class", L""}), LaunchOptionsError);
     EXPECT_THROW(Parse({L"--tray-class", std::wstring(256, L'x')}), LaunchOptionsError);
 }
-
-TEST(LaunchOptions, MonitorsAsksForTheMonitorList) {
-    EXPECT_FALSE(Parse({}).listMonitors);
-    const LaunchOptions options = Parse({L"--monitors", L"--config", L"D:\\other\\config.lua"});
-    EXPECT_TRUE(options.listMonitors);
-    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\other\\config.lua"));
-}

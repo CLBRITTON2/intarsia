@@ -47,7 +47,7 @@ match none at first, and bars appear and go as monitors come and go.
 
 A monitor id is the manufacturer and product code from the monitor's EDID, then its serial: `DEL41A8-7XYZ123`. A
 monitor with no serial, as many laptop panels have, gets the first part alone (`BOE0B4D`), which every monitor of
-that model shares. `intarsia.exe --monitors` lists each connected monitor's id and whether the config gives it a bar:
+that model shares. `intarsia-cli monitors` lists each connected monitor's id and whether the config gives it a bar:
 
 ```
 id               name         connection   primary  bar

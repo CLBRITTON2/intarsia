@@ -13,10 +13,10 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "FileDescription", "intarsia status bar"
+            VALUE "FileDescription", "@INTARSIA_FILE_DESCRIPTION@"
             VALUE "FileVersion", "@INTARSIA_VERSION@"
             VALUE "LegalCopyright", "Apache License 2.0"
-            VALUE "OriginalFilename", "intarsia.exe"
+            VALUE "OriginalFilename", "@INTARSIA_FILE_NAME@"
             VALUE "ProductName", "intarsia"
             VALUE "ProductVersion", "@INTARSIA_VERSION@"
         END

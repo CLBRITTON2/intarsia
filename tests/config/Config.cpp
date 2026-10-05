@@ -152,7 +152,7 @@ TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ConfigErrorWith("lists 'primary' twice"));
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ConfigErrorWith("lists '*' beside other entries"));
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ConfigErrorWith("lists 'Primary', which is not"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ConfigErrorWith("intarsia.exe --monitors lists each monitor's id"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ConfigErrorWith("intarsia-cli monitors lists each monitor's id"));
 }
 
 TEST(Config, ShowsBarOnMatchesAnyEntry) {

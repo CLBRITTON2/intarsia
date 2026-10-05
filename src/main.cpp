@@ -1,10 +1,7 @@
 #include "App.hpp"
 #include "LaunchOptions.hpp"
-#include "MonitorTable.hpp"
 #include "config/Config.hpp"
-#include "platform/Console.hpp"
 #include "platform/Log.hpp"
-#include "platform/Monitors.hpp"
 #include "platform/PeerProcess.hpp"
 #include "platform/Process.hpp"
 #include "platform/ShellLaunch.hpp"
@@ -34,34 +31,19 @@ namespace {
         return level > SECURITY_MANDATORY_MEDIUM_RID && level > ShellIntegrityLevel(kShellWait);
     }
 
-    int PrintMonitors(const std::filesystem::path& configPath) {
-        try {
-            const Config config = LoadConfig(configPath);
-            WriteToCaller(MonitorTable(DescribeMonitors(ListMonitors()), config.bar));
-            return 0;
-        } catch (const ConfigError& error) {
-            WriteToCaller(std::string(error.what()) + "\n");
-            return 1;
-        }
-    }
-
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     try {
         RestrictDllSearchToSystem32();
         LogCrashes();
-        LaunchOptions options = ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), DefaultLogPath(), kGlazeWmPort, kTaskbarClass);
-        // Before the relaunch, which would lose the console the table prints to.
-        if (options.listMonitors) {
-            return PrintMonitors(options.configPath);
-        }
         // Before the log opens, since the relaunched bar rotates it.
         if (RunsAboveShell()) {
             StartThroughShell(ProcessImage(GetCurrentProcess()), CommandLineArguments());
             Log(LogLevel::Info, "app", "relaunched_through_shell", {{.key = "process", .value = std::to_string(GetCurrentProcessId())}});
             return 0;
         }
+        LaunchOptions options = ParseLaunchOptions(CommandLineArguments(), DefaultConfigPath(), DefaultLogPath(), kGlazeWmPort, kTaskbarClass);
         LogToFile(options.logPath);
         Log(LogLevel::Info, "app", "started", {{.key = "process", .value = std::to_string(GetCurrentProcessId())}, {.key = "log", .value = ToUtf8(options.logPath.wstring())}});
         App app(instance, std::move(options));

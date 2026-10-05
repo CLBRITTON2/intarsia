@@ -5,7 +5,7 @@ Builds a release of intarsia and packages it as build\dist\intarsia-<Version>.zi
 .DESCRIPTION
 Refuses uncommitted changes to tracked files, so the package is what HEAD holds, and a Version with no section in
 CHANGELOG.md (scripts/draft-changelog.ps1 adds one). The build starts from an empty build\dist, with Version stamped
-into intarsia.exe's version resource. The zip holds intarsia.exe, both shipped configs, the docs, README.md, LICENSE and
+into both executables' version resources. The zip holds intarsia.exe, intarsia-cli.exe, both shipped configs, the docs, README.md, LICENSE and
 CHANGELOG.md, and build\dist\release-notes.md holds the version's changelog section.
 
 .PARAMETER Version
@@ -43,14 +43,14 @@ try {
         Remove-Item -Recurse -Force $dist
     }
     Invoke-Checked 'cmake --preset release' { cmake --preset release -B $dist "-DINTARSIA_VERSION=$Version" }
-    Invoke-Checked "cmake --build $dist" { cmake --build $dist --target intarsia }
+    Invoke-Checked "cmake --build $dist" { cmake --build $dist --target intarsia intarsia-cli }
 } finally {
     Pop-Location
 }
 
 $stage = Join-Path $dist "package\intarsia-$Version"
 New-Item -ItemType Directory -Force $stage | Out-Null
-Copy-Item (Join-Path $dist 'intarsia.exe') $stage
+Copy-Item (Join-Path $dist 'intarsia.exe'), (Join-Path $dist 'intarsia-cli.exe') $stage
 foreach ($file in $trackedFiles) {
     $target = Join-Path $stage $file
     New-Item -ItemType Directory -Force (Split-Path -Parent $target) | Out-Null

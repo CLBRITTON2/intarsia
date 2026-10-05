@@ -1,16 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
 project(intarsia LANGUAGES CXX RC)
 
-# The version intarsia.exe's version resource carries. scripts/package-release.ps1 sets it, every other build stays
+# The version the executables' version resources carry. scripts/package-release.ps1 sets it, every other build stays
 # 0.0.0.
-set(INTARSIA_VERSION "0.0.0" CACHE STRING "Version stamped into intarsia.exe, as major.minor.patch")
+set(INTARSIA_VERSION "0.0.0" CACHE STRING "Version stamped into intarsia.exe and intarsia-cli.exe, as major.minor.patch")
 if(NOT INTARSIA_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
   message(FATAL_ERROR "INTARSIA_VERSION must be major.minor.patch, got '${INTARSIA_VERSION}'")
 endif()
 set(INTARSIA_VERSION_MAJOR ${CMAKE_MATCH_1})
 set(INTARSIA_VERSION_MINOR ${CMAKE_MATCH_2})
 set(INTARSIA_VERSION_PATCH ${CMAKE_MATCH_3})
+set(INTARSIA_FILE_NAME "intarsia.exe")
+set(INTARSIA_FILE_DESCRIPTION "intarsia status bar")
 configure_file(src/intarsia.rc.in ${CMAKE_BINARY_DIR}/intarsia.rc @ONLY)
+set(INTARSIA_FILE_NAME "intarsia-cli.exe")
+set(INTARSIA_FILE_DESCRIPTION "intarsia command line")
+configure_file(src/intarsia.rc.in ${CMAKE_BINARY_DIR}/intarsia-cli.rc @ONLY)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,6 +62,7 @@ add_library(intarsia_core STATIC
   src/bar/FrameStats.cpp
   src/battery/PowerStatus.cpp
   src/bar/Layout.cpp
+  src/cli/CliOptions.cpp
   src/bar/Menu.cpp
   src/bar/MenuLister.cpp
   src/bar/Tooltip.cpp
@@ -148,6 +154,11 @@ target_link_libraries(intarsia PRIVATE intarsia_core)
 # from System32 only, never from a DLL planted beside it.
 target_link_options(intarsia PRIVATE /DEPENDENTLOADFLAG:0x800)
 
+# A console program, since a shell waits only for one and the bar has to stay a GUI program.
+add_executable(intarsia-cli src/cli/main.cpp src/intarsia.manifest ${CMAKE_BINARY_DIR}/intarsia-cli.rc)
+target_link_libraries(intarsia-cli PRIVATE intarsia_core)
+target_link_options(intarsia-cli PRIVATE /DEPENDENTLOADFLAG:0x800)
+
 option(BUILD_TESTING "Build the GoogleTest unit tests" OFF)
 if(BUILD_TESTING)
   FetchContent_Declare(googletest
@@ -170,6 +181,7 @@ if(BUILD_TESTING)
     tests/bar/Menu.cpp
     tests/bar/MenuLister.cpp
     tests/bar/Tooltip.cpp
+    tests/cli/CliOptions.cpp
     tests/config/Config.cpp
     tests/config/Style.cpp
     tests/audio/CoreAudio.cpp

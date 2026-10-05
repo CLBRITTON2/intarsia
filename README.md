@@ -27,7 +27,7 @@ pwsh -File scripts/build.ps1 -Preset debug
 pwsh -File scripts/build.ps1 -Preset release
 ```
 
-The executable lands in `build\<preset>\intarsia.exe`. The scripts enter the Visual Studio developer shell themselves
+The bar lands in `build\<preset>\intarsia.exe`, with `intarsia-cli.exe` beside it. The scripts enter the Visual Studio developer shell themselves
 and put its CMake and Ninja first on PATH, because another CMake (such as MSYS2's) can carry a CA bundle that fails
 the dependency downloads.
 
@@ -87,7 +87,7 @@ pwsh -File scripts/package-release.ps1 -Version 0.2.0
 
 `draft-changelog.ps1` adds a section for the version to `CHANGELOG.md`, one line per commit since the previous
 release's tag (for the first release, pass the first commit). Edit it and commit. `package-release.ps1` then builds
-from a clean `build\dist` with the version stamped into `intarsia.exe`, and packages `build\dist\intarsia-<version>.zip`
+from a clean `build\dist` with the version stamped into both executables, and packages `build\dist\intarsia-<version>.zip`
 with both configs, the docs, this README, the license and the changelog, and `build\dist\release-notes.md` with the version's
 section. It refuses uncommitted changes and a version the changelog lacks. The Release workflow runs the tests and both steps on
 `windows-2022`, then `scripts/publish-release.ps1` publishes the zip as the GitHub release `v<version>`.
@@ -109,8 +109,8 @@ boxes, `module` for every module and a module's name in the config (`date`) for 
 inside. [Styling](docs/styling.md) lists every block. `--config <path>` reads another config and the `style.conf`
 beside it, and
 `--glazewm-port <port>` connects to GlazeWM on a port other than 6123. `--log <path>` writes the log file somewhere
-other than `%LOCALAPPDATA%\intarsia\intarsia.log`, which a running bar keeps open. `--monitors` prints each monitor's
-id for `bar.monitors`, which picks the monitors that get a bar. Saving either file rebuilds the bars. A wrong
+other than `%LOCALAPPDATA%\intarsia\intarsia.log`, which a running bar keeps open. `intarsia-cli monitors` prints each
+monitor's id for `bar.monitors`, which picks the monitors that get a bar. Saving either file rebuilds the bars. A wrong
 key, block or property stops the bar with a message naming the file and where in it. The bar logs structured lines to stderr, which only show when stderr is redirected as above. Stop it
 with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen space back.
 
@@ -124,6 +124,7 @@ with `taskkill /IM intarsia.exe`, without `/F`, so each bar gives its screen spa
 | `src/config/` | the Lua config loader and the style sheet parser |
 | `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
+| `src/cli/` | `intarsia-cli.exe`, the console program that prints what the bar sees |
 | `config/windows/` | a plain config and style that need nothing but Windows |
 | `config/glazewm/` | a config and style for GlazeWM that document every key and block |
 | `tests/` | unit tests mirroring `src/`, `tests/integration/`, `tests/soak/`, and `tests/support/` for the test GlazeWM server both use |

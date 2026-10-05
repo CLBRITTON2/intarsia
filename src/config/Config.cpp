@@ -263,8 +263,8 @@ namespace {
             } else if (IsMonitorId(entry)) {
                 matches.emplace_back(MonitorWithId{.id = entry});
             } else {
-                throw bar.Error(std::format(R"({} lists '{}', which is not "*", "primary", "internal" or a monitor id such as DEL41A8-7XYZ123 (intarsia.exe )"
-                                            "--monitors lists each monitor's id)",
+                throw bar.Error(std::format(R"({} lists '{}', which is not "*", "primary", "internal" or a monitor id such as DEL41A8-7XYZ123 (intarsia-cli )"
+                                            "monitors lists each monitor's id)",
                                             bar.KeyPath("monitors"), entry));
             }
         }
