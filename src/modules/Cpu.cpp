@@ -88,19 +88,14 @@ Cpu::Cpu(TextModuleConfig config) :
                    .maxCorePercent = 0,
                    .cores          = {},
                })),
-    _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()),
+    _previous(ReadCpuTimes()), _texts(std::chrono::steady_clock::now()),
     _baseFrequency(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\Processor Frequency")),
     _performance(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\% Processor Performance")),
     _cores(CounterIfNamed(Settings(), {"max_core", "cores"}, L"\\Processor(*)\\% Processor Time")) {}
 
 // A sample over a few milliseconds would also swing between 0 and 100.
 ModuleText Cpu::Format(const std::string& spec) {
-    const auto now = std::chrono::steady_clock::now();
-    if (SampleDue(_sampledAt, now, Settings().interval)) {
-        Sample();
-        _sampledAt = now;
-        _texts.Forget();
-    }
+    _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { Sample(); });
     return ModuleText{
         .icon       = Settings().icon,
         .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }),

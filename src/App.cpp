@@ -120,20 +120,20 @@ namespace {
     }
 
     // One line per target, so a user finds the id to write in bar.monitors.
-    void LogMonitor(const MonitorDescription& monitor, bool shown) {
-        const std::string primary = monitor.primary ? "yes" : "no";
-        const std::string bar     = shown ? "yes" : "no";
-        if (monitor.targets.empty()) {
-            Log(LogLevel::Info, "app", "monitor", {{.key = "id", .value = "none"}, {.key = "primary", .value = primary}, {.key = "bar", .value = bar}});
+    void LogMonitor(const MonitorDescription& description, bool shown) {
+        const std::string primaryField = description.primary ? "yes" : "no";
+        const std::string barField     = shown ? "yes" : "no";
+        if (description.targets.empty()) {
+            Log(LogLevel::Info, "app", "monitor", {{.key = "id", .value = "none"}, {.key = "primary", .value = primaryField}, {.key = "bar", .value = barField}});
             return;
         }
-        for (const DisplayTarget& target : monitor.targets) {
+        for (const DisplayTarget& target : description.targets) {
             Log(LogLevel::Info, "app", "monitor",
                 {{.key = "id", .value = target.id.value_or("none")},
                  {.key = "name", .value = target.name.value_or("none")},
                  {.key = "connection", .value = target.connection},
-                 {.key = "primary", .value = primary},
-                 {.key = "bar", .value = bar}});
+                 {.key = "primary", .value = primaryField},
+                 {.key = "bar", .value = barField}});
         }
     }
 
@@ -243,11 +243,11 @@ void App::CreateBars() {
     try {
         const std::vector<HMONITOR> monitors = ListMonitors();
         _placements                          = PlacementsFor(monitors);
-        _monitors                            = DescribeMonitors(monitors);
+        _monitorDescriptions                 = DescribeMonitors(monitors);
         for (size_t index = 0; index < monitors.size(); ++index) {
             const BarPlacement& placement = _placements[index];
-            const bool          shown     = ShowsBarOn(_config->bar, _monitors[index]);
-            LogMonitor(_monitors[index], shown);
+            const bool          shown     = ShowsBarOn(_config->bar, _monitorDescriptions[index]);
+            LogMonitor(_monitorDescriptions[index], shown);
             if (!shown) {
                 continue;
             }
@@ -348,7 +348,7 @@ void App::RebuildBarsIfMonitorsChanged() {
     if (_recovering) {
         return;
     }
-    if (!MonitorsDiffer(_placements, _monitors)) {
+    if (!MonitorsDiffer(_placements, _monitorDescriptions)) {
         return;
     }
     Log(LogLevel::Info, "app", "monitors_changed", {{.key = "from", .value = std::to_string(_placements.size())}});

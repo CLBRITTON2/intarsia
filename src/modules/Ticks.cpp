@@ -12,7 +12,14 @@ bool SampleDue(std::chrono::steady_clock::time_point sampledAt, std::chrono::ste
     return now - sampledAt >= interval - std::chrono::milliseconds(50);
 }
 
-void SampledTexts::Forget() {
+SampledTexts::SampledTexts(std::chrono::steady_clock::time_point sampledAt) : _sampledAt(sampledAt) {}
+
+void SampledTexts::SampleIfDue(std::chrono::steady_clock::time_point now, std::chrono::seconds interval, const std::function<void()>& sample) {
+    if (!SampleDue(_sampledAt, now, interval)) {
+        return;
+    }
+    sample();
+    _sampledAt = now;
     _texts.clear();
 }
 

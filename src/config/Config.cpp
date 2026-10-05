@@ -27,6 +27,7 @@
 #include <map>
 #include <memory>
 #include <ranges>
+#include <set>
 #include <string_view>
 #include <stdexcept>
 #include <utility>
@@ -239,18 +240,25 @@ namespace {
         return value;
     }
 
+    // A set rather than a scan of the entries before each one, since a config's loop can build a list of any length.
+    void RejectRepeats(const TableReader& table, std::string_view key, const std::vector<std::string>& entries) {
+        std::set<std::string_view> seen;
+        for (const std::string& entry : entries) {
+            if (!seen.insert(entry).second) {
+                throw table.Error(std::format("{} lists '{}' twice", table.KeyPath(key), entry));
+            }
+        }
+    }
+
     std::vector<MonitorMatch> ReadMonitorMatches(const TableReader& bar) {
         const std::vector<std::string> entries = bar.StringList("monitors");
         if (entries.empty()) {
             throw bar.Error(std::format(R"({} is empty: list "*" for every monitor, "primary", "internal" or a monitor id)", bar.KeyPath("monitors")));
         }
+        RejectRepeats(bar, "monitors", entries);
         std::vector<MonitorMatch> matches;
         matches.reserve(entries.size());
-        for (size_t index = 0; index < entries.size(); ++index) {
-            const std::string& entry = entries[index];
-            if (std::ranges::find(entries.begin(), entries.begin() + static_cast<std::ptrdiff_t>(index), entry) != entries.begin() + static_cast<std::ptrdiff_t>(index)) {
-                throw bar.Error(std::format("{} lists '{}' twice", bar.KeyPath("monitors"), entry));
-            }
+        for (const std::string& entry : entries) {
             if (entry == "*") {
                 if (entries.size() != 1) {
                     throw bar.Error(std::format("{} lists '*' beside other entries, and '*' alone already matches every monitor", bar.KeyPath("monitors")));
@@ -389,12 +397,10 @@ namespace {
         if (names.empty()) {
             throw group.Error(std::format("{} must name at least one module", group.KeyPath("modules")));
         }
+        RejectRepeats(group, "modules", names);
         std::vector<ModuleInstance> members;
         members.reserve(names.size());
         for (const std::string& name : names) {
-            if (std::ranges::any_of(members, [&name](const ModuleInstance& member) { return member.name == name; })) {
-                throw group.Error(std::format("{} lists '{}' twice", group.KeyPath("modules"), name));
-            }
             const TableReader module = DefinedModule(group, "modules", definitions, name);
             const ModuleKind  kind   = ParseModuleType(module);
             if (kind == ModuleKind::Group) {
@@ -440,7 +446,6 @@ namespace {
         }
     }
 
-    // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
     // A module's style block is named for it, beside the style's own top-level blocks.
     void RejectReservedModuleNames(const TableReader& definitions) {
         for (const std::string& name : definitions.Keys()) {
@@ -450,6 +455,7 @@ namespace {
         }
     }
 
+    // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
     void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
         std::vector<const Sections<ModuleInstance>*> lists{&config.modules};
         for (const LayoutConfig& layout : config.layouts) {
@@ -616,9 +622,9 @@ namespace {
     // Each a block name a module's style.conf block holds, none of the blocks every module holds, none twice.
     std::vector<std::string> ReadCustomClasses(const TableReader& module, std::string_view key) {
         std::vector<std::string> classes = module.StringList(key);
-        for (size_t index = 0; index < classes.size(); ++index) {
-            const std::string& name = classes[index];
-            const bool         wellFormed =
+        RejectRepeats(module, key, classes);
+        for (const std::string& name : classes) {
+            const bool wellFormed =
                 !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, IsNameCharacter);
             if (!wellFormed) {
                 throw module.Error(
@@ -626,9 +632,6 @@ namespace {
             }
             if (IsStyledClass(name)) {
                 throw module.Error(std::format("{} lists '{}', a class intarsia styles itself", module.KeyPath(key), name));
-            }
-            if (std::ranges::find(classes.begin(), classes.begin() + static_cast<std::ptrdiff_t>(index), name) != classes.begin() + static_cast<std::ptrdiff_t>(index)) {
-                throw module.Error(std::format("{} lists '{}' twice", module.KeyPath(key), name));
             }
         }
         return classes;
@@ -767,19 +770,19 @@ namespace {
 
     // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
     // converting one later cannot fail.
-    std::string ReadFile(const std::filesystem::path& path, std::string_view what, size_t largestBytes) {
+    std::string ReadFile(const std::filesystem::path& path, std::string_view what, size_t maxBytes) {
         std::ifstream file(path, std::ios::binary);
         if (!file) {
             throw ConfigError(std::format("cannot open {} file {}", what, ToUtf8(path.wstring())));
         }
-        std::string text(largestBytes + 1, '\0');
+        std::string text(maxBytes + 1, '\0');
         file.read(text.data(), static_cast<std::streamsize>(text.size()));
         if (file.bad()) {
             throw ConfigError(std::format("cannot read {} file {}", what, ToUtf8(path.wstring())));
         }
         text.resize(static_cast<size_t>(file.gcount()));
-        if (text.size() > largestBytes) {
-            throw ConfigError(std::format("{} file {} is larger than {} KiB", what, ToUtf8(path.wstring()), largestBytes >> 10));
+        if (text.size() > maxBytes) {
+            throw ConfigError(std::format("{} file {} is larger than {} KiB", what, ToUtf8(path.wstring()), maxBytes >> 10));
         }
         if (!IsValidUtf8(text)) {
             throw ConfigError(std::format("{} file {} is not valid UTF-8", what, ToUtf8(path.wstring())));
@@ -794,7 +797,7 @@ namespace {
     constexpr std::int32_t kMaxConfigInstructions = 50'000'000;
     // Far more than any real config allocates (a few hundred KiB with the libraries), and a string built in one C call
     // runs no instructions for the count hook to see.
-    constexpr size_t kMaxConfigBytes = size_t{16} << 20;
+    constexpr size_t kMaxConfigMemoryBytes = size_t{16} << 20;
 
     // What the Lua state may use, and whether it was stopped, shared with the allocator and the hook through the
     // allocator's user data.
@@ -863,7 +866,7 @@ namespace {
             return ConfigError(std::format("{}: the config ran {} instructions without finishing, is there an endless loop?", source, kMaxConfigInstructions));
         }
         if (status == LUA_ERRMEM) {
-            return ConfigError(std::format("{}: the config used more than {} MiB of memory", source, kMaxConfigBytes >> 20));
+            return ConfigError(std::format("{}: the config used more than {} MiB of memory", source, kMaxConfigMemoryBytes >> 20));
         }
         return ConfigError(PopErrorMessage(lua));
     }
@@ -887,7 +890,7 @@ Config LoadConfig(const std::filesystem::path& path) {
         .allocate     = nullptr,
         .allocateData = nullptr,
         .usedBytes    = 0,
-        .limitBytes   = kMaxConfigBytes,
+        .limitBytes   = kMaxConfigMemoryBytes,
         .runaway      = false,
     };
     const LuaState lua(luaL_newstate());
@@ -964,10 +967,10 @@ Config LoadConfig(const std::filesystem::path& path) {
     RejectUnshownModules(definitions, config);
     RequireMembersInOneGroup(definitions, config);
     RequireKnownModules(sheet, definitions.Keys());
-    std::vector<DeclaredClasses> declared;
+    std::vector<std::string> declared;
     ForEachModuleInConfig(config, [&declared](const ModuleInstance& instance) {
         if (const auto* custom = std::get_if<CustomConfig>(&instance.settings)) {
-            declared.push_back(DeclaredClasses{.module = instance.name, .classes = custom->classes});
+            declared.insert(declared.end(), custom->classes.begin(), custom->classes.end());
         }
     });
     RequireDeclaredClasses(sheet, declared);
@@ -1001,19 +1004,19 @@ const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float
     return *chosen;
 }
 
-bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& monitor) {
-    return std::ranges::any_of(bar.monitors, [&monitor](const MonitorMatch& match) {
+bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& description) {
+    return std::ranges::any_of(bar.monitors, [&description](const MonitorMatch& match) {
         if (std::holds_alternative<AllMonitors>(match)) {
             return true;
         }
         if (std::holds_alternative<PrimaryMonitor>(match)) {
-            return monitor.primary;
+            return description.primary;
         }
         if (std::holds_alternative<InternalMonitor>(match)) {
-            return std::ranges::any_of(monitor.targets, &DisplayTarget::internal);
+            return std::ranges::any_of(description.targets, &DisplayTarget::internal);
         }
         const std::string& id = std::get<MonitorWithId>(match).id;
-        return std::ranges::any_of(monitor.targets, [&id](const DisplayTarget& target) { return target.id == id; });
+        return std::ranges::any_of(description.targets, [&id](const DisplayTarget& target) { return target.id == id; });
     });
 }
 

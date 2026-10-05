@@ -491,7 +491,7 @@ void Bar::Draw() {
     };
     const SectionStyle&         section = _config.style.section;
     const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), _axis), MainOf(section.margin, _axis), MainInsets(section.box, _axis));
-    const Sections<PlacedEntry> placed{
+    const Sections<PlacedEntry> placedSections{
         .left   = PlaceSection(_modules.left, lengths.left, layout.left),
         .center = PlaceSection(_modules.center, lengths.center, layout.center),
         .right  = PlaceSection(_modules.right, lengths.right, layout.right),
@@ -501,7 +501,7 @@ void Bar::Draw() {
         ThrowLastError("GetWindowRect");
     }
     _hitBoxes.clear();
-    ForEachInSections(placed, [this](const PlacedEntry& placed) {
+    ForEachInSections(placedSections, [this](const PlacedEntry& placed) {
         // Only what the fold uncovers of a member takes the cursor.
         for (const HitBox& member : placed.members) {
             const D2D1_RECT_F shown = Intersection(member.bounds, placed.shownBounds);
@@ -529,9 +529,9 @@ void Bar::Draw() {
 
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
-    DrawSection(placed.left, layout.left);
-    DrawSection(placed.center, layout.center);
-    DrawSection(placed.right, layout.right);
+    DrawSection(placedSections.left, layout.left);
+    DrawSection(placedSections.center, layout.center);
+    DrawSection(placedSections.right, layout.right);
     _surface->ShowBackdrops(SectionBackdrops({&layout.left, &layout.center, &layout.right}), _config.style.section.backdrop);
     const std::chrono::steady_clock::time_point presenting = std::chrono::steady_clock::now();
     _surface->EndDrawAndPresent();

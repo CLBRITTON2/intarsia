@@ -40,10 +40,6 @@ namespace {
         return rect.right <= rect.left || rect.bottom <= rect.top;
     }
 
-    bool SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second) {
-        return first.r == second.r && first.g == second.g && first.b == second.b && first.a == second.a;
-    }
-
     bool IsDrawn(const BorderSide& side) {
         return side.widthDips > 0.0f && side.color.a > 0.0f;
     }
@@ -230,11 +226,6 @@ namespace {
         return SameSide(first.top, second.top) && SameSide(first.right, second.right) && SameSide(first.bottom, second.bottom) && SameSide(first.left, second.left);
     }
 
-    bool SameShadow(const InsetShadow& first, const InsetShadow& second) {
-        return first.xDips == second.xDips && first.yDips == second.yDips && first.blurDips == second.blurDips && first.spreadDips == second.spreadDips &&
-            SameColor(first.color, second.color);
-    }
-
     void DrawBorder(ID2D1DeviceContext* context, BrushCache& brushes, const Figure& outer, const Figure& inner, const Border& border) {
         const std::array<BorderSide, 4> sides = Sides(border);
         if (std::ranges::none_of(sides, IsDrawn)) {
@@ -376,6 +367,15 @@ namespace {
 
 } // namespace
 
+bool SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second) {
+    return first.r == second.r && first.g == second.g && first.b == second.b && first.a == second.a;
+}
+
+bool SameShadow(const InsetShadow& first, const InsetShadow& second) {
+    return first.xDips == second.xDips && first.yDips == second.yDips && first.blurDips == second.blurDips && first.spreadDips == second.spreadDips &&
+        SameColor(first.color, second.color);
+}
+
 BoxCache::BoxCache(ID2D1DeviceContext* context) :
     _context([context] {
         Microsoft::WRL::ComPtr<ID2D1Device> device;
@@ -400,7 +400,7 @@ ID2D1Bitmap1* BoxCache::Find(const BoxStyle& lines, float radius, float pixelsPe
 
 void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2D1_RECT_F& box, float radius, const BoxStyle& lines) {
     const float         pixelsPerDip = grid.pixelsPerDip;
-    const std::uint32_t reach        = PixelLength(std::ceil(ReachDips(lines, radius) * pixelsPerDip) / pixelsPerDip, pixelsPerDip);
+    const std::uint32_t reach        = static_cast<std::uint32_t>(std::ceil(ReachDips(lines, radius) * pixelsPerDip));
     const std::uint32_t length       = PixelLength(box.right - box.left, pixelsPerDip);
     const std::uint32_t depth        = PixelLength(box.bottom - box.top, pixelsPerDip);
     const std::uint32_t width        = SlicedLength(length, reach);

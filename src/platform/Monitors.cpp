@@ -79,10 +79,6 @@ namespace {
         }
     }
 
-    bool IsInternal(DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY technology) {
-        return ConnectionName(technology) == "internal";
-    }
-
     // The EDID Windows read from the monitor, kept in its device key. Absent for a target with no device path or no
     // EDID value, as virtual displays have.
     std::optional<std::vector<std::uint8_t>> ReadEdid(const std::wstring& devicePath) {
@@ -152,15 +148,17 @@ namespace {
         target.header.id        = path.targetInfo.id;
         GetDeviceInfo(target.header, "target name");
 
-        const std::string name = ToUtf8(target.monitorFriendlyDeviceName);
+        const std::string name       = ToUtf8(target.monitorFriendlyDeviceName);
+        std::string       connection = ConnectionName(target.outputTechnology);
+        const bool        internal   = connection == "internal";
         return ActivePath{
             .sourceDevice = source.viewGdiDeviceName,
             .target =
                 DisplayTarget{
                     .id         = TargetId(target.monitorDevicePath),
                     .name       = name.empty() ? std::nullopt : std::optional<std::string>(name),
-                    .connection = ConnectionName(target.outputTechnology),
-                    .internal   = IsInternal(target.outputTechnology),
+                    .connection = std::move(connection),
+                    .internal   = internal,
                 },
         };
     }
@@ -177,9 +175,13 @@ std::vector<HMONITOR> ListMonitors() {
 
 std::vector<MonitorDescription> DescribeMonitors(const std::vector<HMONITOR>& monitors) {
     std::vector<ActivePath> paths;
-    for (const DISPLAYCONFIG_PATH_INFO& path : QueryActivePaths()) {
-        paths.push_back(ReadPath(path));
-    }
+    // Every call here can fail when a monitor is unplugged or the session's displays change mid-read, so none may end
+    // the bar. The message keeps the call and its code for the recovery's log line.
+    try {
+        for (const DISPLAYCONFIG_PATH_INFO& path : QueryActivePaths()) {
+            paths.push_back(ReadPath(path));
+        }
+    } catch (const Win32Error& error) { throw MonitorGoneError(error.what()); }
 
     std::vector<MonitorDescription> descriptions;
     descriptions.reserve(monitors.size());

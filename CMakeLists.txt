@@ -250,14 +250,15 @@ if(BUILD_TESTING)
   # Runs the real bar against the test GlazeWM server below, so ctest runs it apart from the unit tests by its label.
   # The bar's manifest makes it per monitor DPI aware too, so every rect, column and cursor position is in the bar's
   # physical pixels.
-  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
+  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Cli.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
                                       tests/integration/GlazeWm.cpp tests/integration/Group.cpp tests/integration/Hover.cpp tests/integration/Input.cpp
-                                      tests/integration/Menu.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp tests/integration/TrayApp.cpp)
+                                      tests/integration/Menu.cpp tests/integration/Monitors.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp
+                                      tests/integration/TrayApp.cpp)
   target_link_libraries(intarsia_integration PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_include_directories(intarsia_integration PRIVATE tests)
   target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:test_glazewm_server>"
-                                                          INTARSIA_ARGV_RECORDER="$<TARGET_FILE:integration_argv_recorder>")
-  add_dependencies(intarsia_integration intarsia test_glazewm_server integration_argv_recorder)
+                                                          INTARSIA_ARGV_RECORDER="$<TARGET_FILE:integration_argv_recorder>" INTARSIA_CLI_EXE="$<TARGET_FILE:intarsia-cli>")
+  add_dependencies(intarsia_integration intarsia intarsia-cli test_glazewm_server integration_argv_recorder)
   gtest_discover_tests(intarsia_integration PROPERTIES LABELS integration)
 
   # The program the integration tests' actions and custom commands run.

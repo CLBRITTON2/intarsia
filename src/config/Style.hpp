@@ -47,12 +47,7 @@ bool IsNameCharacter(char character);
 // with.
 bool IsStyledClass(std::string_view name);
 
-// The classes one custom module declares.
-struct DeclaredClasses {
-    std::string              module;
-    std::vector<std::string> classes;
-};
-
 // Every class block under module must be one some custom module declares, so a misspelled class is an error rather
-// than a block that never applies. A module's own block checks its classes as it resolves.
-void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<DeclaredClasses>& declared);
+// than a block that never applies. declared holds every custom module's classes. A module's own block checks its
+// classes as it resolves.
+void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<std::string>& declared);

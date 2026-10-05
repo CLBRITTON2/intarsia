@@ -72,6 +72,18 @@ TEST(Edid, TreatsABlankOrUnprintableTextSerialAsNone) {
     EXPECT_EQ(ParseEdid(WithTextSerial(WithNumericSerial(BaseBlock(), 42), "AB\x1B[2J")).serial, std::optional<std::string>("42"));
 }
 
+// An id the reader makes that the config refused could be listed by intarsia-cli monitors and still never match.
+TEST(Edid, MakesOnlyIdsAConfigAccepts) {
+    const std::string longestText = MonitorId(ParseEdid(WithTextSerial(BaseBlock(), "ABCDEFGHIJ 12")));
+    EXPECT_EQ(longestText, "DEL41A8-ABCDEFGHIJ 12");
+    EXPECT_TRUE(IsMonitorId(longestText)) << longestText;
+    const std::string largestNumber = MonitorId(ParseEdid(WithNumericSerial(BaseBlock(), 0xFFFFFFFFU)));
+    EXPECT_EQ(largestNumber, "DEL41A8-4294967295");
+    EXPECT_TRUE(IsMonitorId(largestNumber)) << largestNumber;
+    const std::string noSerial = MonitorId(ParseEdid(BaseBlock()));
+    EXPECT_TRUE(IsMonitorId(noSerial)) << noSerial;
+}
+
 TEST(Edid, RefusesAShortBlockABadHeaderAndABadLetter) {
     const std::vector<std::uint8_t> edid = BaseBlock();
     EXPECT_THROW(ParseEdid(std::span(edid).first(127)), EdidError);

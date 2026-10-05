@@ -90,11 +90,11 @@ namespace {
 
     // Only the notifications that change what State shows, since the WLAN service also reports every scan.
     void WINAPI WakeOnWlanChange(PWLAN_NOTIFICATION_DATA data, PVOID linkEvent) {
-        const bool acm = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_ACM &&
+        const bool connectionChanged = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_ACM &&
             (data->NotificationCode == wlan_notification_acm_connection_complete || data->NotificationCode == wlan_notification_acm_disconnected);
-        const bool msm = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_MSM &&
+        const bool signalChanged = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_MSM &&
             (data->NotificationCode == wlan_notification_msm_signal_quality_change || data->NotificationCode == wlan_notification_msm_roaming_end);
-        if (acm || msm) {
+        if (connectionChanged || signalChanged) {
             SetEvent(linkEvent);
         }
     }
@@ -155,15 +155,15 @@ void CancelMibNotification::operator()(HANDLE notification) const {
 
 IpHelper::IpHelper(ChangeSignal& changes, bool samplesRates) :
     _changes(changes), _samplesRates(samplesRates), _linkEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(network link)")), _state(NetworkState::None()),
-    _interfaces([this] {
+    _interfaceNotification([this] {
         HANDLE notification = nullptr;
         return OwnNotification(NotifyIpInterfaceChange(AF_UNSPEC, WakeOnInterfaceChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyIpInterfaceChange");
     }()),
-    _addresses([this] {
+    _addressNotification([this] {
         HANDLE notification = nullptr;
         return OwnNotification(NotifyUnicastIpAddressChange(AF_INET, WakeOnAddressChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyUnicastIpAddressChange");
     }()),
-    _routes([this] {
+    _routeNotification([this] {
         HANDLE notification = nullptr;
         return OwnNotification(NotifyRouteChange2(AF_UNSPEC, WakeOnRouteChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyRouteChange2");
     }()),

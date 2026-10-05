@@ -40,9 +40,9 @@ class IpHelper final : public INetwork {
     mutable std::mutex _mutex;     // guards _state
     NetworkState       _state;
     // Canceled before _linkEvent closes, since their callbacks set it.
-    UniqueMibNotification _interfaces;
-    UniqueMibNotification _addresses;
-    UniqueMibNotification _routes;
+    UniqueMibNotification _interfaceNotification;
+    UniqueMibNotification _addressNotification;
+    UniqueMibNotification _routeNotification;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

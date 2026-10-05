@@ -1,5 +1,7 @@
 #include "modules/AnimatedValue.hpp"
 
+#include "bar/Box.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -66,17 +68,6 @@ namespace {
 
     float Lerp(float from, float to, float share) {
         return from + ((to - from) * share);
-    }
-
-    bool SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second) {
-        return first.r == second.r && first.g == second.g && first.b == second.b && first.a == second.a;
-    }
-
-    bool SameShadows(const std::vector<InsetShadow>& first, const std::vector<InsetShadow>& second) {
-        return std::ranges::equal(first, second, [](const InsetShadow& one, const InsetShadow& other) {
-            return one.xDips == other.xDips && one.yDips == other.yDips && one.blurDips == other.blurDips && one.spreadDips == other.spreadDips &&
-                SameColor(one.color, other.color);
-        });
     }
 
     // The shadow at index, or its partner's shape in transparent when the list is too short to hold one.
@@ -154,7 +145,7 @@ bool ColorFade::Running(std::chrono::steady_clock::time_point now) const {
 ShadowFade::ShadowFade(const std::vector<InsetShadow>& shadows) : _from(shadows), _to(shadows) {}
 
 void ShadowFade::Retarget(const std::vector<InsetShadow>& target, const Transition& transition, std::chrono::steady_clock::time_point now) {
-    if (SameShadows(target, _to)) {
+    if (std::ranges::equal(target, _to, SameShadow)) {
         return;
     }
     _from     = Shadows(now);

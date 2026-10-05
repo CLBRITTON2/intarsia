@@ -19,6 +19,9 @@ struct Insets {
 
 Insets ContentInsets(const BoxStyle& style);
 
+bool   SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second);
+bool   SameShadow(const InsetShadow& first, const InsetShadow& second);
+
 // Where a context's device pixels fall in DIPs: its pixels per DIP and its world transform's translation.
 struct PixelGrid {
     float pixelsPerDip;

@@ -500,8 +500,8 @@ Config LoadConfig(const std::filesystem::path& path);
 // The sections of the last layout whose minimum edgeLengthDips reaches, or the config's own lists when none does.
 const Sections<ModuleInstance>& ModulesForEdgeLength(const Config& config, float edgeLengthDips);
 
-// Whether any of bar.monitors matches monitor.
-bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& monitor);
+// Whether any of bar.monitors matches the monitor description describes.
+bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& description);
 
 // Whether any bar can show a module of kind (AnyModuleInConfig).
 bool ShowsKind(const Config& config, ModuleKind kind);

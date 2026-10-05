@@ -89,15 +89,15 @@ std::optional<size_t> HoveredItem::Get() const {
     return _item;
 }
 
-void ItemFades::Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hovered, std::chrono::steady_clock::time_point now) {
+void ItemFades::Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hover, std::chrono::steady_clock::time_point now) {
     if (_fades.size() > styles.size()) {
         _fades.erase(_fades.begin() + static_cast<std::ptrdiff_t>(styles.size()), _fades.end());
     }
     for (size_t index = 0; index < styles.size(); ++index) {
         const ItemStyle&   style      = *styles[index];
-        const bool         isHovered  = hovered.Is(index);
-        const D2D1_COLOR_F background = isHovered ? style.hoverBackground : style.background;
-        const D2D1_COLOR_F text       = isHovered ? style.hoverColor : style.color;
+        const bool         hovered    = hover.Is(index);
+        const D2D1_COLOR_F background = hovered ? style.hoverBackground : style.background;
+        const D2D1_COLOR_F text       = hovered ? style.hoverColor : style.color;
         if (index == _fades.size()) {
             _fades.push_back(Fade{
                 .background = ColorFade(background),

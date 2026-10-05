@@ -101,6 +101,6 @@ class App {
     std::unique_ptr<ShellNotifyIcon> _tray;
     // Every monitor present when the bars were built, shown or not, compared on WM_DISPLAYCHANGE.
     std::vector<BarPlacement>         _placements;
-    std::vector<MonitorDescription>   _monitors;
+    std::vector<MonitorDescription>   _monitorDescriptions;
     std::vector<std::unique_ptr<Bar>> _bars;
 };

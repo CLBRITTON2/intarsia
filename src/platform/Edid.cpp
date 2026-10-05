@@ -13,14 +13,14 @@ namespace {
 
     constexpr size_t                      kBaseBlockBytes = 128;
     constexpr std::array<std::uint8_t, 8> kHeader{0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
-    constexpr size_t                      kFirstDescriptor  = 54;
-    constexpr size_t                      kDescriptorBytes  = 18;
-    constexpr size_t                      kDescriptorCount  = 4;
-    constexpr size_t                      kDescriptorText   = 5;
-    constexpr std::uint8_t                kSerialDescriptor = 0xFF;
-    constexpr std::uint8_t                kTextEnd          = 0x0A;
-    constexpr size_t                      kModelLetters     = 3;
-    constexpr size_t                      kModelLength      = 7;
+    constexpr size_t                      kFirstDescriptorOffset = 54;
+    constexpr size_t                      kDescriptorBytes       = 18;
+    constexpr size_t                      kDescriptorCount       = 4;
+    constexpr size_t                      kDescriptorTextOffset  = 5;
+    constexpr std::uint8_t                kSerialDescriptor      = 0xFF;
+    constexpr std::uint8_t                kTextEnd               = 0x0A;
+    constexpr size_t                      kModelLetters          = 3;
+    constexpr size_t                      kModelLength           = 7;
     // The longest descriptor text, past the decimal digits of a 32-bit serial.
     constexpr size_t kMaxSerialLength = 13;
 
@@ -32,7 +32,7 @@ namespace {
     // none, so nothing a monitor sends reaches a log or a config unescaped.
     std::optional<std::string> DescriptorText(std::span<const std::uint8_t> descriptor) {
         std::string text;
-        for (const std::uint8_t byte : descriptor.subspan(kDescriptorText)) {
+        for (const std::uint8_t byte : descriptor.subspan(kDescriptorTextOffset)) {
             if (byte == kTextEnd) {
                 break;
             }
@@ -49,7 +49,7 @@ namespace {
     // Each of the four 18-byte descriptors that starts with three zero bytes is a display descriptor tagged by its fourth.
     std::optional<std::string> TaggedText(std::span<const std::uint8_t> edid, std::uint8_t tag) {
         for (size_t index = 0; index < kDescriptorCount; ++index) {
-            const std::span<const std::uint8_t> descriptor = edid.subspan(kFirstDescriptor + (index * kDescriptorBytes), kDescriptorBytes);
+            const std::span<const std::uint8_t> descriptor = edid.subspan(kFirstDescriptorOffset + (index * kDescriptorBytes), kDescriptorBytes);
             if (descriptor[0] == 0 && descriptor[1] == 0 && descriptor[2] == 0 && descriptor[3] == tag) {
                 return DescriptorText(descriptor);
             }

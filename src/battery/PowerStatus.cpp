@@ -115,8 +115,8 @@ namespace {
 
 PowerStatus::PowerStatus(ChangeSignal& changes) :
     _changes(changes), _wakeEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(battery wake)")),
-    _powerSource(RegisterWake(GUID_ACDC_POWER_SOURCE, _wakeEvent.get(), "PowerSettingRegisterNotification(GUID_ACDC_POWER_SOURCE)")),
-    _percentRemaining(RegisterWake(GUID_BATTERY_PERCENTAGE_REMAINING, _wakeEvent.get(), "PowerSettingRegisterNotification(GUID_BATTERY_PERCENTAGE_REMAINING)")),
+    _powerSourceNotification(RegisterWake(GUID_ACDC_POWER_SOURCE, _wakeEvent.get(), "PowerSettingRegisterNotification(GUID_ACDC_POWER_SOURCE)")),
+    _percentNotification(RegisterWake(GUID_BATTERY_PERCENTAGE_REMAINING, _wakeEvent.get(), "PowerSettingRegisterNotification(GUID_BATTERY_PERCENTAGE_REMAINING)")),
     _thread("battery", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 std::optional<BatteryState> PowerStatus::State() const {

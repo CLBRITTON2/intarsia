@@ -31,3 +31,23 @@ TEST(MonitorTable, ListsEachTargetUnderItsColumns) {
               "DEL41A8-7XYZ123  DELL U2720Q  DisplayPort  no       yes\n"
               "none             none         none         no       no\n");
 }
+
+TEST(MonitorTable, ReplacesControlCharactersInAName) {
+    const BarConfig bar{
+        .edge          = Edge::Top,
+        .layer         = Layer::Top,
+        .space         = Space::Reserve,
+        .thicknessDips = 32.0F,
+        .monitors      = {MonitorWithId{.id = "DEL41A8"}},
+    };
+    // An OSC sequence that would set the terminal's title.
+    const MonitorDescription hostile{
+        .monitor = nullptr,
+        .primary = true,
+        .targets = {DisplayTarget{.id = "DEL41A8", .name = "EVIL\x1B]0;owned\x07", .connection = "HDMI", .internal = false}},
+    };
+    const std::string table = MonitorTable({hostile}, bar);
+    EXPECT_EQ(table.find('\x1B'), std::string::npos) << table;
+    EXPECT_EQ(table.find('\x07'), std::string::npos) << table;
+    EXPECT_NE(table.find("EVIL\xEF\xBF\xBD]0;owned\xEF\xBF\xBD  HDMI"), std::string::npos) << table;
+}

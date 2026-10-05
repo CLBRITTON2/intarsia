@@ -27,6 +27,6 @@ struct MonitorDescription {
 // Every monitor's handle, in Windows' order.
 std::vector<HMONITOR> ListMonitors();
 
-// Each monitor's targets from the active display paths and their EDIDs. Throws MonitorGoneError when a monitor goes
-// while it is read.
+// Each monitor's targets from the active display paths and their EDIDs. Every failure throws MonitorGoneError, since
+// any of them can come from a monitor that goes or a display change while it is read.
 std::vector<MonitorDescription> DescribeMonitors(const std::vector<HMONITOR>& monitors);

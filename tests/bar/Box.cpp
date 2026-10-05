@@ -22,42 +22,68 @@ namespace {
         .offsetY      = 0.0f,
     };
 
-    constexpr std::uint32_t kDrawnWidth  = 60;
-    constexpr std::uint32_t kDrawnHeight = 30;
+    constexpr std::uint32_t            kCanvasWidth = 100;
+    constexpr std::uint32_t            kDrawnWidth  = 60;
+    constexpr std::uint32_t            kDrawnHeight = 30;
 
-    // style's box filling a clear 96 DPI bitmap of kDrawnWidth by kDrawnHeight, as premultiplied BGRA rows.
-    std::vector<std::uint8_t> DrawnPixels(const BoxStyle& style) {
-        const ComScope                                   com(ComThreading::Multi, "box test");
-        const Microsoft::WRL::ComPtr<IWICImagingFactory> imaging = CreateImagingFactory();
-        Microsoft::WRL::ComPtr<IWICBitmap>               bitmap;
-        ThrowIfFailed(imaging->CreateBitmap(kDrawnWidth, kDrawnHeight, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &bitmap), "IWICImagingFactory::CreateBitmap");
+    Microsoft::WRL::ComPtr<IWICBitmap> CreateCanvasBitmap(IWICImagingFactory* imaging) {
+        Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+        ThrowIfFailed(imaging->CreateBitmap(kCanvasWidth, kDrawnHeight, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &bitmap), "IWICImagingFactory::CreateBitmap");
+        return bitmap;
+    }
+
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> CreateCanvasContext(IWICBitmap* bitmap) {
         Microsoft::WRL::ComPtr<ID2D1Factory1> factory;
         ThrowIfFailed(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, IID_PPV_ARGS(&factory)), "D2D1CreateFactory");
         Microsoft::WRL::ComPtr<ID2D1RenderTarget> target;
-        ThrowIfFailed(factory->CreateWicBitmapRenderTarget(
-                          bitmap.Get(),
-                          D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &target),
-                      "ID2D1Factory::CreateWicBitmapRenderTarget");
+        ThrowIfFailed(
+            factory->CreateWicBitmapRenderTarget(
+                bitmap, D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &target),
+            "ID2D1Factory::CreateWicBitmapRenderTarget");
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
         ThrowIfFailed(target.As(&context), "ID2D1RenderTarget::QueryInterface(ID2D1DeviceContext)");
-        BrushCache brushes(context.Get());
-        BoxCache   boxes(context.Get());
-        context->BeginDraw();
-        context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-        DrawBox(context.Get(), brushes, boxes, D2D1::RectF(0.0f, 0.0f, static_cast<float>(kDrawnWidth), static_cast<float>(kDrawnHeight)), style,
-                D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-        ThrowIfFailed(context->EndDraw(), "ID2D1RenderTarget::EndDraw");
-        std::vector<std::uint8_t> pixels(static_cast<size_t>(kDrawnWidth) * kDrawnHeight * 4);
-        ThrowIfFailed(bitmap->CopyPixels(nullptr, kDrawnWidth * 4, static_cast<UINT>(pixels.size()), pixels.data()), "IWICBitmap::CopyPixels");
-        return pixels;
+        return context;
+    }
+
+    // A clear 96 DPI bitmap of kCanvasWidth by kDrawnHeight with one BoxCache, which every box drawn on it shares.
+    class Canvas {
+      public:
+        Canvas() :
+            _com(ComThreading::Multi, "box test"), _imaging(CreateImagingFactory()), _bitmap(CreateCanvasBitmap(_imaging.Get())), _context(CreateCanvasContext(_bitmap.Get())),
+            _brushes(_context.Get()), _boxes(_context.Get()) {}
+
+        // The canvas cleared, then style's box from its left edge, widthDips wide and as tall as the canvas, as
+        // premultiplied BGRA rows.
+        std::vector<std::uint8_t> Draw(const BoxStyle& style, float widthDips) {
+            _context->BeginDraw();
+            _context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+            DrawBox(_context.Get(), _brushes, _boxes, D2D1::RectF(0.0f, 0.0f, widthDips, static_cast<float>(kDrawnHeight)), style, D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+            ThrowIfFailed(_context->EndDraw(), "ID2D1RenderTarget::EndDraw");
+            std::vector<std::uint8_t> pixels(static_cast<size_t>(kCanvasWidth) * kDrawnHeight * 4);
+            ThrowIfFailed(_bitmap->CopyPixels(nullptr, kCanvasWidth * 4, static_cast<UINT>(pixels.size()), pixels.data()), "IWICBitmap::CopyPixels");
+            return pixels;
+        }
+
+      private:
+        ComScope                                   _com;
+        Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging;
+        Microsoft::WRL::ComPtr<IWICBitmap>         _bitmap;
+        Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
+        BrushCache                                 _brushes;
+        BoxCache                                   _boxes;
+    };
+
+    std::vector<std::uint8_t> DrawnPixels(const BoxStyle& style) {
+        Canvas canvas;
+        return canvas.Draw(style, static_cast<float>(kDrawnWidth));
     }
 
     std::uint8_t Red(const std::vector<std::uint8_t>& pixels, size_t x, size_t y) {
-        return pixels.at((((y * kDrawnWidth) + x) * 4) + 2);
+        return pixels.at((((y * kCanvasWidth) + x) * 4) + 2);
     }
 
     std::uint8_t Blue(const std::vector<std::uint8_t>& pixels, size_t x, size_t y) {
-        return pixels.at(((y * kDrawnWidth) + x) * 4);
+        return pixels.at(((y * kCanvasWidth) + x) * 4);
     }
 
     BorderSide Side(float widthDips) {
@@ -72,6 +98,25 @@ namespace {
             .padding    = {},
             .shadows    = shadows,
         };
+    }
+
+    // An unblurred shadow whose hole is the box moved down 2 and shrunk 3: rows 5 to height - 2, columns 3 to
+    // width - 4.
+    BoxStyle HardShadowed(const D2D1_COLOR_F& color) {
+        return Lined(
+            Border{
+                .top    = Side(0.0f),
+                .right  = Side(0.0f),
+                .bottom = Side(0.0f),
+                .left   = Side(0.0f),
+            },
+            {InsetShadow{
+                .xDips      = 0.0f,
+                .yDips      = 2.0f,
+                .blurDips   = 0.0f,
+                .spreadDips = 3.0f,
+                .color      = color,
+            }});
     }
 
 } // namespace
@@ -208,22 +253,7 @@ TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
 // A shadow box far longer than its edges reach, both ways, so it draws from a bitmap of both ends and one row and
 // column between: each edge of the hard shadow still lands on its own pixel.
 TEST(Box, AShadowLongerThanItsReachDrawsEachEdgeInPlace) {
-    const InsetShadow shadow{
-        .xDips      = 0.0f,
-        .yDips      = 2.0f,
-        .blurDips   = 0.0f,
-        .spreadDips = 3.0f,
-        .color      = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f),
-    };
-    const std::vector<std::uint8_t> pixels = DrawnPixels(Lined(
-        Border{
-            .top    = Side(0.0f),
-            .right  = Side(0.0f),
-            .bottom = Side(0.0f),
-            .left   = Side(0.0f),
-        },
-        {shadow}));
-    // The shadow's hole is the box moved down 2 and shrunk 3: rows 5 to 28, columns 3 to 56.
+    const std::vector<std::uint8_t> pixels = DrawnPixels(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)));
     EXPECT_GT(Red(pixels, 30, 4), 200);
     EXPECT_LT(Red(pixels, 30, 5), 50);
     EXPECT_LT(Red(pixels, 30, 28), 50);
@@ -232,4 +262,29 @@ TEST(Box, AShadowLongerThanItsReachDrawsEachEdgeInPlace) {
     EXPECT_LT(Red(pixels, 3, 15), 50);
     EXPECT_LT(Red(pixels, 56, 15), 50);
     EXPECT_GT(Red(pixels, 57, 15), 200);
+}
+
+// A cache key that ignored the shadow's color would draw the first shadow again: a fade frozen on its first frame.
+TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
+    Canvas                          canvas;
+    const std::vector<std::uint8_t> red  = canvas.Draw(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)), static_cast<float>(kDrawnWidth));
+    const std::vector<std::uint8_t> blue = canvas.Draw(HardShadowed(D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)), static_cast<float>(kDrawnWidth));
+    EXPECT_GT(Red(red, 30, 4), 200);
+    EXPECT_GT(Blue(blue, 30, 4), 200);
+    EXPECT_LT(Red(blue, 30, 4), 50);
+}
+
+// Both lengths draw from one sliced bitmap, and each still puts its far edge in place.
+TEST(Box, OneCacheDrawsOneStyleAtTwoLengthsWithEachEdgeInPlace) {
+    Canvas                          canvas;
+    const BoxStyle                  style  = HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));
+    const std::vector<std::uint8_t> narrow = canvas.Draw(style, 60.0f);
+    const std::vector<std::uint8_t> wide   = canvas.Draw(style, 100.0f);
+    EXPECT_LT(Red(narrow, 56, 15), 50);
+    EXPECT_GT(Red(narrow, 57, 15), 200);
+    EXPECT_GT(Red(wide, 2, 15), 200);
+    EXPECT_LT(Red(wide, 3, 15), 50);
+    EXPECT_LT(Red(wide, 96, 15), 50);
+    EXPECT_GT(Red(wide, 97, 15), 200);
+    EXPECT_GT(Red(wide, 50, 29), 200);
 }

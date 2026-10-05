@@ -632,7 +632,7 @@ TEST(Style, ClassBlocksMustBeOnesACustomModuleDeclares) {
     // A class block under module parses, as a custom module may declare it, and fails once no module does.
     EXPECT_THAT([] { RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {}); },
                 ConfigErrorWith("style.conf:2: module: active is not a block module holds (icon, item, hover, alert), nor a class a custom module lists"));
-    EXPECT_NO_THROW(RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {DeclaredClasses{.module = "weather", .classes = {"active"}}}));
+    EXPECT_NO_THROW(RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {"active"}));
     const StyleSheet  sheet   = WithBar("weather {\n  icon {\n    color: #00ff00\n  }\n  sunny {\n    color: #ff0000\n  }\n}\n");
     const ModuleStyle weather = ResolveModuleStyle(sheet, ResolveBarStyle(sheet), ModuleKind::Custom, "weather", {"sunny", "rainy"});
     if (weather.classes.size() != 2) {

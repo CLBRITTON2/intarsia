@@ -31,16 +31,26 @@ TEST(Ticks, ASampleIsDueOncePerIntervalWithSlackForAnEarlyTimer) {
 }
 
 TEST(Ticks, EachSpecIsFormattedOncePerSample) {
-    SampledTexts texts;
-    std::int32_t formats = 0;
-    const auto   format  = [&formats] {
+    const std::chrono::steady_clock::time_point start{std::chrono::seconds(10)};
+    SampledTexts                                texts(start);
+    std::int32_t                                samples = 0;
+    const auto                                  sample  = [&samples] { ++samples; };
+    std::int32_t                                formats = 0;
+    const auto                                  format  = [&formats] {
         ++formats;
         return std::to_wstring(formats);
     };
     EXPECT_EQ(texts.Of("{usage}", format), L"1");
-    EXPECT_EQ(texts.Of("{usage}", format), L"1");
     EXPECT_EQ(texts.Of("{ghz}", format), L"2");
-    texts.Forget();
+    texts.SampleIfDue(start + std::chrono::seconds(1), std::chrono::seconds(2), sample);
+    EXPECT_EQ(samples, 0);
+    EXPECT_EQ(texts.Of("{usage}", format), L"1");
+    texts.SampleIfDue(start + std::chrono::seconds(2), std::chrono::seconds(2), sample);
+    EXPECT_EQ(samples, 1);
     EXPECT_EQ(texts.Of("{usage}", format), L"3");
+    EXPECT_EQ(texts.Of("{usage}", format), L"3");
+    // The interval counts from the last sample, not the first.
+    texts.SampleIfDue(start + std::chrono::seconds(3), std::chrono::seconds(2), sample);
+    EXPECT_EQ(samples, 1);
     EXPECT_EQ(formats, 3);
 }

@@ -150,6 +150,7 @@ TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
     EXPECT_THAT([&] { return LoadText(Replace(kValidConfig, R"(, monitors = { "*" })", "")); }, ConfigErrorWith("bar.monitors is missing"));
     EXPECT_THAT([&] { return LoadText(withMonitors("{}")); }, ConfigErrorWith("bar.monitors is empty"));
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ConfigErrorWith("lists 'primary' twice"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "internal", "BOE0B4D", "internal" })")); }, ConfigErrorWith("bar.monitors lists 'internal' twice"));
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ConfigErrorWith("lists '*' beside other entries"));
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ConfigErrorWith("lists 'Primary', which is not"));
     EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ConfigErrorWith("intarsia-cli monitors lists each monitor's id"));
@@ -713,6 +714,7 @@ TEST(Config, DeclaredClassesAreClassNamesOfTheirOwn) {
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "two words" })")); }, ConfigErrorWith("modules.weather.classes lists 'two words', which is not a class name"));
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "alert" })")); }, ConfigErrorWith("modules.weather.classes lists 'alert', a class intarsia styles itself"));
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "sunny", "sunny" })")); }, ConfigErrorWith("modules.weather.classes lists 'sunny' twice"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "rain", "sunny", "snow", "sunny" })")); }, ConfigErrorWith("modules.weather.classes lists 'sunny' twice"));
 }
 
 TEST(Config, CounterModulesReadTheirPathAndCombine) {

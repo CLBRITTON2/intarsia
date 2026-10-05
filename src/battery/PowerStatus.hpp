@@ -36,8 +36,8 @@ class PowerStatus final : public IBattery {
     mutable std::mutex          _mutex;     // guards _state
     std::optional<BatteryState> _state;
     // Unregistered before _wakeEvent closes, since their callbacks set it.
-    UniquePowerNotification _powerSource;
-    UniquePowerNotification _percentRemaining;
+    UniquePowerNotification _powerSourceNotification;
+    UniquePowerNotification _percentNotification;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

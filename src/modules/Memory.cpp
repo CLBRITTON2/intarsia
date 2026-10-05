@@ -46,15 +46,10 @@ Memory::Memory(TextModuleConfig config) :
                    .committedBytes   = 0,
                    .commitLimitBytes = 0,
                })),
-    _usage(ReadMemoryUsage()), _sampledAt(std::chrono::steady_clock::now()) {}
+    _usage(ReadMemoryUsage()), _texts(std::chrono::steady_clock::now()) {}
 
 ModuleText Memory::Format(const std::string& spec) {
-    const auto now = std::chrono::steady_clock::now();
-    if (SampleDue(_sampledAt, now, Settings().interval)) {
-        _usage     = ReadMemoryUsage();
-        _sampledAt = now;
-        _texts.Forget();
-    }
+    _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { _usage = ReadMemoryUsage(); });
     return ModuleText{
         .icon       = Settings().icon,
         .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }),

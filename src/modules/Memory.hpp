@@ -33,9 +33,8 @@ class Memory final : public TextModule {
     explicit Memory(TextModuleConfig config);
 
   private:
-    ModuleText                            Format(const std::string& spec) override;
+    ModuleText   Format(const std::string& spec) override;
 
-    MemoryUsage                           _usage;
-    std::chrono::steady_clock::time_point _sampledAt;
-    SampledTexts                          _texts;
+    MemoryUsage  _usage;
+    SampledTexts _texts;
 };

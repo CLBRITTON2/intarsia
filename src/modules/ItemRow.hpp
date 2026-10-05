@@ -58,7 +58,7 @@ class HoveredItem {
 class ItemFades {
   public:
     // A new index starts at its style's colors, as an item that just appeared has nothing to fade from.
-    void                     Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hovered, std::chrono::steady_clock::time_point now);
+    void                     Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hover, std::chrono::steady_clock::time_point now);
     D2D1_COLOR_F             Background(size_t index, std::chrono::steady_clock::time_point now) const;
     D2D1_COLOR_F             Text(size_t index, std::chrono::steady_clock::time_point now) const;
     std::vector<InsetShadow> Shadows(size_t index, std::chrono::steady_clock::time_point now) const;

@@ -52,11 +52,11 @@ class Cpu final : public TextModule {
     explicit Cpu(TextModuleConfig config);
 
   private:
-    ModuleText                            Format(const std::string& spec) override;
-    void                                  Sample();
+    ModuleText   Format(const std::string& spec) override;
+    void         Sample();
 
-    CpuTimes                              _previous;
-    std::chrono::steady_clock::time_point _sampledAt;
+    CpuTimes     _previous;
+    SampledTexts _texts;
     // Null unless a format names their value.
     std::unique_ptr<PerformanceCounter> _baseFrequency;
     std::unique_ptr<PerformanceCounter> _performance;
@@ -67,6 +67,5 @@ class Cpu final : public TextModule {
                                   .maxCorePercent = 0,
                                   .cores          = {},
     };
-    FailureLog   _counterLog{"cpu"};
-    SampledTexts _texts;
+    FailureLog _counterLog{"cpu"};
 };

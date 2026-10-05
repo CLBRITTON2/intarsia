@@ -1,8 +1,11 @@
 #include "MonitorTable.hpp"
 
+#include "platform/Text.hpp"
+
 #include <algorithm>
 #include <array>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -12,16 +15,25 @@ namespace {
 
     using Row = std::array<std::string, kColumns>;
 
-    std::vector<Row> Rows(const std::vector<MonitorDescription>& monitors, const BarConfig& bar) {
+    // Windows takes the friendly name from the monitor's own EDID, so an escape sequence there must not reach the
+    // user's terminal. The id is already printable ASCII (platform/Edid).
+    std::string PrintableName(const DisplayTarget& target) {
+        if (!target.name.has_value()) {
+            return "none";
+        }
+        return ToUtf8(DrawableText(std::string_view(*target.name)));
+    }
+
+    std::vector<Row> Rows(const std::vector<MonitorDescription>& descriptions, const BarConfig& bar) {
         std::vector<Row> rows{Row{"id", "name", "connection", "primary", "bar"}};
-        for (const MonitorDescription& monitor : monitors) {
-            const std::string primary = monitor.primary ? "yes" : "no";
-            const std::string shown   = ShowsBarOn(bar, monitor) ? "yes" : "no";
-            if (monitor.targets.empty()) {
-                rows.push_back(Row{"none", "none", "none", primary, shown});
+        for (const MonitorDescription& description : descriptions) {
+            const std::string primaryCell = description.primary ? "yes" : "no";
+            const std::string barCell     = ShowsBarOn(bar, description) ? "yes" : "no";
+            if (description.targets.empty()) {
+                rows.push_back(Row{"none", "none", "none", primaryCell, barCell});
             }
-            for (const DisplayTarget& target : monitor.targets) {
-                rows.push_back(Row{target.id.value_or("none"), target.name.value_or("none"), target.connection, primary, shown});
+            for (const DisplayTarget& target : description.targets) {
+                rows.push_back(Row{target.id.value_or("none"), PrintableName(target), target.connection, primaryCell, barCell});
             }
         }
         return rows;
@@ -29,8 +41,8 @@ namespace {
 
 } // namespace
 
-std::string MonitorTable(const std::vector<MonitorDescription>& monitors, const BarConfig& bar) {
-    const std::vector<Row>       rows = Rows(monitors, bar);
+std::string MonitorTable(const std::vector<MonitorDescription>& descriptions, const BarConfig& bar) {
+    const std::vector<Row>       rows = Rows(descriptions, bar);
     std::array<size_t, kColumns> widths{};
     for (const Row& row : rows) {
         for (size_t column = 0; column < kColumns; ++column) {

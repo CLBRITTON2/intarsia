@@ -19,11 +19,13 @@ bool SampleDue(std::chrono::steady_clock::time_point sampledAt, std::chrono::ste
 // nothing.
 class SampledTexts {
   public:
-    // Drops every text, for a new sample.
-    void Forget();
-    // spec's text, from format the first time since the last Forget.
+    explicit SampledTexts(std::chrono::steady_clock::time_point sampledAt);
+    // Calls sample and drops every text when a sample is due at now (SampleDue).
+    void SampleIfDue(std::chrono::steady_clock::time_point now, std::chrono::seconds interval, const std::function<void()>& sample);
+    // spec's text, from format the first time since the last sample.
     const std::wstring& Of(const std::string& spec, const std::function<std::wstring()>& format);
 
   private:
+    std::chrono::steady_clock::time_point             _sampledAt;
     std::vector<std::pair<std::string, std::wstring>> _texts;
 };

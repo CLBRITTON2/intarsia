@@ -143,18 +143,18 @@ namespace {
     // The device enumerator, with the default device notifications of one flow registered for as long as it lives.
     class Devices {
       public:
-        Devices(CoreAudio& audio, EDataFlow flow) : _flow(flow), _client(Make<DeviceNotifications>(audio, flow)) {
+        Devices(CoreAudio& audio, EDataFlow flow) : _flow(flow), _callback(Make<DeviceNotifications>(audio, flow)) {
             ThrowIfFailed(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&_enumerator)), "CoCreateInstance(MMDeviceEnumerator)");
-            ThrowIfFailed(_enumerator->RegisterEndpointNotificationCallback(_client.Get()), "IMMDeviceEnumerator::RegisterEndpointNotificationCallback");
+            ThrowIfFailed(_enumerator->RegisterEndpointNotificationCallback(_callback.Get()), "IMMDeviceEnumerator::RegisterEndpointNotificationCallback");
         }
         ~Devices() {
-            _enumerator->UnregisterEndpointNotificationCallback(_client.Get());
+            _enumerator->UnregisterEndpointNotificationCallback(_callback.Get());
         }
         Devices(const Devices&)            = delete;
         Devices& operator=(const Devices&) = delete;
 
         // The default device's control, or null when the system has no device of the flow.
-        std::unique_ptr<Endpoint> DefaultDevice(CoreAudio& audio) const {
+        std::unique_ptr<Endpoint> DefaultEndpoint(CoreAudio& audio) const {
             ComPtr<IMMDevice> device;
             const HRESULT     found = _enumerator->GetDefaultAudioEndpoint(_flow, eConsole, &device);
             if (found == E_NOTFOUND) {
@@ -166,7 +166,7 @@ namespace {
 
       private:
         EDataFlow                     _flow;
-        ComPtr<IMMNotificationClient> _client;
+        ComPtr<IMMNotificationClient> _callback;
         ComPtr<IMMDeviceEnumerator>   _enumerator;
     };
 
@@ -236,18 +236,18 @@ void CoreAudio::Run(HANDLE stopEvent) {
     }
     std::unique_ptr<Devices>    devices;
     std::unique_ptr<Endpoint>   endpoint;
-    bool                        attach  = true;
-    bool                        failing = false;
+    bool                        attachDue = true;
+    bool                        failing   = false;
     const std::array<HANDLE, 3> waits{stopEvent, _deviceEvent.get(), _requestEvent.get()};
     while (true) {
-        if (attach) {
-            attach = false;
+        if (attachDue) {
+            attachDue = false;
             endpoint.reset();
             try {
                 if (devices == nullptr) {
                     devices = std::make_unique<Devices>(*this, CoreAudioFlow(_flow));
                 }
-                endpoint = devices->DefaultDevice(*this);
+                endpoint = devices->DefaultEndpoint(*this);
                 Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioDevice>(endpoint->Read()));
                 if (failing) {
                     Log(LogLevel::Info, "audio", "recovered", {{.key = "flow", .value = FlowName(_flow)}});
@@ -295,11 +295,11 @@ void CoreAudio::Run(HANDLE stopEvent) {
             } catch (const Win32Error& error) {
                 // The device most likely went away mid-change, so the request is dropped and the device read again.
                 Log(LogLevel::Warning, "audio", "change_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}});
-                attach = true;
+                attachDue = true;
             }
             continue;
         }
         // The default device changed or the retry wait ran out.
-        attach = true;
+        attachDue = true;
     }
 }

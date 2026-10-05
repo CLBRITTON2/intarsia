@@ -426,6 +426,15 @@ namespace {
         const BlockShape*                 classes = nullptr;
     };
 
+    constexpr BlockShape PropertiesOnly(std::span<const std::string_view> properties) {
+        return BlockShape{
+            .properties = properties,
+            .blocks     = {},
+            .animated   = {},
+            .classes    = nullptr,
+        };
+    }
+
     constexpr std::array<std::string_view, 2>  kColors{"color", "background"};
     constexpr std::array<std::string_view, 1>  kColor{"color"};
     constexpr std::array<std::string_view, 1>  kBackground{"background"};
@@ -446,42 +455,17 @@ namespace {
     constexpr std::array<std::string_view, 6>  kIconProperties{"font", "size", "color", "margin-right", "rotate", "transition"};
     constexpr std::array<std::string_view, 4>  kDefaultIconProperties{"font", "size", "color", "margin-right"};
 
-    constexpr BlockShape                       kBar{
-                              .properties = kBarProperties,
-                              .blocks     = {},
+    constexpr BlockShape                       kBar       = PropertiesOnly(kBarProperties);
+    constexpr BlockShape                       kSection   = PropertiesOnly(kSectionProperties);
+    constexpr BlockShape                       kTooltip   = PropertiesOnly(kTooltipProperties);
+    constexpr BlockShape                       kScrollbar = PropertiesOnly(kScrollbarProperties);
+    constexpr BlockShape                       kItemHover = PropertiesOnly(kColors);
+    constexpr std::array<ChildBlock, 1>        kMenuActiveBlocks{{{.key = "hover", .shape = &kItemHover}}};
+    constexpr BlockShape                       kMenuActive{
+                              .properties = kMenuItemProperties,
+                              .blocks     = kMenuActiveBlocks,
                               .animated   = {},
                               .classes    = nullptr,
-    };
-    constexpr BlockShape kSection{
-        .properties = kSectionProperties,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr BlockShape kTooltip{
-        .properties = kTooltipProperties,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr BlockShape kScrollbar{
-        .properties = kScrollbarProperties,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr BlockShape kItemHover{
-        .properties = kColors,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr std::array<ChildBlock, 1> kMenuActiveBlocks{{{.key = "hover", .shape = &kItemHover}}};
-    constexpr BlockShape                kMenuActive{
-                       .properties = kMenuItemProperties,
-                       .blocks     = kMenuActiveBlocks,
-                       .animated   = {},
-                       .classes    = nullptr,
     };
     constexpr std::array<ChildBlock, 2> kMenuItemBlocks{{{.key = "hover", .shape = &kItemHover}, {.key = "active", .shape = &kMenuActive}}};
     constexpr BlockShape                kMenuItem{
@@ -504,12 +488,7 @@ namespace {
         .animated   = kRotate,
         .classes    = nullptr,
     };
-    constexpr BlockShape kDefaultIcon{
-        .properties = kDefaultIconProperties,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
+    constexpr BlockShape kDefaultIcon = PropertiesOnly(kDefaultIconProperties);
     constexpr BlockShape kItemState{
         .properties = kItemProperties,
         .blocks     = {},
@@ -527,37 +506,16 @@ namespace {
                        .animated   = kColors,
                        .classes    = nullptr,
     };
-    constexpr BlockShape kHover{
-        .properties = kBackground,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr BlockShape kAlert{
-        .properties = kColor,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr BlockShape kStateIcon{
-        .properties = kColor,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
-    constexpr std::array<ChildBlock, 1> kStateBlocks{{{.key = "icon", .shape = &kStateIcon}}};
+    constexpr BlockShape                kHover     = PropertiesOnly(kBackground);
+    constexpr BlockShape                kColorOnly = PropertiesOnly(kColor);
+    constexpr std::array<ChildBlock, 1> kStateBlocks{{{.key = "icon", .shape = &kColorOnly}}};
     constexpr BlockShape                kState{
                        .properties = kColor,
                        .blocks     = kStateBlocks,
                        .animated   = {},
                        .classes    = nullptr,
     };
-    constexpr BlockShape kExpandedIcon{
-        .properties = kRotate,
-        .blocks     = {},
-        .animated   = {},
-        .classes    = nullptr,
-    };
+    constexpr BlockShape                kExpandedIcon = PropertiesOnly(kRotate);
     constexpr std::array<ChildBlock, 1> kExpandedBlocks{{{.key = "icon", .shape = &kExpandedIcon}}};
     constexpr BlockShape                kExpanded{
                        .properties = {},
@@ -568,7 +526,7 @@ namespace {
     constexpr std::array<ChildBlock, 8> kModuleBlocks{{{.key = "icon", .shape = &kIcon},
                                                        {.key = "item", .shape = &kItem},
                                                        {.key = "hover", .shape = &kHover},
-                                                       {.key = "alert", .shape = &kAlert},
+                                                       {.key = "alert", .shape = &kColorOnly},
                                                        {.key = "warning", .shape = &kState},
                                                        {.key = "critical", .shape = &kState},
                                                        {.key = "muted", .shape = &kState},
@@ -581,7 +539,7 @@ namespace {
     };
     // The module block styles every module, so it holds nothing only a tray, a group, a battery or an audio module draws.
     constexpr std::array<ChildBlock, 4> kDefaultModuleBlocks{
-        {{.key = "icon", .shape = &kDefaultIcon}, {.key = "item", .shape = &kItem}, {.key = "hover", .shape = &kHover}, {.key = "alert", .shape = &kAlert}}};
+        {{.key = "icon", .shape = &kDefaultIcon}, {.key = "item", .shape = &kItem}, {.key = "hover", .shape = &kHover}, {.key = "alert", .shape = &kColorOnly}}};
     constexpr BlockShape kDefaultModule{
         .properties = kModuleProperties,
         .blocks     = kDefaultModuleBlocks,
@@ -589,18 +547,13 @@ namespace {
         .classes    = &kState,
     };
 
-    struct TopBlock {
-        std::string_view  key;
-        const BlockShape* shape;
-    };
+    constexpr std::array<ChildBlock, 5> kTopBlocks{{{.key = "bar", .shape = &kBar},
+                                                    {.key = "section", .shape = &kSection},
+                                                    {.key = "module", .shape = &kDefaultModule},
+                                                    {.key = "tooltip", .shape = &kTooltip},
+                                                    {.key = "menu", .shape = &kMenu}}};
 
-    constexpr std::array<TopBlock, 5> kTopBlocks{{{.key = "bar", .shape = &kBar},
-                                                  {.key = "section", .shape = &kSection},
-                                                  {.key = "module", .shape = &kDefaultModule},
-                                                  {.key = "tooltip", .shape = &kTooltip},
-                                                  {.key = "menu", .shape = &kMenu}}};
-
-    bool                              IsBlock(const StyleNode& node) {
+    bool                                IsBlock(const StyleNode& node) {
         return node.value.empty();
     }
 
@@ -626,15 +579,15 @@ namespace {
 
     void CheckBlock(const StyleNode& block, const BlockShape& shape, std::string_view path, std::string_view source) {
         for (const StyleNode& child : block.children) {
-            const bool property = std::ranges::find(shape.properties, child.key) != shape.properties.end();
-            const auto nested   = std::ranges::find(shape.blocks, child.key, &ChildBlock::key);
-            const bool isClass  = nested == shape.blocks.end() && shape.classes != nullptr && !IsStyledClass(child.key);
-            const auto where    = PathOf(path, child.key);
+            const bool property   = std::ranges::find(shape.properties, child.key) != shape.properties.end();
+            const auto nested     = std::ranges::find(shape.blocks, child.key, &ChildBlock::key);
+            const bool classBlock = nested == shape.blocks.end() && shape.classes != nullptr && !IsStyledClass(child.key);
+            const auto where      = PathOf(path, child.key);
             if (IsBlock(child)) {
                 if (property) {
                     throw StyleError(source, child.line, std::format("{}: {} is a property, written as {}: value", path, child.key, child.key));
                 }
-                if (nested == shape.blocks.end() && !isClass) {
+                if (nested == shape.blocks.end() && !classBlock) {
                     throw StyleError(
                         source, child.line,
                         std::format("{}: {} is not a block {} holds, which are: {}", path, child.key, path,
@@ -668,18 +621,18 @@ namespace {
     // Past the deepest block any shape holds, so the passes that recurse once per level stay shallow.
     constexpr size_t kMaxLevels = 8;
 
-    // What a selector starts with, and what joins its parts after a name. None is a name character.
+    // What a selector starts with, and what can follow a name in one. None is a name character.
     constexpr std::string_view kSelectorCharacters = ".#*:[>,~+";
-    constexpr std::string_view kCombinators        = ".*[>,~+";
+    constexpr std::string_view kSelectorSyntax     = ".*[>,~+";
 
-    // Reads style.conf's blocks (key { ... }) and properties (key: value), counting lines for its errors. The format
+    // Parses style.conf's blocks (key { ... }) and properties (key: value), counting lines for its errors. The format
     // looks enough like CSS that users write CSS in it, so each CSS habit it does not take is refused by name.
-    class TreeReader {
+    class TreeParser {
       public:
-        TreeReader(std::string_view text, std::string_view source) : _text(text), _source(source) {}
+        TreeParser(std::string_view text, std::string_view source) : _text(text), _source(source) {}
 
-        std::vector<StyleNode> Read() {
-            return ReadBlockBody(0, nullptr);
+        std::vector<StyleNode> Parse() {
+            return ParseBlockBody(0, nullptr);
         }
 
       private:
@@ -720,8 +673,9 @@ namespace {
         }
 
         // The blocks and properties up to the } that closes opener, or to the end of the text for the top level.
-        std::vector<StyleNode> ReadBlockBody(size_t level, const StyleNode* opener) {
-            std::vector<StyleNode>                            children;
+        std::vector<StyleNode> ParseBlockBody(size_t level, const StyleNode* opener) {
+            std::vector<StyleNode> children;
+            // A map, not a find over children: a block of thousands of one-line entries would make that quadratic.
             std::map<std::string, std::uint32_t, std::less<>> keyLines;
             while (true) {
                 SkipBlank();
@@ -738,7 +692,7 @@ namespace {
                     ++_at;
                     return children;
                 }
-                StyleNode node              = ReadEntry(level);
+                StyleNode node              = ParseEntry(level);
                 const auto [earlier, added] = keyLines.try_emplace(node.key, node.line);
                 if (!added) {
                     throw Error(node.line, std::format("{}: is already set on line {} of the same block", node.key, earlier->second));
@@ -748,7 +702,7 @@ namespace {
         }
 
         // One block or property, from its key.
-        StyleNode ReadEntry(size_t level) {
+        StyleNode ParseEntry(size_t level) {
             const std::uint32_t line = _line;
             RefuseCssAtKey();
             const size_t start = _at;
@@ -775,7 +729,7 @@ namespace {
                     .line     = line,
                     .children = {},
                 };
-                block.children = ReadBlockBody(level + 1, &block);
+                block.children = ParseBlockBody(level + 1, &block);
                 if (block.children.empty()) {
                     throw Error(line, std::format("{}: is an empty block: a block holds at least one block or property", key));
                 }
@@ -785,12 +739,12 @@ namespace {
                 ++_at;
                 return StyleNode{
                     .key      = key,
-                    .value    = ReadValue(key, line),
+                    .value    = ParseValue(key, line),
                     .line     = line,
                     .children = {},
                 };
             }
-            if (kCombinators.find(next) != std::string_view::npos) {
+            if (kSelectorSyntax.find(next) != std::string_view::npos) {
                 throw SelectorError(line, _text.substr(start));
             }
             throw Error(line, std::format("{}: is followed by '{}': follow a key with : and a value, or with {{ to open a block", key, CharacterAt(_text, _at)));
@@ -820,7 +774,7 @@ namespace {
         }
 
         // The value after a property's colon, which ends at a line break, a ;, its block's } or a comment.
-        std::string ReadValue(std::string_view key, std::uint32_t line) {
+        std::string ParseValue(std::string_view key, std::uint32_t line) {
             const size_t           end   = std::min({_text.find_first_of("\n;}", _at), _text.find("//", _at), _text.size()});
             const std::string_view value = Trim(_text.substr(_at, end - _at));
             _at                          = end;
@@ -844,7 +798,7 @@ namespace {
     };
 
     std::vector<StyleNode> ParseTree(std::string_view text, std::string_view source) {
-        return TreeReader(text, source).Read();
+        return TreeParser(text, source).Parse();
     }
 
     using Variables = std::map<std::string, std::string, std::less<>>;
@@ -1014,8 +968,7 @@ namespace {
         .saturation = 1.0f,
     };
 
-    Backdrop ResolveBackdrop(const StyleNode* block) {
-        const Chain chain = ChainOf({block});
+    Backdrop ResolveBackdrop(const Chain& chain) {
         if (!Read(chain, "blur", ParseSwitch, false)) {
             return kNoBackdrop;
         }
@@ -1129,7 +1082,7 @@ StyleSheet ParseStyleSheet(std::string_view text, std::string source) {
         if (!IsBlock(block)) {
             throw StyleError(sheet.source, block.line, std::format("{}: the top level holds blocks, as {} {{ ... }}", block.key, block.key));
         }
-        const auto top = std::ranges::find(kTopBlocks, block.key, &TopBlock::key);
+        const auto top = std::ranges::find(kTopBlocks, block.key, &ChildBlock::key);
         CheckBlock(block, top != kTopBlocks.end() ? *top->shape : kModule, block.key, sheet.source);
         sheet.blocks.push_back(std::move(block));
     }
@@ -1141,36 +1094,35 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     if (bar == nullptr) {
         throw ConfigError(std::format("{}: must have a bar block that sets font, size and color, as bar {{ font: Segoe UI; size: 13; color: #e0def4 }}", sheet.source));
     }
-    const StyleNode*   section   = TopLevel(sheet, "section");
-    const StyleNode*   tooltip   = TopLevel(sheet, "tooltip");
-    const StyleNode*   menu      = TopLevel(sheet, "menu");
-    const Chain        menuChain = ChainOf({menu});
-    const Chain        items     = Children(menuChain, "item");
-    const Chain        active    = Children(items, "active");
-    const D2D1_COLOR_F color     = ParseColor(Required(sheet, *bar, "color", "#e0def4").value);
-    const D2D1_COLOR_F menuColor = ResolveColor(menuChain, "color", color);
-    const Chain        scrollbar = Children(menuChain, "scrollbar");
+    const Chain        sectionChain = ChainOf({TopLevel(sheet, "section")});
+    const Chain        tooltipChain = ChainOf({TopLevel(sheet, "tooltip")});
+    const Chain        menuChain    = ChainOf({TopLevel(sheet, "menu")});
+    const Chain        items        = Children(menuChain, "item");
+    const Chain        active       = Children(items, "active");
+    const D2D1_COLOR_F color        = ParseColor(Required(sheet, *bar, "color", "#e0def4").value);
+    const D2D1_COLOR_F menuColor    = ResolveColor(menuChain, "color", color);
+    const Chain        scrollbar    = Children(menuChain, "scrollbar");
     return StyleConfig{
         .font         = ParseFamily(Required(sheet, *bar, "font", "Segoe UI").value),
         .fontSizeDips = ParsePositiveLength(Required(sheet, *bar, "size", "13").value),
         .color        = color,
         .section =
             {
-                .box      = ResolveBox(ChainOf({section})),
-                .margin   = ResolveSpacing(ChainOf({section}), "margin"),
-                .backdrop = ResolveBackdrop(section),
+                .box      = ResolveBox(sectionChain),
+                .margin   = ResolveSpacing(sectionChain, "margin"),
+                .backdrop = ResolveBackdrop(sectionChain),
             },
         .tooltip =
             {
-                .box      = ResolveBox(ChainOf({tooltip})),
-                .color    = ResolveColor(ChainOf({tooltip}), "color", color),
-                .backdrop = ResolveBackdrop(tooltip),
+                .box      = ResolveBox(tooltipChain),
+                .color    = ResolveColor(tooltipChain, "color", color),
+                .backdrop = ResolveBackdrop(tooltipChain),
             },
         .menu =
             {
                 .box           = ResolveBox(menuChain),
                 .color         = menuColor,
-                .backdrop      = ResolveBackdrop(menu),
+                .backdrop      = ResolveBackdrop(menuChain),
                 .maxWidthDips  = Read(menuChain, "max-width", ParseCap, std::nullopt),
                 .maxHeightDips = Read(menuChain, "max-height", ParseCap, std::nullopt),
                 .item          = ResolveItem(items, Children(items, "hover"), menuColor),
@@ -1243,7 +1195,7 @@ void RequireKnownModules(const StyleSheet& sheet, const std::vector<std::string>
 }
 
 bool IsReservedModuleName(std::string_view name) {
-    return name == "vars" || std::ranges::find(kTopBlocks, name, &TopBlock::key) != kTopBlocks.end();
+    return name == "vars" || std::ranges::find(kTopBlocks, name, &ChildBlock::key) != kTopBlocks.end();
 }
 
 bool IsNameCharacter(char character) {
@@ -1254,16 +1206,14 @@ bool IsStyledClass(std::string_view name) {
     return std::ranges::find(kModuleBlocks, name, &ChildBlock::key) != kModuleBlocks.end();
 }
 
-void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<DeclaredClasses>& declared) {
+void RequireDeclaredClasses(const StyleSheet& sheet, const std::vector<std::string>& declared) {
     const StyleNode* module = TopLevel(sheet, "module");
     if (module == nullptr) {
         return;
     }
     for (const StyleNode& child : module->children) {
         const bool known = std::ranges::find(kDefaultModuleBlocks, child.key, &ChildBlock::key) != kDefaultModuleBlocks.end();
-        const bool declares =
-            std::ranges::any_of(declared, [&child](const DeclaredClasses& custom) { return std::ranges::find(custom.classes, child.key) != custom.classes.end(); });
-        if (IsBlock(child) && !known && !declares) {
+        if (IsBlock(child) && !known && std::ranges::find(declared, child.key) == declared.end()) {
             throw StyleError(sheet.source, child.line,
                              std::format("module: {} is not a block module holds ({}), nor a class a custom module lists in its classes", child.key, KeysOf(kDefaultModuleBlocks)));
         }
