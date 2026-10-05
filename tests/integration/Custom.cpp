@@ -55,17 +55,21 @@ return {{
     // Large text, so glyph stems cover whole pixels in the exact color.
     std::string StyleWithRules(std::string_view rules) {
         return std::string(R"(
-bar:
+bar {
   font: Segoe UI
   size: 24
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
-  alert:
+}
+module {
+  alert {
     color: #e74c3c
+  }
+}
 )") + std::string(rules);
     }
 
@@ -74,7 +78,7 @@ module:
 TEST(Custom, DrawsTheColorOfTheClassItsJsonNames) {
     constexpr std::string_view    kTestName = "custom-class";
     const integration::RunningBar bar(kTestName, CustomConfig(R"("probe")", RecorderModule(kTestName, "probe", "json", R"("good")", R"([[{"text":"WWWW","class":"good"}]])")),
-                                      StyleWithRules("probe:\n  color: #27ae60\n  good:\n    color: #f39c12\n"));
+                                      StyleWithRules("probe {\n  color: #27ae60\n  good {\n    color: #f39c12\n  }\n}\n"));
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the class the output names never drew its color";
     EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the module's own color drew beside its class's";
 }
@@ -95,7 +99,8 @@ TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
     const std::string module = std::format(R"(probe = {{ type = "custom", command = {{ {}, "/c", {} }}, run = "continuous", output = "json", classes = {{ "one", "two" }},
                   format = "{{text}}", icon = "", interval = 2 }},)",
                                            integration::LuaString(R"(C:\Windows\System32\cmd.exe)"), integration::LuaPath(script));
-    const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module), StyleWithRules("probe:\n  one:\n    color: #27ae60\n  two:\n    color: #f39c12\n"));
+    const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module),
+                                      StyleWithRules("probe {\n  one {\n    color: #27ae60\n  }\n  two {\n    color: #f39c12\n  }\n}\n"));
 
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";
     ASSERT_TRUE(bar.Draws(kOrange, kDrawn)) << "the second line's class never drew";

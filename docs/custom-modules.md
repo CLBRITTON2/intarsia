@@ -89,15 +89,20 @@ classes = { "rain", "sun" },
 ```
 
 ```
-weather:
-  rain:
+weather {
+  rain {
     color: #60a5fa
-    icon:
+    icon {
       color: #60a5fa
-  sun:
+    }
+  }
+  sun {
     color: #facc15
-    icon:
+    icon {
       color: #facc15
+    }
+  }
+}
 ```
 
 Classes only set color. Printing a class the list doesn't have fails the run, and styling one it doesn't have is a

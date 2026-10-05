@@ -35,22 +35,28 @@ return {
 
     // Icons at 16 DIPs, the size the test icons are made at, and no transitions, so a fold is done on the next frame.
     constexpr std::string_view kStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-tray:
-  icon:
+}
+tray {
+  icon {
     size: 16
-  item:
+  }
+  item {
     padding: 4
     margin: 0 1
-    toggle:
+    toggle {
       background: #8e44ad
+    }
+  }
+}
 )";
 
     constexpr std::uint32_t    kGreen  = 0x27AE60;

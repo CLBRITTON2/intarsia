@@ -41,22 +41,27 @@ return {
     }
 
     constexpr std::string_view kStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
+}
+module {
   padding: 0 8
-  item:
+  item {
     padding: 2 6
     margin: 0 1
-    focused:
+    focused {
       color: #191724
       background: #9ccfd8
+    }
+  }
+}
 )";
 
     // The ids the test server gives the windows it lists, in its order (tests/support/GlazeWmServer.cpp).
@@ -82,20 +87,25 @@ return {
     constexpr std::uint32_t    kFocusedColor = 0x2E86C1;
 
     constexpr std::string_view kFocusedStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
-  item:
+}
+module {
+  item {
     padding: 2 6
     margin: 0 1
-    focused:
+    focused {
       background: #2e86c1
+    }
+  }
+}
 )";
 
     constexpr std::string_view kWorkspacesConfig = R"(
@@ -115,17 +125,21 @@ return {
 
     // Large text, so glyph stems cover whole pixels in the exact color.
     constexpr std::string_view kAlertStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 24
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
-  alert:
+}
+module {
+  alert {
     color: #e74c3c
+  }
+}
 )";
 
     // The test server shows the binding mode "resize" and the vertical direction while the focus index is odd.
@@ -148,59 +162,75 @@ return {
     constexpr std::uint32_t    kTilingColor = 0x2E86C1;
 
     constexpr std::string_view kModesStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 24
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-modes:
-  item:
+}
+modes {
+  item {
     background: #f39c12
-tiling:
+  }
+}
+tiling {
   background: #2e86c1
+}
 )";
 
     constexpr std::uint32_t    kEmptyColor = 0xF39C12;
 
     constexpr std::string_view kStatesStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
-  item:
+}
+module {
+  item {
     padding: 2 6
     margin: 0 1
-    empty:
+    empty {
       background: #f39c12
-    focused:
+    }
+    focused {
       background: #2e86c1
+    }
+  }
+}
 )";
 
     // A tiling module the rejecting server never gives a direction, styled so any drawing of it shows.
     constexpr std::string_view  kRejectedStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
+}
+module {
   padding: 0 8
-  item:
+  item {
     padding: 2 6
     margin: 0 1
-tiling:
+  }
+}
+tiling {
   background: #2e86c1
+}
 )";
 
     std::optional<std::int32_t> TilingSpan(const integration::RunningBar& bar) {

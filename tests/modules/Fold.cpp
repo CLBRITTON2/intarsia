@@ -15,12 +15,13 @@ namespace {
     const std::chrono::steady_clock::time_point kStart = std::chrono::steady_clock::time_point() + std::chrono::hours(1);
 
     ModuleStyle                                 GroupStyle(std::string_view blocks) {
-        const StyleSheet sheet = ParseStyleSheet("bar:\n  font: Some Font\n  size: 15\n  color: #e0def4\n" + std::string(blocks), "style.conf");
+        const StyleSheet sheet = ParseStyleSheet("bar {\n  font: Some Font\n  size: 15\n  color: #e0def4\n}\n" + std::string(blocks), "style.conf");
         return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), ModuleKind::Group, "layout", {});
     }
 
     ModuleStyle TurningStyle() {
-        return GroupStyle("layout:\n  transition: width 100ms linear\n  icon:\n    rotate: -90\n    transition: rotate 200ms linear\n  expanded:\n    icon:\n      rotate: 90\n");
+        return GroupStyle("layout {\n  transition: width 100ms linear\n  icon {\n    rotate: -90\n    transition: rotate 200ms linear\n  }\n  expanded {\n    icon {\n      "
+                          "rotate: 90\n    }\n  }\n}\n");
     }
 
 } // namespace

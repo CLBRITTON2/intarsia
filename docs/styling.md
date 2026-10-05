@@ -7,23 +7,35 @@ names the line, and saving reloads the bar.
 
 ```
 // A comment runs from // to the end of the line.
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
+}
 
-clock:
+clock {
   padding: 0 8
-  hover:
-    background: #403d52
+  hover { background: #403d52 }
+}
+
+workspaces { item { padding: 2 8; radius: 6 } }
 ```
 
-- Each line is blank, a comment, a block (`key:`) or a property (`key: value`).
-- A block's lines are indented two spaces deeper than its key. Tabs, odd indents and lines indented more than one
-  level past their block are errors. A block must hold at least one line. Blocks nest at most 8 levels deep.
+- A block is `key { ... }` and holds properties (`key: value`) and blocks. A block must hold at least one of them.
+  Blocks nest at most 8 levels deep.
+- A property ends at the end of its line, a `;` or the `}` that closes its block, so short blocks fit on one line.
+- Spaces, tabs and line breaks between entries are free. Comments are `//` to the end of the line.
 - A key appears once per block.
 - The file is at most 64 KiB, and a value is at most 1024 characters once its vars are filled in.
-- Keys are letters, digits, `_` and `-`. A value runs to the end of the line or its comment.
+- Keys are letters, digits, `_` and `-`.
+- An unclosed `{` is an error naming the line that opened it, and a `}` that closes nothing names its own line.
+
+The format is not CSS, and the CSS forms it does not take are errors that name the form to use instead:
+
+- Selectors (`.module`, `#clock`, `item:hover`, `item > hover`, `a, b`, `*`): blocks are names nested inside each
+  other, as `item { hover { ... } }`.
+- `:root`, `--name` and `var(--name)`: define values in `vars` and write them as `$name`.
+- Units on numbers (`4px`, `1em`), `!important`, at-rules (`@media`, `@import`) and `/* */` comments.
 
 ## Values
 
@@ -34,13 +46,16 @@ clock:
 - Variables: define them in the `vars` block and use them as `$name` anywhere in a value. A var can't use another var.
 
 ```
-vars:
+vars {
   accent: #60a5fa
   box: #1c1c1e 92%
+}
 
-module:
-  icon:
+module {
+  icon {
     color: $accent
+  }
+}
 ```
 
 ## Blocks
@@ -134,7 +149,7 @@ block sets a color.
 ## Example
 
 ```
-vars:
+vars {
   text: #f2f2f2
   accent: #60a5fa
   box: #1c1c1e 92%
@@ -142,68 +157,90 @@ vars:
   hover: #ffffff 10%
   red: #f87171
   yellow: #facc15
+}
 
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: $text
+}
 
-section:
+section {
   margin: 6
   padding: 3
   background: $box
   border: 1 $line
   radius: 10
   blur: on
+}
 
-tooltip:
+tooltip {
   padding: 8
   background: $box
   border: 1 $line
   radius: 8
+}
 
-module:
+module {
   padding: 0 10
   radius: 7
   transition: background 150ms ease
-  hover:
+  hover {
     background: $hover
-  icon:
+  }
+  icon {
     font: Segoe MDL2 Assets
     size: 14
     margin-right: 7
     color: $accent
-  alert:
+  }
+  alert {
     color: $red
-  item:
+  }
+  item {
     padding: 4
     radius: 5
     transition: background 150ms ease, color 150ms ease
-    hover:
+    hover {
       background: $hover
+    }
+  }
+}
 
-battery:
-  warning:
-    icon:
+battery {
+  warning {
+    icon {
       color: $yellow
-  critical:
+    }
+  }
+  critical {
     color: $red
-    icon:
+    icon {
       color: $red
+    }
+  }
+}
 
-tray:
+tray {
   transition: width 300ms ease-out
-  icon:
+  icon {
     transition: rotate 250ms ease
-  expanded:
-    icon:
+  }
+  expanded {
+    icon {
       rotate: 180
+    }
+  }
+}
 
-workspaces:
-  item:
-    focused:
+workspaces {
+  item {
+    focused {
       weight: bold
       shadow: 0 -2 0 $accent
+    }
+  }
+}
 ```
 
 `config\glazewm\style.conf` styles every module that config shows, with comments.

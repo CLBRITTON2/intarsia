@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-// One line of style.conf: a property (key: value), or a block (key:) holding the lines indented beneath it.
+// One entry of style.conf: a property (key: value), or a block (key { ... }) holding the entries between its braces.
 struct StyleNode {
     std::string            key;
     std::string            value; // $names already replaced, empty for a block
@@ -20,9 +20,9 @@ struct StyleSheet {
     std::vector<StyleNode> blocks; // every top-level block but vars, in file order
 };
 
-// Blocks of key: value lines nested by two-space indents, with // comments and $names from the vars block. Every line
-// is checked against the block it is in, and anything outside the format is a ConfigError naming the line, never a
-// line that silently does nothing.
+// Blocks (key { ... }) of properties (key: value, ended by a line break, ; or }), with // comments and $names from the
+// vars block. Every entry is checked against the block it is in, and anything outside the format is a ConfigError
+// naming the line, never an entry that silently does nothing.
 StyleSheet ParseStyleSheet(std::string_view text, std::string source);
 
 // The bar block, which must set font, size and color, and the section, tooltip and menu blocks.

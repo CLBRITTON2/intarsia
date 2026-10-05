@@ -31,20 +31,25 @@ return {
 
     // The transition makes the hover an animation, which logs its frames when it ends.
     constexpr std::string_view kModuleStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 24
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
+}
+module {
   transition: background 200ms
-probe:
+}
+probe {
   background: #27ae60
-  hover:
+  hover {
     background: #2e86c1
+  }
+}
 )";
 
     constexpr std::string_view kItemConfig = R"(
@@ -60,22 +65,27 @@ return {
 )";
 
     constexpr std::string_view kItemStyle = R"(
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: #e0def4
-section:
+}
+section {
   margin: 4
   padding: 3
   background: #191724
-module:
-  item:
+}
+module {
+  item {
     padding: 4 8
     margin: 0 2
     background: #27ae60
     transition: background 200ms
-    hover:
+    hover {
       background: #2e86c1
+    }
+  }
+}
 )";
 
     // The right section is empty, so its end has no module under it.

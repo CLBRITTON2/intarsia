@@ -104,7 +104,7 @@ Copy-Item config\windows\config.lua, config\windows\style.conf $env:USERPROFILE\
 Start-Process build\release\intarsia.exe -RedirectStandardError $env:TEMP\intarsia.log
 ```
 
-`style.conf` is indented `key: value` blocks: `bar` for the bar-wide font and color, `section` and `tooltip` for their
+`style.conf` is `key { ... }` blocks of `key: value` properties: `bar` for the bar-wide font and color, `section` and `tooltip` for their
 boxes, `module` for every module and a module's name in the config (`date`) for one, with its `icon` and `item` blocks
 inside. [Styling](docs/styling.md) lists every block. `--config <path>` reads another config and the `style.conf`
 beside it, and

@@ -30,7 +30,7 @@ namespace {
         .b = 0.0f,
         .a = 0.0f,
     };
-    constexpr std::string_view kSpace = " \r";
+    constexpr std::string_view kSpace = " \t\r";
 
     ConfigError                StyleError(std::string_view source, std::uint32_t line, std::string_view message) {
         return ConfigError(std::format("{}:{}: {}", source, line, message));
@@ -644,7 +644,7 @@ namespace {
                 continue;
             }
             if (nested != shape.blocks.end()) {
-                throw StyleError(source, child.line, std::format("{}: {} is a block, with its lines indented beneath it", path, child.key));
+                throw StyleError(source, child.line, std::format("{}: {} is a block, as {} {{ ... }}", path, child.key, child.key));
             }
             if (!property) {
                 throw StyleError(source, child.line,
@@ -665,94 +665,186 @@ namespace {
         RequireBlurForTone(block, path, source);
     }
 
-    // The last rule of the format left for once the tree is built: a block must hold something.
-    void RequireFilledBlocks(const std::vector<StyleNode>& nodes, std::string_view source) {
-        for (const StyleNode& node : nodes) {
-            if (IsBlock(node) && node.children.empty()) {
-                throw StyleError(source, node.line, std::format("{}: has no value and nothing indented beneath it", node.key));
-            }
-            RequireFilledBlocks(node.children, source);
-        }
-    }
+    // Past the deepest block any shape holds, so the passes that recurse once per level stay shallow.
+    constexpr size_t kMaxLevels = 8;
 
-    // One line's key and value, its depth from its indent.
-    struct Line {
-        std::uint32_t    number;
-        size_t           level;
-        std::string_view key;
-        std::string_view value;
+    // What a selector starts with, and what joins its parts after a name. None is a name character.
+    constexpr std::string_view kSelectorCharacters = ".#*:[>,~+";
+    constexpr std::string_view kCombinators        = ".*[>,~+";
+
+    // Reads style.conf's blocks (key { ... }) and properties (key: value), counting lines for its errors. The format
+    // looks enough like CSS that users write CSS in it, so each CSS habit it does not take is refused by name.
+    class TreeReader {
+      public:
+        TreeReader(std::string_view text, std::string_view source) : _text(text), _source(source) {}
+
+        std::vector<StyleNode> Read() {
+            return ReadBlockBody(0, nullptr);
+        }
+
+      private:
+        std::string_view _text;
+        std::string_view _source;
+        size_t           _at   = 0;
+        std::uint32_t    _line = 1;
+
+        bool             AtEnd() const {
+            return _at >= _text.size();
+        }
+
+        std::string_view Rest() const {
+            return _text.substr(_at);
+        }
+
+        ConfigError Error(std::uint32_t line, std::string_view message) const {
+            return StyleError(_source, line, message);
+        }
+
+        // Spaces, line breaks and // comments, none of which the format reads.
+        void SkipBlank() {
+            while (!AtEnd()) {
+                const char character = _text[_at];
+                if (character == '\n') {
+                    ++_line;
+                    ++_at;
+                } else if (character == ' ' || character == '\t' || character == '\r') {
+                    ++_at;
+                } else if (Rest().starts_with("//")) {
+                    _at = std::min(_text.size(), _text.find('\n', _at));
+                } else if (Rest().starts_with("/*")) {
+                    throw Error(_line, "/* */ is not a comment here: comments are // to the end of the line");
+                } else {
+                    return;
+                }
+            }
+        }
+
+        // The blocks and properties up to the } that closes opener, or to the end of the text for the top level.
+        std::vector<StyleNode> ReadBlockBody(size_t level, const StyleNode* opener) {
+            std::vector<StyleNode>                            children;
+            std::map<std::string, std::uint32_t, std::less<>> keyLines;
+            while (true) {
+                SkipBlank();
+                if (AtEnd()) {
+                    if (opener != nullptr) {
+                        throw Error(opener->line, std::format("{}: the block opened here is never closed: end it with }}", opener->key));
+                    }
+                    return children;
+                }
+                if (_text[_at] == '}') {
+                    if (opener == nullptr) {
+                        throw Error(_line, "} closes no block");
+                    }
+                    ++_at;
+                    return children;
+                }
+                StyleNode node              = ReadEntry(level);
+                const auto [earlier, added] = keyLines.try_emplace(node.key, node.line);
+                if (!added) {
+                    throw Error(node.line, std::format("{}: is already set on line {} of the same block", node.key, earlier->second));
+                }
+                children.push_back(std::move(node));
+            }
+        }
+
+        // One block or property, from its key.
+        StyleNode ReadEntry(size_t level) {
+            const std::uint32_t line = _line;
+            RefuseCssAtKey();
+            const size_t start = _at;
+            while (!AtEnd() && IsNameCharacter(_text[_at])) {
+                ++_at;
+            }
+            const std::string key(_text.substr(start, _at - start));
+            if (key.empty()) {
+                throw Error(line, std::format("'{}' cannot start a key: write letters, digits, '_' and '-'", _text[_at]));
+            }
+            SkipBlank();
+            if (AtEnd()) {
+                throw Error(line, std::format("{}: ends the file: follow it with : and a value, or with {{ to open a block", key));
+            }
+            const char next = _text[_at];
+            if (next == '{') {
+                if (level >= kMaxLevels) {
+                    throw Error(line, std::format("{}: is nested {} levels deep, and a style nests at most {}", key, level + 1, kMaxLevels));
+                }
+                ++_at;
+                StyleNode block{
+                    .key      = key,
+                    .value    = {},
+                    .line     = line,
+                    .children = {},
+                };
+                block.children = ReadBlockBody(level + 1, &block);
+                if (block.children.empty()) {
+                    throw Error(line, std::format("{}: is an empty block: a block holds at least one block or property", key));
+                }
+                return block;
+            }
+            if (next == ':') {
+                ++_at;
+                return StyleNode{
+                    .key      = key,
+                    .value    = ReadValue(key, line),
+                    .line     = line,
+                    .children = {},
+                };
+            }
+            if (kCombinators.find(next) != std::string_view::npos) {
+                throw SelectorError(line, _text.substr(start));
+            }
+            throw Error(line, std::format("{}: is followed by '{}': follow a key with : and a value, or with {{ to open a block", key, next));
+        }
+
+        // What a CSS rule or custom property starts with, in place of a key.
+        void RefuseCssAtKey() const {
+            const std::string_view rest = Rest();
+            if (rest.starts_with(":root")) {
+                throw Error(_line, ":root is CSS: define values in a vars block and write them as $name");
+            }
+            if (rest.starts_with("--")) {
+                throw Error(_line, "--name is a CSS custom property: define it in a vars block and write it as $name");
+            }
+            if (rest.starts_with('@')) {
+                const std::string_view rule = rest.substr(0, rest.find_first_of(" \t\r\n{;"));
+                throw Error(_line, std::format("{} is a CSS at-rule, and style.conf has none", rule));
+            }
+            if (kSelectorCharacters.find(rest.front()) != std::string_view::npos) {
+                throw SelectorError(_line, rest);
+            }
+        }
+
+        ConfigError SelectorError(std::uint32_t line, std::string_view from) const {
+            const std::string_view selector = Trim(from.substr(0, from.find_first_of("{\n")));
+            return Error(line, std::format("'{}' is a selector, and style.conf has none: blocks are names nested inside each other, as item {{ hover {{ ... }} }}", selector));
+        }
+
+        // The value after a property's colon, which ends at a line break, a ;, its block's } or a comment.
+        std::string ReadValue(std::string_view key, std::uint32_t line) {
+            const size_t           end   = std::min({_text.find_first_of("\n;}", _at), _text.find("//", _at), _text.size()});
+            const std::string_view value = Trim(_text.substr(_at, end - _at));
+            _at                          = end;
+            if (value.empty()) {
+                throw Error(line, std::format("{}: has no value: a property is {}: value, and a block opens with {} {{", key, key, key));
+            }
+            if (value.find('{') != std::string_view::npos) {
+                throw SelectorError(line, std::format("{}:{}", key, value));
+            }
+            if (value.find("!important") != std::string_view::npos) {
+                throw Error(line, std::format("{}: !important is CSS: a property comes from the most specific block that sets it, never from a flag", key));
+            }
+            if (value.find("var(") != std::string_view::npos) {
+                throw Error(line, std::format("{}: var() is CSS: define the value in a vars block and write it as $name", key));
+            }
+            if (!AtEnd() && _text[_at] == ';') {
+                ++_at;
+            }
+            return std::string(value);
+        }
     };
 
-    std::optional<Line> ParseLine(std::string_view raw, std::uint32_t number, std::string_view source) {
-        const std::string_view text = raw.substr(0, raw.find("//"));
-        if (text.find('\t') != std::string_view::npos) {
-            throw StyleError(source, number, "has a tab: indent by two spaces per level");
-        }
-        const std::string_view content = Trim(text);
-        if (content.empty()) {
-            return std::nullopt;
-        }
-        const size_t indent = text.find_first_not_of(' ');
-        if (indent % 2 != 0) {
-            throw StyleError(source, number, std::format("is indented by {} spaces: indent by two spaces per level", indent));
-        }
-        const size_t colon = content.find(':');
-        if (colon == std::string_view::npos) {
-            throw StyleError(source, number, std::format("'{}' must be key: value, or key: alone to open a block", content));
-        }
-        const std::string_view key = content.substr(0, colon);
-        if (key.empty() || !std::ranges::all_of(key, IsNameCharacter)) {
-            throw StyleError(source, number, std::format("'{}' is not a key: write letters, digits, '_' and '-', then a colon", key));
-        }
-        return Line{
-            .number = number,
-            .level  = indent / 2,
-            .key    = key,
-            .value  = Trim(content.substr(colon + 1)),
-        };
-    }
-
-    // Past the deepest block any shape holds, so the passes that recurse once per level stay shallow.
-    constexpr size_t       kMaxLevels = 8;
-
     std::vector<StyleNode> ParseTree(std::string_view text, std::string_view source) {
-        std::vector<StyleNode>                                 roots;
-        std::vector<std::vector<StyleNode>*>                   open{&roots}; // open[n] takes the lines at level n
-        std::vector<std::map<std::string_view, std::uint32_t>> keyLines(1);  // keyLines[n] holds open[n]'s keys by line
-        std::uint32_t                                          number = 0;
-        for (const auto piece : text | std::views::split('\n')) {
-            ++number;
-            const std::optional<Line> line = ParseLine(std::string_view(piece.begin(), piece.end()), number, source);
-            if (!line.has_value()) {
-                continue;
-            }
-            if (line->level >= open.size()) {
-                throw StyleError(source, line->number,
-                                 std::format("{}: is indented past the block above it: a block's lines sit one level deeper than its key, and a property holds none", line->key));
-            }
-            if (line->level >= kMaxLevels) {
-                throw StyleError(source, line->number, std::format("{}: is nested {} levels deep, and a style nests at most {}", line->key, line->level + 1, kMaxLevels));
-            }
-            open.resize(line->level + 1);
-            keyLines.resize(line->level + 1);
-            const auto [earlier, added] = keyLines.back().try_emplace(line->key, line->number);
-            if (!added) {
-                throw StyleError(source, line->number, std::format("{}: is already set on line {} of the same block", line->key, earlier->second));
-            }
-            std::vector<StyleNode>& siblings = *open.back();
-            siblings.push_back(StyleNode{
-                .key      = std::string(line->key),
-                .value    = std::string(line->value),
-                .line     = line->number,
-                .children = {},
-            });
-            if (line->value.empty()) {
-                open.push_back(&siblings.back().children);
-                keyLines.emplace_back();
-            }
-        }
-        RequireFilledBlocks(roots, source);
-        return roots;
+        return TreeReader(text, source).Read();
     }
 
     using Variables = std::map<std::string, std::string, std::less<>>;
@@ -795,7 +887,7 @@ namespace {
             if (found == variables.end()) {
                 throw StyleError(source, property.line,
                                  name.empty() ? std::format("{}: $ must be followed by the name of a var", property.key) :
-                                                std::format("{}: ${} names no var: define it in vars, as vars:\n  {}: #e0def4", property.key, name, name));
+                                                std::format("{}: ${} names no var: define it in vars, as vars {{ {}: #e0def4 }}", property.key, name, name));
             }
             value += std::string_view(property.value).substr(start, dollar - start);
             value += found->second;
@@ -1035,7 +1127,7 @@ StyleSheet ParseStyleSheet(std::string_view text, std::string source) {
             continue;
         }
         if (!IsBlock(block)) {
-            throw StyleError(sheet.source, block.line, std::format("{}: the top level holds blocks, as {}: with its lines indented beneath it", block.key, block.key));
+            throw StyleError(sheet.source, block.line, std::format("{}: the top level holds blocks, as {} {{ ... }}", block.key, block.key));
         }
         const auto top = std::ranges::find(kTopBlocks, block.key, &TopBlock::key);
         CheckBlock(block, top != kTopBlocks.end() ? *top->shape : kModule, block.key, sheet.source);
@@ -1047,7 +1139,7 @@ StyleSheet ParseStyleSheet(std::string_view text, std::string source) {
 StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     const StyleNode* bar = TopLevel(sheet, "bar");
     if (bar == nullptr) {
-        throw ConfigError(std::format("{}: must have a bar block that sets font, size and color, as bar:\n  font: Segoe UI\n  size: 13\n  color: #e0def4", sheet.source));
+        throw ConfigError(std::format("{}: must have a bar block that sets font, size and color, as bar {{ font: Segoe UI; size: 13; color: #e0def4 }}", sheet.source));
     }
     const StyleNode*   section   = TopLevel(sheet, "section");
     const StyleNode*   tooltip   = TopLevel(sheet, "tooltip");

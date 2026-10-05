@@ -448,16 +448,18 @@ return {
 # the bar).
 function New-SoakStyle([string] $path, [string[]] $optional) {
     $style = @'
-vars:
+vars {
   foreground: #e0def4
   border: #6e6a86 25%
+}
 
-bar:
+bar {
   font: Segoe UI
   size: 13
   color: $foreground
+}
 
-section:
+section {
   margin: 4
   padding: 3
   background: #191724 90%
@@ -467,65 +469,85 @@ section:
   blur: on
   brightness: 0.8
   saturate: 1.4
+}
 
-tooltip:
+tooltip {
   padding: 6
   background: #1f1d2e 90%
   border: 1 $border
   radius: 10
   blur: on
+}
 
-menu:
+menu {
   padding: 4
   background: #1f1d2e 90%
   border: 1 $border
   radius: 10
   blur: on
+}
 
-module:
+module {
   padding: 0 8
   radius: 8
-  hover:
+  hover {
     background: #403d52 80%
-  icon:
+  }
+  icon {
     size: 16
     margin-right: 6
     color: #c4a7e7
-  alert:
+  }
+  alert {
     color: #eb6f92
-  item:
+  }
+  item {
     padding: 2 6
     margin: 0 1
     radius: 8
-    focused:
+    focused {
       color: #191724
       background: #9ccfd8
       weight: bold
       shadow: 0 1 1 #ffffff 35%, 0 -1 1 #000000 25%
-    empty:
+    }
+    empty {
       color: #908caa
+    }
+  }
+}
 
-stats:
+stats {
   border-right: 1 $border
   transition: width 300ms ease-out
-  icon:
+  icon {
     transition: rotate 200ms ease
-  expanded:
-    icon:
+  }
+  expanded {
+    icon {
       rotate: 90
+    }
+  }
+}
 '@
     if ('tray' -in $optional) {
         $style += "`n" + @'
-tray:
+tray {
   transition: width 300ms ease-out
-  icon:
+  icon {
     transition: rotate 200ms ease
-  expanded:
-    icon:
+  }
+  expanded {
+    icon {
       rotate: 180
-  item:
-    toggle:
+    }
+  }
+  item {
+    toggle {
       padding: 2 10
+    }
+  }
+}
 '@
     }
     [System.IO.File]::WriteAllText($path, $style)

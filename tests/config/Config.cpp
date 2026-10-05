@@ -34,10 +34,11 @@ return {
 )lua";
 
     constexpr std::string_view kValidStyle = R"(
-bar:
+bar {
   font: Some Font
   size: 15
   color: #e0def4
+}
 )";
 
     // A config and a style.conf beside it in a directory that deletes itself, so each case runs LoadConfig on real files.
@@ -149,7 +150,7 @@ TEST(Config, MissingStyleIsAnError) {
 }
 
 TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
-    const Config       config = LoadStyled(kValidConfig, std::string(kValidStyle) + "time:\n  color: #ff0000\n  icon:\n    color: #00ff00\n");
+    const Config       config = LoadStyled(kValidConfig, std::string(kValidStyle) + "time {\n  color: #ff0000\n  icon {\n    color: #00ff00\n  }\n}\n");
     const ModuleStyle& time   = config.modules.center.at(0).style;
     EXPECT_FLOAT_EQ(time.color.r, 1.0f);
     EXPECT_FLOAT_EQ(time.icon.color.g, 1.0f);
@@ -158,12 +159,12 @@ TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
 }
 
 TEST(Config, StyleIdsMustNameADefinedModule) {
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie:\n  color: #ff0000\n"); }, ConfigErrorWith("style.conf:6: tmie: names no module"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie {\n  color: #ff0000\n}\n"); }, ConfigErrorWith("style.conf:7: tmie: names no module"));
 }
 
 TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "\nmodule:\n  colour: #ff0000\n"); },
-                ConfigErrorWith("style.conf:8: module: colour is not a property"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "\nmodule {\n  colour: #ff0000\n}\n"); },
+                ConfigErrorWith("style.conf:9: module: colour is not a property"));
 }
 
 TEST(Config, AModuleMayNotTakeTheNameOfAStyleBlock) {
@@ -297,7 +298,7 @@ TEST(Config, AGroupReadsItsIconAndItsMembersInOrder) {
 }
 
 TEST(Config, AGroupsMembersAreStyledByTheirOwnNames) {
-    const Config config = LoadStyled(WithGroup(kGroup), std::string(kValidStyle) + "cpu:\n  color: #ff0000\n");
+    const Config config = LoadStyled(WithGroup(kGroup), std::string(kValidStyle) + "cpu {\n  color: #ff0000\n}\n");
     EXPECT_FLOAT_EQ(SettingsOf<GroupConfig>(config.modules.right, 0).members.at(0).style.color.r, 1.0f);
 }
 
@@ -355,7 +356,7 @@ TEST(Config, TheConfigsWalksReachAGroupsMembers) {
 TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
     const std::string config = WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "weather" })") + R"(
         weather = { type = "custom", command = { "cmd" }, run = "interval", timeout = 5, output = "json", classes = { "sunny" }, format = "{text}", icon = "", interval = 30 },)");
-    EXPECT_NO_THROW(LoadStyled(config, std::string(kValidStyle) + "weather:\n  sunny:\n    color: #ff0000\n"));
+    EXPECT_NO_THROW(LoadStyled(config, std::string(kValidStyle) + "weather {\n  sunny {\n    color: #ff0000\n  }\n}\n"));
 }
 
 TEST(Config, TheLastLayoutAnEdgeReachesReplacesTheLists) {
@@ -627,9 +628,10 @@ namespace {
 } // namespace
 
 TEST(Config, DeclaredClassesColorTheirCustomModule) {
-    const Config       config = LoadStyled(WithWeather(R"({ "sunny", "rain" })"),
-                                           std::string(kValidStyle) + "weather:\n  sunny:\n    color: #ff0000\n    icon:\n      color: #00ff00\nmodule:\n  rain:\n    color: #0000ff\n");
-    const ModuleStyle& style  = config.modules.right.at(0).style;
+    const Config config = LoadStyled(
+        WithWeather(R"({ "sunny", "rain" })"),
+        std::string(kValidStyle) + "weather {\n  sunny {\n    color: #ff0000\n    icon {\n      color: #00ff00\n    }\n  }\n}\nmodule {\n  rain {\n    color: #0000ff\n  }\n}\n");
+    const ModuleStyle& style = config.modules.right.at(0).style;
     ASSERT_EQ(style.classes.size(), 2u);
     EXPECT_EQ(style.classes[0].name, "sunny");
     EXPECT_FLOAT_EQ(style.classes[0].colors.text.r, 1.0f);
@@ -640,14 +642,14 @@ TEST(Config, DeclaredClassesColorTheirCustomModule) {
 }
 
 TEST(Config, AClassNoCustomModuleDeclaresIsAnError) {
-    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather:\n  snowy:\n    color: #ff0000\n"); },
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather {\n  snowy {\n    color: #ff0000\n  }\n}\n"); },
                 ConfigErrorWith("weather: snowy is not a block a module holds"));
-    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "module:\n  snowy:\n    color: #ff0000\n"); },
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "module {\n  snowy {\n    color: #ff0000\n  }\n}\n"); },
                 ConfigErrorWith("module: snowy is not a block module holds"));
     // Declared by the weather module, but the block names a clock.
-    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "time:\n  sunny:\n    color: #ff0000\n"); },
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "time {\n  sunny {\n    color: #ff0000\n  }\n}\n"); },
                 ConfigErrorWith("time: sunny is not a block a module holds"));
-    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather:\n  sunny:\n    item:\n      color: #ff0000\n"); },
+    EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather {\n  sunny {\n    item {\n      color: #ff0000\n    }\n  }\n}\n"); },
                 ConfigErrorWith("weather > sunny: item is not a block weather > sunny holds, which are: icon"));
 }
 
