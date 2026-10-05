@@ -5,20 +5,42 @@
 #include "platform/Console.hpp"
 #include "platform/Monitors.hpp"
 #include "platform/Process.hpp"
+#include "platform/Text.hpp"
 
 #include <windows.h>
 
 #include <exception>
+#include <filesystem>
 #include <format>
+#include <stdexcept>
 #include <string>
+
+namespace {
+
+    std::string Check(const std::filesystem::path& configPath) {
+        LoadConfig(configPath);
+        return std::format("{} and {} load\n", ToUtf8(configPath.wstring()), ToUtf8(StylePath(configPath).wstring()));
+    }
+
+    std::string Monitors(const std::filesystem::path& configPath) {
+        return MonitorTable(DescribeMonitors(ListMonitors()), LoadConfig(configPath).bar);
+    }
+
+    std::string Run(const CliOptions& options) {
+        switch (options.command) {
+            case CliCommand::Check: return Check(options.configPath);
+            case CliCommand::Monitors: return Monitors(options.configPath);
+        }
+        throw std::logic_error("unhandled CliCommand");
+    }
+
+} // namespace
 
 // A console program beside the GUI bar, since a shell waits only for a console program and prints its output in order.
 int wmain() { // NOLINT(misc-use-internal-linkage)
     try {
         RestrictDllSearchToSystem32();
-        const CliOptions options = ParseCliOptions(CommandLineArguments(), DefaultConfigPath());
-        const Config     config  = LoadConfig(options.configPath);
-        WriteUtf8(GetStdHandle(STD_OUTPUT_HANDLE), MonitorTable(DescribeMonitors(ListMonitors()), config.bar));
+        WriteUtf8(GetStdHandle(STD_OUTPUT_HANDLE), Run(ParseCliOptions(CommandLineArguments(), DefaultConfigPath())));
         return 0;
     } catch (const CliOptionsError& error) {
         WriteUtf8(GetStdHandle(STD_ERROR_HANDLE), std::format("{}\n{}\n", error.what(), kCliUsage));

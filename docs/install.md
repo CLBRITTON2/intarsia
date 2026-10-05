@@ -66,6 +66,7 @@ is. Check `CHANGELOG.md` for changed settings first.
 
 | Command | Effect |
 | --- | --- |
+| `intarsia-cli check [--config <path>]` | Load the config and its `style.conf` as the bar would, and print the first error. |
 | `intarsia-cli monitors [--config <path>]` | Print each monitor's id and whether the config gives it a bar (see [Configuration](configuration.md#monitors)). |
 
 It exits with 0 on success, 1 when the config cannot load and 2 on a usage error.
@@ -74,7 +75,8 @@ It exits with 0 on success, 1 when the config cannot load and 2 on a usage error
 
 **An error box appears.** The config or style has a mistake, and the message names the file and line. The bar is
 strict: a missing key, an unknown key, a module listed but not defined, a module defined but not shown, or a property
-a block doesn't take all stop it. A bad save while it runs also stops it, so fix the file and start it again.
+a block doesn't take all stop it. A bad save while it runs also stops it, so fix the file and start it again. To
+try an edit first, save it to a copy beside a copy of `style.conf` and run `intarsia-cli check --config <copy>`.
 
 **Nothing appears.** Check `Get-Process intarsia`, then the end of the log:
 

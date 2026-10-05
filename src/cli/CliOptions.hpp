@@ -7,9 +7,11 @@
 #include <string_view>
 #include <vector>
 
-constexpr std::string_view kCliUsage = "usage: intarsia-cli monitors [--config <path>]";
+constexpr std::string_view kCliUsage = "usage: intarsia-cli check [--config <path>]\n"
+                                       "       intarsia-cli monitors [--config <path>]";
 
 enum class CliCommand : std::uint8_t {
+    Check,   // load the config and its style as the bar would, and report the first error
     Monitors // print each monitor's id and whether the config gives it a bar
 };
 
