@@ -757,7 +757,7 @@ namespace {
             }
             const std::string key(_text.substr(start, _at - start));
             if (key.empty()) {
-                throw Error(line, std::format("'{}' cannot start a key: write letters, digits, '_' and '-'", _text[_at]));
+                throw Error(line, std::format("'{}' cannot start a key: write letters, digits, '_' and '-'", CharacterAt(_text, _at)));
             }
             SkipBlank();
             if (AtEnd()) {
@@ -793,7 +793,7 @@ namespace {
             if (kCombinators.find(next) != std::string_view::npos) {
                 throw SelectorError(line, _text.substr(start));
             }
-            throw Error(line, std::format("{}: is followed by '{}': follow a key with : and a value, or with {{ to open a block", key, next));
+            throw Error(line, std::format("{}: is followed by '{}': follow a key with : and a value, or with {{ to open a block", key, CharacterAt(_text, _at)));
         }
 
         // What a CSS rule or custom property starts with, in place of a key.

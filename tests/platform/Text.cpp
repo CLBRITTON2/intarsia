@@ -43,6 +43,13 @@ TEST(Text, SameFileNameIgnoresCase) {
     EXPECT_FALSE(SameFileName(L"config.lua.bak", L"config.lua"));
 }
 
+TEST(Text, CharacterAtTakesTheWholeSequenceOrOneByteThatStartsNone) {
+    EXPECT_EQ(CharacterAt("a\xC3\xA9z", 1), "\xC3\xA9");
+    EXPECT_EQ(CharacterAt("a\xC3\xA9z", 0), "a");
+    EXPECT_EQ(CharacterAt("\xA9z", 0), "\xA9");
+    EXPECT_EQ(CharacterAt("\xC3", 0), "\xC3");
+}
+
 TEST(Text, LogExcerptEscapesQuotesBackslashesAndControlBytes) {
     EXPECT_EQ(LogExcerpt("a\"b\\c\nd\x7F", 100), "a\\\"b\\\\c\\x0ad\\x7f");
 }

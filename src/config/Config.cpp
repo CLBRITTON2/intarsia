@@ -849,9 +849,10 @@ namespace {
         lua_pop(lua, 1);
     }
 
+    // A config's error() can hold any bytes, and the message reaches a console that refuses ones that are not UTF-8.
     std::string PopErrorMessage(lua_State* lua) {
         const char* message = lua_tostring(lua, -1);
-        std::string text    = message == nullptr ? std::string("non-string Lua error") : std::string(message);
+        std::string text    = message == nullptr ? std::string("non-string Lua error") : ToUtf8(DrawableText(std::string_view(message)));
         lua_pop(lua, 1);
         return text;
     }

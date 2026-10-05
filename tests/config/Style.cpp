@@ -591,6 +591,11 @@ TEST(Style, AnythingOutsideTheFormatIsAnErrorNamingTheLine) {
     EXPECT_THAT([] { return Parse("module {\n  item {\n    weight: 450\n  }\n}\n"); }, ConfigErrorWith("in steps of 100"));
 }
 
+TEST(Style, AnErrorQuotesAWholeCharacterSoItStaysUtf8) {
+    EXPECT_THAT([] { return Parse("cpu {\n  \xC3\xBC: #fff\n}\n"); }, ConfigErrorWith("style.conf:2: '\xC3\xBC' cannot start a key"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color\xC3\xBC: #fff\n}\n"); }, ConfigErrorWith("style.conf:2: color: is followed by '\xC3\xBC'"));
+}
+
 TEST(Style, AKeyIsCheckedAgainstItsOwnBlockOnceANestedBlockCloses) {
     EXPECT_THAT([] { return Parse("cpu {\n  icon {\n    color: #fff\n  }\n  color: #fff\n  icon {\n    color: #000\n  }\n}\n"); },
                 ConfigErrorWith("style.conf:6: icon: is already set on line 2 of the same block"));

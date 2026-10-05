@@ -95,6 +95,11 @@ bool IsValidUtf8(std::string_view bytes) {
     return bytes.empty() || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<std::int32_t>(bytes.size()), nullptr, 0) > 0;
 }
 
+std::string_view CharacterAt(std::string_view utf8, size_t at) {
+    const size_t bytes = Utf8SequenceBytes(utf8, at);
+    return utf8.substr(at, bytes == 0 ? 1 : bytes);
+}
+
 std::wstring DrawableText(std::string_view bytes) {
     if (bytes.empty()) {
         return {};

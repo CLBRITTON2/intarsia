@@ -232,6 +232,13 @@ TEST(Config, LuaSyntaxAndRuntimeErrorsAreReported) {
     EXPECT_THAT([] { return LoadText("error('boom')"); }, ConfigErrorWith("boom"));
 }
 
+TEST(Config, ALuaErrorOfBytesThatAreNotUtf8IsReportedAsUtf8) {
+    // U+FFFD in place of the bad byte, its literal split from "b" since a hex escape would take the b too.
+    EXPECT_THAT([] { return LoadText(R"(error('a\xffb'))"); },
+                ConfigErrorWith("a\xEF\xBF\xBD"
+                                "b"));
+}
+
 TEST(Config, ChunkMustReturnATable) {
     EXPECT_THAT([] { return LoadText("return 42"); }, ConfigErrorWith("must return a table, got number"));
 }

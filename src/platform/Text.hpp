@@ -35,6 +35,9 @@ bool IsUnsafeCharacter(wchar_t unit);
 // Whether bytes are well-formed UTF-8 (no overlong forms, encoded surrogates or code points past U+10FFFF).
 bool IsValidUtf8(std::string_view bytes);
 
+// The UTF-8 sequence that starts at utf8[at], or that one byte when none does, so a message never quotes part of one.
+std::string_view CharacterAt(std::string_view utf8, size_t at);
+
 // Untrusted bytes that should be UTF-8, such as a Wi-Fi network's name, made safe to draw: each invalid sequence and
 // each unsafe character becomes U+FFFD, so nothing can throw or reorder the drawn line.
 std::wstring DrawableText(std::string_view bytes);
