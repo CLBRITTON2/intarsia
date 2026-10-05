@@ -57,8 +57,12 @@ namespace {
             ThrowLastError("SHAllocShared(appbar result)");
         }
         AppBarCommand  request = AppBarRequest(message, data, reinterpret_cast<std::uint64_t>(block), taskbarProcess);
-        COPYDATASTRUCT copy{.dwData = kAppBarCopyData, .cbData = sizeof(request), .lpData = &request};
-        DWORD_PTR      result = 0;
+        COPYDATASTRUCT copy{
+            .dwData = kAppBarCopyData,
+            .cbData = sizeof(request),
+            .lpData = &request,
+        };
+        DWORD_PTR result = 0;
         if (SendMessageTimeoutW(taskbar, WM_COPYDATA, reinterpret_cast<WPARAM>(data.hWnd), reinterpret_cast<LPARAM>(&copy), SMTO_ABORTIFHUNG, kTaskbarTimeoutMs, &result) == 0) {
             Log(LogLevel::Warning, "bar", "taskbar_unanswered", {{.key = "message", .value = std::to_string(message)}, {.key = "error", .value = std::to_string(GetLastError())}});
             // A timed-out send can still reach Explorer, which then writes its answer through the block: freeing it
@@ -104,17 +108,22 @@ namespace {
 } // namespace
 
 AppBarCommand AppBarRequest(std::uint32_t message, const APPBARDATA& data, std::uint64_t result, std::uint32_t resultProcess) {
-    return AppBarCommand{.data          = AppBarData32{.size            = sizeof(AppBarData32),
-                                                       .window          = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(data.hWnd)),
-                                                       .callbackMessage = data.uCallbackMessage,
-                                                       .edge            = data.uEdge,
-                                                       .rect            = data.rc,
-                                                       .lParam          = static_cast<std::int64_t>(data.lParam)},
-                         .message       = message,
-                         .reserved      = 0,
-                         .result        = result,
-                         .resultProcess = resultProcess,
-                         .reserved2     = 0};
+    return AppBarCommand{
+        .data =
+            AppBarData32{
+                .size            = sizeof(AppBarData32),
+                .window          = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(data.hWnd)),
+                .callbackMessage = data.uCallbackMessage,
+                .edge            = data.uEdge,
+                .rect            = data.rc,
+                .lParam          = static_cast<std::int64_t>(data.lParam),
+            },
+        .message       = message,
+        .reserved      = 0,
+        .result        = result,
+        .resultProcess = resultProcess,
+        .reserved2     = 0,
+    };
 }
 
 RECT DockedRect(const RECT& area, Edge edge, std::int32_t thickness) {

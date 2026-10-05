@@ -52,8 +52,14 @@ TEST(ColorFade, WithoutATransitionItChangesAtOnce) {
 
 TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    const InsetShadow                           line{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 0.0f, .spreadDips = 0.0f, .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f)};
-    ShadowFade                                  fade({});
+    const InsetShadow                           line{
+                                  .xDips      = 0.0f,
+                                  .yDips      = 1.0f,
+                                  .blurDips   = 0.0f,
+                                  .spreadDips = 0.0f,
+                                  .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f),
+    };
+    ShadowFade fade({});
     fade.Retarget({line}, kLinear100, start);
     const std::vector<InsetShadow> halfway = fade.Shadows(start + std::chrono::milliseconds(50));
     ASSERT_EQ(halfway.size(), 1u);
@@ -69,8 +75,14 @@ TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
 
 TEST(ShadowFade, RetargetedMidwayItKeepsNoMoreShadowsThanEitherEndHolds) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    const InsetShadow                           line{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 0.0f, .spreadDips = 0.0f, .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f)};
-    ShadowFade                                  fade({line});
+    const InsetShadow                           line{
+                                  .xDips      = 0.0f,
+                                  .yDips      = 1.0f,
+                                  .blurDips   = 0.0f,
+                                  .spreadDips = 0.0f,
+                                  .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f),
+    };
+    ShadowFade fade({line});
     for (std::int64_t step = 0; step < 10; ++step) {
         fade.Retarget(step % 2 == 0 ? std::vector<InsetShadow>{} : std::vector<InsetShadow>{line}, kLinear100, start + std::chrono::milliseconds(10 * step));
     }

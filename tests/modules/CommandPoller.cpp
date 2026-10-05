@@ -13,7 +13,13 @@ namespace {
 
     CommandResult                  Succeeded(std::string text, std::optional<std::string> tooltip, bool alert) {
         return CommandResult{
-                             .outcome = CommandOutcome::Succeeded, .text = std::move(text), .tooltip = std::move(tooltip), .alert = alert, .classIndex = std::nullopt, .detail = {}};
+                             .outcome    = CommandOutcome::Succeeded,
+                             .text       = std::move(text),
+                             .tooltip    = std::move(tooltip),
+                             .alert      = alert,
+                             .classIndex = std::nullopt,
+                             .detail     = {},
+        };
     }
 
     CommandResult ParseOutput(std::string_view output, CustomOutput format) {

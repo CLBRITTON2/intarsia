@@ -22,14 +22,30 @@ namespace {
 TEST(MenuLister, ParsesEntriesWithActiveOptional) {
     const std::vector<MenuItem> items = ParseMenuOutput(R"({"items":[{"id":"work","text":"Work","active":true},{"id":"home","text":"Home"}]})");
     EXPECT_EQ(items,
-              (std::vector<MenuItem>{MenuEntry{.id = "work", .text = "Work", .active = true, .tooltip = std::nullopt},
-                                     MenuEntry{.id = "home", .text = "Home", .active = false, .tooltip = std::nullopt}}));
+              (std::vector<MenuItem>{MenuEntry{
+                                         .id      = "work",
+                                         .text    = "Work",
+                                         .active  = true,
+                                         .tooltip = std::nullopt,
+                                     },
+                                     MenuEntry{
+                                         .id      = "home",
+                                         .text    = "Home",
+                                         .active  = false,
+                                         .tooltip = std::nullopt,
+                                     }}));
     EXPECT_TRUE(ParseMenuOutput(R"({"items":[]})").empty());
 }
 
 TEST(MenuLister, ParsesATooltipThatMayBreakLines) {
     const std::vector<MenuItem> items = ParseMenuOutput(R"({"items":[{"id":"a","text":"A","tooltip":"Full title\norg/repo #1"}]})");
-    EXPECT_EQ(items, (std::vector<MenuItem>{MenuEntry{.id = "a", .text = "A", .active = false, .tooltip = "Full title\norg/repo #1"}}));
+    EXPECT_EQ(items,
+              (std::vector<MenuItem>{MenuEntry{
+                  .id      = "a",
+                  .text    = "A",
+                  .active  = false,
+                  .tooltip = "Full title\norg/repo #1",
+              }}));
 }
 
 TEST(MenuLister, RefusesATooltipThatIsNotDrawableText) {
@@ -41,8 +57,19 @@ TEST(MenuLister, RefusesATooltipThatIsNotDrawableText) {
 TEST(MenuLister, ParsesSeparatorsBetweenEntries) {
     const std::vector<MenuItem> items = ParseMenuOutput(R"({"items":[{"id":"a","text":"A"},{"separator":true},{"id":"b","text":"B"}]})");
     EXPECT_EQ(items,
-              (std::vector<MenuItem>{MenuEntry{.id = "a", .text = "A", .active = false, .tooltip = std::nullopt}, MenuSeparator{},
-                                     MenuEntry{.id = "b", .text = "B", .active = false, .tooltip = std::nullopt}}));
+              (std::vector<MenuItem>{MenuEntry{
+                                         .id      = "a",
+                                         .text    = "A",
+                                         .active  = false,
+                                         .tooltip = std::nullopt,
+                                     },
+                                     MenuSeparator{},
+                                     MenuEntry{
+                                         .id      = "b",
+                                         .text    = "B",
+                                         .active  = false,
+                                         .tooltip = std::nullopt,
+                                     }}));
     EXPECT_TRUE(HasEntries(items));
     EXPECT_FALSE(HasEntries(ParseMenuOutput(R"({"items":[{"separator":true}]})")));
     EXPECT_FALSE(HasEntries({}));

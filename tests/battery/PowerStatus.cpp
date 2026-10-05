@@ -23,14 +23,34 @@ namespace {
 
 TEST(PowerStatus, ChargingWinsOverPluggedAndOnlyDischargingHasTimeLeft) {
     EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_OFFLINE, BATTERY_FLAG_LOW, 20, 3900)),
-              (BatteryState{.charge = ChargeState::Discharging, .percent = 20, .secondsLeft = 3900, .healthPercent = std::nullopt}));
+              (BatteryState{
+                  .charge        = ChargeState::Discharging,
+                  .percent       = 20,
+                  .secondsLeft   = 3900,
+                  .healthPercent = std::nullopt,
+              }));
     EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_ONLINE, BATTERY_FLAG_CHARGING | BATTERY_FLAG_HIGH, 70, 5000)),
-              (BatteryState{.charge = ChargeState::Charging, .percent = 70, .secondsLeft = std::nullopt, .healthPercent = std::nullopt}));
+              (BatteryState{
+                  .charge        = ChargeState::Charging,
+                  .percent       = 70,
+                  .secondsLeft   = std::nullopt,
+                  .healthPercent = std::nullopt,
+              }));
     EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_ONLINE, BATTERY_FLAG_HIGH, 100, BATTERY_LIFE_UNKNOWN)),
-              (BatteryState{.charge = ChargeState::Plugged, .percent = 100, .secondsLeft = std::nullopt, .healthPercent = std::nullopt}));
+              (BatteryState{
+                  .charge        = ChargeState::Plugged,
+                  .percent       = 100,
+                  .secondsLeft   = std::nullopt,
+                  .healthPercent = std::nullopt,
+              }));
     // Windows has no estimate yet just after unplugging.
     EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_OFFLINE, BATTERY_FLAG_HIGH, 90, BATTERY_LIFE_UNKNOWN)),
-              (BatteryState{.charge = ChargeState::Discharging, .percent = 90, .secondsLeft = std::nullopt, .healthPercent = std::nullopt}));
+              (BatteryState{
+                  .charge        = ChargeState::Discharging,
+                  .percent       = 90,
+                  .secondsLeft   = std::nullopt,
+                  .healthPercent = std::nullopt,
+              }));
 }
 
 TEST(PowerStatus, NoBatteryOrAnUnknownOneIsNoState) {

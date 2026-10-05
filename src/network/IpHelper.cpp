@@ -195,7 +195,12 @@ void IpHelper::Run(HANDLE stopEvent) {
                 MIB_IF_ROW2 row{};
                 row.InterfaceIndex = *index;
                 ThrowIfWin32Failed(GetIfEntry2(&row), "GetIfEntry2");
-                const Counters now{.index = *index, .received = row.InOctets, .sent = row.OutOctets, .at = Clock::now()};
+                const Counters now{
+                    .index    = *index,
+                    .received = row.InOctets,
+                    .sent     = row.OutOctets,
+                    .at       = Clock::now(),
+                };
                 if (last.has_value() && last->index == now.index) {
                     const double seconds         = std::chrono::duration<double>(now.at - last->at).count();
                     state.receivedBytesPerSecond = BytesPerSecond(last->received, now.received, seconds);

@@ -53,10 +53,12 @@ namespace {
     }
 
     CornerRadii ShrinkAll(const CornerRadii& radii, float by) {
-        return CornerRadii{.topLeft     = Shrink(radii.topLeft, by, by),
-                           .topRight    = Shrink(radii.topRight, by, by),
-                           .bottomRight = Shrink(radii.bottomRight, by, by),
-                           .bottomLeft  = Shrink(radii.bottomLeft, by, by)};
+        return CornerRadii{
+            .topLeft     = Shrink(radii.topLeft, by, by),
+            .topRight    = Shrink(radii.topRight, by, by),
+            .bottomRight = Shrink(radii.bottomRight, by, by),
+            .bottomLeft  = Shrink(radii.bottomLeft, by, by),
+        };
     }
 
     void AddCorner(ID2D1GeometrySink* sink, const D2D1_POINT_2F& end, const D2D1_SIZE_F& radius) {
@@ -163,7 +165,12 @@ namespace {
                 const std::vector<Figure> figures = IsEmpty(hole) ?
                     std::vector<Figure>{Figure{.rect = padding.rect, .radii = {}}} :
                     std::vector<Figure>{Figure{.rect = Union(padding.rect, hole), .radii = {}}, Figure{.rect = hole, .radii = ShrinkAll(padding.radii, by)}};
-                const D2D1_COLOR_F        color{.r = shadow.color.r, .g = shadow.color.g, .b = shadow.color.b, .a = ring.alpha};
+                const D2D1_COLOR_F        color{
+                           .r = shadow.color.r,
+                           .g = shadow.color.g,
+                           .b = shadow.color.b,
+                           .a = ring.alpha,
+                };
                 context->FillGeometry(CreatePath(factory, figures).Get(), brushes.Get(color));
             }
         }
@@ -277,14 +284,22 @@ namespace {
     void DrawDecorations(ID2D1DeviceContext* context, BrushCache& brushes, const D2D1_RECT_F& box, float radius, const BoxStyle& lines) {
         const Border&     border = lines.border;
         const D2D1_SIZE_F corner = D2D1::SizeF(radius, radius);
-        const Figure      outer{.rect = box, .radii = {.topLeft = corner, .topRight = corner, .bottomRight = corner, .bottomLeft = corner}};
+        const Figure      outer{.rect  = box,
+                                .radii = {
+                                    .topLeft     = corner,
+                                    .topRight    = corner,
+                                    .bottomRight = corner,
+                                    .bottomLeft  = corner,
+                           }};
         // CSS's inner edge: each corner's radius less the widths of the two sides that meet there.
         const Figure inner{
             .rect  = D2D1::RectF(box.left + border.left.widthDips, box.top + border.top.widthDips, box.right - border.right.widthDips, box.bottom - border.bottom.widthDips),
-            .radii = {.topLeft     = Shrink(corner, border.left.widthDips, border.top.widthDips),
-                      .topRight    = Shrink(corner, border.right.widthDips, border.top.widthDips),
-                      .bottomRight = Shrink(corner, border.right.widthDips, border.bottom.widthDips),
-                      .bottomLeft  = Shrink(corner, border.left.widthDips, border.bottom.widthDips)}};
+            .radii = {
+                .topLeft     = Shrink(corner, border.left.widthDips, border.top.widthDips),
+                .topRight    = Shrink(corner, border.right.widthDips, border.top.widthDips),
+                .bottomRight = Shrink(corner, border.right.widthDips, border.bottom.widthDips),
+                .bottomLeft  = Shrink(corner, border.left.widthDips, border.bottom.widthDips),
+            }};
         if (!lines.shadows.empty() && !IsEmpty(inner.rect)) {
             DrawShadows(context, brushes, FactoryOf(context).Get(), inner, lines.shadows);
         }
@@ -324,13 +339,33 @@ namespace {
 
     std::vector<Slice> Slices(float from, float to, std::uint32_t sliced, std::uint32_t length, std::uint32_t reach, float pixelsPerDip) {
         if (sliced == length) {
-            return {Slice{.sourceFrom = 0.0f, .sourceTo = to - from, .drawnFrom = from, .drawnTo = to}};
+            return {Slice{
+                .sourceFrom = 0.0f,
+                .sourceTo   = to - from,
+                .drawnFrom  = from,
+                .drawnTo    = to,
+            }};
         }
         const float end = static_cast<float>(reach) / pixelsPerDip;
         const float one = 1.0f / pixelsPerDip;
-        return {Slice{.sourceFrom = 0.0f, .sourceTo = end, .drawnFrom = from, .drawnTo = from + end},
-                Slice{.sourceFrom = end, .sourceTo = end + one, .drawnFrom = from + end, .drawnTo = to - end},
-                Slice{.sourceFrom = end + one, .sourceTo = end + one + end, .drawnFrom = to - end, .drawnTo = to}};
+        return {Slice{
+                    .sourceFrom = 0.0f,
+                    .sourceTo   = end,
+                    .drawnFrom  = from,
+                    .drawnTo    = from + end,
+                },
+                Slice{
+                    .sourceFrom = end,
+                    .sourceTo   = end + one,
+                    .drawnFrom  = from + end,
+                    .drawnTo    = to - end,
+                },
+                Slice{
+                    .sourceFrom = end + one,
+                    .sourceTo   = end + one + end,
+                    .drawnFrom  = to - end,
+                    .drawnTo    = to,
+                }};
     }
 
     std::uint32_t PixelLength(float dips, float pixelsPerDip) {
@@ -390,8 +425,15 @@ void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2
         if (_entries.size() == kMostCachedBoxes) {
             _entries.erase(_entries.begin());
         }
-        _entries.push_back(
-            Entry{.border = lines.border, .shadows = lines.shadows, .radius = radius, .pixelsPerDip = pixelsPerDip, .width = width, .height = height, .bitmap = drawn});
+        _entries.push_back(Entry{
+            .border       = lines.border,
+            .shadows      = lines.shadows,
+            .radius       = radius,
+            .pixelsPerDip = pixelsPerDip,
+            .width        = width,
+            .height       = height,
+            .bitmap       = drawn,
+        });
         bitmap = drawn.Get();
     }
     for (const Slice& across : Slices(box.left, box.right, width, length, reach, pixelsPerDip)) {
@@ -409,7 +451,11 @@ PixelGrid PixelGridOf(ID2D1DeviceContext* context) {
     context->GetDpi(&dpiX, &dpiY);
     D2D1_MATRIX_3X2_F transform{};
     context->GetTransform(&transform);
-    return PixelGrid{.pixelsPerDip = dpiX / USER_DEFAULT_SCREEN_DPI, .offsetX = transform._31, .offsetY = transform._32};
+    return PixelGrid{
+        .pixelsPerDip = dpiX / USER_DEFAULT_SCREEN_DPI,
+        .offsetX      = transform._31,
+        .offsetY      = transform._32,
+    };
 }
 
 float SnapLength(const PixelGrid& grid, float dips) {
@@ -424,10 +470,12 @@ D2D1_RECT_F SnapRect(const PixelGrid& grid, const D2D1_RECT_F& rect) {
 BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
     const float pixelsPerDip = grid.pixelsPerDip;
     BoxStyle    snapped      = style;
-    snapped.border           = Border{.top    = SnapSide(pixelsPerDip, style.border.top),
-                                      .right  = SnapSide(pixelsPerDip, style.border.right),
-                                      .bottom = SnapSide(pixelsPerDip, style.border.bottom),
-                                      .left   = SnapSide(pixelsPerDip, style.border.left)};
+    snapped.border           = Border{
+                  .top    = SnapSide(pixelsPerDip, style.border.top),
+                  .right  = SnapSide(pixelsPerDip, style.border.right),
+                  .bottom = SnapSide(pixelsPerDip, style.border.bottom),
+                  .left   = SnapSide(pixelsPerDip, style.border.left),
+    };
     for (InsetShadow& shadow : snapped.shadows) {
         shadow.xDips      = SnapLength(grid, shadow.xDips);
         shadow.yDips      = SnapLength(grid, shadow.yDips);
@@ -437,10 +485,12 @@ BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
 }
 
 Insets ContentInsets(const BoxStyle& style) {
-    return Insets{.left   = style.padding.xDips + style.border.left.widthDips,
-                  .top    = style.padding.yDips + style.border.top.widthDips,
-                  .right  = style.padding.xDips + style.border.right.widthDips,
-                  .bottom = style.padding.yDips + style.border.bottom.widthDips};
+    return Insets{
+        .left   = style.padding.xDips + style.border.left.widthDips,
+        .top    = style.padding.yDips + style.border.top.widthDips,
+        .right  = style.padding.xDips + style.border.right.widthDips,
+        .bottom = style.padding.yDips + style.border.bottom.widthDips,
+    };
 }
 
 D2D1_ROUNDED_RECT SnappedOutline(const PixelGrid& grid, const D2D1_RECT_F& bounds, const BoxStyle& style) {

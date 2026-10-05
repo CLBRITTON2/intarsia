@@ -22,11 +22,13 @@ namespace {
         }
         // Every count is in pages.
         const std::uint64_t page = info.PageSize;
-        return MemoryUsage{.totalBytes       = info.PhysicalTotal * page,
-                           .availableBytes   = info.PhysicalAvailable * page,
-                           .cachedBytes      = info.SystemCache * page,
-                           .committedBytes   = info.CommitTotal * page,
-                           .commitLimitBytes = info.CommitLimit * page};
+        return MemoryUsage{
+            .totalBytes       = info.PhysicalTotal * page,
+            .availableBytes   = info.PhysicalAvailable * page,
+            .cachedBytes      = info.SystemCache * page,
+            .committedBytes   = info.CommitTotal * page,
+            .commitLimitBytes = info.CommitLimit * page,
+        };
     }
 
 } // namespace
@@ -36,7 +38,14 @@ double BytesToGibibytes(std::uint64_t bytes) {
 }
 
 Memory::Memory(TextModuleConfig config) :
-    TextModule(std::move(config), "memory", MemoryPlaceholders(MemoryUsage{.totalBytes = 1, .availableBytes = 0, .cachedBytes = 0, .committedBytes = 0, .commitLimitBytes = 0})),
+    TextModule(std::move(config), "memory",
+               MemoryPlaceholders(MemoryUsage{
+                   .totalBytes       = 1,
+                   .availableBytes   = 0,
+                   .cachedBytes      = 0,
+                   .committedBytes   = 0,
+                   .commitLimitBytes = 0,
+               })),
     _usage(ReadMemoryUsage()), _sampledAt(std::chrono::steady_clock::now()) {}
 
 ModuleText Memory::Format(const std::string& spec) {
@@ -46,10 +55,12 @@ ModuleText Memory::Format(const std::string& spec) {
         _sampledAt = now;
         _texts.Forget();
     }
-    return ModuleText{.icon       = Settings().icon,
-                      .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }),
-                      .state      = TextState::Normal,
-                      .classIndex = 0};
+    return ModuleText{
+        .icon       = Settings().icon,
+        .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }),
+        .state      = TextState::Normal,
+        .classIndex = 0,
+    };
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {

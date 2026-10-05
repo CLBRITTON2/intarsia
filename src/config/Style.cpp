@@ -24,7 +24,12 @@
 
 namespace {
 
-    constexpr D2D1_COLOR_F     kTransparent{.r = 0.0f, .g = 0.0f, .b = 0.0f, .a = 0.0f};
+    constexpr D2D1_COLOR_F kTransparent{
+        .r = 0.0f,
+        .g = 0.0f,
+        .b = 0.0f,
+        .a = 0.0f,
+    };
     constexpr std::string_view kSpace = " \r";
 
     ConfigError                StyleError(std::string_view source, std::uint32_t line, std::string_view message) {
@@ -162,7 +167,12 @@ namespace {
             const std::uint32_t value = shortForm ? HexDigit(digits[channel]) * 17 : (HexDigit(digits[channel * 2]) * 16) + HexDigit(digits[(channel * 2) + 1]);
             channels.at(channel)      = static_cast<float>(value) / 255.0f;
         }
-        return D2D1_COLOR_F{.r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3]};
+        return D2D1_COLOR_F{
+                          .r = channels[0],
+                          .g = channels[1],
+                          .b = channels[2],
+                          .a = channels[3],
+        };
     }
 
     // A hex color, optionally followed by an opacity percentage that multiplies its alpha, or transparent.
@@ -307,7 +317,12 @@ namespace {
             throw std::invalid_argument("has a negative blur, which must be 0 or more");
         }
         return InsetShadow{
-            .xDips = numbers[0], .yDips = numbers[1], .blurDips = blur, .spreadDips = numbers.size() > 3 ? numbers[3] : 0.0f, .color = ParseColor(JoinFrom(words, numbers.size()))};
+            .xDips      = numbers[0],
+            .yDips      = numbers[1],
+            .blurDips   = blur,
+            .spreadDips = numbers.size() > 3 ? numbers[3] : 0.0f,
+            .color      = ParseColor(JoinFrom(words, numbers.size())),
+        };
     }
 
     std::vector<InsetShadow> ParseShadows(std::string_view text) {
@@ -431,48 +446,148 @@ namespace {
     constexpr std::array<std::string_view, 6>  kIconProperties{"font", "size", "color", "margin-right", "rotate", "transition"};
     constexpr std::array<std::string_view, 4>  kDefaultIconProperties{"font", "size", "color", "margin-right"};
 
-    constexpr BlockShape                       kBar{.properties = kBarProperties, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kSection{.properties = kSectionProperties, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kTooltip{.properties = kTooltipProperties, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kScrollbar{.properties = kScrollbarProperties, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kItemHover{.properties = kColors, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr std::array<ChildBlock, 1>        kMenuActiveBlocks{{{.key = "hover", .shape = &kItemHover}}};
-    constexpr BlockShape                       kMenuActive{.properties = kMenuItemProperties, .blocks = kMenuActiveBlocks, .animated = {}, .classes = nullptr};
-    constexpr std::array<ChildBlock, 2>        kMenuItemBlocks{{{.key = "hover", .shape = &kItemHover}, {.key = "active", .shape = &kMenuActive}}};
-    constexpr BlockShape                       kMenuItem{.properties = kMenuItemProperties, .blocks = kMenuItemBlocks, .animated = {}, .classes = nullptr};
-    constexpr std::array<ChildBlock, 2>        kMenuBlocks{{{.key = "item", .shape = &kMenuItem}, {.key = "scrollbar", .shape = &kScrollbar}}};
-    constexpr BlockShape                       kMenu{.properties = kMenuProperties, .blocks = kMenuBlocks, .animated = {}, .classes = nullptr};
+    constexpr BlockShape                       kBar{
+                              .properties = kBarProperties,
+                              .blocks     = {},
+                              .animated   = {},
+                              .classes    = nullptr,
+    };
+    constexpr BlockShape kSection{
+        .properties = kSectionProperties,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kTooltip{
+        .properties = kTooltipProperties,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kScrollbar{
+        .properties = kScrollbarProperties,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kItemHover{
+        .properties = kColors,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 1> kMenuActiveBlocks{{{.key = "hover", .shape = &kItemHover}}};
+    constexpr BlockShape                kMenuActive{
+                       .properties = kMenuItemProperties,
+                       .blocks     = kMenuActiveBlocks,
+                       .animated   = {},
+                       .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 2> kMenuItemBlocks{{{.key = "hover", .shape = &kItemHover}, {.key = "active", .shape = &kMenuActive}}};
+    constexpr BlockShape                kMenuItem{
+                       .properties = kMenuItemProperties,
+                       .blocks     = kMenuItemBlocks,
+                       .animated   = {},
+                       .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 2> kMenuBlocks{{{.key = "item", .shape = &kMenuItem}, {.key = "scrollbar", .shape = &kScrollbar}}};
+    constexpr BlockShape                kMenu{
+                       .properties = kMenuProperties,
+                       .blocks     = kMenuBlocks,
+                       .animated   = {},
+                       .classes    = nullptr,
+    };
 
-    constexpr BlockShape                       kIcon{.properties = kIconProperties, .blocks = {}, .animated = kRotate, .classes = nullptr};
-    constexpr BlockShape                       kDefaultIcon{.properties = kDefaultIconProperties, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kItemState{.properties = kItemProperties, .blocks = {}, .animated = kColors, .classes = nullptr};
-    constexpr std::array<ChildBlock, 5>        kItemBlocks{{{.key = "hover", .shape = &kItemHover},
-                                                            {.key = "focused", .shape = &kItemState},
-                                                            {.key = "occupied", .shape = &kItemState},
-                                                            {.key = "empty", .shape = &kItemState},
-                                                            {.key = "toggle", .shape = &kItemState}}};
-    constexpr BlockShape                       kItem{.properties = kItemProperties, .blocks = kItemBlocks, .animated = kColors, .classes = nullptr};
-    constexpr BlockShape                       kHover{.properties = kBackground, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kAlert{.properties = kColor, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kStateIcon{.properties = kColor, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr std::array<ChildBlock, 1>        kStateBlocks{{{.key = "icon", .shape = &kStateIcon}}};
-    constexpr BlockShape                       kState{.properties = kColor, .blocks = kStateBlocks, .animated = {}, .classes = nullptr};
-    constexpr BlockShape                       kExpandedIcon{.properties = kRotate, .blocks = {}, .animated = {}, .classes = nullptr};
-    constexpr std::array<ChildBlock, 1>        kExpandedBlocks{{{.key = "icon", .shape = &kExpandedIcon}}};
-    constexpr BlockShape                       kExpanded{.properties = {}, .blocks = kExpandedBlocks, .animated = {}, .classes = nullptr};
-    constexpr std::array<ChildBlock, 8>        kModuleBlocks{{{.key = "icon", .shape = &kIcon},
-                                                              {.key = "item", .shape = &kItem},
-                                                              {.key = "hover", .shape = &kHover},
-                                                              {.key = "alert", .shape = &kAlert},
-                                                              {.key = "warning", .shape = &kState},
-                                                              {.key = "critical", .shape = &kState},
-                                                              {.key = "muted", .shape = &kState},
-                                                              {.key = "expanded", .shape = &kExpanded}}};
-    constexpr BlockShape                       kModule{.properties = kModuleProperties, .blocks = kModuleBlocks, .animated = kBackgroundAndWidth, .classes = &kState};
+    constexpr BlockShape kIcon{
+        .properties = kIconProperties,
+        .blocks     = {},
+        .animated   = kRotate,
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kDefaultIcon{
+        .properties = kDefaultIconProperties,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kItemState{
+        .properties = kItemProperties,
+        .blocks     = {},
+        .animated   = kColors,
+        .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 5> kItemBlocks{{{.key = "hover", .shape = &kItemHover},
+                                                     {.key = "focused", .shape = &kItemState},
+                                                     {.key = "occupied", .shape = &kItemState},
+                                                     {.key = "empty", .shape = &kItemState},
+                                                     {.key = "toggle", .shape = &kItemState}}};
+    constexpr BlockShape                kItem{
+                       .properties = kItemProperties,
+                       .blocks     = kItemBlocks,
+                       .animated   = kColors,
+                       .classes    = nullptr,
+    };
+    constexpr BlockShape kHover{
+        .properties = kBackground,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kAlert{
+        .properties = kColor,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr BlockShape kStateIcon{
+        .properties = kColor,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 1> kStateBlocks{{{.key = "icon", .shape = &kStateIcon}}};
+    constexpr BlockShape                kState{
+                       .properties = kColor,
+                       .blocks     = kStateBlocks,
+                       .animated   = {},
+                       .classes    = nullptr,
+    };
+    constexpr BlockShape kExpandedIcon{
+        .properties = kRotate,
+        .blocks     = {},
+        .animated   = {},
+        .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 1> kExpandedBlocks{{{.key = "icon", .shape = &kExpandedIcon}}};
+    constexpr BlockShape                kExpanded{
+                       .properties = {},
+                       .blocks     = kExpandedBlocks,
+                       .animated   = {},
+                       .classes    = nullptr,
+    };
+    constexpr std::array<ChildBlock, 8> kModuleBlocks{{{.key = "icon", .shape = &kIcon},
+                                                       {.key = "item", .shape = &kItem},
+                                                       {.key = "hover", .shape = &kHover},
+                                                       {.key = "alert", .shape = &kAlert},
+                                                       {.key = "warning", .shape = &kState},
+                                                       {.key = "critical", .shape = &kState},
+                                                       {.key = "muted", .shape = &kState},
+                                                       {.key = "expanded", .shape = &kExpanded}}};
+    constexpr BlockShape                kModule{
+                       .properties = kModuleProperties,
+                       .blocks     = kModuleBlocks,
+                       .animated   = kBackgroundAndWidth,
+                       .classes    = &kState,
+    };
     // The module block styles every module, so it holds nothing only a tray, a group, a battery or an audio module draws.
     constexpr std::array<ChildBlock, 4> kDefaultModuleBlocks{
         {{.key = "icon", .shape = &kDefaultIcon}, {.key = "item", .shape = &kItem}, {.key = "hover", .shape = &kHover}, {.key = "alert", .shape = &kAlert}}};
-    constexpr BlockShape kDefaultModule{.properties = kModuleProperties, .blocks = kDefaultModuleBlocks, .animated = kBackground, .classes = &kState};
+    constexpr BlockShape kDefaultModule{
+        .properties = kModuleProperties,
+        .blocks     = kDefaultModuleBlocks,
+        .animated   = kBackground,
+        .classes    = &kState,
+    };
 
     struct TopBlock {
         std::string_view  key;
@@ -589,7 +704,12 @@ namespace {
         if (key.empty() || !std::ranges::all_of(key, IsNameCharacter)) {
             throw StyleError(source, number, std::format("'{}' is not a key: write letters, digits, '_' and '-', then a colon", key));
         }
-        return Line{.number = number, .level = indent / 2, .key = key, .value = Trim(content.substr(colon + 1))};
+        return Line{
+            .number = number,
+            .level  = indent / 2,
+            .key    = key,
+            .value  = Trim(content.substr(colon + 1)),
+        };
     }
 
     // Past the deepest block any shape holds, so the passes that recurse once per level stay shallow.
@@ -620,7 +740,12 @@ namespace {
                 throw StyleError(source, line->number, std::format("{}: is already set on line {} of the same block", line->key, earlier->second));
             }
             std::vector<StyleNode>& siblings = *open.back();
-            siblings.push_back(StyleNode{.key = std::string(line->key), .value = std::string(line->value), .line = line->number, .children = {}});
+            siblings.push_back(StyleNode{
+                .key      = std::string(line->key),
+                .value    = std::string(line->value),
+                .line     = line->number,
+                .children = {},
+            });
             if (line->value.empty()) {
                 open.push_back(&siblings.back().children);
                 keyLines.emplace_back();
@@ -687,10 +812,12 @@ namespace {
         std::vector<StyleNode> substituted;
         substituted.reserve(nodes.size());
         for (const StyleNode& node : nodes) {
-            substituted.push_back(StyleNode{.key      = node.key,
-                                            .value    = IsBlock(node) ? std::string() : Substitute(node, variables, source),
-                                            .line     = node.line,
-                                            .children = SubstituteAll(node.children, variables, source)});
+            substituted.push_back(StyleNode{
+                .key      = node.key,
+                .value    = IsBlock(node) ? std::string() : Substitute(node, variables, source),
+                .line     = node.line,
+                .children = SubstituteAll(node.children, variables, source),
+            });
         }
         return substituted;
     }
@@ -774,41 +901,56 @@ namespace {
     }
 
     BoxStyle ResolveBox(const Chain& chain) {
-        return BoxStyle{.background = ResolveColor(chain, "background", kTransparent),
-                        .border     = {.top    = ResolveBorderSide(chain, "top"),
-                                       .right  = ResolveBorderSide(chain, "right"),
-                                       .bottom = ResolveBorderSide(chain, "bottom"),
-                                       .left   = ResolveBorderSide(chain, "left")},
-                        .radiusDips = Read(chain, "radius", ParseLength, 0.0f),
-                        .padding    = ResolveSpacing(chain, "padding"),
-                        .shadows    = Read(chain, "shadow", ParseShadows, std::vector<InsetShadow>{})};
+        return BoxStyle{
+            .background = ResolveColor(chain, "background", kTransparent),
+            .border =
+                {
+                    .top    = ResolveBorderSide(chain, "top"),
+                    .right  = ResolveBorderSide(chain, "right"),
+                    .bottom = ResolveBorderSide(chain, "bottom"),
+                    .left   = ResolveBorderSide(chain, "left"),
+                },
+            .radiusDips = Read(chain, "radius", ParseLength, 0.0f),
+            .padding    = ResolveSpacing(chain, "padding"),
+            .shadows    = Read(chain, "shadow", ParseShadows, std::vector<InsetShadow>{}),
+        };
     }
 
-    constexpr Backdrop kNoBackdrop{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
+    constexpr Backdrop kNoBackdrop{
+        .blur       = false,
+        .brightness = 1.0f,
+        .saturation = 1.0f,
+    };
 
-    Backdrop           ResolveBackdrop(const StyleNode* block) {
+    Backdrop ResolveBackdrop(const StyleNode* block) {
         const Chain chain = ChainOf({block});
         if (!Read(chain, "blur", ParseSwitch, false)) {
             return kNoBackdrop;
         }
-        return Backdrop{.blur = true, .brightness = Read(chain, "brightness", ParseLength, 1.0f), .saturation = Read(chain, "saturate", ParseLength, 1.0f)};
+        return Backdrop{
+            .blur       = true,
+            .brightness = Read(chain, "brightness", ParseLength, 1.0f),
+            .saturation = Read(chain, "saturate", ParseLength, 1.0f),
+        };
     }
 
     // An item from its blocks, and its colors under the cursor from hover's.
     ItemStyle ResolveItem(const Chain& item, const Chain& hover, const D2D1_COLOR_F& color) {
         const D2D1_COLOR_F itemColor  = ResolveColor(item, "color", color);
         const D2D1_COLOR_F background = ResolveColor(item, "background", kTransparent);
-        return ItemStyle{.color                = itemColor,
-                         .background           = background,
-                         .weight               = Read(item, "weight", ParseWeight, DWRITE_FONT_WEIGHT_NORMAL),
-                         .padding              = ResolveSpacing(item, "padding"),
-                         .margin               = ResolveSpacing(item, "margin"),
-                         .radiusDips           = Read(item, "radius", ParseLength, 0.0f),
-                         .shadows              = Read(item, "shadow", ParseShadows, std::vector<InsetShadow>{}),
-                         .hoverColor           = ResolveColor(hover, "color", itemColor),
-                         .hoverBackground      = ResolveColor(hover, "background", background),
-                         .backgroundTransition = Read(item, "transition", TransitionReader("background"), kNoTransition),
-                         .colorTransition      = Read(item, "transition", TransitionReader("color"), kNoTransition)};
+        return ItemStyle{
+            .color                = itemColor,
+            .background           = background,
+            .weight               = Read(item, "weight", ParseWeight, DWRITE_FONT_WEIGHT_NORMAL),
+            .padding              = ResolveSpacing(item, "padding"),
+            .margin               = ResolveSpacing(item, "margin"),
+            .radiusDips           = Read(item, "radius", ParseLength, 0.0f),
+            .shadows              = Read(item, "shadow", ParseShadows, std::vector<InsetShadow>{}),
+            .hoverColor           = ResolveColor(hover, "color", itemColor),
+            .hoverBackground      = ResolveColor(hover, "background", background),
+            .backgroundTransition = Read(item, "transition", TransitionReader("background"), kNoTransition),
+            .colorTransition      = Read(item, "transition", TransitionReader("color"), kNoTransition),
+        };
     }
 
     // An item in one state: the state's blocks over the item's, and under the cursor the state's colors over the item's
@@ -916,22 +1058,40 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     const D2D1_COLOR_F color     = ParseColor(Required(sheet, *bar, "color", "#e0def4").value);
     const D2D1_COLOR_F menuColor = ResolveColor(menuChain, "color", color);
     const Chain        scrollbar = Children(menuChain, "scrollbar");
-    return StyleConfig{.font         = ParseFamily(Required(sheet, *bar, "font", "Segoe UI").value),
-                       .fontSizeDips = ParsePositiveLength(Required(sheet, *bar, "size", "13").value),
-                       .color        = color,
-                       .section      = {.box = ResolveBox(ChainOf({section})), .margin = ResolveSpacing(ChainOf({section}), "margin"), .backdrop = ResolveBackdrop(section)},
-                       .tooltip      = {.box = ResolveBox(ChainOf({tooltip})), .color = ResolveColor(ChainOf({tooltip}), "color", color), .backdrop = ResolveBackdrop(tooltip)},
-                       .menu         = {.box           = ResolveBox(menuChain),
-                                        .color         = menuColor,
-                                        .backdrop      = ResolveBackdrop(menu),
-                                        .maxWidthDips  = Read(menuChain, "max-width", ParseCap, std::nullopt),
-                                        .maxHeightDips = Read(menuChain, "max-height", ParseCap, std::nullopt),
-                                        .item          = ResolveItem(items, Children(items, "hover"), menuColor),
-                                        .active        = ResolveItem(Concat(active, items), Concat(Children(active, "hover"), Concat(active, Children(items, "hover"))), menuColor),
-                                        .scrollbar     = {.widthDips  = Read(scrollbar, "width", ParsePositiveLength, 0.0f),
-                                                          .background = ResolveColor(scrollbar, "background", kTransparent),
-                                                          .radiusDips = Read(scrollbar, "radius", ParseLength, 0.0f),
-                                                          .margin     = ResolveSpacing(scrollbar, "margin")}}};
+    return StyleConfig{
+        .font         = ParseFamily(Required(sheet, *bar, "font", "Segoe UI").value),
+        .fontSizeDips = ParsePositiveLength(Required(sheet, *bar, "size", "13").value),
+        .color        = color,
+        .section =
+            {
+                .box      = ResolveBox(ChainOf({section})),
+                .margin   = ResolveSpacing(ChainOf({section}), "margin"),
+                .backdrop = ResolveBackdrop(section),
+            },
+        .tooltip =
+            {
+                .box      = ResolveBox(ChainOf({tooltip})),
+                .color    = ResolveColor(ChainOf({tooltip}), "color", color),
+                .backdrop = ResolveBackdrop(tooltip),
+            },
+        .menu =
+            {
+                .box           = ResolveBox(menuChain),
+                .color         = menuColor,
+                .backdrop      = ResolveBackdrop(menu),
+                .maxWidthDips  = Read(menuChain, "max-width", ParseCap, std::nullopt),
+                .maxHeightDips = Read(menuChain, "max-height", ParseCap, std::nullopt),
+                .item          = ResolveItem(items, Children(items, "hover"), menuColor),
+                .active        = ResolveItem(Concat(active, items), Concat(Children(active, "hover"), Concat(active, Children(items, "hover"))), menuColor),
+                .scrollbar =
+                    {
+                        .widthDips  = Read(scrollbar, "width", ParsePositiveLength, 0.0f),
+                        .background = ResolveColor(scrollbar, "background", kTransparent),
+                        .radiusDips = Read(scrollbar, "radius", ParseLength, 0.0f),
+                        .margin     = ResolveSpacing(scrollbar, "margin"),
+                    },
+            },
+    };
 }
 
 ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, ModuleKind kind, std::string_view name, const std::vector<std::string>& classes) {
@@ -950,29 +1110,34 @@ ModuleStyle ResolveModuleStyle(const StyleSheet& sheet, const StyleConfig& bar, 
     for (const std::string& declared : classes) {
         classColors.push_back(ClassColors{.name = declared, .colors = ResolveStateColors(module, declared, color)});
     }
-    return ModuleStyle{.box                         = box,
-                       .margin                      = ResolveSpacing(module, "margin"),
-                       .hover                       = ResolveColor(Children(module, "hover"), "background", box.background),
-                       .backgroundTransition        = Read(module, "transition", TransitionReader("background"), kNoTransition),
-                       .color                       = color,
-                       .alertColor                  = ResolveColor(Children(module, "alert"), "color", color),
-                       .warning                     = ResolveStateColors(module, "warning", color),
-                       .critical                    = ResolveStateColors(module, "critical", color),
-                       .muted                       = ResolveStateColors(module, "muted", color),
-                       .classes                     = std::move(classColors),
-                       .icon                        = {.font            = Read(icon, "font", ParseFamily, bar.font),
-                                                       .sizeDips        = Read(icon, "size", ParsePositiveLength, bar.fontSizeDips),
-                                                       .color           = ResolveColor(icon, "color", color),
-                                                       .gapDips         = Read(icon, "margin-right", ParseLength, 0.0f),
-                                                       .rotationDegrees = rotation,
-                                                       .transition      = Read(icon, "transition", TransitionReader("rotate"), kNoTransition)},
-                       .item                        = ResolveItem(items, Children(items, "hover"), color),
-                       .focused                     = ResolveItemState(items, "focused", color),
-                       .occupied                    = ResolveItemState(items, "occupied", color),
-                       .empty                       = ResolveItemState(items, "empty", color),
-                       .toggle                      = ResolveItemState(items, "toggle", color),
-                       .transition                  = Read(module, "transition", TransitionReader("width"), kNoTransition),
-                       .expandedIconRotationDegrees = Read(Children(Children(module, "expanded"), "icon"), "rotate", ParseSignedNumber, rotation)};
+    return ModuleStyle{
+        .box                  = box,
+        .margin               = ResolveSpacing(module, "margin"),
+        .hover                = ResolveColor(Children(module, "hover"), "background", box.background),
+        .backgroundTransition = Read(module, "transition", TransitionReader("background"), kNoTransition),
+        .color                = color,
+        .alertColor           = ResolveColor(Children(module, "alert"), "color", color),
+        .warning              = ResolveStateColors(module, "warning", color),
+        .critical             = ResolveStateColors(module, "critical", color),
+        .muted                = ResolveStateColors(module, "muted", color),
+        .classes              = std::move(classColors),
+        .icon =
+            {
+                .font            = Read(icon, "font", ParseFamily, bar.font),
+                .sizeDips        = Read(icon, "size", ParsePositiveLength, bar.fontSizeDips),
+                .color           = ResolveColor(icon, "color", color),
+                .gapDips         = Read(icon, "margin-right", ParseLength, 0.0f),
+                .rotationDegrees = rotation,
+                .transition      = Read(icon, "transition", TransitionReader("rotate"), kNoTransition),
+            },
+        .item                        = ResolveItem(items, Children(items, "hover"), color),
+        .focused                     = ResolveItemState(items, "focused", color),
+        .occupied                    = ResolveItemState(items, "occupied", color),
+        .empty                       = ResolveItemState(items, "empty", color),
+        .toggle                      = ResolveItemState(items, "toggle", color),
+        .transition                  = Read(module, "transition", TransitionReader("width"), kNoTransition),
+        .expandedIconRotationDegrees = Read(Children(Children(module, "expanded"), "icon"), "rotate", ParseSignedNumber, rotation),
+    };
 }
 
 void RequireKnownModules(const StyleSheet& sheet, const std::vector<std::string>& names) {

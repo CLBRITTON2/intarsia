@@ -18,29 +18,46 @@ namespace {
 
     // Handles no window has, so every icon read finds nothing and no bitmap is ever made.
     const std::vector<ManagedWindow> kWindows{
-        {.id = "a", .handle = 0x7FFF0001, .focused = false, .monitor = 10},
-        {.id = "b", .handle = 0x7FFF0002, .focused = true, .monitor = 10},
-        {.id = "c", .handle = 0x7FFF0003, .focused = false, .monitor = 20},
+        {
+            .id      = "a",
+            .handle  = 0x7FFF0001,
+            .focused = false,
+            .monitor = 10,
+        },
+        {
+            .id      = "b",
+            .handle  = 0x7FFF0002,
+            .focused = true,
+            .monitor = 10,
+        },
+        {
+            .id      = "c",
+            .handle  = 0x7FFF0003,
+            .focused = false,
+            .monitor = 20,
+        },
     };
 
     RenderContext NoDrawing() {
-        return RenderContext{.context      = nullptr,
-                             .dwrite       = nullptr,
-                             .textFormat   = nullptr,
-                             .iconFont     = nullptr,
-                             .iconSizeDips = 20.0f,
-                             .iconGapDips  = 0.0f,
-                             .foreground   = nullptr,
-                             .accent       = nullptr,
-                             .alert        = nullptr,
-                             .warning      = {.text = nullptr, .icon = nullptr},
-                             .critical     = {.text = nullptr, .icon = nullptr},
-                             .muted        = {.text = nullptr, .icon = nullptr},
-                             .classes      = {},
-                             .brushes      = nullptr,
-                             .boxes        = nullptr,
-                             .axis         = Axis::Horizontal,
-                             .boxCrossDips = 24.0f};
+        return RenderContext{
+            .context      = nullptr,
+            .dwrite       = nullptr,
+            .textFormat   = nullptr,
+            .iconFont     = nullptr,
+            .iconSizeDips = 20.0f,
+            .iconGapDips  = 0.0f,
+            .foreground   = nullptr,
+            .accent       = nullptr,
+            .alert        = nullptr,
+            .warning      = {.text = nullptr, .icon = nullptr},
+            .critical     = {.text = nullptr, .icon = nullptr},
+            .muted        = {.text = nullptr, .icon = nullptr},
+            .classes      = {},
+            .brushes      = nullptr,
+            .boxes        = nullptr,
+            .axis         = Axis::Horizontal,
+            .boxCrossDips = 24.0f,
+        };
     }
 
     class WindowListModule : public testing::Test {
@@ -89,7 +106,12 @@ TEST_F(WindowListModule, SizeCoversEveryPaddedIconAndTheGapsBetween) {
 TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     const MessageWindow iconWindow;
     SendMessageW(iconWindow.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
-    _windowManager.windows = {{.id = "a", .handle = reinterpret_cast<std::intptr_t>(iconWindow.Get()), .focused = true, .monitor = 10}};
+    _windowManager.windows = {{
+        .id      = "a",
+        .handle  = reinterpret_cast<std::intptr_t>(iconWindow.Get()),
+        .focused = true,
+        .monitor = 10,
+    }};
 
     const CompositionThread                    compositionThread;
     const GraphicsDevice                       graphics = CreateGraphicsDevice();

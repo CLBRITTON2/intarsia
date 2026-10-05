@@ -91,7 +91,11 @@ MonitorOutput OutputForMonitor(HMONITOR monitor) {
             DXGI_OUTPUT_DESC description{};
             ThrowIfFailed(output->GetDesc(&description), "IDXGIOutput::GetDesc");
             if (description.Monitor == monitor) {
-                return MonitorOutput{.output = output, .adapter = AdapterName(adapter.Get()), .refreshHz = RefreshHz(display)};
+                return MonitorOutput{
+                    .output    = output,
+                    .adapter   = AdapterName(adapter.Get()),
+                    .refreshHz = RefreshHz(display),
+                };
             }
         }
     }
@@ -127,10 +131,12 @@ std::int32_t DipsToWholePixels(float dips, std::uint32_t dpi) {
 }
 
 RECT DipsToScreen(const RECT& window, const D2D1_RECT_F& dips, std::uint32_t dpi) {
-    return RECT{.left   = window.left + DipsToPixels(dips.left, dpi),
-                .top    = window.top + DipsToPixels(dips.top, dpi),
-                .right  = window.left + DipsToPixels(dips.right, dpi),
-                .bottom = window.top + DipsToPixels(dips.bottom, dpi)};
+    return RECT{
+        .left   = window.left + DipsToPixels(dips.left, dpi),
+        .top    = window.top + DipsToPixels(dips.top, dpi),
+        .right  = window.left + DipsToPixels(dips.right, dpi),
+        .bottom = window.top + DipsToPixels(dips.bottom, dpi),
+    };
 }
 
 void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family) {

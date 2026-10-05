@@ -13,8 +13,14 @@ namespace {
     HICON BlankIcon(std::int32_t side) {
         HBITMAP  color = CreateBitmap(side, side, 1, 32, nullptr);
         HBITMAP  mask  = CreateBitmap(side, side, 1, 1, nullptr);
-        ICONINFO info{.fIcon = TRUE, .xHotspot = 0, .yHotspot = 0, .hbmMask = mask, .hbmColor = color};
-        HICON    icon = CreateIconIndirect(&info);
+        ICONINFO info{
+            .fIcon    = TRUE,
+            .xHotspot = 0,
+            .yHotspot = 0,
+            .hbmMask  = mask,
+            .hbmColor = color,
+        };
+        HICON icon = CreateIconIndirect(&info);
         DeleteObject(color);
         DeleteObject(mask);
         return icon;
@@ -23,8 +29,14 @@ namespace {
     // A monochrome icon of the given size: no color bitmap, and a mask twice as tall holding both masks.
     HICON MonochromeIcon(std::int32_t side) {
         HBITMAP  mask = CreateBitmap(side, side * 2, 1, 1, nullptr);
-        ICONINFO info{.fIcon = TRUE, .xHotspot = 0, .yHotspot = 0, .hbmMask = mask, .hbmColor = nullptr};
-        HICON    icon = CreateIconIndirect(&info);
+        ICONINFO info{
+            .fIcon    = TRUE,
+            .xHotspot = 0,
+            .yHotspot = 0,
+            .hbmMask  = mask,
+            .hbmColor = nullptr,
+        };
+        HICON icon = CreateIconIndirect(&info);
         DeleteObject(mask);
         return icon;
     }

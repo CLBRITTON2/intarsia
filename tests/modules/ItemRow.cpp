@@ -92,7 +92,13 @@ TEST(ItemRow, ItemFadesFadeANewStatesShadowsOverItsBackgroundTransition) {
     const ItemStyle rest                              = TestItemStyle(0x000000, 0x000000);
     ItemStyle       focused                           = TestItemStyle(0xFFFFFF, 0xFFFFFF);
     focused.backgroundTransition                      = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
-    focused.shadows                                   = {{.xDips = 0.0f, .yDips = 1.0f, .blurDips = 0.0f, .spreadDips = 0.0f, .color = D2D1::ColorF(0xFFFFFF)}};
+    focused.shadows                                   = {{
+                                          .xDips      = 0.0f,
+                                          .yDips      = 1.0f,
+                                          .blurDips   = 0.0f,
+                                          .spreadDips = 0.0f,
+                                          .color      = D2D1::ColorF(0xFFFFFF),
+    }};
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     const HoveredItem                           hovered;
     ItemFades                                   fades;

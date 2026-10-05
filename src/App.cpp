@@ -100,7 +100,11 @@ namespace {
         if (FAILED(dpiFound)) {
             throw MonitorGoneError(std::format("GetDpiForMonitor failed with 0x{:08X} for a listed handle", static_cast<std::uint32_t>(dpiFound)));
         }
-        return BarPlacement{.monitor = monitor, .monitorRect = info.rcMonitor, .dpi = dpiX};
+        return BarPlacement{
+            .monitor     = monitor,
+            .monitorRect = info.rcMonitor,
+            .dpi         = dpiX,
+        };
     }
 
     std::vector<BarPlacement> PlacementsForAllMonitors() {
@@ -231,16 +235,18 @@ void App::CreateBars() {
         _placements = PlacementsForAllMonitors();
         for (const BarPlacement& placement : _placements) {
             _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
-                                                  ModuleSources{.windowManager   = *_windowManager,
-                                                                .commandPollers  = *_commandPollers,
-                                                                .counterSamplers = *_counterSamplers,
-                                                                .windowIcons     = _windowIcons.get(),
-                                                                .audioOutput     = _audioOutput.get(),
-                                                                .audioInput      = _audioInput.get(),
-                                                                .network         = _network.get(),
-                                                                .battery         = _battery.get(),
-                                                                .tray            = _tray.get(),
-                                                                .monitor         = placement.monitor},
+                                                  ModuleSources{
+                                                      .windowManager   = *_windowManager,
+                                                      .commandPollers  = *_commandPollers,
+                                                      .counterSamplers = *_counterSamplers,
+                                                      .windowIcons     = _windowIcons.get(),
+                                                      .audioOutput     = _audioOutput.get(),
+                                                      .audioInput      = _audioInput.get(),
+                                                      .network         = _network.get(),
+                                                      .battery         = _battery.get(),
+                                                      .tray            = _tray.get(),
+                                                      .monitor         = placement.monitor,
+                                                  },
                                                   _launcher, placement, AppBarRouteForTray(), _windowProcError, _control.get(), kDeviceLost));
             if (_windowProcError.error) {
                 std::rethrow_exception(_windowProcError.error);

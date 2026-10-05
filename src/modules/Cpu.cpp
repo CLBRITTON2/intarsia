@@ -32,7 +32,11 @@ namespace {
         if (!GetSystemTimes(&idle, &kernel, &user)) {
             ThrowLastError("GetSystemTimes");
         }
-        return CpuTimes{.idle = Ticks(idle), .kernel = Ticks(kernel), .user = Ticks(user)};
+        return CpuTimes{
+            .idle   = Ticks(idle),
+            .kernel = Ticks(kernel),
+            .user   = Ticks(user),
+        };
     }
 
     bool AnyFormatNames(const TextModuleConfig& config, std::string_view name) {
@@ -77,8 +81,15 @@ double CpuGigahertz(double baseMegahertz, double performancePercent) {
 }
 
 Cpu::Cpu(TextModuleConfig config) :
-    TextModule(std::move(config), "cpu", CpuPlaceholders(CpuSample{.usagePercent = 0, .gigahertz = 0.0, .maxCorePercent = 0, .cores = {}})), _previous(ReadCpuTimes()),
-    _sampledAt(std::chrono::steady_clock::now()), _baseFrequency(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\Processor Frequency")),
+    TextModule(std::move(config), "cpu",
+               CpuPlaceholders(CpuSample{
+                   .usagePercent   = 0,
+                   .gigahertz      = 0.0,
+                   .maxCorePercent = 0,
+                   .cores          = {},
+               })),
+    _previous(ReadCpuTimes()), _sampledAt(std::chrono::steady_clock::now()),
+    _baseFrequency(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\Processor Frequency")),
     _performance(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\% Processor Performance")),
     _cores(CounterIfNamed(Settings(), {"max_core", "cores"}, L"\\Processor(*)\\% Processor Time")) {}
 
@@ -90,10 +101,12 @@ ModuleText Cpu::Format(const std::string& spec) {
         _sampledAt = now;
         _texts.Forget();
     }
-    return ModuleText{.icon       = Settings().icon,
-                      .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }),
-                      .state      = TextState::Normal,
-                      .classIndex = 0};
+    return ModuleText{
+        .icon       = Settings().icon,
+        .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }),
+        .state      = TextState::Normal,
+        .classIndex = 0,
+    };
 }
 
 void Cpu::Sample() {

@@ -40,8 +40,12 @@ namespace {
     }
 
     LRESULT Send(HWND tray, ULONG_PTR kind, std::vector<std::byte>& bytes) {
-        COPYDATASTRUCT data{.dwData = kind, .cbData = static_cast<DWORD>(bytes.size()), .lpData = bytes.data()};
-        DWORD_PTR      result = 0;
+        COPYDATASTRUCT data{
+            .dwData = kind,
+            .cbData = static_cast<DWORD>(bytes.size()),
+            .lpData = bytes.data(),
+        };
+        DWORD_PTR result = 0;
         EXPECT_NE(SendMessageTimeoutW(tray, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&data), SMTO_NORMAL, 5000, &result), 0);
         return static_cast<LRESULT>(result);
     }
@@ -77,7 +81,12 @@ namespace {
     }
 
     // A monitor above the primary has negative coordinates.
-    constexpr RECT kAbovePrimary{.left = 100, .top = -2100, .right = 130, .bottom = -2070};
+    constexpr RECT kAbovePrimary{
+        .left   = 100,
+        .top    = -2100,
+        .right  = 130,
+        .bottom = -2070,
+    };
 
     // Answers every icon rect query with kAbovePrimary, as the tray answers one.
     LRESULT CALLBACK AnswerAbovePrimary(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {

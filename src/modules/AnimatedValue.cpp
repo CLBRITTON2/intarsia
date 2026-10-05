@@ -19,11 +19,41 @@ namespace {
     // The control points CSS Easing Functions Level 1 gives each keyword.
     Bezier CurveOf(TimingFunction timing) {
         switch (timing) {
-            case TimingFunction::Linear: return {.x1 = 0.0f, .y1 = 0.0f, .x2 = 1.0f, .y2 = 1.0f};
-            case TimingFunction::Ease: return {.x1 = 0.25f, .y1 = 0.1f, .x2 = 0.25f, .y2 = 1.0f};
-            case TimingFunction::EaseIn: return {.x1 = 0.42f, .y1 = 0.0f, .x2 = 1.0f, .y2 = 1.0f};
-            case TimingFunction::EaseOut: return {.x1 = 0.0f, .y1 = 0.0f, .x2 = 0.58f, .y2 = 1.0f};
-            case TimingFunction::EaseInOut: return {.x1 = 0.42f, .y1 = 0.0f, .x2 = 0.58f, .y2 = 1.0f};
+            case TimingFunction::Linear:
+                return {
+                    .x1 = 0.0f,
+                    .y1 = 0.0f,
+                    .x2 = 1.0f,
+                    .y2 = 1.0f,
+                };
+            case TimingFunction::Ease:
+                return {
+                    .x1 = 0.25f,
+                    .y1 = 0.1f,
+                    .x2 = 0.25f,
+                    .y2 = 1.0f,
+                };
+            case TimingFunction::EaseIn:
+                return {
+                    .x1 = 0.42f,
+                    .y1 = 0.0f,
+                    .x2 = 1.0f,
+                    .y2 = 1.0f,
+                };
+            case TimingFunction::EaseOut:
+                return {
+                    .x1 = 0.0f,
+                    .y1 = 0.0f,
+                    .x2 = 0.58f,
+                    .y2 = 1.0f,
+                };
+            case TimingFunction::EaseInOut:
+                return {
+                    .x1 = 0.42f,
+                    .y1 = 0.0f,
+                    .x2 = 0.58f,
+                    .y2 = 1.0f,
+                };
         }
         throw std::invalid_argument(std::format("unknown timing function {}", static_cast<std::int32_t>(timing)));
     }
@@ -144,11 +174,13 @@ std::vector<InsetShadow> ShadowFade::Shadows(std::chrono::steady_clock::time_poi
     for (size_t index = 0; index < std::max(_from.size(), _to.size()); ++index) {
         const InsetShadow from = ShadowOrClear(_from, _to, index);
         const InsetShadow to   = ShadowOrClear(_to, _from, index);
-        mixed.push_back(InsetShadow{.xDips      = Lerp(from.xDips, to.xDips, share),
-                                    .yDips      = Lerp(from.yDips, to.yDips, share),
-                                    .blurDips   = Lerp(from.blurDips, to.blurDips, share),
-                                    .spreadDips = Lerp(from.spreadDips, to.spreadDips, share),
-                                    .color      = MixColors(from.color, to.color, share)});
+        mixed.push_back(InsetShadow{
+            .xDips      = Lerp(from.xDips, to.xDips, share),
+            .yDips      = Lerp(from.yDips, to.yDips, share),
+            .blurDips   = Lerp(from.blurDips, to.blurDips, share),
+            .spreadDips = Lerp(from.spreadDips, to.spreadDips, share),
+            .color      = MixColors(from.color, to.color, share),
+        });
     }
     return mixed;
 }

@@ -119,7 +119,11 @@ namespace {
             ThrowIfFailed(_volume->GetMasterVolumeLevelScalar(&volume), "IAudioEndpointVolume::GetMasterVolumeLevelScalar");
             BOOL muted = FALSE;
             ThrowIfFailed(_volume->GetMute(&muted), "IAudioEndpointVolume::GetMute");
-            return AudioDevice{.name = _name, .volume = volume, .muted = muted != FALSE};
+            return AudioDevice{
+                .name   = _name,
+                .volume = volume,
+                .muted  = muted != FALSE,
+            };
         }
 
         void SetVolume(float volume) const {

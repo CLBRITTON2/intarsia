@@ -12,26 +12,57 @@
 namespace {
 
     AudioConfig TestConfig() {
-        return AudioConfig{.flow        = AudioFlow::Output,
-                           .format      = "{volume}%",
-                           .formatMuted = "muted",
-                           .tooltip     = "{device} at {volume}%",
-                           .icon        = L"V",
-                           .iconMuted   = L"M",
-                           .stepPercent = 5,
-                           .actions     = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+        return AudioConfig{
+            .flow        = AudioFlow::Output,
+            .format      = "{volume}%",
+            .formatMuted = "muted",
+            .tooltip     = "{device} at {volume}%",
+            .icon        = L"V",
+            .iconMuted   = L"M",
+            .stepPercent = 5,
+            .actions =
+                {
+                    .click       = std::nullopt,
+                    .rightClick  = std::nullopt,
+                    .middleClick = std::nullopt,
+                    .scrollUp    = std::nullopt,
+                    .scrollDown  = std::nullopt,
+                },
+        };
     }
 
     AudioDevice Speakers(float volume, bool muted) {
-        return AudioDevice{.name = L"Speakers", .volume = volume, .muted = muted};
+        return AudioDevice{
+            .name   = L"Speakers",
+            .volume = volume,
+            .muted  = muted,
+        };
     }
 
 } // namespace
 
 TEST(Audio, FormatsTheVolumeOrTheMutedTextWithTheirIcons) {
-    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, false)), (ModuleText{.icon = L"V", .text = L"42%", .state = TextState::Normal, .classIndex = 0}));
-    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, true)), (ModuleText{.icon = L"M", .text = L"muted", .state = TextState::Muted, .classIndex = 0}));
-    EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, false)),
+              (ModuleText{
+                  .icon       = L"V",
+                  .text       = L"42%",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
+    EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, true)),
+              (ModuleText{
+                  .icon       = L"M",
+                  .text       = L"muted",
+                  .state      = TextState::Muted,
+                  .classIndex = 0,
+              }));
+    EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt),
+              (ModuleText{
+                  .icon       = L"",
+                  .text       = L"",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
 }
 
 TEST(Audio, FormatsNameTheDeviceAndTakeASpec) {

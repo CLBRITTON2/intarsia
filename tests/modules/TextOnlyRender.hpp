@@ -23,22 +23,24 @@ struct TextOnlyRender {
 
     // For a bar along axis whose module boxes are boxCrossDips across it.
     RenderContext Along(Axis axis, float boxCrossDips) const {
-        return RenderContext{.context      = nullptr,
-                             .dwrite       = dwrite.Get(),
-                             .textFormat   = format.Get(),
-                             .iconFont     = L"Segoe UI",
-                             .iconSizeDips = 12.0f,
-                             .iconGapDips  = 4.0f,
-                             .foreground   = nullptr,
-                             .accent       = nullptr,
-                             .alert        = nullptr,
-                             .warning      = {.text = nullptr, .icon = nullptr},
-                             .critical     = {.text = nullptr, .icon = nullptr},
-                             .muted        = {.text = nullptr, .icon = nullptr},
-                             .classes      = {},
-                             .brushes      = nullptr,
-                             .boxes        = nullptr,
-                             .axis         = axis,
-                             .boxCrossDips = boxCrossDips};
+        return RenderContext{
+            .context      = nullptr,
+            .dwrite       = dwrite.Get(),
+            .textFormat   = format.Get(),
+            .iconFont     = L"Segoe UI",
+            .iconSizeDips = 12.0f,
+            .iconGapDips  = 4.0f,
+            .foreground   = nullptr,
+            .accent       = nullptr,
+            .alert        = nullptr,
+            .warning      = {.text = nullptr, .icon = nullptr},
+            .critical     = {.text = nullptr, .icon = nullptr},
+            .muted        = {.text = nullptr, .icon = nullptr},
+            .classes      = {},
+            .brushes      = nullptr,
+            .boxes        = nullptr,
+            .axis         = axis,
+            .boxCrossDips = boxCrossDips,
+        };
     }
 };

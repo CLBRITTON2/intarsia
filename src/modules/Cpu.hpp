@@ -61,7 +61,12 @@ class Cpu final : public TextModule {
     std::unique_ptr<PerformanceCounter> _baseFrequency;
     std::unique_ptr<PerformanceCounter> _performance;
     std::unique_ptr<PerformanceCounter> _cores;
-    CpuSample                           _sample{.usagePercent = 0, .gigahertz = 0.0, .maxCorePercent = 0, .cores = {}};
-    FailureLog                          _counterLog{"cpu"};
-    SampledTexts                        _texts;
+    CpuSample                           _sample{
+                                  .usagePercent   = 0,
+                                  .gigahertz      = 0.0,
+                                  .maxCorePercent = 0,
+                                  .cores          = {},
+    };
+    FailureLog   _counterLog{"cpu"};
+    SampledTexts _texts;
 };

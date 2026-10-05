@@ -78,4 +78,10 @@ class IModule {
 };
 
 // Actions() for a module whose config binds none.
-inline const ModuleActions kNoActions{.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt};
+inline const ModuleActions kNoActions{
+    .click       = std::nullopt,
+    .rightClick  = std::nullopt,
+    .middleClick = std::nullopt,
+    .scrollUp    = std::nullopt,
+    .scrollDown  = std::nullopt,
+};

@@ -22,7 +22,11 @@ Sections<std::invoke_result_t<Transform, const T&>> MapSections(const Sections<T
         std::ranges::transform(items, std::back_inserter(mapped), transform);
         return mapped;
     };
-    return {.left = mapOne(sections.left), .center = mapOne(sections.center), .right = mapOne(sections.right)};
+    return {
+        .left   = mapOne(sections.left),
+        .center = mapOne(sections.center),
+        .right  = mapOne(sections.right),
+    };
 }
 
 template <typename T, typename Predicate>

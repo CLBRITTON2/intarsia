@@ -43,10 +43,12 @@ namespace {
         if (tooltip != item.end() && !tooltip->is_string()) {
             throw OutputError("printed a JSON item tooltip that is not a string");
         }
-        MenuEntry entry{.id      = id->get<std::string>(),
-                        .text    = text->get<std::string>(),
-                        .active  = active != item.end() && active->get<bool>(),
-                        .tooltip = tooltip == item.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>())};
+        MenuEntry entry{
+            .id      = id->get<std::string>(),
+            .text    = text->get<std::string>(),
+            .active  = active != item.end() && active->get<bool>(),
+            .tooltip = tooltip == item.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
+        };
         RequireDrawable(entry.id, "id", L"");
         RequireDrawable(entry.text, "text", L"");
         if (entry.tooltip.has_value()) {

@@ -7,7 +7,11 @@
 #include <winrt/base.h>
 
 CompositionThread::CompositionThread() : _com(ComThreading::Single, "composition") {
-    const DispatcherQueueOptions options{.dwSize = sizeof(DispatcherQueueOptions), .threadType = DQTYPE_THREAD_CURRENT, .apartmentType = DQTAT_COM_NONE};
+    const DispatcherQueueOptions options{
+        .dwSize        = sizeof(DispatcherQueueOptions),
+        .threadType    = DQTYPE_THREAD_CURRENT,
+        .apartmentType = DQTAT_COM_NONE,
+    };
     ThrowIfFailed(CreateDispatcherQueueController(options, &_queue), "CreateDispatcherQueueController");
 }
 

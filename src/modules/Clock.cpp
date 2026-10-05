@@ -15,7 +15,12 @@ ModuleText Clock::Format(const std::string& spec) {
         _formattedSecond = second;
         _formattedSpec   = spec;
     }
-    return ModuleText{.icon = Settings().icon, .text = _formatted, .state = TextState::Normal, .classIndex = 0};
+    return ModuleText{
+        .icon       = Settings().icon,
+        .text       = _formatted,
+        .state      = TextState::Normal,
+        .classIndex = 0,
+    };
 }
 
 std::vector<Placeholder> ClockPlaceholders(std::chrono::system_clock::time_point now) {

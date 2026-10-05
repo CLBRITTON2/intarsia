@@ -12,9 +12,18 @@ namespace {
     constexpr std::uint32_t kChanged = WM_APP + 1;
 
     CounterConfig           SumOf(std::wstring path) {
-        return CounterConfig{.path    = std::move(path),
-                                       .combine = CounterCombine::Sum,
-                                       .text    = TextModuleConfig{.format = "{value}", .tooltip = std::nullopt, .icon = {}, .interval = std::chrono::seconds(1), .actions = {}}};
+        return CounterConfig{
+                      .path    = std::move(path),
+                      .combine = CounterCombine::Sum,
+                      .text =
+                TextModuleConfig{
+                              .format   = "{value}",
+                              .tooltip  = std::nullopt,
+                              .icon     = {},
+                              .interval = std::chrono::seconds(1),
+                              .actions  = {},
+                },
+        };
     }
 
     class Sampler : public testing::Test {
@@ -42,11 +51,31 @@ TEST(CounterSampler, NoInstancesCombineToZero) {
 }
 
 TEST(CounterSampler, OnlyANewOutcomeOrFailureChangesOutcome) {
-    const CounterReading pending{.outcome = CounterOutcome::Pending, .value = 0.0, .detail = {}};
-    const CounterReading sampled{.outcome = CounterOutcome::Sampled, .value = 1.0, .detail = {}};
-    const CounterReading resampled{.outcome = CounterOutcome::Sampled, .value = 2.0, .detail = {}};
-    const CounterReading failed{.outcome = CounterOutcome::Failed, .value = 0.0, .detail = "gone"};
-    const CounterReading failedOtherwise{.outcome = CounterOutcome::Failed, .value = 0.0, .detail = "denied"};
+    const CounterReading pending{
+        .outcome = CounterOutcome::Pending,
+        .value   = 0.0,
+        .detail  = {},
+    };
+    const CounterReading sampled{
+        .outcome = CounterOutcome::Sampled,
+        .value   = 1.0,
+        .detail  = {},
+    };
+    const CounterReading resampled{
+        .outcome = CounterOutcome::Sampled,
+        .value   = 2.0,
+        .detail  = {},
+    };
+    const CounterReading failed{
+        .outcome = CounterOutcome::Failed,
+        .value   = 0.0,
+        .detail  = "gone",
+    };
+    const CounterReading failedOtherwise{
+        .outcome = CounterOutcome::Failed,
+        .value   = 0.0,
+        .detail  = "denied",
+    };
     EXPECT_TRUE(ChangesOutcome(pending, sampled));
     EXPECT_FALSE(ChangesOutcome(sampled, resampled));
     EXPECT_TRUE(ChangesOutcome(sampled, failed));

@@ -84,11 +84,13 @@ namespace glazewm {
 
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {
             // A workspace's children are its windows and the split containers holding them, so any child means a window.
-            return Workspace{.label    = DisplayLabel(workspace, "workspace"),
-                             .name     = StringField(workspace, "name", "workspace"),
-                             .focused  = BoolField(workspace, "hasFocus", "workspace"),
-                             .occupied = !ArrayField(workspace, "children", "workspace").empty(),
-                             .monitor  = monitor};
+            return Workspace{
+                .label    = DisplayLabel(workspace, "workspace"),
+                .name     = StringField(workspace, "name", "workspace"),
+                .focused  = BoolField(workspace, "hasFocus", "workspace"),
+                .occupied = !ArrayField(workspace, "children", "workspace").empty(),
+                .monitor  = monitor,
+            };
         }
 
     } // namespace
@@ -149,17 +151,25 @@ namespace glazewm {
         nlohmann::json data      = dataField != message.end() ? std::move(*dataField) : nlohmann::json();
 
         if (messageType == "client_response") {
-            return ServerMessage{.kind          = MessageKind::Response,
-                                 .clientMessage = StringField(message, "clientMessage", "response"),
-                                 .eventType     = "",
-                                 .success       = success,
-                                 .error         = std::move(errorText),
-                                 .data          = std::move(data)};
+            return ServerMessage{
+                .kind          = MessageKind::Response,
+                .clientMessage = StringField(message, "clientMessage", "response"),
+                .eventType     = "",
+                .success       = success,
+                .error         = std::move(errorText),
+                .data          = std::move(data),
+            };
         }
         if (messageType == "event_subscription") {
             const std::string eventType = data.is_object() ? StringField(data, "eventType", "event") : std::string();
             return ServerMessage{
-                .kind = MessageKind::Event, .clientMessage = "", .eventType = eventType, .success = success, .error = std::move(errorText), .data = std::move(data)};
+                .kind          = MessageKind::Event,
+                .clientMessage = "",
+                .eventType     = eventType,
+                .success       = success,
+                .error         = std::move(errorText),
+                .data          = std::move(data),
+            };
         }
         throw ProtocolError(std::format("GlazeWM sent an unknown messageType \"{}\"", LogExcerpt(messageType, kExcerptBytes)));
     }
@@ -193,10 +203,12 @@ namespace glazewm {
                     pending.pop_back();
                     const std::string type = StringField(node, "type", "workspace child");
                     if (type == "window") {
-                        windows.push_back(ManagedWindow{.id      = StringField(node, "id", "window"),
-                                                        .handle  = HandleField(node, "handle", "window"),
-                                                        .focused = BoolField(node, "hasFocus", "window"),
-                                                        .monitor = monitorHandle});
+                        windows.push_back(ManagedWindow{
+                            .id      = StringField(node, "id", "window"),
+                            .handle  = HandleField(node, "handle", "window"),
+                            .focused = BoolField(node, "hasFocus", "window"),
+                            .monitor = monitorHandle,
+                        });
                     } else if (type == "split") {
                         PushChildren(pending, node, "split");
                     } else {

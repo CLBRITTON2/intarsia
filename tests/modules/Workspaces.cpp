@@ -11,10 +11,34 @@
 namespace {
 
     const std::vector<Workspace> kWorkspaces{
-        {.label = L"1", .name = "1", .focused = false, .occupied = true, .monitor = 10},
-        {.label = L"web", .name = "5", .focused = true, .occupied = true, .monitor = 10},
-        {.label = L"3", .name = "3", .focused = false, .occupied = false, .monitor = 10},
-        {.label = L"9", .name = "9", .focused = false, .occupied = true, .monitor = 20},
+        {
+            .label    = L"1",
+            .name     = "1",
+            .focused  = false,
+            .occupied = true,
+            .monitor  = 10,
+        },
+        {
+            .label    = L"web",
+            .name     = "5",
+            .focused  = true,
+            .occupied = true,
+            .monitor  = 10,
+        },
+        {
+            .label    = L"3",
+            .name     = "3",
+            .focused  = false,
+            .occupied = false,
+            .monitor  = 10,
+        },
+        {
+            .label    = L"9",
+            .name     = "9",
+            .focused  = false,
+            .occupied = true,
+            .monitor  = 20,
+        },
     };
 
 } // namespace

@@ -91,17 +91,19 @@ NotifyIconMessage ParseNotifyIconMessage(std::span<const std::byte> payload) {
     if (raw.signature != kTrayNotifySignature) {
         throw TrayMessageError(std::format("a notify icon message starts with 0x{:08X}, got 0x{:08X}", kTrayNotifySignature, raw.signature));
     }
-    return NotifyIconMessage{.command         = raw.command,
-                             .owner           = WidenHandle(raw.data.window),
-                             .id              = raw.data.id,
-                             .flags           = raw.data.flags,
-                             .callbackMessage = raw.data.callbackMessage,
-                             .icon            = WidenHandle(raw.data.icon),
-                             .tip             = UpToNull(raw.data.tip),
-                             .state           = raw.data.state,
-                             .stateMask       = raw.data.stateMask,
-                             .version         = raw.data.version,
-                             .guid            = raw.data.guid};
+    return NotifyIconMessage{
+        .command         = raw.command,
+        .owner           = WidenHandle(raw.data.window),
+        .id              = raw.data.id,
+        .flags           = raw.data.flags,
+        .callbackMessage = raw.data.callbackMessage,
+        .icon            = WidenHandle(raw.data.icon),
+        .tip             = UpToNull(raw.data.tip),
+        .state           = raw.data.state,
+        .stateMask       = raw.data.stateMask,
+        .version         = raw.data.version,
+        .guid            = raw.data.guid,
+    };
 }
 
 IconRectQuery ParseIconRectQuery(std::span<const std::byte> payload) {
@@ -117,7 +119,12 @@ IconRectQuery ParseIconRectQuery(std::span<const std::byte> payload) {
     if (raw.part != static_cast<std::uint32_t>(IconRectPart::Position) && raw.part != static_cast<std::uint32_t>(IconRectPart::Size)) {
         throw TrayMessageError(std::format("an icon rect query asks for part 1 or 2, got {}", raw.part));
     }
-    return IconRectQuery{.part = static_cast<IconRectPart>(raw.part), .owner = WidenHandle(raw.window), .id = raw.id, .guid = raw.guid};
+    return IconRectQuery{
+        .part  = static_cast<IconRectPart>(raw.part),
+        .owner = WidenHandle(raw.window),
+        .id    = raw.id,
+        .guid  = raw.guid,
+    };
 }
 
 std::optional<RECT> QueriedIconRect(const IconRectQuery& query, const std::vector<TrayIcon>& icons, const std::vector<TrayIconRect>& rects, POINT cursor) {
@@ -162,17 +169,20 @@ std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>
             if (updated.size() >= kMaxTrayIcons) {
                 return std::nullopt;
             }
-            updated.push_back(Updated(TrayIcon{.owner           = message.owner,
-                                               .id              = message.id,
-                                               .guid            = std::nullopt,
-                                               .ownerImage      = {},
-                                               .callbackMessage = 0,
-                                               .version         = 0,
-                                               .tooltip         = {},
-                                               .standardTooltip = false,
-                                               .pixels          = nullptr,
-                                               .hidden          = false},
-                                      message, ownerImage, std::move(pixels)));
+            updated.push_back(Updated(
+                TrayIcon{
+                    .owner           = message.owner,
+                    .id              = message.id,
+                    .guid            = std::nullopt,
+                    .ownerImage      = {},
+                    .callbackMessage = 0,
+                    .version         = 0,
+                    .tooltip         = {},
+                    .standardTooltip = false,
+                    .pixels          = nullptr,
+                    .hidden          = false,
+                },
+                message, ownerImage, std::move(pixels)));
             return updated;
         case NIM_MODIFY:
             if (!found) {
@@ -238,10 +248,17 @@ std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, const std:
     for (const std::uint32_t event : events) {
         // Version 4 carries the cursor in wParam and the event and id in lParam, earlier versions the id and the event.
         if (icon.version >= NOTIFYICON_VERSION_4) {
-            messages.push_back(
-                TrayInputMessage{.message = icon.callbackMessage, .wParam = CursorWParam(cursor), .lParam = MAKELPARAM(static_cast<WORD>(event), static_cast<WORD>(icon.id))});
+            messages.push_back(TrayInputMessage{
+                .message = icon.callbackMessage,
+                .wParam  = CursorWParam(cursor),
+                .lParam  = MAKELPARAM(static_cast<WORD>(event), static_cast<WORD>(icon.id)),
+            });
         } else {
-            messages.push_back(TrayInputMessage{.message = icon.callbackMessage, .wParam = icon.id, .lParam = static_cast<LPARAM>(event)});
+            messages.push_back(TrayInputMessage{
+                .message = icon.callbackMessage,
+                .wParam  = icon.id,
+                .lParam  = static_cast<LPARAM>(event),
+            });
         }
     }
     return messages;

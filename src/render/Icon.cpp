@@ -63,7 +63,11 @@ IconPixels IconToPixels(IWICImagingFactory& imaging, HICON icon) {
     ThrowIfFailed(converter->Initialize(bitmap.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom),
                   "IWICFormatConverter::Initialize");
 
-    IconPixels pixels{.width = 0, .height = 0, .pbgra = {}};
+    IconPixels pixels{
+        .width  = 0,
+        .height = 0,
+        .pbgra  = {},
+    };
     ThrowIfFailed(converter->GetSize(&pixels.width, &pixels.height), "IWICFormatConverter::GetSize");
     RequireReadableSize(pixels.width, pixels.height);
     const std::uint32_t stride = pixels.width * 4;

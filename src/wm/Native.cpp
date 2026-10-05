@@ -54,7 +54,11 @@ std::optional<TilingDirection> Native::Direction() const {
 }
 
 WindowManagerStatus Native::Status() const {
-    return WindowManagerStatus{.name = L"Windows", .connection = Connection::Connected, .detail = ""};
+    return WindowManagerStatus{
+        .name       = L"Windows",
+        .connection = Connection::Connected,
+        .detail     = "",
+    };
 }
 
 void Native::FocusWorkspace(const std::string& name) {

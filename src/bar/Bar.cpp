@@ -364,23 +364,25 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
     for (const ClassColors& declared : style.classes) {
         classes.push_back(StateBrushes{.text = _brushes->Keep(declared.colors.text), .icon = _brushes->Keep(declared.colors.icon)});
     }
-    return RenderContext{.context      = _surface->Context(),
-                         .dwrite       = _graphics.dwrite.Get(),
-                         .textFormat   = _textFormat.Get(),
-                         .iconFont     = style.icon.font.c_str(),
-                         .iconSizeDips = style.icon.sizeDips,
-                         .iconGapDips  = style.icon.gapDips,
-                         .foreground   = _brushes->Keep(style.color),
-                         .accent       = _brushes->Keep(style.icon.color),
-                         .alert        = _brushes->Keep(style.alertColor),
-                         .warning      = {.text = _brushes->Keep(style.warning.text), .icon = _brushes->Keep(style.warning.icon)},
-                         .critical     = {.text = _brushes->Keep(style.critical.text), .icon = _brushes->Keep(style.critical.icon)},
-                         .muted        = {.text = _brushes->Keep(style.muted.text), .icon = _brushes->Keep(style.muted.icon)},
-                         .classes      = std::move(classes),
-                         .brushes      = _brushes.get(),
-                         .boxes        = _boxes.get(),
-                         .axis         = _axis,
-                         .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, _axis))};
+    return RenderContext{
+        .context      = _surface->Context(),
+        .dwrite       = _graphics.dwrite.Get(),
+        .textFormat   = _textFormat.Get(),
+        .iconFont     = style.icon.font.c_str(),
+        .iconSizeDips = style.icon.sizeDips,
+        .iconGapDips  = style.icon.gapDips,
+        .foreground   = _brushes->Keep(style.color),
+        .accent       = _brushes->Keep(style.icon.color),
+        .alert        = _brushes->Keep(style.alertColor),
+        .warning      = {.text = _brushes->Keep(style.warning.text), .icon = _brushes->Keep(style.warning.icon)},
+        .critical     = {.text = _brushes->Keep(style.critical.text), .icon = _brushes->Keep(style.critical.icon)},
+        .muted        = {.text = _brushes->Keep(style.muted.text), .icon = _brushes->Keep(style.muted.icon)},
+        .classes      = std::move(classes),
+        .brushes      = _brushes.get(),
+        .boxes        = _boxes.get(),
+        .axis         = _axis,
+        .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, _axis)),
+    };
 }
 
 void Bar::BuildContexts() {
@@ -481,14 +483,20 @@ GroupLayout Bar::ArrangeMembers(const ModuleEntry& entry, const std::vector<floa
 }
 
 void Bar::Draw() {
-    ID2D1DeviceContext*         context = _surface->Context();
-    const Sections<float>       lengths{.left = BoxLengths(_modules.left), .center = BoxLengths(_modules.center), .right = BoxLengths(_modules.right)};
+    ID2D1DeviceContext*   context = _surface->Context();
+    const Sections<float> lengths{
+        .left   = BoxLengths(_modules.left),
+        .center = BoxLengths(_modules.center),
+        .right  = BoxLengths(_modules.right),
+    };
     const SectionStyle&         section = _config.style.section;
     const BarLayout             layout  = ArrangeBar(lengths, MainLength(context->GetSize(), _axis), MainOf(section.margin, _axis), MainInsets(section.box, _axis));
-    const Sections<PlacedEntry> placed{.left   = PlaceSection(_modules.left, lengths.left, layout.left),
-                                       .center = PlaceSection(_modules.center, lengths.center, layout.center),
-                                       .right  = PlaceSection(_modules.right, lengths.right, layout.right)};
-    RECT                        windowRect{};
+    const Sections<PlacedEntry> placed{
+        .left   = PlaceSection(_modules.left, lengths.left, layout.left),
+        .center = PlaceSection(_modules.center, lengths.center, layout.center),
+        .right  = PlaceSection(_modules.right, lengths.right, layout.right),
+    };
+    RECT windowRect{};
     if (!GetWindowRect(_window, &windowRect)) {
         ThrowLastError("GetWindowRect");
     }
@@ -498,13 +506,21 @@ void Bar::Draw() {
         for (const HitBox& member : placed.members) {
             const D2D1_RECT_F shown = Intersection(member.bounds, placed.shownBounds);
             if (shown.right > shown.left && shown.bottom > shown.top) {
-                _hitBoxes.push_back(HitBox{.module = member.module, .bounds = shown, .contentOrigin = member.contentOrigin});
+                _hitBoxes.push_back(HitBox{
+                    .module        = member.module,
+                    .bounds        = shown,
+                    .contentOrigin = member.contentOrigin,
+                });
             }
         }
         _hitBoxes.push_back(placed.box);
     });
     for (const HitBox& box : _hitBoxes) {
-        box.module->Place(ModulePlacement{.windowRect = windowRect, .contentOrigin = box.contentOrigin, .dpi = _placement.dpi});
+        box.module->Place(ModulePlacement{
+            .windowRect    = windowRect,
+            .contentOrigin = box.contentOrigin,
+            .dpi           = _placement.dpi,
+        });
     }
     // Items move under a cursor that stays still, as a tray unfolds, and no WM_MOUSEMOVE says so.
     if (_cursor.has_value()) {
@@ -546,7 +562,11 @@ Bar::HitBox Bar::PlaceBox(const ModuleEntry& entry, float start, float length) c
     const float         margin   = CrossOf(entry.style.margin, _axis);
     const float         boxStart = CrossOf(style.margin, _axis) + CrossInsets(style.box, _axis).start + margin;
     const D2D1_RECT_F   box      = MainCrossRect(_axis, start, length, boxStart, BoxCrossLength() - (2.0f * margin));
-    return HitBox{.module = entry.module.get(), .bounds = box, .contentOrigin = ContentOrigin(_axis, box, ContentInsets(entry.style.box), entry.module->Size())};
+    return HitBox{
+        .module        = entry.module.get(),
+        .bounds        = box,
+        .contentOrigin = ContentOrigin(_axis, box, ContentInsets(entry.style.box), entry.module->Size()),
+    };
 }
 
 // The entry's box within the room BoxLengths gave it, past its margin at both ends.
@@ -563,7 +583,13 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
     placed.reserve(entries.size());
     for (size_t index = 0; index < entries.size(); ++index) {
         const ModuleEntry& entry = entries[index];
-        PlacedEntry        placedEntry{.entry = &entry, .box = PlaceInRoom(entry, layout.offsets[index], lengths[index]), .toggleBounds = {}, .members = {}, .shownBounds = {}};
+        PlacedEntry        placedEntry{
+                   .entry        = &entry,
+                   .box          = PlaceInRoom(entry, layout.offsets[index], lengths[index]),
+                   .toggleBounds = {},
+                   .members      = {},
+                   .shownBounds  = {},
+        };
         if (entry.group != nullptr) {
             const float              start         = layout.offsets[index] + MainOf(entry.style.margin, _axis);
             const std::vector<float> memberLengths = BoxLengths(entry.members);
@@ -743,7 +769,12 @@ void Bar::MoveCursor(POINT client) {
 
 void Bar::RestartHover() {
     _tooltip->Hide();
-    TRACKMOUSEEVENT track{.cbSize = sizeof(TRACKMOUSEEVENT), .dwFlags = TME_HOVER | TME_LEAVE, .hwndTrack = _window, .dwHoverTime = HOVER_DEFAULT};
+    TRACKMOUSEEVENT track{
+        .cbSize      = sizeof(TRACKMOUSEEVENT),
+        .dwFlags     = TME_HOVER | TME_LEAVE,
+        .hwndTrack   = _window,
+        .dwHoverTime = HOVER_DEFAULT,
+    };
     if (!TrackMouseEvent(&track)) {
         ThrowLastError("TrackMouseEvent");
     }
@@ -771,7 +802,13 @@ TooltipAnchor Bar::AnchorFor(const D2D1_RECT_F& span) const {
         ThrowLastError("GetWindowRect");
     }
     const std::uint32_t dpi = _placement.dpi;
-    return TooltipAnchor{.target = DipsToScreen(barRect, span, dpi), .barRect = barRect, .monitorRect = _placement.monitorRect, .edge = _config.bar.edge, .dpi = dpi};
+    return TooltipAnchor{
+        .target      = DipsToScreen(barRect, span, dpi),
+        .barRect     = barRect,
+        .monitorRect = _placement.monitorRect,
+        .edge        = _config.bar.edge,
+        .dpi         = dpi,
+    };
 }
 
 void Bar::ShowMenu() {

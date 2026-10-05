@@ -29,7 +29,12 @@ double CombineCounterValues(const std::vector<double>& values, CounterCombine co
 
 CounterSampler::CounterSampler(std::string name, const CounterConfig& config, ChangeSignal& changes) :
     _name(std::move(name)), _path(config.path), _combine(config.combine), _interval(config.text.interval), _changes(changes),
-    _reading{.outcome = CounterOutcome::Pending, .value = 0.0, .detail = {}}, _thread("counter sampler", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
+    _reading{
+        .outcome = CounterOutcome::Pending,
+        .value   = 0.0,
+        .detail  = {},
+    },
+    _thread("counter sampler", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 CounterReading CounterSampler::Reading() const {
     const std::scoped_lock lock(_mutex);
@@ -50,12 +55,20 @@ void CounterSampler::Run(HANDLE stopEvent) {
                 counter->Collect();
                 const std::optional<std::vector<double>> values = counter->Values();
                 if (values.has_value()) {
-                    Publish(CounterReading{.outcome = CounterOutcome::Sampled, .value = CombineCounterValues(*values, _combine), .detail = {}});
+                    Publish(CounterReading{
+                        .outcome = CounterOutcome::Sampled,
+                        .value   = CombineCounterValues(*values, _combine),
+                        .detail  = {},
+                    });
                 }
             }
         } catch (const PdhError& error) {
             counter.reset();
-            Publish(CounterReading{.outcome = CounterOutcome::Failed, .value = 0.0, .detail = error.what()});
+            Publish(CounterReading{
+                .outcome = CounterOutcome::Failed,
+                .value   = 0.0,
+                .detail  = error.what(),
+            });
         }
         const auto wait = std::max(std::chrono::duration_cast<std::chrono::milliseconds>(started + _interval - std::chrono::steady_clock::now()), std::chrono::milliseconds(0));
         if (WaitForSingleObject(stopEvent, static_cast<DWORD>(wait.count())) == WAIT_OBJECT_0) {

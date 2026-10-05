@@ -37,7 +37,11 @@ bool WindowList::LayOutItems(const RenderContext& render) {
         // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
         const auto kept = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.window.handle == shown[index].handle && slot.pixels == pixels[index]; });
         auto bitmap     = kept != _slots.end() ? kept->bitmap : (pixels[index] != nullptr && pixels[index]->width > 0 ? CreateIconBitmap(render.context, *pixels[index]) : nullptr);
-        slots.push_back(Slot{.window = shown[index], .pixels = pixels[index], .bitmap = std::move(bitmap)});
+        slots.push_back(Slot{
+            .window = shown[index],
+            .pixels = pixels[index],
+            .bitmap = std::move(bitmap),
+        });
     }
     _slots   = std::move(slots);
     _laidOut = true;

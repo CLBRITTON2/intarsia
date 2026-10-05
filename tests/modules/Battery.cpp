@@ -9,33 +9,71 @@
 namespace {
 
     BatteryConfig TestConfig() {
-        return BatteryConfig{.formatDischarging = "{capacity}% {time}",
-                             .formatCharging    = "{capacity}% charging",
-                             .formatPlugged     = "",
-                             .tooltip           = "health {health}%",
-                             .icons             = {L"0", L"1", L"2", L"3", L"4"},
-                             .iconCharging      = L"C",
-                             .iconPlugged       = L"P",
-                             .warningAtPercent  = 40,
-                             .criticalAtPercent = 15,
-                             .actions = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+        return BatteryConfig{
+            .formatDischarging = "{capacity}% {time}",
+            .formatCharging    = "{capacity}% charging",
+            .formatPlugged     = "",
+            .tooltip           = "health {health}%",
+            .icons             = {L"0", L"1", L"2", L"3", L"4"},
+            .iconCharging      = L"C",
+            .iconPlugged       = L"P",
+            .warningAtPercent  = 40,
+            .criticalAtPercent = 15,
+            .actions =
+                {
+                    .click       = std::nullopt,
+                    .rightClick  = std::nullopt,
+                    .middleClick = std::nullopt,
+                    .scrollUp    = std::nullopt,
+                    .scrollDown  = std::nullopt,
+                },
+        };
     }
 
     BatteryState Discharging(std::int32_t percent) {
-        return BatteryState{.charge = ChargeState::Discharging, .percent = percent, .secondsLeft = 4500, .healthPercent = 91};
+        return BatteryState{
+            .charge        = ChargeState::Discharging,
+            .percent       = percent,
+            .secondsLeft   = 4500,
+            .healthPercent = 91,
+        };
     }
 
 } // namespace
 
 TEST(Battery, EachChargeHasItsFormatAndIcon) {
-    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)), (ModuleText{.icon = L"3", .text = L"64% 1:15", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)),
+              (ModuleText{
+                  .icon       = L"3",
+                  .text       = L"64% 1:15",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
     BatteryState charging = Discharging(64);
     charging.charge       = ChargeState::Charging;
-    EXPECT_EQ(FormatBattery(TestConfig(), charging), (ModuleText{.icon = L"C", .text = L"64% charging", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatBattery(TestConfig(), charging),
+              (ModuleText{
+                  .icon       = L"C",
+                  .text       = L"64% charging",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
     BatteryState plugged = Discharging(100);
     plugged.charge       = ChargeState::Plugged;
-    EXPECT_EQ(FormatBattery(TestConfig(), plugged), (ModuleText{.icon = L"P", .text = L"", .state = TextState::Normal, .classIndex = 0}));
-    EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt), (ModuleText{.icon = L"", .text = L"", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatBattery(TestConfig(), plugged),
+              (ModuleText{
+                  .icon       = L"P",
+                  .text       = L"",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
+    EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt),
+              (ModuleText{
+                  .icon       = L"",
+                  .text       = L"",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
 }
 
 TEST(Battery, WarnsThenTurnsCriticalOnlyWhileDischargingAtOrUnderEachThreshold) {

@@ -11,7 +11,11 @@ namespace {
     }
 
     SectionLayout PlaceSection(const std::vector<float>& lengths, float start, EndInsets insets) {
-        SectionLayout section{.start = start, .length = SectionLength(lengths, insets), .offsets = {}};
+        SectionLayout section{
+            .start   = start,
+            .length  = SectionLength(lengths, insets),
+            .offsets = {},
+        };
         section.offsets.reserve(lengths.size());
         float next = start + insets.start;
         for (const float length : lengths) {
@@ -35,7 +39,13 @@ GroupLayout ArrangeGroup(float toggleLength, const std::vector<float>& memberLen
     const float members = std::accumulate(memberLengths.begin(), memberLengths.end(), 0.0f);
     const float shown   = revealed * members;
     const float toggle  = toggleLength + insets.start + insets.end;
-    GroupLayout group{.length = toggle + shown, .toggleLength = toggle, .shownStart = toggle, .shownLength = shown, .offsets = {}};
+    GroupLayout group{
+        .length       = toggle + shown,
+        .toggleLength = toggle,
+        .shownStart   = toggle,
+        .shownLength  = shown,
+        .offsets      = {},
+    };
     group.offsets.reserve(memberLengths.size());
     float next = toggle;
     for (const float length : memberLengths) {

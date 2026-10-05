@@ -22,7 +22,12 @@ namespace {
 } // namespace
 
 TEST(Composition, BackdropColorMatrixLeavesAPlainBlurAsItIs) {
-    const std::array<float, 4> out = Apply(BackdropColorMatrix({.blur = true, .brightness = 1.0f, .saturation = 1.0f}), {0.2f, 0.5f, 0.9f, 1.0f});
+    const std::array<float, 4> out = Apply(BackdropColorMatrix({
+                                               .blur       = true,
+                                               .brightness = 1.0f,
+                                               .saturation = 1.0f,
+                                           }),
+                                           {0.2f, 0.5f, 0.9f, 1.0f});
     EXPECT_NEAR(out[0], 0.2f, 1e-6f);
     EXPECT_NEAR(out[1], 0.5f, 1e-6f);
     EXPECT_NEAR(out[2], 0.9f, 1e-6f);
@@ -30,13 +35,23 @@ TEST(Composition, BackdropColorMatrixLeavesAPlainBlurAsItIs) {
 }
 
 TEST(Composition, BackdropColorMatrixGreysByLuminanceAndScalesByBrightnessButNeverAlpha) {
-    const std::array<float, 4> grey = Apply(BackdropColorMatrix({.blur = true, .brightness = 0.5f, .saturation = 0.0f}), {1.0f, 0.0f, 0.0f, 1.0f});
+    const std::array<float, 4> grey = Apply(BackdropColorMatrix({
+                                                .blur       = true,
+                                                .brightness = 0.5f,
+                                                .saturation = 0.0f,
+                                            }),
+                                            {1.0f, 0.0f, 0.0f, 1.0f});
     EXPECT_NEAR(grey[0], 0.1065f, 1e-6f);
     EXPECT_NEAR(grey[1], 0.1065f, 1e-6f);
     EXPECT_NEAR(grey[2], 0.1065f, 1e-6f);
     EXPECT_FLOAT_EQ(grey[3], 1.0f);
     // A grey stays grey at any saturation.
-    const std::array<float, 4> kept = Apply(BackdropColorMatrix({.blur = true, .brightness = 1.0f, .saturation = 1.8f}), {0.4f, 0.4f, 0.4f, 1.0f});
+    const std::array<float, 4> kept = Apply(BackdropColorMatrix({
+                                                .blur       = true,
+                                                .brightness = 1.0f,
+                                                .saturation = 1.8f,
+                                            }),
+                                            {0.4f, 0.4f, 0.4f, 1.0f});
     EXPECT_NEAR(kept[0], 0.4f, 1e-6f);
     EXPECT_NEAR(kept[2], 0.4f, 1e-6f);
 }

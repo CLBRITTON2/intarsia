@@ -96,8 +96,11 @@ void Tray::Place(const ModulePlacement& placement) {
     const D2D1_POINT_2F       origin   = placement.contentOrigin;
     for (size_t index = 0; index < _slots.size() && MainEnd(_row.boxes[index], _row.axis) <= revealed; ++index) {
         const D2D1_RECT_F& box = _row.boxes[index];
-        rects.push_back(
-            TrayIconRect{.owner = _slots[index].icon.owner, .id = _slots[index].icon.id, .rect = DipsToScreen(placement.windowRect, Offset(box, origin), placement.dpi)});
+        rects.push_back(TrayIconRect{
+            .owner = _slots[index].icon.owner,
+            .id    = _slots[index].icon.id,
+            .rect  = DipsToScreen(placement.windowRect, Offset(box, origin), placement.dpi),
+        });
     }
     if (!std::ranges::equal(rects, _placed, SamePlace)) {
         _placed = rects;

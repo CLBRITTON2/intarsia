@@ -21,20 +21,26 @@ namespace {
     const TrayConfig kConfig{.icon = L">"};
 
     TrayIcon         Icon(std::uint32_t id, std::shared_ptr<const IconPixels> pixels, bool hidden) {
-        return TrayIcon{.owner           = 1,
-                                .id              = id,
-                                .guid            = std::nullopt,
-                                .ownerImage      = {},
-                                .callbackMessage = WM_APP,
-                                .version         = 0,
-                                .tooltip         = L"icon",
-                                .standardTooltip = false,
-                                .pixels          = std::move(pixels),
-                                .hidden          = hidden};
+        return TrayIcon{
+                    .owner           = 1,
+                    .id              = id,
+                    .guid            = std::nullopt,
+                    .ownerImage      = {},
+                    .callbackMessage = WM_APP,
+                    .version         = 0,
+                    .tooltip         = L"icon",
+                    .standardTooltip = false,
+                    .pixels          = std::move(pixels),
+                    .hidden          = hidden,
+        };
     }
 
     std::shared_ptr<const IconPixels> Pixels() {
-        return std::make_shared<const IconPixels>(IconPixels{.width = 2, .height = 2, .pbgra = std::vector<std::uint8_t>(16, 255)});
+        return std::make_shared<const IconPixels>(IconPixels{
+            .width  = 2,
+            .height = 2,
+            .pbgra  = std::vector<std::uint8_t>(16, 255),
+        });
     }
 
     // Bitmaps need a device, and the toggle's text needs DirectWrite.
@@ -258,7 +264,17 @@ TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeavi
 }
 
 TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
-    const ModulePlacement placement{.windowRect = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 192};
+    const ModulePlacement placement{
+        .windowRect =
+            RECT{
+                .left   = 1000,
+                .top    = 20,
+                .right  = 3000,
+                .bottom = 80,
+            },
+        .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
+        .dpi           = 192,
+    };
     {
         Tray module(kConfig, _tray, TestModuleStyle());
         module.Layout(_render);
@@ -280,8 +296,18 @@ TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
 }
 
 TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
-    const ModulePlacement placement{.windowRect = RECT{.left = 1000, .top = 20, .right = 3000, .bottom = 80}, .contentOrigin = D2D1::Point2F(100.0f, 4.0f), .dpi = 96};
-    Tray                  module(kConfig, _tray, TestModuleStyle());
+    const ModulePlacement placement{
+        .windowRect =
+            RECT{
+                .left   = 1000,
+                .top    = 20,
+                .right  = 3000,
+                .bottom = 80,
+            },
+        .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
+        .dpi           = 96,
+    };
+    Tray module(kConfig, _tray, TestModuleStyle());
     module.Layout(_render);
     module.Click(At(module, module.Size().width / 2.0f));
     module.Layout(_render);
@@ -290,7 +316,11 @@ TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
     const size_t calls = _tray.showCalls;
     module.Place(placement);
     EXPECT_EQ(_tray.showCalls, calls);
-    module.Place(ModulePlacement{.windowRect = placement.windowRect, .contentOrigin = D2D1::Point2F(120.0f, 4.0f), .dpi = 96});
+    module.Place(ModulePlacement{
+        .windowRect    = placement.windowRect,
+        .contentOrigin = D2D1::Point2F(120.0f, 4.0f),
+        .dpi           = 96,
+    });
     EXPECT_EQ(_tray.showCalls, calls + 1);
 }
 
@@ -308,7 +338,17 @@ TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     _tray.icons[0].pixels = Pixels();
     EXPECT_FALSE(module.Layout(_render));
     EXPECT_FLOAT_EQ(module.Size().width, folded);
-    module.Place(ModulePlacement{.windowRect = RECT{.left = 0, .top = 0, .right = 2000, .bottom = 60}, .contentOrigin = D2D1::Point2F(0.0f, 0.0f), .dpi = 96});
+    module.Place(ModulePlacement{
+        .windowRect =
+            RECT{
+                .left   = 0,
+                .top    = 0,
+                .right  = 2000,
+                .bottom = 60,
+            },
+        .contentOrigin = D2D1::Point2F(0.0f, 0.0f),
+        .dpi           = 96,
+    });
     EXPECT_TRUE(_tray.rects.empty());
 
     module.Click(At(module, folded / 2.0f));

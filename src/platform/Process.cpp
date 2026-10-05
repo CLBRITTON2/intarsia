@@ -176,11 +176,19 @@ namespace {
         static std::atomic<std::uint64_t>        created{0};
         const std::wstring                       name       = std::format(L"\\\\.\\pipe\\intarsia-command-{}-{}", GetCurrentProcessId(), created.fetch_add(1));
         const UniqueReleased<HLOCAL, &LocalFree> descriptor = OwnerOnlyDescriptor();
-        SECURITY_ATTRIBUTES                      ownerOnly{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = descriptor.get(), .bInheritHandle = FALSE};
-        UniqueHandle                             read = OwnHandle(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
-                                                                                   PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, 4096, 0, &ownerOnly),
-                                                                  "CreateNamedPipeW(command output)");
-        SECURITY_ATTRIBUTES                      inheritable{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
+        SECURITY_ATTRIBUTES                      ownerOnly{
+                                 .nLength              = sizeof(SECURITY_ATTRIBUTES),
+                                 .lpSecurityDescriptor = descriptor.get(),
+                                 .bInheritHandle       = FALSE,
+        };
+        UniqueHandle        read = OwnHandle(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                                              PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, 4096, 0, &ownerOnly),
+                                             "CreateNamedPipeW(command output)");
+        SECURITY_ATTRIBUTES inheritable{
+            .nLength              = sizeof(SECURITY_ATTRIBUTES),
+            .lpSecurityDescriptor = nullptr,
+            .bInheritHandle       = TRUE,
+        };
         UniqueHandle write = OwnHandle(CreateFileW(name.c_str(), GENERIC_WRITE, 0, &inheritable, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr), "CreateFileW(command output)");
         return Pipe{.read = std::move(read), .write = std::move(write)};
     }
@@ -370,7 +378,12 @@ namespace {
     class CommandRun {
       public:
         CommandRun(const Command& command, HANDLE cancel, std::optional<std::chrono::milliseconds> timeout) :
-            _pipe(OutputPipe()), _job(KillOnCloseJob()), _port(OutputPort(_pipe.read.get(), _job.get())), _watchdog{.job = _job.get(), .port = _port.get(), .stop = Stop::None},
+            _pipe(OutputPipe()), _job(KillOnCloseJob()), _port(OutputPort(_pipe.read.get(), _job.get())),
+            _watchdog{
+                .job  = _job.get(),
+                .port = _port.get(),
+                .stop = Stop::None,
+            },
             _wait(CreateThreadpoolWait(StopJob, &_watchdog, nullptr)) {
             if (_wait == nullptr) {
                 ThrowLastError("CreateThreadpoolWait");

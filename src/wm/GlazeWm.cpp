@@ -25,11 +25,18 @@ namespace {
 } // namespace
 
 GlazeWm::Snapshot GlazeWm::Snapshot::Empty(Connection connection, std::string detail) {
-    return Snapshot{.workspaces   = {},
-                    .windows      = {},
-                    .bindingModes = {},
-                    .direction    = std::nullopt,
-                    .status       = WindowManagerStatus{.name = kName, .connection = connection, .detail = std::move(detail)}};
+    return Snapshot{
+        .workspaces   = {},
+        .windows      = {},
+        .bindingModes = {},
+        .direction    = std::nullopt,
+        .status =
+            WindowManagerStatus{
+                .name       = kName,
+                .connection = connection,
+                .detail     = std::move(detail),
+            },
+    };
 }
 
 GlazeWm::GlazeWm(ChangeSignal& changes, std::uint16_t port, std::unique_ptr<Native> focus) :

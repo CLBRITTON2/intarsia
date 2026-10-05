@@ -250,7 +250,11 @@ TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
     const std::filesystem::path impostor = integration::NewWorkDirectory("impostor-server") / "impostor.exe";
     std::filesystem::copy_file(integration::GlazeWmTestServer(L"integration").program, impostor, std::filesystem::copy_options::overwrite_existing);
     const integration::RunningBar  bar("impostor", ClicksConfig("top"), kStyle,
-                                       integration::TestServer{.program = impostor, .scenario = L"integration", .readyEvent = "disconnected"});
+                                       integration::TestServer{
+                                           .program    = impostor,
+                                           .scenario   = L"integration",
+                                           .readyEvent = "disconnected",
+                                      });
 
     const std::vector<std::string> refused = bar.Events("disconnected");
     ASSERT_FALSE(refused.empty());

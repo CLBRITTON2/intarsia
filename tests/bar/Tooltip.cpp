@@ -4,10 +4,21 @@
 
 namespace {
 
-    constexpr RECT kMonitor{.left = 0, .top = 0, .right = 1920, .bottom = 1080};
+    constexpr RECT kMonitor{
+        .left   = 0,
+        .top    = 0,
+        .right  = 1920,
+        .bottom = 1080,
+    };
 
-    TooltipAnchor  AnchorAt(Edge edge, RECT barRect, RECT target) {
-        return TooltipAnchor{.target = target, .barRect = barRect, .monitorRect = kMonitor, .edge = edge, .dpi = 96};
+    TooltipAnchor AnchorAt(Edge edge, RECT barRect, RECT target) {
+        return TooltipAnchor{
+            .target      = target,
+            .barRect     = barRect,
+            .monitorRect = kMonitor,
+            .edge        = edge,
+            .dpi         = 96,
+        };
     }
 
     bool SameRect(const RECT& actual, const RECT& expected) {

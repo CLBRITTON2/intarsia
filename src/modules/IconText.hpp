@@ -76,7 +76,12 @@ class TextLine {
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
 
   private:
-    ModuleText _shown{.icon = {}, .text = {}, .state = TextState::Normal, .classIndex = 0}; // what _text holds, once laid out
-    bool       _laidOut = false;
-    IconText   _text    = EmptyIconText();
+    ModuleText _shown{
+        .icon       = {},
+        .text       = {},
+        .state      = TextState::Normal,
+        .classIndex = 0,
+    }; // what _text holds, once laid out
+    bool     _laidOut = false;
+    IconText _text    = EmptyIconText();
 };

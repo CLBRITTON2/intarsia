@@ -26,7 +26,15 @@ struct NetworkState {
 
     // No link, as before the first sample or after a failed one.
     static NetworkState None() {
-        return {.link = NetworkLink::None, .interfaceName = {}, .ssid = {}, .signalPercent = std::nullopt, .ipv4 = {}, .receivedBytesPerSecond = 0.0, .sentBytesPerSecond = 0.0};
+        return {
+            .link                   = NetworkLink::None,
+            .interfaceName          = {},
+            .ssid                   = {},
+            .signalPercent          = std::nullopt,
+            .ipv4                   = {},
+            .receivedBytesPerSecond = 0.0,
+            .sentBytesPerSecond     = 0.0,
+        };
     }
 };
 

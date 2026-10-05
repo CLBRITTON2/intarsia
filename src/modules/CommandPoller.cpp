@@ -19,7 +19,13 @@ namespace {
 
     CommandResult Failure(std::string text, std::string detail) {
         return CommandResult{
-            .outcome = CommandOutcome::Failed, .text = std::move(text), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = std::move(detail)};
+            .outcome    = CommandOutcome::Failed,
+            .text       = std::move(text),
+            .tooltip    = std::nullopt,
+            .alert      = false,
+            .classIndex = std::nullopt,
+            .detail     = std::move(detail),
+        };
     }
 
     // The first line of text, without its line ending.
@@ -34,7 +40,14 @@ namespace {
     CommandResult ParseText(std::string_view output) {
         const std::string_view line = FirstLine(output);
         RequireDrawable(line, "output", L"");
-        return CommandResult{.outcome = CommandOutcome::Succeeded, .text = std::string(line), .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}};
+        return CommandResult{
+            .outcome    = CommandOutcome::Succeeded,
+            .text       = std::string(line),
+            .tooltip    = std::nullopt,
+            .alert      = false,
+            .classIndex = std::nullopt,
+            .detail     = {},
+        };
     }
 
     // The failure never quotes the class, which is output.
@@ -83,12 +96,14 @@ namespace {
         }
 
         const bool    alerted = alert != value.end() && alert->get<bool>();
-        CommandResult result{.outcome    = CommandOutcome::Succeeded,
-                             .text       = text->get<std::string>(),
-                             .tooltip    = tooltip == value.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
-                             .alert      = alerted,
-                             .classIndex = ReadClass(value, alerted, classes),
-                             .detail     = {}};
+        CommandResult result{
+            .outcome    = CommandOutcome::Succeeded,
+            .text       = text->get<std::string>(),
+            .tooltip    = tooltip == value.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
+            .alert      = alerted,
+            .classIndex = ReadClass(value, alerted, classes),
+            .detail     = {},
+        };
         RequireDrawable(result.text, "text", L"");
         if (result.tooltip.has_value()) {
             RequireDrawable(*result.tooltip, "tooltip", L"\n");
@@ -121,7 +136,14 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format, const st
 
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :
     _name(std::move(name)), _command(config.command), _interval(config.text.interval), _run(config.run), _output(config.output), _classes(config.classes), _changes(changes),
-    _result{.outcome = CommandOutcome::Pending, .text = {}, .tooltip = std::nullopt, .alert = false, .classIndex = std::nullopt, .detail = {}},
+    _result{
+        .outcome    = CommandOutcome::Pending,
+        .text       = {},
+        .tooltip    = std::nullopt,
+        .alert      = false,
+        .classIndex = std::nullopt,
+        .detail     = {},
+    },
     _thread("command poller", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 CommandResult CommandPoller::Result() const {

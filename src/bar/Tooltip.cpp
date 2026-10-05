@@ -49,7 +49,12 @@ RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
             left = KeepWithin(anchor.edge == Edge::Left ? barRect.right : barRect.left - size.cx, size.cx, monitorRect.left, monitorRect.right);
             break;
     }
-    return RECT{.left = left, .top = top, .right = left + size.cx, .bottom = top + size.cy};
+    return RECT{
+        .left   = left,
+        .top    = top,
+        .right  = left + size.cx,
+        .bottom = top + size.cy,
+    };
 }
 
 void Tooltip::RegisterWindowClass(HINSTANCE instance) {

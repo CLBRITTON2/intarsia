@@ -14,9 +14,18 @@ namespace {
     constexpr std::uint32_t kChanged = WM_APP + 1;
 
     CounterConfig           WithFormat(std::wstring path, std::string format) {
-        return CounterConfig{.path    = std::move(path),
-                                       .combine = CounterCombine::Average,
-                                       .text = TextModuleConfig{.format = std::move(format), .tooltip = std::nullopt, .icon = L"", .interval = std::chrono::seconds(1), .actions = {}}};
+        return CounterConfig{
+                      .path    = std::move(path),
+                      .combine = CounterCombine::Average,
+                      .text =
+                TextModuleConfig{
+                              .format   = std::move(format),
+                              .tooltip  = std::nullopt,
+                              .icon     = L"",
+                              .interval = std::chrono::seconds(1),
+                              .actions  = {},
+                },
+        };
     }
 
     class CounterModule : public testing::Test {

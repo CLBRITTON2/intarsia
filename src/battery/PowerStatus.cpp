@@ -179,7 +179,12 @@ std::optional<BatteryState> BatteryFromPowerStatus(const SYSTEM_POWER_STATUS& po
     if (charge == ChargeState::Discharging && power.BatteryLifeTime != BATTERY_LIFE_UNKNOWN) {
         secondsLeft = static_cast<std::int32_t>(power.BatteryLifeTime);
     }
-    return BatteryState{.charge = charge, .percent = power.BatteryLifePercent, .secondsLeft = secondsLeft, .healthPercent = std::nullopt};
+    return BatteryState{
+        .charge        = charge,
+        .percent       = power.BatteryLifePercent,
+        .secondsLeft   = secondsLeft,
+        .healthPercent = std::nullopt,
+    };
 }
 
 std::optional<std::int32_t> HealthPercent(const std::vector<BatteryCapacity>& batteries) {

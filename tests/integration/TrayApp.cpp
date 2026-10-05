@@ -25,7 +25,11 @@ namespace integration {
             if (message == kCallback) {
                 auto* received = reinterpret_cast<std::vector<TrayInputMessage>*>(GetWindowLongPtrW(window, GWLP_USERDATA)); // NOLINT(performance-no-int-to-ptr)
                 if (received != nullptr) {
-                    received->push_back(TrayInputMessage{.message = message, .wParam = wParam, .lParam = lParam});
+                    received->push_back(TrayInputMessage{
+                               .message = message,
+                               .wParam  = wParam,
+                               .lParam  = lParam,
+                    });
                 }
                 return 0;
             }
@@ -39,7 +43,13 @@ namespace integration {
                 const std::array<std::byte, 32>  mask{};
                 HBITMAP                          color     = CreateBitmap(kIconSide, kIconSide, 1, 32, pixels.data());
                 HBITMAP                          maskImage = CreateBitmap(kIconSide, kIconSide, 1, 1, mask.data());
-                ICONINFO                         info{.fIcon = TRUE, .xHotspot = 0, .yHotspot = 0, .hbmMask = maskImage, .hbmColor = color};
+                ICONINFO                         info{
+                                            .fIcon    = TRUE,
+                                            .xHotspot = 0,
+                                            .yHotspot = 0,
+                                            .hbmMask  = maskImage,
+                                            .hbmColor = color,
+                };
                 _icon             = color != nullptr && maskImage != nullptr ? CreateIconIndirect(&info) : nullptr;
                 const DWORD error = GetLastError();
                 DeleteObject(color);
@@ -86,18 +96,20 @@ namespace integration {
         if (_tray == nullptr) {
             throw std::runtime_error("no window of the bar's tray class exists");
         }
-        const WNDCLASSEXW ownerClass{.cbSize        = sizeof(WNDCLASSEXW),
-                                     .style         = 0,
-                                     .lpfnWndProc   = OwnerProc,
-                                     .cbClsExtra    = 0,
-                                     .cbWndExtra    = 0,
-                                     .hInstance     = GetModuleHandleW(nullptr),
-                                     .hIcon         = nullptr,
-                                     .hCursor       = nullptr,
-                                     .hbrBackground = nullptr,
-                                     .lpszMenuName  = nullptr,
-                                     .lpszClassName = kOwnerClass,
-                                     .hIconSm       = nullptr};
+        const WNDCLASSEXW ownerClass{
+            .cbSize        = sizeof(WNDCLASSEXW),
+            .style         = 0,
+            .lpfnWndProc   = OwnerProc,
+            .cbClsExtra    = 0,
+            .cbWndExtra    = 0,
+            .hInstance     = GetModuleHandleW(nullptr),
+            .hIcon         = nullptr,
+            .hCursor       = nullptr,
+            .hbrBackground = nullptr,
+            .lpszMenuName  = nullptr,
+            .lpszClassName = kOwnerClass,
+            .hIconSm       = nullptr,
+        };
         // A second app registers the class again, which fails harmlessly.
         RegisterClassExW(&ownerClass);
         _owner = CreateWindowExW(0, kOwnerClass, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -134,14 +146,16 @@ namespace integration {
     }
 
     std::optional<RECT> TrayApp::IconRect() const {
-        NotifyIconIdentifier32 query{.signature = kTrayNotifySignature,
-                                     .part      = static_cast<std::uint32_t>(IconRectPart::Size),
-                                     .size      = sizeof(NOTIFYICONIDENTIFIER),
-                                     .padding   = 0,
-                                     .window    = Handle32(_owner),
-                                     .id        = _id,
-                                     .guid      = GUID{}};
-        LRESULT                size = 0;
+        NotifyIconIdentifier32 query{
+            .signature = kTrayNotifySignature,
+            .part      = static_cast<std::uint32_t>(IconRectPart::Size),
+            .size      = sizeof(NOTIFYICONIDENTIFIER),
+            .padding   = 0,
+            .window    = Handle32(_owner),
+            .id        = _id,
+            .guid      = GUID{},
+        };
+        LRESULT size = 0;
         if (!Send(kIconRectCopyData, &query, sizeof(query), size) || size == 0) {
             return std::nullopt;
         }
@@ -150,7 +164,12 @@ namespace integration {
         if (!Send(kIconRectCopyData, &query, sizeof(query), position)) {
             return std::nullopt;
         }
-        return RECT{.left = Low16(position), .top = High16(position), .right = Low16(position) + Low16(size), .bottom = High16(position) + High16(size)};
+        return RECT{
+            .left   = Low16(position),
+            .top    = High16(position),
+            .right  = Low16(position) + Low16(size),
+            .bottom = High16(position) + High16(size),
+        };
     }
 
     const std::vector<TrayInputMessage>& TrayApp::Received() const {
@@ -159,8 +178,12 @@ namespace integration {
 
     // Whether the tray answered in time. Throws when the send fails for any other reason than a timeout.
     bool TrayApp::Send(ULONG_PTR kind, void* payload, size_t size, LRESULT& answer) const {
-        COPYDATASTRUCT data{.dwData = kind, .cbData = static_cast<DWORD>(size), .lpData = payload};
-        DWORD_PTR      result = 0;
+        COPYDATASTRUCT data{
+            .dwData = kind,
+            .cbData = static_cast<DWORD>(size),
+            .lpData = payload,
+        };
+        DWORD_PTR result = 0;
         if (SendMessageTimeoutW(_tray, WM_COPYDATA, reinterpret_cast<WPARAM>(_owner), reinterpret_cast<LPARAM>(&data), SMTO_NORMAL, kAnswerMs, &result) == 0) {
             const DWORD error = GetLastError();
             if (error == ERROR_TIMEOUT) {

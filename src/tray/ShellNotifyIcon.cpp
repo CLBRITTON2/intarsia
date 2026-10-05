@@ -113,8 +113,14 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
         return;
     }
     const POINT     cursor = *position;
-    const TrayClick click{.owner = icon.owner, .id = icon.id, .button = button, .cursor = cursor, .time = std::chrono::steady_clock::now()};
-    const bool      doubled =
+    const TrayClick click{
+        .owner  = icon.owner,
+        .id     = icon.id,
+        .button = button,
+        .cursor = cursor,
+        .time   = std::chrono::steady_clock::now(),
+    };
+    const bool doubled =
         IsDoubleClick(_lastClick, click, std::chrono::milliseconds(GetDoubleClickTime()), SIZE{.cx = GetSystemMetrics(SM_CXDOUBLECLK), .cy = GetSystemMetrics(SM_CYDOUBLECLK)});
     // A third click after a double click starts a new pair, as Windows counts them.
     _lastClick                                   = doubled ? std::nullopt : std::optional<TrayClick>(click);

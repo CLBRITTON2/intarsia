@@ -17,7 +17,11 @@ namespace {
 } // namespace
 
 Audio::Audio(AudioConfig config, IAudio& audio) : IconTextModule(std::move(config)), _audio(audio) {
-    const std::vector<Placeholder> samples = AudioPlaceholders(AudioDevice{.name = L"Speakers", .volume = 0.5f, .muted = false});
+    const std::vector<Placeholder> samples = AudioPlaceholders(AudioDevice{
+        .name   = L"Speakers",
+        .volume = 0.5f,
+        .muted  = false,
+    });
     RequirePlaceholders("audio format", Settings().format, samples);
     RequirePlaceholders("audio format_muted", Settings().formatMuted, samples);
     RequireOptionalPlaceholders("audio tooltip", Settings().tooltip, samples);
@@ -55,13 +59,20 @@ std::int32_t VolumePercent(float volume) {
 
 ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device) {
     if (!device.has_value()) {
-        return ModuleText{.icon = {}, .text = {}, .state = TextState::Normal, .classIndex = 0};
+        return ModuleText{
+            .icon       = {},
+            .text       = {},
+            .state      = TextState::Normal,
+            .classIndex = 0,
+        };
     }
     const std::string& format = device->muted ? config.formatMuted : config.format;
-    return ModuleText{.icon       = device->muted ? config.iconMuted : config.icon,
-                      .text       = ToWide(FormatPlaceholders(format, AudioPlaceholders(*device))),
-                      .state      = device->muted ? TextState::Muted : TextState::Normal,
-                      .classIndex = 0};
+    return ModuleText{
+        .icon       = device->muted ? config.iconMuted : config.icon,
+        .text       = ToWide(FormatPlaceholders(format, AudioPlaceholders(*device))),
+        .state      = device->muted ? TextState::Muted : TextState::Normal,
+        .classIndex = 0,
+    };
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {

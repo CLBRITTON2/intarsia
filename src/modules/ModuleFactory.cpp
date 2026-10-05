@@ -70,7 +70,12 @@ namespace {
         const auto* settings = std::get_if<GroupConfig>(&instance.settings);
         if (settings == nullptr) {
             std::unique_ptr<IModule> module = CreateModule(instance, sources);
-            return ModuleEntry{.module = std::move(module), .style = instance.style, .group = nullptr, .members = {}};
+            return ModuleEntry{
+                .module  = std::move(module),
+                .style   = instance.style,
+                .group   = nullptr,
+                .members = {},
+            };
         }
         auto                     group = std::make_unique<Group>(*settings, instance.style);
         const Group*             view  = group.get();
@@ -79,7 +84,12 @@ namespace {
         for (const ModuleInstance& member : settings->members) {
             members.push_back(CreateEntry(member, sources));
         }
-        return ModuleEntry{.module = std::move(group), .style = instance.style, .group = view, .members = std::move(members)};
+        return ModuleEntry{
+            .module  = std::move(group),
+            .style   = instance.style,
+            .group   = view,
+            .members = std::move(members),
+        };
     }
 
 } // namespace

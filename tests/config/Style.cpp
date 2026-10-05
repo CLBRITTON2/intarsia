@@ -342,8 +342,17 @@ TEST(Style, ShadowsAreInsetAndKeepTheirOrder) {
 
 TEST(Style, SectionsTooltipsAndMenusTakeTheSystemsBlurAndNothingElseDoes) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section:\n  blur: on\nmenu:\n  blur: off\n"));
-    const Backdrop    none{.blur = false, .brightness = 1.0f, .saturation = 1.0f};
-    EXPECT_EQ(bar.section.backdrop, (Backdrop{.blur = true, .brightness = 1.0f, .saturation = 1.0f}));
+    const Backdrop    none{
+           .blur       = false,
+           .brightness = 1.0f,
+           .saturation = 1.0f,
+    };
+    EXPECT_EQ(bar.section.backdrop,
+              (Backdrop{
+                  .blur       = true,
+                  .brightness = 1.0f,
+                  .saturation = 1.0f,
+              }));
     EXPECT_EQ(bar.tooltip.backdrop, none);
     EXPECT_EQ(bar.menu.backdrop, none);
     EXPECT_THAT([] { return Parse("tooltip:\n  blur: 20\n"); }, ConfigErrorWith("tooltip: blur must be on or off"));
@@ -352,7 +361,12 @@ TEST(Style, SectionsTooltipsAndMenusTakeTheSystemsBlurAndNothingElseDoes) {
 
 TEST(Style, BrightnessAndSaturateToneTheBlur) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section:\n  blur: on\n  saturate: 1.8\n  brightness: 0.4\ntooltip:\n  brightness: 0.4\n  blur: on\n"));
-    EXPECT_EQ(bar.section.backdrop, (Backdrop{.blur = true, .brightness = 0.4f, .saturation = 1.8f}));
+    EXPECT_EQ(bar.section.backdrop,
+              (Backdrop{
+                  .blur       = true,
+                  .brightness = 0.4f,
+                  .saturation = 1.8f,
+              }));
     EXPECT_FLOAT_EQ(bar.tooltip.backdrop.brightness, 0.4f);
     EXPECT_FLOAT_EQ(bar.tooltip.backdrop.saturation, 1.0f);
     EXPECT_THAT([] { return Parse("section:\n  brightness: 0.4\n"); }, ConfigErrorWith("section: brightness tones the system's blur, so it takes blur: on beside it"));

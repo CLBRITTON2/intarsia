@@ -82,9 +82,15 @@ namespace {
         const std::array<std::byte, 32>  mask{};
         HBITMAP                          colorBitmap = CreateBitmap(kIconSide, kIconSide, 1, 32, pixels.data());
         HBITMAP                          maskBitmap  = CreateBitmap(kIconSide, kIconSide, 1, 1, mask.data());
-        ICONINFO                         info{.fIcon = TRUE, .xHotspot = 0, .yHotspot = 0, .hbmMask = maskBitmap, .hbmColor = colorBitmap};
-        HICON                            icon  = colorBitmap != nullptr && maskBitmap != nullptr ? CreateIconIndirect(&info) : nullptr;
-        const DWORD                      error = GetLastError();
+        ICONINFO                         info{
+                                    .fIcon    = TRUE,
+                                    .xHotspot = 0,
+                                    .yHotspot = 0,
+                                    .hbmMask  = maskBitmap,
+                                    .hbmColor = colorBitmap,
+        };
+        HICON       icon  = colorBitmap != nullptr && maskBitmap != nullptr ? CreateIconIndirect(&info) : nullptr;
+        const DWORD error = GetLastError();
         DeleteObject(colorBitmap);
         DeleteObject(maskBitmap);
         if (icon == nullptr) {
@@ -110,8 +116,12 @@ namespace {
 
     // Returns whether the tray took the message. Throws TrayHung when it does not answer in time.
     bool Send(HWND tray, HWND sender, TrayNotifyData data) {
-        COPYDATASTRUCT copy{.dwData = kNotifyIconCopyData, .cbData = sizeof(data), .lpData = &data};
-        DWORD_PTR      result = 0;
+        COPYDATASTRUCT copy{
+            .dwData = kNotifyIconCopyData,
+            .cbData = sizeof(data),
+            .lpData = &data,
+        };
+        DWORD_PTR result = 0;
         if (SendMessageTimeoutW(tray, WM_COPYDATA, reinterpret_cast<WPARAM>(sender), reinterpret_cast<LPARAM>(&copy), SMTO_NORMAL, kAnswerMs, &result) == 0) {
             const DWORD error = GetLastError();
             if (error == ERROR_TIMEOUT) {

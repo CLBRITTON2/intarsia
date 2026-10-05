@@ -47,7 +47,11 @@ namespace integration {
         }
 
         UniqueHandle InheritableFile(const std::filesystem::path& path) {
-            SECURITY_ATTRIBUTES inherit{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
+            SECURITY_ATTRIBUTES inherit{
+                .nLength              = sizeof(SECURITY_ATTRIBUTES),
+                .lpSecurityDescriptor = nullptr,
+                .bInheritHandle       = TRUE,
+            };
             return OwnHandle(
                 CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
                 "CreateFileW(child output)");
@@ -188,9 +192,13 @@ namespace integration {
         }
         const UniqueHandle  output = InheritableFile(stdoutPath);
         const UniqueHandle  errors = InheritableFile(stderrPath);
-        SECURITY_ATTRIBUTES inherit{.nLength = sizeof(SECURITY_ATTRIBUTES), .lpSecurityDescriptor = nullptr, .bInheritHandle = TRUE};
-        HANDLE              readEnd  = nullptr;
-        HANDLE              writeEnd = nullptr;
+        SECURITY_ATTRIBUTES inherit{
+            .nLength              = sizeof(SECURITY_ATTRIBUTES),
+            .lpSecurityDescriptor = nullptr,
+            .bInheritHandle       = TRUE,
+        };
+        HANDLE readEnd  = nullptr;
+        HANDLE writeEnd = nullptr;
         if (!CreatePipe(&readEnd, &writeEnd, &inherit, 0)) {
             ThrowLastError("CreatePipe(child stdin)");
         }
@@ -259,18 +267,20 @@ namespace integration {
     }
 
     TestWindow::TestWindow(std::wstring_view suffix) {
-        const WNDCLASSEXW windowClass{.cbSize        = sizeof(WNDCLASSEXW),
-                                      .style         = 0,
-                                      .lpfnWndProc   = DefWindowProcW,
-                                      .cbClsExtra    = 0,
-                                      .cbWndExtra    = 0,
-                                      .hInstance     = GetModuleHandleW(nullptr),
-                                      .hIcon         = LoadIconW(nullptr, IDI_APPLICATION),
-                                      .hCursor       = nullptr,
-                                      .hbrBackground = nullptr,
-                                      .lpszMenuName  = nullptr,
-                                      .lpszClassName = kWindowClass,
-                                      .hIconSm       = nullptr};
+        const WNDCLASSEXW windowClass{
+            .cbSize        = sizeof(WNDCLASSEXW),
+            .style         = 0,
+            .lpfnWndProc   = DefWindowProcW,
+            .cbClsExtra    = 0,
+            .cbWndExtra    = 0,
+            .hInstance     = GetModuleHandleW(nullptr),
+            .hIcon         = LoadIconW(nullptr, IDI_APPLICATION),
+            .hCursor       = nullptr,
+            .hbrBackground = nullptr,
+            .lpszMenuName  = nullptr,
+            .lpszClassName = kWindowClass,
+            .hIconSm       = nullptr,
+        };
         // A second window registers the class again, which fails harmlessly.
         RegisterClassExW(&windowClass);
         const std::wstring title = std::wstring(kWindowTitle) + std::wstring(suffix);
@@ -447,7 +457,11 @@ namespace integration {
 
     Capture CaptureScreenOver(HWND window) {
         const RECT rect = ScreenRect(window);
-        Capture    capture{.width = rect.right - rect.left, .height = rect.bottom - rect.top, .pixels = {}};
+        Capture    capture{
+               .width  = rect.right - rect.left,
+               .height = rect.bottom - rect.top,
+               .pixels = {},
+        };
         capture.pixels.resize(static_cast<size_t>(capture.width) * static_cast<size_t>(capture.height));
 
         HDC screen = GetDC(nullptr);
@@ -462,17 +476,19 @@ namespace integration {
         SelectObject(memory, old);
         // A negative height asks for rows top to bottom.
         BITMAPINFO info{};
-        info.bmiHeader          = BITMAPINFOHEADER{.biSize          = sizeof(BITMAPINFOHEADER),
-                                                   .biWidth         = capture.width,
-                                                   .biHeight        = -capture.height,
-                                                   .biPlanes        = 1,
-                                                   .biBitCount      = 32,
-                                                   .biCompression   = BI_RGB,
-                                                   .biSizeImage     = 0,
-                                                   .biXPelsPerMeter = 0,
-                                                   .biYPelsPerMeter = 0,
-                                                   .biClrUsed       = 0,
-                                                   .biClrImportant  = 0};
+        info.bmiHeader = BITMAPINFOHEADER{
+            .biSize          = sizeof(BITMAPINFOHEADER),
+            .biWidth         = capture.width,
+            .biHeight        = -capture.height,
+            .biPlanes        = 1,
+            .biBitCount      = 32,
+            .biCompression   = BI_RGB,
+            .biSizeImage     = 0,
+            .biXPelsPerMeter = 0,
+            .biYPelsPerMeter = 0,
+            .biClrUsed       = 0,
+            .biClrImportant  = 0,
+        };
         const std::int32_t rows = GetDIBits(memory, bitmap, 0, static_cast<UINT>(capture.height), capture.pixels.data(), &info, DIB_RGB_COLORS);
         DeleteObject(bitmap);
         DeleteDC(memory);
@@ -543,7 +559,11 @@ namespace integration {
     }
 
     TestServer GlazeWmTestServer(std::wstring_view scenario) {
-        return TestServer{.program = Executable(INTARSIA_GLAZEWM_SERVER), .scenario = std::wstring(scenario), .readyEvent = "connected"};
+        return TestServer{
+            .program    = Executable(INTARSIA_GLAZEWM_SERVER),
+            .scenario   = std::wstring(scenario),
+            .readyEvent = "connected",
+        };
     }
 
     RunningBar::RunningBar(std::string_view testName, std::string_view config, std::string_view style) : RunningBar(testName, config, style, GlazeWmTestServer(L"integration")) {}

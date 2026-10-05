@@ -32,7 +32,11 @@ namespace {
         ThrowIfFailed(layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER), "IDWriteTextLayout::SetTextAlignment");
         ComPtr<IDWriteInlineObject> ellipsis;
         ThrowIfFailed(render.dwrite->CreateEllipsisTrimmingSign(render.textFormat, &ellipsis), "IDWriteFactory::CreateEllipsisTrimmingSign");
-        const DWRITE_TRIMMING trimming{.granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER, .delimiter = 0, .delimiterCount = 0};
+        const DWRITE_TRIMMING trimming{
+            .granularity    = DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+            .delimiter      = 0,
+            .delimiterCount = 0,
+        };
         ThrowIfFailed(layout->SetTrimming(&trimming, ellipsis.Get()), "IDWriteTextLayout::SetTrimming");
         return layout;
     }
@@ -75,15 +79,17 @@ namespace {
         const float               gap         = icon != nullptr && text != nullptr ? iconGapDips : 0.0f;
         const D2D1_SIZE_F         size        = axis == Axis::Horizontal ? D2D1::SizeF(iconSize.width + gap + textSize.width, std::max(iconSize.height, textSize.height)) :
                                                                            D2D1::SizeF(std::max(iconSize.width, textSize.width), iconSize.height + gap + textSize.height);
-        return IconText{.icon             = std::move(icon),
-                        .text             = std::move(text),
-                        .axis             = axis,
-                        .iconSize         = iconSize,
-                        .iconInkShiftDips = inkShift,
-                        .textSize         = textSize,
-                        .textLeftDips     = textMetrics.left,
-                        .gapDips          = gap,
-                        .size             = size};
+        return IconText{
+            .icon             = std::move(icon),
+            .text             = std::move(text),
+            .axis             = axis,
+            .iconSize         = iconSize,
+            .iconInkShiftDips = inkShift,
+            .textSize         = textSize,
+            .textLeftDips     = textMetrics.left,
+            .gapDips          = gap,
+            .size             = size,
+        };
     }
 
     void DrawBeside(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, ID2D1Brush* iconBrush, ID2D1Brush* textBrush) {
@@ -147,15 +153,17 @@ void DrawTurnedIconText(const RenderContext& render, D2D1_POINT_2F origin, const
 }
 
 IconText EmptyIconText() {
-    return IconText{.icon             = nullptr,
-                    .text             = nullptr,
-                    .axis             = Axis::Horizontal,
-                    .iconSize         = {.width = 0.0f, .height = 0.0f},
-                    .iconInkShiftDips = 0.0f,
-                    .textSize         = {.width = 0.0f, .height = 0.0f},
-                    .textLeftDips     = 0.0f,
-                    .gapDips          = 0.0f,
-                    .size             = {.width = 0.0f, .height = 0.0f}};
+    return IconText{
+        .icon             = nullptr,
+        .text             = nullptr,
+        .axis             = Axis::Horizontal,
+        .iconSize         = {.width = 0.0f, .height = 0.0f},
+        .iconInkShiftDips = 0.0f,
+        .textSize         = {.width = 0.0f, .height = 0.0f},
+        .textLeftDips     = 0.0f,
+        .gapDips          = 0.0f,
+        .size             = {.width = 0.0f, .height = 0.0f},
+    };
 }
 
 const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32_t percent) {

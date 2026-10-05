@@ -54,11 +54,12 @@ namespace {
     }
 
     BackdropVisual CreateBackdrop(const CompositionDevice& device, const composition::CompositionEffectFactory& factory) {
-        BackdropVisual                            backdrop{.sprite = device.compositor.CreateSpriteVisual(),
-                                                           .mask =
-                                    device.graphics.CreateDrawingSurface2({.Width = 0, .Height = 0}, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
-                                                                                                     winrt::Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied),
-                                                           .box = std::nullopt};
+        BackdropVisual backdrop{
+            .sprite = device.compositor.CreateSpriteVisual(),
+            .mask   = device.graphics.CreateDrawingSurface2({.Width = 0, .Height = 0}, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
+                                                            winrt::Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied),
+            .box    = std::nullopt,
+        };
         const composition::CompositionEffectBrush brush = factory.CreateBrush();
         brush.SetSourceParameter(L"backdrop", device.compositor.CreateHostBackdropBrush());
         brush.SetSourceParameter(L"mask", device.compositor.CreateSurfaceBrush(backdrop.mask));

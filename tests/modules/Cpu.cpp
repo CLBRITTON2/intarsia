@@ -10,22 +10,53 @@
 namespace {
 
     TextModuleConfig CpuWithFormat(std::string format) {
-        return TextModuleConfig{.format = std::move(format), .tooltip = std::nullopt, .icon = L"", .interval = std::chrono::seconds(1), .actions = {}};
+        return TextModuleConfig{
+            .format   = std::move(format),
+            .tooltip  = std::nullopt,
+            .icon     = L"",
+            .interval = std::chrono::seconds(1),
+            .actions  = {},
+        };
     }
 
 } // namespace
 
 TEST(Cpu, UsageIsTheBusyShareOfKernelPlusUserTime) {
     // 400 ticks elapsed (kernel 300 of which idle 100, user 100): 300 busy of 400 is 75%.
-    const CpuTimes before{.idle = 1000, .kernel = 5000, .user = 2000};
-    const CpuTimes after{.idle = 1100, .kernel = 5300, .user = 2100};
+    const CpuTimes before{
+        .idle   = 1000,
+        .kernel = 5000,
+        .user   = 2000,
+    };
+    const CpuTimes after{
+        .idle   = 1100,
+        .kernel = 5300,
+        .user   = 2100,
+    };
     EXPECT_EQ(CpuUsagePercent(before, after), 75);
     // 2 busy of 3 rounds to the nearest percent.
-    EXPECT_EQ(CpuUsagePercent(CpuTimes{.idle = 0, .kernel = 0, .user = 0}, CpuTimes{.idle = 1, .kernel = 1, .user = 2}), 67);
+    EXPECT_EQ(CpuUsagePercent(
+                  CpuTimes{
+                      .idle   = 0,
+                      .kernel = 0,
+                      .user   = 0,
+                  },
+                  CpuTimes{
+                      .idle   = 1,
+                      .kernel = 1,
+                      .user   = 2,
+                  }),
+              67);
 }
 
 TEST(Cpu, TheTooltipCanNameTheClockSpeedAndTheBusiestCore) {
-    EXPECT_EQ(FormatPlaceholders("{usage}% {ghz:.2f} GHz busiest {max_core}%", CpuPlaceholders(CpuSample{.usagePercent = 12, .gigahertz = 3.6, .maxCorePercent = 71, .cores = {}})),
+    EXPECT_EQ(FormatPlaceholders("{usage}% {ghz:.2f} GHz busiest {max_core}%",
+                                 CpuPlaceholders(CpuSample{
+                                     .usagePercent   = 12,
+                                     .gigahertz      = 3.6,
+                                     .maxCorePercent = 71,
+                                     .cores          = {},
+                                 })),
               "12% 3.60 GHz busiest 71%");
 }
 

@@ -20,7 +20,12 @@ namespace {
 
 LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, const std::filesystem::path& defaultLogPath,
                                  std::uint16_t defaultGlazeWmPort, const std::wstring& defaultTrayClass) {
-    LaunchOptions options{.configPath = defaultConfigPath, .logPath = defaultLogPath, .glazeWmPort = defaultGlazeWmPort, .trayClass = defaultTrayClass};
+    LaunchOptions options{
+        .configPath  = defaultConfigPath,
+        .logPath     = defaultLogPath,
+        .glazeWmPort = defaultGlazeWmPort,
+        .trayClass   = defaultTrayClass,
+    };
     for (size_t index = 0; index < arguments.size(); index += 2) {
         const std::wstring& name = arguments[index];
         if (index + 1 >= arguments.size()) {

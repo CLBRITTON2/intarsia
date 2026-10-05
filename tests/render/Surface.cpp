@@ -44,8 +44,16 @@ TEST(Surface, BackdropsFollowTheBoxesAndToneOfEachCall) {
     const D2D1_ROUNDED_RECT first  = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, 80.0f, 40.0f), 8.0f, 8.0f);
     const D2D1_ROUNDED_RECT second = D2D1::RoundedRect(D2D1::RectF(100.0f, 4.0f, 180.0f, 36.0f), 4.0f, 4.0f);
     const D2D1_ROUNDED_RECT empty  = D2D1::RoundedRect(D2D1::RectF(190.0f, 0.0f, 190.0f, 40.0f), 0.0f, 0.0f);
-    const Backdrop          plain{.blur = true, .brightness = 1.0f, .saturation = 1.0f};
-    const Backdrop          toned{.blur = true, .brightness = 0.4f, .saturation = 1.8f};
+    const Backdrop          plain{
+                 .blur       = true,
+                 .brightness = 1.0f,
+                 .saturation = 1.0f,
+    };
+    const Backdrop toned{
+        .blur       = true,
+        .brightness = 0.4f,
+        .saturation = 1.8f,
+    };
     EXPECT_NO_THROW(surface.ShowBackdrops({first, second}, plain));
     EXPECT_NO_THROW(surface.ShowBackdrops({first, second, empty}, plain));
     EXPECT_NO_THROW(surface.ShowBackdrops({second}, toned));

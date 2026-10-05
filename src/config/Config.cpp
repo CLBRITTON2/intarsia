@@ -318,7 +318,12 @@ namespace {
         ModuleSettings      settings = ReadModuleSettings(module, kind, definitions, sheet, style);
         const CustomConfig* custom   = std::get_if<CustomConfig>(&settings);
         ModuleStyle         styled   = ResolveModuleStyle(sheet, style, kind, name, custom != nullptr ? custom->classes : std::vector<std::string>{});
-        return ModuleInstance{.name = name, .kind = kind, .settings = std::move(settings), .style = std::move(styled)};
+        return ModuleInstance{
+            .name     = name,
+            .kind     = kind,
+            .settings = std::move(settings),
+            .style    = std::move(styled),
+        };
     }
 
     // The table of a module a list shows, which must be defined in the modules table, one table per module.
@@ -367,9 +372,11 @@ namespace {
     }
 
     Sections<ModuleInstance> ReadSections(const TableReader& lists, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
-        return Sections<ModuleInstance>{.left   = ReadModuleList(lists, definitions, "modules_left", sheet, style),
-                                        .center = ReadModuleList(lists, definitions, "modules_center", sheet, style),
-                                        .right  = ReadModuleList(lists, definitions, "modules_right", sheet, style)};
+        return Sections<ModuleInstance>{
+            .left   = ReadModuleList(lists, definitions, "modules_left", sheet, style),
+            .center = ReadModuleList(lists, definitions, "modules_center", sheet, style),
+            .right  = ReadModuleList(lists, definitions, "modules_right", sheet, style),
+        };
     }
 
     // ModulesForEdgeLength takes the last layout an edge reaches, so each must start past the one before.
@@ -477,7 +484,11 @@ namespace {
         action.RejectUnknownKeys({"menu"});
         const TableReader menu = action.Table("menu");
         menu.RejectUnknownKeys({"command", "timeout", "on_select"});
-        MenuAction read{.command = ReadCommand(menu, "command"), .timeout = Seconds(menu, "timeout"), .onSelect = ReadCommand(menu, "on_select")};
+        MenuAction read{
+            .command  = ReadCommand(menu, "command"),
+            .timeout  = Seconds(menu, "timeout"),
+            .onSelect = ReadCommand(menu, "on_select"),
+        };
         if (SameFileName(read.onSelect.program.filename().wstring(), L"cmd.exe")) {
             throw menu.Error(
                 std::format("{} may not run cmd.exe, which would read the picked id as shell syntax: name an .exe that takes it as an argument", menu.KeyPath("on_select")));
@@ -533,11 +544,13 @@ namespace {
     }
 
     ModuleActions ReadActions(const TableReader& module) {
-        return ModuleActions{.click       = ReadAction(module, "on_click"),
-                             .rightClick  = ReadAction(module, "on_right_click"),
-                             .middleClick = ReadAction(module, "on_middle_click"),
-                             .scrollUp    = ReadAction(module, "on_scroll_up"),
-                             .scrollDown  = ReadAction(module, "on_scroll_down")};
+        return ModuleActions{
+            .click       = ReadAction(module, "on_click"),
+            .rightClick  = ReadAction(module, "on_right_click"),
+            .middleClick = ReadAction(module, "on_middle_click"),
+            .scrollUp    = ReadAction(module, "on_scroll_up"),
+            .scrollDown  = ReadAction(module, "on_scroll_down"),
+        };
     }
 
     // A module's own keys plus the optional tooltip and input actions every module with settings takes.
@@ -552,11 +565,13 @@ namespace {
     }
 
     TextModuleConfig ReadTextFields(const TableReader& module) {
-        return TextModuleConfig{.format   = module.String("format"),
-                                .tooltip  = ReadTooltip(module),
-                                .icon     = ToWide(module.String("icon")),
-                                .interval = Seconds(module, "interval"),
-                                .actions  = ReadActions(module)};
+        return TextModuleConfig{
+            .format   = module.String("format"),
+            .tooltip  = ReadTooltip(module),
+            .icon     = ToWide(module.String("icon")),
+            .interval = Seconds(module, "interval"),
+            .actions  = ReadActions(module),
+        };
     }
 
     TextModuleConfig ReadTextModuleConfig(const TableReader& module) {
@@ -599,11 +614,13 @@ namespace {
 
     CustomConfig ReadCustomConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "run", "timeout", "output", "classes", "format", "icon", "interval"}));
-        return CustomConfig{.command = ReadCommand(module, "command"),
-                            .run     = ReadCustomRun(module),
-                            .output  = ParseKeyword(module, "output", kCustomOutputs),
-                            .classes = ReadCustomClasses(module, "classes"),
-                            .text    = ReadTextFields(module)};
+        return CustomConfig{
+            .command = ReadCommand(module, "command"),
+            .run     = ReadCustomRun(module),
+            .output  = ParseKeyword(module, "output", kCustomOutputs),
+            .classes = ReadCustomClasses(module, "classes"),
+            .text    = ReadTextFields(module),
+        };
     }
 
     // Added to a query of its own here, so a path this system has no counter for stops the load rather than the bar.
@@ -623,7 +640,11 @@ namespace {
 
     CounterConfig ReadCounterConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "counter", "combine", "format", "icon", "interval"}));
-        return CounterConfig{.path = ReadCounterPath(module, "counter"), .combine = ParseKeyword(module, "combine", kCounterCombines), .text = ReadTextFields(module)};
+        return CounterConfig{
+            .path    = ReadCounterPath(module, "counter"),
+            .combine = ParseKeyword(module, "combine", kCounterCombines),
+            .text    = ReadTextFields(module),
+        };
     }
 
     AudioConfig ReadAudioConfig(const TableReader& module) {
@@ -632,14 +653,16 @@ namespace {
         if (step > 100) {
             throw module.Error(std::format("{} is a percent of full volume, from 1 to 100, got {}", module.KeyPath("step"), step));
         }
-        return AudioConfig{.flow        = ParseKeyword(module, "flow", kAudioFlows),
-                           .format      = module.String("format"),
-                           .formatMuted = module.String("format_muted"),
-                           .tooltip     = ReadTooltip(module),
-                           .icon        = ToWide(module.String("icon")),
-                           .iconMuted   = ToWide(module.String("icon_muted")),
-                           .stepPercent = static_cast<std::int32_t>(step),
-                           .actions     = ReadActions(module)};
+        return AudioConfig{
+            .flow        = ParseKeyword(module, "flow", kAudioFlows),
+            .format      = module.String("format"),
+            .formatMuted = module.String("format_muted"),
+            .tooltip     = ReadTooltip(module),
+            .icon        = ToWide(module.String("icon")),
+            .iconMuted   = ToWide(module.String("icon_muted")),
+            .stepPercent = static_cast<std::int32_t>(step),
+            .actions     = ReadActions(module),
+        };
     }
 
     // A list of icons for a level from 0 to 100, lowest first. order says what the first one stands for.
@@ -656,14 +679,16 @@ namespace {
 
     NetworkConfig ReadNetworkConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "format_wifi", "format_ethernet", "format_disconnected", "icons_wifi", "icon_ethernet", "icon_disconnected"}));
-        return NetworkConfig{.formatWifi         = module.String("format_wifi"),
-                             .formatEthernet     = module.String("format_ethernet"),
-                             .formatDisconnected = module.String("format_disconnected"),
-                             .tooltip            = ReadTooltip(module),
-                             .iconsWifi          = ReadLevelIcons(module, "icons_wifi", "weakest signal"),
-                             .iconEthernet       = ToWide(module.String("icon_ethernet")),
-                             .iconDisconnected   = ToWide(module.String("icon_disconnected")),
-                             .actions            = ReadActions(module)};
+        return NetworkConfig{
+            .formatWifi         = module.String("format_wifi"),
+            .formatEthernet     = module.String("format_ethernet"),
+            .formatDisconnected = module.String("format_disconnected"),
+            .tooltip            = ReadTooltip(module),
+            .iconsWifi          = ReadLevelIcons(module, "icons_wifi", "weakest signal"),
+            .iconEthernet       = ToWide(module.String("icon_ethernet")),
+            .iconDisconnected   = ToWide(module.String("icon_disconnected")),
+            .actions            = ReadActions(module),
+        };
     }
 
     std::int64_t ChargePercent(const TableReader& module, std::string_view key) {
@@ -683,21 +708,27 @@ namespace {
             throw module.Error(std::format("{} ({}) must be under {} ({}), since a battery runs low before it is nearly empty", module.KeyPath("critical_at"), criticalAt,
                                            module.KeyPath("warning_at"), warningAt));
         }
-        return BatteryConfig{.formatDischarging = module.String("format_discharging"),
-                             .formatCharging    = module.String("format_charging"),
-                             .formatPlugged     = module.String("format_plugged"),
-                             .tooltip           = ReadTooltip(module),
-                             .icons             = ReadLevelIcons(module, "icons", "emptiest"),
-                             .iconCharging      = ToWide(module.String("icon_charging")),
-                             .iconPlugged       = ToWide(module.String("icon_plugged")),
-                             .warningAtPercent  = static_cast<std::int32_t>(warningAt),
-                             .criticalAtPercent = static_cast<std::int32_t>(criticalAt),
-                             .actions           = ReadActions(module)};
+        return BatteryConfig{
+            .formatDischarging = module.String("format_discharging"),
+            .formatCharging    = module.String("format_charging"),
+            .formatPlugged     = module.String("format_plugged"),
+            .tooltip           = ReadTooltip(module),
+            .icons             = ReadLevelIcons(module, "icons", "emptiest"),
+            .iconCharging      = ToWide(module.String("icon_charging")),
+            .iconPlugged       = ToWide(module.String("icon_plugged")),
+            .warningAtPercent  = static_cast<std::int32_t>(warningAt),
+            .criticalAtPercent = static_cast<std::int32_t>(criticalAt),
+            .actions           = ReadActions(module),
+        };
     }
 
     WindowConfig ReadWindowConfig(const TableReader& window) {
         window.RejectUnknownKeys(WithOptionalKeys({"type", "max_length"}));
-        return WindowConfig{.maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")), .tooltip = ReadTooltip(window), .actions = ReadActions(window)};
+        return WindowConfig{
+            .maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")),
+            .tooltip   = ReadTooltip(window),
+            .actions   = ReadActions(window),
+        };
     }
 
     // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
@@ -817,7 +848,13 @@ Config LoadConfig(const std::filesystem::path& path) {
     const std::string chunk  = ReadFile(path, "config", kMaxConfigFileBytes);
 
     // Declared before the state, whose close frees through the limited allocator.
-    LuaLimits      limits{.allocate = nullptr, .allocateData = nullptr, .usedBytes = 0, .limitBytes = kMaxConfigBytes, .runaway = false};
+    LuaLimits limits{
+        .allocate     = nullptr,
+        .allocateData = nullptr,
+        .usedBytes    = 0,
+        .limitBytes   = kMaxConfigBytes,
+        .runaway      = false,
+    };
     const LuaState lua(luaL_newstate());
     if (lua == nullptr) {
         throw ConfigError("luaL_newstate failed to allocate a Lua state");
@@ -875,13 +912,19 @@ Config LoadConfig(const std::filesystem::path& path) {
     const TableReader         bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "layer", "space", "thickness"});
     const BarConfig barConfig{
-        .edge = ParseKeyword(bar, "edge", kEdges), .layer = ParseKeyword(bar, "layer", kLayers), .space = ParseKeyword(bar, "space", kSpaces), .thicknessDips = BarThickness(bar)};
+        .edge          = ParseKeyword(bar, "edge", kEdges),
+        .layer         = ParseKeyword(bar, "layer", kLayers),
+        .space         = ParseKeyword(bar, "space", kSpaces),
+        .thicknessDips = BarThickness(bar),
+    };
 
-    Config config{.bar           = barConfig,
-                  .style         = std::move(style),
-                  .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
-                  .modules       = std::move(modules),
-                  .layouts       = std::move(layouts)};
+    Config config{
+        .bar           = barConfig,
+        .style         = std::move(style),
+        .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
+        .modules       = std::move(modules),
+        .layouts       = std::move(layouts),
+    };
     RejectUnshownModules(definitions, config);
     RequireMembersInOneGroup(definitions, config);
     RequireKnownModules(sheet, definitions.Keys());

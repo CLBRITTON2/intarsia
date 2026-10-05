@@ -38,7 +38,11 @@ namespace {
     }
 
     std::shared_ptr<const IconPixels> Pixels(std::uint8_t value) {
-        return std::make_shared<const IconPixels>(IconPixels{.width = 1, .height = 1, .pbgra = {value, value, value, 255}});
+        return std::make_shared<const IconPixels>(IconPixels{
+            .width  = 1,
+            .height = 1,
+            .pbgra  = {value, value, value, 255},
+        });
     }
 
     // The icons after a message from kAppImage the tray must take. A refusal fails the test and leaves no icons.
@@ -52,31 +56,50 @@ namespace {
     }
 
     TrayIcon Icon(std::intptr_t owner, std::uint32_t id) {
-        return TrayIcon{.owner           = owner,
-                        .id              = id,
-                        .guid            = std::nullopt,
-                        .ownerImage      = {},
-                        .callbackMessage = WM_APP,
-                        .version         = 0,
-                        .tooltip         = {},
-                        .standardTooltip = false,
-                        .pixels          = nullptr,
-                        .hidden          = false};
+        return TrayIcon{
+            .owner           = owner,
+            .id              = id,
+            .guid            = std::nullopt,
+            .ownerImage      = {},
+            .callbackMessage = WM_APP,
+            .version         = 0,
+            .tooltip         = {},
+            .standardTooltip = false,
+            .pixels          = nullptr,
+            .hidden          = false,
+        };
     }
 
     std::vector<std::byte> QueryBytes(std::uint32_t part, std::uint32_t owner, std::uint32_t id, const GUID& guid) {
-        const NotifyIconIdentifier32 raw{.signature = kTrayNotifySignature, .part = part, .size = 32, .padding = 0, .window = owner, .id = id, .guid = guid};
-        std::vector<std::byte>       bytes(sizeof(raw));
+        const NotifyIconIdentifier32 raw{
+            .signature = kTrayNotifySignature,
+            .part      = part,
+            .size      = 32,
+            .padding   = 0,
+            .window    = owner,
+            .id        = id,
+            .guid      = guid,
+        };
+        std::vector<std::byte> bytes(sizeof(raw));
         std::memcpy(bytes.data(), &raw, sizeof(raw));
         return bytes;
     }
 
     IconRectQuery Query(std::intptr_t owner, std::uint32_t id, const GUID& guid) {
-        return IconRectQuery{.part = IconRectPart::Size, .owner = owner, .id = id, .guid = guid};
+        return IconRectQuery{
+            .part  = IconRectPart::Size,
+            .owner = owner,
+            .id    = id,
+            .guid  = guid,
+        };
     }
 
     TrayIconRect Shown(std::intptr_t owner, std::uint32_t id, RECT rect) {
-        return TrayIconRect{.owner = owner, .id = id, .rect = rect};
+        return TrayIconRect{
+            .owner = owner,
+            .id    = id,
+            .rect  = rect,
+        };
     }
 
     bool SameRect(const std::optional<RECT>& rect, const RECT& expected) {
@@ -247,7 +270,17 @@ TEST(NotifyIconProtocol, DrawableTooltipKeepsLineBreaksAndReplacesTheUnsafe) {
 
 TEST(NotifyIconProtocol, VersionZeroPostsTheIdAndTheMouseMessage) {
     const std::vector<TrayInputMessage> messages = TrayInputMessages(Icon(5, 7), ClickEvents(TrayButton::Left, 0), POINT{.x = 10, .y = 20});
-    EXPECT_EQ(messages, (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = 7, .lParam = WM_LBUTTONDOWN}, {.message = WM_APP, .wParam = 7, .lParam = WM_LBUTTONUP}}));
+    EXPECT_EQ(messages,
+              (std::vector<TrayInputMessage>{{
+                                                 .message = WM_APP,
+                                                 .wParam  = 7,
+                                                 .lParam  = WM_LBUTTONDOWN,
+                                             },
+                                             {
+                                                 .message = WM_APP,
+                                                 .wParam  = 7,
+                                                 .lParam  = WM_LBUTTONUP,
+                                             }}));
 }
 
 TEST(NotifyIconProtocol, VersionThreeAddsSelectAndContextMenu) {
@@ -268,8 +301,14 @@ TEST(NotifyIconProtocol, TheSecondClickOfADoubleClickIsTheDoubleClickAndUp) {
 
 TEST(NotifyIconProtocol, ADoubleClickIsTheSameButtonOnTheSameIconSoonAndNear) {
     const auto      start = std::chrono::steady_clock::now();
-    const TrayClick first{.owner = 5, .id = 7, .button = TrayButton::Left, .cursor = POINT{.x = 100, .y = 10}, .time = start};
-    const auto      second = [&first](std::chrono::milliseconds after, POINT cursor) {
+    const TrayClick first{
+        .owner  = 5,
+        .id     = 7,
+        .button = TrayButton::Left,
+        .cursor = POINT{.x = 100, .y = 10},
+        .time   = start,
+    };
+    const auto second = [&first](std::chrono::milliseconds after, POINT cursor) {
         TrayClick click = first;
         click.cursor    = cursor;
         click.time      = first.time + after;
@@ -291,10 +330,19 @@ TEST(NotifyIconProtocol, ADoubleClickIsTheSameButtonOnTheSameIconSoonAndNear) {
 
 TEST(NotifyIconProtocol, AMoveTravelsInTheIconsVersionForm) {
     TrayIcon icon = Icon(5, 7);
-    EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}), (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = 7, .lParam = WM_MOUSEMOVE}}));
+    EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}),
+              (std::vector<TrayInputMessage>{{
+                  .message = WM_APP,
+                  .wParam  = 7,
+                  .lParam  = WM_MOUSEMOVE,
+              }}));
     icon.version = NOTIFYICON_VERSION_4;
     EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}),
-              (std::vector<TrayInputMessage>{{.message = WM_APP, .wParam = MAKEWPARAM(3, 4), .lParam = MAKELPARAM(WM_MOUSEMOVE, 7)}}));
+              (std::vector<TrayInputMessage>{{
+                  .message = WM_APP,
+                  .wParam  = MAKEWPARAM(3, 4),
+                  .lParam  = MAKELPARAM(WM_MOUSEMOVE, 7),
+              }}));
 }
 
 TEST(NotifyIconProtocol, VersionFourPostsTheCursorAndPacksTheIdWithTheEvent) {
@@ -335,10 +383,28 @@ TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
 }
 
 TEST(NotifyIconProtocol, AnIconShownOnTwoBarsAnswersWithTheOneNearestTheCursor) {
-    const std::vector<TrayIcon>     icons{Icon(5, 7)};
-    const RECT                      left{.left = -1000, .top = 0, .right = -970, .bottom = 30};
-    const RECT                      right{.left = 1500, .top = 0, .right = 1530, .bottom = 30};
-    const std::vector<TrayIconRect> rects{Shown(5, 7, left), Shown(5, 8, RECT{.left = 0, .top = 0, .right = 30, .bottom = 30}), Shown(5, 7, right)};
+    const std::vector<TrayIcon> icons{Icon(5, 7)};
+    const RECT                  left{
+                         .left   = -1000,
+                         .top    = 0,
+                         .right  = -970,
+                         .bottom = 30,
+    };
+    const RECT right{
+        .left   = 1500,
+        .top    = 0,
+        .right  = 1530,
+        .bottom = 30,
+    };
+    const std::vector<TrayIconRect> rects{Shown(5, 7, left),
+                                          Shown(5, 8,
+                                                RECT{
+                                                    .left   = 0,
+                                                    .top    = 0,
+                                                    .right  = 30,
+                                                    .bottom = 30,
+                                                }),
+                                          Shown(5, 7, right)};
     EXPECT_TRUE(SameRect(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = 1510, .y = 10}), right));
     EXPECT_TRUE(SameRect(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = -500, .y = 400}), left));
 }
@@ -346,12 +412,23 @@ TEST(NotifyIconProtocol, AnIconShownOnTwoBarsAnswersWithTheOneNearestTheCursor) 
 TEST(NotifyIconProtocol, AnIconWithAGuidIsFoundByIt) {
     TrayIcon icon = Icon(5, 7);
     icon.guid     = kGuid;
-    const RECT rect{.left = 10, .top = 0, .right = 40, .bottom = 30};
+    const RECT rect{
+        .left   = 10,
+        .top    = 0,
+        .right  = 40,
+        .bottom = 30,
+    };
     EXPECT_TRUE(SameRect(QueriedIconRect(Query(0, 0, kGuid), {icon}, {Shown(5, 7, rect)}, POINT{.x = 0, .y = 0}), rect));
 }
 
 TEST(NotifyIconProtocol, AnIconNoBarShowsHasNoRect) {
-    const std::vector<TrayIconRect> rects{Shown(5, 8, RECT{.left = 0, .top = 0, .right = 30, .bottom = 30})};
+    const std::vector<TrayIconRect> rects{Shown(5, 8,
+                                                RECT{
+                                                    .left   = 0,
+                                                    .top    = 0,
+                                                    .right  = 30,
+                                                    .bottom = 30,
+                                                })};
     // Folded away, an icon the tray never had, and a GUID no icon has.
     EXPECT_FALSE(QueriedIconRect(Query(5, 7, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());

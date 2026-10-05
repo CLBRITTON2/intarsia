@@ -14,7 +14,14 @@ namespace {
 
 TEST(IpHelper, SameLinkIgnoresTheRatesAlone) {
     const NetworkState first{
-        .link = NetworkLink::Wifi, .interfaceName = L"Wi-Fi", .ssid = L"home", .signalPercent = 70, .ipv4 = L"192.0.2.7", .receivedBytesPerSecond = 1.0, .sentBytesPerSecond = 2.0};
+        .link                   = NetworkLink::Wifi,
+        .interfaceName          = L"Wi-Fi",
+        .ssid                   = L"home",
+        .signalPercent          = 70,
+        .ipv4                   = L"192.0.2.7",
+        .receivedBytesPerSecond = 1.0,
+        .sentBytesPerSecond     = 2.0,
+    };
     NetworkState second           = first;
     second.receivedBytesPerSecond = 900.0;
     second.sentBytesPerSecond     = 0.0;

@@ -33,7 +33,11 @@ class FakeWindowManager final : public IWindowManager {
         return direction;
     }
     WindowManagerStatus Status() const override {
-        return WindowManagerStatus{.name = L"fake", .connection = Connection::Connected, .detail = ""};
+        return WindowManagerStatus{
+            .name       = L"fake",
+            .connection = Connection::Connected,
+            .detail     = "",
+        };
     }
     void FocusWorkspace(const std::string& name) override {
         focusedWorkspace = name;

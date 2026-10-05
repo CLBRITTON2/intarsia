@@ -19,13 +19,15 @@ namespace {
 
     // The config once every format is known to be valid. Throws ConfigError.
     NetworkConfig Validated(NetworkConfig config) {
-        const std::vector<Placeholder> samples = NetworkPlaceholders(NetworkState{.link                   = NetworkLink::Wifi,
-                                                                                  .interfaceName          = L"Wi-Fi",
-                                                                                  .ssid                   = L"home",
-                                                                                  .signalPercent          = 80,
-                                                                                  .ipv4                   = L"192.0.2.1",
-                                                                                  .receivedBytesPerSecond = 1000.0,
-                                                                                  .sentBytesPerSecond     = 1000.0});
+        const std::vector<Placeholder> samples = NetworkPlaceholders(NetworkState{
+            .link                   = NetworkLink::Wifi,
+            .interfaceName          = L"Wi-Fi",
+            .ssid                   = L"home",
+            .signalPercent          = 80,
+            .ipv4                   = L"192.0.2.1",
+            .receivedBytesPerSecond = 1000.0,
+            .sentBytesPerSecond     = 1000.0,
+        });
         RequirePlaceholders("network format_wifi", config.formatWifi, samples);
         RequirePlaceholders("network format_ethernet", config.formatEthernet, samples);
         RequirePlaceholders("network format_disconnected", config.formatDisconnected, samples);
@@ -68,18 +70,26 @@ std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {
 ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state) {
     switch (state.link) {
         case NetworkLink::None:
-            return ModuleText{.icon       = config.iconDisconnected,
-                              .text       = ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state))),
-                              .state      = TextState::Normal,
-                              .classIndex = 0};
+            return ModuleText{
+                .icon       = config.iconDisconnected,
+                .text       = ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state))),
+                .state      = TextState::Normal,
+                .classIndex = 0,
+            };
         case NetworkLink::Ethernet:
             return ModuleText{
-                .icon = config.iconEthernet, .text = ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state))), .state = TextState::Normal, .classIndex = 0};
+                .icon       = config.iconEthernet,
+                .text       = ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state))),
+                .state      = TextState::Normal,
+                .classIndex = 0,
+            };
         case NetworkLink::Wifi:
-            return ModuleText{.icon       = WifiIcon(config.iconsWifi, state.signalPercent),
-                              .text       = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))),
-                              .state      = TextState::Normal,
-                              .classIndex = 0};
+            return ModuleText{
+                .icon       = WifiIcon(config.iconsWifi, state.signalPercent),
+                .text       = ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))),
+                .state      = TextState::Normal,
+                .classIndex = 0,
+            };
     }
     throw std::invalid_argument(std::format("unknown network link {}", static_cast<std::int32_t>(state.link)));
 }

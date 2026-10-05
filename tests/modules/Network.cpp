@@ -12,36 +12,65 @@
 namespace {
 
     NetworkConfig TestConfig() {
-        return NetworkConfig{.formatWifi         = "{ssid} {signal}%",
-                             .formatEthernet     = "{interface}",
-                             .formatDisconnected = "offline",
-                             .tooltip            = "{ip} down {down} up {up}",
-                             .iconsWifi          = {L"0", L"1", L"2", L"3", L"4"},
-                             .iconEthernet       = L"E",
-                             .iconDisconnected   = L"X",
-                             .actions = {.click = std::nullopt, .rightClick = std::nullopt, .middleClick = std::nullopt, .scrollUp = std::nullopt, .scrollDown = std::nullopt}};
+        return NetworkConfig{
+            .formatWifi         = "{ssid} {signal}%",
+            .formatEthernet     = "{interface}",
+            .formatDisconnected = "offline",
+            .tooltip            = "{ip} down {down} up {up}",
+            .iconsWifi          = {L"0", L"1", L"2", L"3", L"4"},
+            .iconEthernet       = L"E",
+            .iconDisconnected   = L"X",
+            .actions =
+                {
+                    .click       = std::nullopt,
+                    .rightClick  = std::nullopt,
+                    .middleClick = std::nullopt,
+                    .scrollUp    = std::nullopt,
+                    .scrollDown  = std::nullopt,
+                },
+        };
     }
 
     NetworkState Wifi(std::optional<std::int32_t> signal) {
-        return NetworkState{.link                   = NetworkLink::Wifi,
-                            .interfaceName          = L"Wi-Fi",
-                            .ssid                   = L"home",
-                            .signalPercent          = signal,
-                            .ipv4                   = L"192.0.2.7",
-                            .receivedBytesPerSecond = 1'250'000.0,
-                            .sentBytesPerSecond     = 800.0};
+        return NetworkState{
+            .link                   = NetworkLink::Wifi,
+            .interfaceName          = L"Wi-Fi",
+            .ssid                   = L"home",
+            .signalPercent          = signal,
+            .ipv4                   = L"192.0.2.7",
+            .receivedBytesPerSecond = 1'250'000.0,
+            .sentBytesPerSecond     = 800.0,
+        };
     }
 
 } // namespace
 
 TEST(Network, EachLinkHasItsFormatAndIcon) {
-    EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)), (ModuleText{.icon = L"3", .text = L"home 72%", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)),
+              (ModuleText{
+                  .icon       = L"3",
+                  .text       = L"home 72%",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
     NetworkState wired  = Wifi(std::nullopt);
     wired.link          = NetworkLink::Ethernet;
     wired.interfaceName = L"Ethernet 2";
-    EXPECT_EQ(FormatNetwork(TestConfig(), wired), (ModuleText{.icon = L"E", .text = L"Ethernet 2", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatNetwork(TestConfig(), wired),
+              (ModuleText{
+                  .icon       = L"E",
+                  .text       = L"Ethernet 2",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
     const FakeNetwork none;
-    EXPECT_EQ(FormatNetwork(TestConfig(), none.state), (ModuleText{.icon = L"X", .text = L"offline", .state = TextState::Normal, .classIndex = 0}));
+    EXPECT_EQ(FormatNetwork(TestConfig(), none.state),
+              (ModuleText{
+                  .icon       = L"X",
+                  .text       = L"offline",
+                  .state      = TextState::Normal,
+                  .classIndex = 0,
+              }));
 }
 
 TEST(Network, WifiIconsSplitTheSignalRangeEvenly) {

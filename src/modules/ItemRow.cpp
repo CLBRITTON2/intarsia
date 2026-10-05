@@ -13,7 +13,11 @@
 #include <utility>
 
 ItemRow EmptyItemRow() {
-    return ItemRow{.boxes = {}, .size = {.width = 0.0f, .height = 0.0f}, .axis = Axis::Horizontal};
+    return ItemRow{
+        .boxes = {},
+        .size  = {.width = 0.0f, .height = 0.0f},
+        .axis  = Axis::Horizontal,
+    };
 }
 
 ItemRow ArrangeItems(const std::vector<D2D1_SIZE_F>& contents, const std::vector<const ItemStyle*>& styles, Axis axis) {
@@ -35,7 +39,11 @@ ItemRow ArrangeItems(const std::vector<D2D1_SIZE_F>& contents, const std::vector
         boxes.push_back(MainCrossRect(axis, start, boxMain, (cross - boxCross) / 2.0f, boxCross));
         start += boxMain + MainOf(style.margin, axis);
     }
-    return ItemRow{.boxes = std::move(boxes), .size = MainCrossSize(axis, start, cross), .axis = axis};
+    return ItemRow{
+        .boxes = std::move(boxes),
+        .size  = MainCrossSize(axis, start, cross),
+        .axis  = axis,
+    };
 }
 
 float ItemTextInset(const ItemStyle& style, Axis axis) {
@@ -57,7 +65,13 @@ D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, 
 void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, const std::vector<InsetShadow>& shadows,
                         D2D1_POINT_2F origin) {
     const D2D1_RECT_F placed = Offset(box, origin);
-    const BoxStyle    boxStyle{.background = style.background, .border = {}, .radiusDips = style.radiusDips, .padding = style.padding, .shadows = shadows};
+    const BoxStyle    boxStyle{
+           .background = style.background,
+           .border     = {},
+           .radiusDips = style.radiusDips,
+           .padding    = style.padding,
+           .shadows    = shadows,
+    };
     DrawBox(render.context, *render.brushes, *render.boxes, placed, boxStyle, fill);
 }
 
@@ -85,7 +99,11 @@ void ItemFades::Follow(const std::vector<const ItemStyle*>& styles, const Hovere
         const D2D1_COLOR_F background = isHovered ? style.hoverBackground : style.background;
         const D2D1_COLOR_F text       = isHovered ? style.hoverColor : style.color;
         if (index == _fades.size()) {
-            _fades.push_back(Fade{.background = ColorFade(background), .text = ColorFade(text), .shadows = ShadowFade(style.shadows)});
+            _fades.push_back(Fade{
+                .background = ColorFade(background),
+                .text       = ColorFade(text),
+                .shadows    = ShadowFade(style.shadows),
+            });
             continue;
         }
         _fades[index].background.Retarget(background, style.backgroundTransition, now);
