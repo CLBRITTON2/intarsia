@@ -108,7 +108,9 @@ namespace {
              {.key = "length_ms", .value = MillisecondsText(length)},
              {.key = "mean_interval_ms", .value = MillisecondsText(mean)},
              {.key = "longest_interval_ms", .value = MillisecondsText(stats.longestInterval)},
-             {.key = "longest_present_ms", .value = MillisecondsText(stats.longestPresent)}});
+             {.key = "longest_present_ms", .value = MillisecondsText(stats.longestPresent)},
+             {.key = "dropped_frames", .value = std::to_string(stats.droppedFrames)},
+             {.key = "repeated_refreshes", .value = std::to_string(stats.repeatedRefreshes)}});
     }
 
     // The action an input runs, or nullopt when the config binds none to it.
@@ -382,7 +384,17 @@ RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
         .boxes        = _boxes.get(),
         .axis         = _axis,
         .boxCrossDips = BoxCrossLength() - (2.0f * CrossOf(style.margin, _axis)),
+        .frameTime    = _frameTime,
     };
+}
+
+// While the clock runs, the latest refresh, never earlier than a frame already drawn (a frame drawn between the clock's
+// start and its first blank reads the last animation's). Otherwise a change outside any animation, drawn now.
+void Bar::StampFrameTime() {
+    _frameTime = _animating ? std::max(_frames->LastVBlank(), _frameTime) : std::chrono::steady_clock::now();
+    for (auto& [style, context] : _contexts) {
+        context.frameTime = _frameTime;
+    }
 }
 
 void Bar::BuildContexts() {
@@ -415,6 +427,7 @@ void Bar::Render() {
     if (_surface == nullptr || _deviceLost) {
         return;
     }
+    StampFrameTime();
     try {
         LayOutModules();
         Draw();
@@ -429,6 +442,7 @@ void Bar::Refresh() {
     if (_surface == nullptr || _deviceLost) {
         return;
     }
+    StampFrameTime();
     try {
         if (LayOutModules()) {
             Draw();
@@ -444,6 +458,7 @@ void Bar::Redraw() {
     if (_surface == nullptr || _deviceLost) {
         return;
     }
+    StampFrameTime();
     try {
         Draw();
     } catch (const DeviceLostError& error) {
@@ -538,7 +553,7 @@ void Bar::Draw() {
     _presented = true;
     if (_animating) {
         const std::chrono::steady_clock::time_point presented = std::chrono::steady_clock::now();
-        _animationFrames                                      = WithFrame(_animationFrames, presented, presented - presenting);
+        _animationFrames = WithFrame(_animationFrames, presented, presented - presenting, _surface->LastPresentCount(), _surface->LatestShown());
     }
 }
 
@@ -606,7 +621,7 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
 }
 
 void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
-    DrawBox(_surface->Context(), *_brushes, *_boxes, box.bounds, style.box, _boxFades.at(box.module).Color(std::chrono::steady_clock::now()));
+    DrawBox(_surface->Context(), *_brushes, *_boxes, box.bounds, style.box, _boxFades.at(box.module).Color(_frameTime));
     box.module->Draw(ContextFor(style), box.contentOrigin);
 }
 
@@ -615,7 +630,7 @@ void Bar::DrawGroup(const PlacedEntry& placed) {
     const ModuleStyle&  style   = placed.entry->style;
     DrawBox(context, *_brushes, *_boxes, placed.box.bounds, style.box, style.box.background);
     // The toggle's box at rest is the group's own, drawn once already with its border and shadows.
-    const D2D1_COLOR_F toggleFill = _boxFades.at(placed.box.module).Color(std::chrono::steady_clock::now());
+    const D2D1_COLOR_F toggleFill = _boxFades.at(placed.box.module).Color(_frameTime);
     if (toggleFill.a > 0.0f) {
         DrawBox(context, *_brushes, *_boxes, placed.toggleBounds, style.box, toggleFill);
     }

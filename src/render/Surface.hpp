@@ -2,10 +2,12 @@
 
 #include "config/Config.hpp"
 #include "render/Graphics.hpp"
+#include "render/ShownPresent.hpp"
 
 #include <windows.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 // Holds C++/WinRT types, defined in Surface.cpp only.
@@ -27,6 +29,10 @@ class Surface {
 
     void                Resize(std::uint32_t width, std::uint32_t height, std::uint32_t dpi);
     void                EndDrawAndPresent();
+    // The swap chain's number for its latest present, as `LatestShown` numbers them.
+    std::uint32_t LastPresentCount() const;
+    // Null while the swap chain has no statistics yet, or they restarted (DXGI_ERROR_FRAME_STATISTICS_DISJOINT).
+    std::optional<ShownPresent> LatestShown() const;
 
     // Shows the system's blur of whatever lies behind the window inside each box (in DIPs, on whole pixels), toned by
     // backdrop's brightness and saturation, under the drawing, in place of the boxes the last call showed.

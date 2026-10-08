@@ -57,6 +57,7 @@ namespace {
             .boxes        = nullptr,
             .axis         = Axis::Horizontal,
             .boxCrossDips = 24.0f,
+            .frameTime    = std::chrono::steady_clock::now(),
         };
     }
 

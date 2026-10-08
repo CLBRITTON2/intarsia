@@ -166,6 +166,22 @@ void Surface::EndDrawAndPresent() {
     ThrowIfDeviceFailed(_swapChain->Present(0, 0), "IDXGISwapChain1::Present");
 }
 
+std::uint32_t Surface::LastPresentCount() const {
+    UINT count = 0;
+    ThrowIfDeviceFailed(_swapChain->GetLastPresentCount(&count), "IDXGISwapChain1::GetLastPresentCount");
+    return count;
+}
+
+std::optional<ShownPresent> Surface::LatestShown() const {
+    DXGI_FRAME_STATISTICS statistics{};
+    const HRESULT         read = _swapChain->GetFrameStatistics(&statistics);
+    if (read == DXGI_ERROR_FRAME_STATISTICS_DISJOINT) {
+        return std::nullopt;
+    }
+    ThrowIfDeviceFailed(read, "IDXGISwapChain1::GetFrameStatistics");
+    return ShownPresent{.present = statistics.PresentCount, .refresh = statistics.PresentRefreshCount};
+}
+
 void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop) {
     Composing("Surface::ShowBackdrops", [this, &boxes, &backdrop] {
         std::vector<BackdropVisual>& backdrops = _visuals->backdrops;

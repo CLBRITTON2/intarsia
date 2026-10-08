@@ -177,6 +177,7 @@ if(BUILD_TESTING)
     tests/LaunchOptions.cpp
     tests/MonitorTable.cpp
     tests/bar/Box.cpp
+    tests/bar/FrameStats.cpp
     tests/bar/Layout.cpp
     tests/bar/Menu.cpp
     tests/bar/MenuLister.cpp

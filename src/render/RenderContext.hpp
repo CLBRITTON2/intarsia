@@ -6,6 +6,7 @@
 #include <d2d1_1.h>
 #include <dwrite.h>
 
+#include <chrono>
 #include <vector>
 
 class BoxCache;
@@ -37,4 +38,7 @@ struct RenderContext {
     BoxCache*   boxes;
     Axis        axis;         // the bar's
     float       boxCrossDips; // across the bar, of the box a module draws in: the room a vertical bar cuts text to
+    // What animations draw at, never the clock: the refresh the frame is paced to, so each frame of a fold or fade moves
+    // one refresh on however late the bar gets to draw it.
+    std::chrono::steady_clock::time_point frameTime;
 };

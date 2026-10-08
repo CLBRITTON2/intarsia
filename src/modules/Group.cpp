@@ -5,7 +5,7 @@
 Group::Group(const GroupConfig& config, const ModuleStyle& style) : _icon(config.icon), _fold(style), _toggle(EmptyIconText()) {}
 
 bool Group::Layout(const RenderContext& render) {
-    const FoldPosition position = _fold.At(std::chrono::steady_clock::now());
+    const FoldPosition position = _fold.At(render.frameTime);
     const bool         changed  = !_laidOut || position.revealed != _shown.revealed || position.angleDegrees != _shown.angleDegrees;
     _shown                      = position;
     if (!_laidOut) {

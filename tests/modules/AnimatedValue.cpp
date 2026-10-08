@@ -107,3 +107,14 @@ TEST(AnimatedValue, TimingFunctionsHaveTheirCssShapes) {
     EXPECT_LT(Eased(TimingFunction::EaseIn, 0.25f), 0.15f);
     EXPECT_NEAR(Eased(TimingFunction::Ease, 0.5f), 0.8024f, 0.002f);
 }
+
+// A bar draws at its last refresh, which can come just before the click that turned the value.
+TEST(AnimatedValue, ReadBeforeItTurnedItHoldsWhereItTurned) {
+    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    AnimatedValue                               value(0.0f);
+    value.Retarget(1.0f, kLinear100, start);
+    EXPECT_NEAR(value.Value(start - std::chrono::milliseconds(3)), 0.0f, 0.001f);
+    value.Retarget(0.0f, kLinear100, start + std::chrono::milliseconds(50));
+    EXPECT_NEAR(value.Value(start + std::chrono::milliseconds(47)), 0.5f, 0.001f);
+    EXPECT_TRUE(value.Running(start + std::chrono::milliseconds(47)));
+}

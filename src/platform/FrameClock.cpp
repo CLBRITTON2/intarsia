@@ -32,6 +32,10 @@ void FrameClock::RethrowFailure() {
     _failure.RethrowReported();
 }
 
+std::chrono::steady_clock::time_point FrameClock::LastVBlank() const {
+    return _lastVBlank.load();
+}
+
 // The running event stays set while started, so each pass waits one vertical blank.
 void FrameClock::Run(HANDLE stopEvent) {
     const std::array<HANDLE, 2> events{stopEvent, _runningEvent.get()};
@@ -49,6 +53,8 @@ void FrameClock::Run(HANDLE stopEvent) {
             if (FAILED(waited)) {
                 throw MonitorGoneError(std::format("IDXGIOutput::WaitForVBlank failed with 0x{:08X}", static_cast<std::uint32_t>(waited)));
             }
+            // Stored before the post, so the frame it asks for reads this blank or a later one.
+            _lastVBlank.store(std::chrono::steady_clock::now());
             if (!_pending.exchange(true) && !PostMessageW(_target, _frameMessage, 0, 0)) {
                 ThrowLastError("PostMessageW(frame)");
             }

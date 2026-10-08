@@ -56,12 +56,11 @@ D2D1_SIZE_F WindowList::Size() const {
 }
 
 void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    const float                                 icon = _style.icon.sizeDips;
-    const std::chrono::steady_clock::time_point now  = std::chrono::steady_clock::now();
+    const float icon = _style.icon.sizeDips;
     for (size_t index = 0; index < _slots.size(); ++index) {
         const Slot&      slot  = _slots[index];
         const ItemStyle& style = StyleOf(slot);
-        DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, now), _fades.Shadows(index, now), origin);
+        DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, render.frameTime), _fades.Shadows(index, render.frameTime), origin);
         if (slot.bitmap != nullptr) {
             const D2D1_POINT_2F start = ItemContentOrigin(_row.boxes[index], style, origin);
             render.context->DrawBitmap(slot.bitmap.Get(), D2D1::RectF(start.x, start.y, start.x + icon, start.y + icon), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);

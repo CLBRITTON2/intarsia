@@ -22,6 +22,7 @@
 
 #include <windows.h>
 
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <memory>
@@ -95,7 +96,9 @@ class Bar {
     // Every module's context, made again whenever the surface's size changes, since each spans the bar's thickness.
     void                 BuildContexts();
     const RenderContext& ContextFor(const ModuleStyle& style) const;
-    float                BoxCrossLength() const;
+    // Sets the time the next frame draws at, in the bar and in every module's context.
+    void  StampFrameTime();
+    float BoxCrossLength() const;
     // Whether any module's content changed.
     bool LayOutModules();
     // A group's length takes in the revealed share of its members'.
@@ -161,27 +164,28 @@ class Bar {
         Command  onSelect;
     };
 
-    const GraphicsDevice&       _graphics;
-    const Config&               _config;
-    const Axis                  _axis;
-    Launcher&                   _launcher;
-    std::unique_ptr<FrameClock> _frames; // paced by this bar's monitor, null until the window exists
-    bool                        _animating = false;
-    std::optional<FrameStats>   _animationFrames; // null while no animation runs
-    IWindowManager&             _windowManager;   // takes the window_manager actions
-    WindowProcError&            _windowProcError;
-    HWND                        _control;
-    std::uint32_t               _deviceLostMessage;
-    bool                        _deviceLost = false;
-    bool                        _presented  = false;
-    BarPlacement                _placement;
-    AppBarRoute                 _route;
-    Sections<ModuleEntry>       _modules;
-    std::vector<HitBox>         _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
-    IModule*                    _hovered = nullptr; // the module under the cursor, null when there is none
-    std::optional<POINT>        _cursor;            // client pixels where the cursor last moved, null once it left
-    std::uint32_t               _taskbarCreated;
-    std::optional<MenuOwner>    _menuOwner; // null once any other input came after the menu's
+    const GraphicsDevice&                 _graphics;
+    const Config&                         _config;
+    const Axis                            _axis;
+    Launcher&                             _launcher;
+    std::unique_ptr<FrameClock>           _frames; // paced by this bar's monitor, null until the window exists
+    bool                                  _animating = false;
+    std::chrono::steady_clock::time_point _frameTime;       // the RenderContext::frameTime of the frame last drawn
+    std::optional<FrameStats>             _animationFrames; // null while no animation runs
+    IWindowManager&                       _windowManager;   // takes the window_manager actions
+    WindowProcError&                      _windowProcError;
+    HWND                                  _control;
+    std::uint32_t                         _deviceLostMessage;
+    bool                                  _deviceLost = false;
+    bool                                  _presented  = false;
+    BarPlacement                          _placement;
+    AppBarRoute                           _route;
+    Sections<ModuleEntry>                 _modules;
+    std::vector<HitBox>                   _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
+    IModule*                              _hovered = nullptr; // the module under the cursor, null when there is none
+    std::optional<POINT>                  _cursor;            // client pixels where the cursor last moved, null once it left
+    std::uint32_t                         _taskbarCreated;
+    std::optional<MenuOwner>              _menuOwner; // null once any other input came after the menu's
 
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Surface>                              _surface;

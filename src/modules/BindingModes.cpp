@@ -41,11 +41,10 @@ D2D1_SIZE_F BindingModes::Size() const {
 }
 
 void BindingModes::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    const ItemStyle&                            itemStyle = _style.item;
-    const std::chrono::steady_clock::time_point now       = std::chrono::steady_clock::now();
+    const ItemStyle& itemStyle = _style.item;
     for (size_t index = 0; index < _labels.size(); ++index) {
-        DrawItemBackground(render, _row.boxes[index], itemStyle, _fades.Background(index, now), _fades.Shadows(index, now), origin);
-        DrawIconText(render, ItemContentOrigin(_row.boxes[index], itemStyle, origin), _labels[index], render.accent, render.brushes->Get(_fades.Text(index, now)));
+        DrawItemBackground(render, _row.boxes[index], itemStyle, _fades.Background(index, render.frameTime), _fades.Shadows(index, render.frameTime), origin);
+        DrawIconText(render, ItemContentOrigin(_row.boxes[index], itemStyle, origin), _labels[index], render.accent, render.brushes->Get(_fades.Text(index, render.frameTime)));
     }
 }
 

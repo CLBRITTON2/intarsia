@@ -9,6 +9,7 @@
 #include <wrl/client.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 
 // Posts frameMessage to target once per vertical blank of output while started, so animations draw at that monitor's
@@ -27,16 +28,19 @@ class FrameClock {
     void Acknowledge();
     // On failedMessage, rethrows the error that stopped the thread.
     void RethrowFailure();
+    // When the latest vertical blank the clock waited for came, or the clock's epoch before the first.
+    std::chrono::steady_clock::time_point LastVBlank() const;
 
   private:
-    void                                Run(HANDLE stopEvent);
+    void                                               Run(HANDLE stopEvent);
 
-    HWND                                _target;
-    std::uint32_t                       _frameMessage;
-    Microsoft::WRL::ComPtr<IDXGIOutput> _output;
-    UniqueHandle                        _runningEvent; // set while started
-    std::atomic<bool>                   _pending = false;
-    ThreadFailure                       _failure;
+    HWND                                               _target;
+    std::uint32_t                                      _frameMessage;
+    Microsoft::WRL::ComPtr<IDXGIOutput>                _output;
+    UniqueHandle                                       _runningEvent; // set while started
+    std::atomic<bool>                                  _pending = false;
+    std::atomic<std::chrono::steady_clock::time_point> _lastVBlank;
+    ThreadFailure                                      _failure;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

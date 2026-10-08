@@ -6,6 +6,8 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 
+#include <chrono>
+
 // Enough to lay text out: nothing here draws, so there is no device context or brush.
 struct TextOnlyRender {
     Microsoft::WRL::ComPtr<IDWriteFactory>    dwrite;
@@ -41,6 +43,7 @@ struct TextOnlyRender {
             .boxes        = nullptr,
             .axis         = axis,
             .boxCrossDips = boxCrossDips,
+            .frameTime    = std::chrono::steady_clock::now(),
         };
     }
 };
