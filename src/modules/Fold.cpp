@@ -11,7 +11,7 @@ void Fold::Toggle(std::chrono::steady_clock::time_point now) {
 }
 
 FoldPosition Fold::At(std::chrono::steady_clock::time_point now) const {
-    return FoldPosition{.revealed = _reveal.Value(now), .angleDegrees = _foldedDegrees + ((_unfoldedDegrees - _foldedDegrees) * _turn.Value(now))};
+    return FoldPosition{.revealed = _reveal.Value(now), .angleDegrees = Lerp(_foldedDegrees, _unfoldedDegrees, _turn.Value(now))};
 }
 
 bool Fold::Running(std::chrono::steady_clock::time_point now) const {

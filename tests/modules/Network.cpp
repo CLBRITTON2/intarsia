@@ -46,31 +46,13 @@ namespace {
 } // namespace
 
 TEST(Network, EachLinkHasItsFormatAndIcon) {
-    EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)),
-              (ModuleText{
-                  .icon       = L"3",
-                  .text       = L"home 72%",
-                  .state      = TextState::Normal,
-                  .classIndex = 0,
-              }));
+    EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)), NormalText(L"3", L"home 72%"));
     NetworkState wired  = Wifi(std::nullopt);
     wired.link          = NetworkLink::Ethernet;
     wired.interfaceName = L"Ethernet 2";
-    EXPECT_EQ(FormatNetwork(TestConfig(), wired),
-              (ModuleText{
-                  .icon       = L"E",
-                  .text       = L"Ethernet 2",
-                  .state      = TextState::Normal,
-                  .classIndex = 0,
-              }));
+    EXPECT_EQ(FormatNetwork(TestConfig(), wired), NormalText(L"E", L"Ethernet 2"));
     const FakeNetwork none;
-    EXPECT_EQ(FormatNetwork(TestConfig(), none.state),
-              (ModuleText{
-                  .icon       = L"X",
-                  .text       = L"offline",
-                  .state      = TextState::Normal,
-                  .classIndex = 0,
-              }));
+    EXPECT_EQ(FormatNetwork(TestConfig(), none.state), NormalText(L"X", L"offline"));
 }
 
 TEST(Network, WifiIconsSplitTheSignalRangeEvenly) {

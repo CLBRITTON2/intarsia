@@ -31,11 +31,12 @@ namespace {
         };
     }
 
-} // namespace
+    // Gibibytes (1024^3), the unit Task Manager calls GB.
+    double BytesToGibibytes(std::uint64_t bytes) {
+        return static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
+    }
 
-double BytesToGibibytes(std::uint64_t bytes) {
-    return static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
-}
+} // namespace
 
 Memory::Memory(TextModuleConfig config) :
     TextModule(std::move(config), "memory",
@@ -50,12 +51,7 @@ Memory::Memory(TextModuleConfig config) :
 
 ModuleText Memory::Format(const std::string& spec) {
     _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { _usage = ReadMemoryUsage(); });
-    return ModuleText{
-        .icon       = Settings().icon,
-        .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }),
-        .state      = TextState::Normal,
-        .classIndex = 0,
-    };
+    return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }));
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {

@@ -46,8 +46,7 @@ class Workspaces final : public IModule {
     std::vector<Workspace> _shown;
     std::wstring           _disconnectedText;
     bool                   _laidOut = false;
-    std::vector<IconText>  _labels;     // one per shown workspace
-    std::vector<ItemStyle> _itemStyles; // one per shown workspace
+    std::vector<IconText>  _labels; // one per shown workspace
     ItemRow                _row;
     IconText               _disconnected;
 };

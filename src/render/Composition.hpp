@@ -17,11 +17,6 @@
 // backdrop by its brightness and saturation as CSS's brightness() and saturate() do.
 std::array<float, 20> BackdropColorMatrix(const Backdrop& backdrop);
 
-// The host backdrop (source "backdrop") toned by backdrop's color matrix and cut to a mask surface's alpha (source
-// "mask"), which antialiases a rounded edge that a geometric clip leaves stepped. A mask brush refuses a host backdrop
-// as its source, and a color matrix is no property a brush can set, so each tone takes a factory of its own.
-winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop);
-
 // One backdrop factory per tone for every surface on a compositor, since each compiles an effect graph and a tooltip or
 // menu makes a surface per show. A config holds a few tones, and the compositor's lifetime bounds them.
 class BackdropFactories {

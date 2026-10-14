@@ -116,10 +116,8 @@ void MenuLister::List(const Command& command, std::chrono::seconds timeout) {
 }
 
 std::optional<MenuListing> MenuLister::Take() {
-    const std::scoped_lock     lock(_mutex);
-    std::optional<MenuListing> ready = std::move(_ready);
-    _ready.reset();
-    return ready;
+    const std::scoped_lock lock(_mutex);
+    return std::exchange(_ready, std::nullopt);
 }
 
 void MenuLister::Run(HANDLE stopEvent) {

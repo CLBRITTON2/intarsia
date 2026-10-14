@@ -10,7 +10,6 @@
 #include <wrl/client.h>
 
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <optional>
 #include <vector>

@@ -135,7 +135,7 @@ Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t widt
         root.Children().InsertAtTop(_visuals->content);
         _visuals->target.Root(root);
     });
-    BindRenderTarget(dpi);
+    BindRenderTarget();
 }
 
 Surface::~Surface() = default;
@@ -156,7 +156,7 @@ void Surface::Resize(std::uint32_t width, std::uint32_t height, std::uint32_t dp
         }
     }
     _dpi = dpi;
-    BindRenderTarget(dpi);
+    BindRenderTarget();
 }
 
 void Surface::EndDrawAndPresent() {
@@ -209,11 +209,11 @@ void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const B
     });
 }
 
-void Surface::BindRenderTarget(std::uint32_t dpi) {
+void Surface::BindRenderTarget() {
     ComPtr<IDXGISurface> surface;
     ThrowIfDeviceFailed(_swapChain->GetBuffer(0, IID_PPV_ARGS(&surface)), "IDXGISwapChain1::GetBuffer");
 
-    const auto                    pixelsPerInch = static_cast<float>(dpi);
+    const auto                    pixelsPerInch = static_cast<float>(_dpi);
     const D2D1_BITMAP_PROPERTIES1 properties    = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
                                                                           D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), pixelsPerInch, pixelsPerInch);
     ComPtr<ID2D1Bitmap1>          target;

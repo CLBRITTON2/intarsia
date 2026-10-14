@@ -27,13 +27,7 @@ std::optional<std::wstring> Custom::TooltipText() {
 ModuleText Custom::Format(const std::string& spec) {
     const CommandResult result = _poller.Result();
     switch (result.outcome) {
-        case CommandOutcome::Pending:
-            return ModuleText{
-                .icon       = Settings().icon,
-                .text       = {},
-                .state      = TextState::Normal,
-                .classIndex = 0,
-            };
+        case CommandOutcome::Pending: return NormalText(Settings().icon, L"");
         case CommandOutcome::Succeeded:
             return ModuleText{
                 .icon       = Settings().icon,

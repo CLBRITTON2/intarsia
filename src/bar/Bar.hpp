@@ -14,6 +14,7 @@
 #include "platform/AppBar.hpp"
 #include "platform/FrameClock.hpp"
 #include "platform/Process.hpp"
+#include "platform/WindowProc.hpp"
 #include "render/Axis.hpp"
 #include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
@@ -24,7 +25,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <exception>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -44,12 +44,6 @@ struct BarPlacement {
     std::uint32_t dpi;
 
     bool          operator==(const BarPlacement& other) const;
-};
-
-// The exception a window procedure caught, held for the message loop to rethrow, since exceptions cannot unwind through
-// user32.
-struct WindowProcError {
-    std::exception_ptr error;
 };
 
 // One appbar window docked to one edge of one monitor, drawing its own module instances. When the graphics device is
@@ -94,8 +88,7 @@ class Bar {
     // What a module lays out and draws with: the bar's fonts and the module's own colors.
     RenderContext ModuleContext(const ModuleStyle& style) const;
     // Every module's context, made again whenever the surface's size changes, since each spans the bar's thickness.
-    void                 BuildContexts();
-    const RenderContext& ContextFor(const ModuleStyle& style) const;
+    void BuildContexts();
     // Sets the time the next frame draws at, in the bar and in every module's context.
     void  StampFrameTime();
     float BoxCrossLength() const;

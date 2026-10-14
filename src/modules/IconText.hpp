@@ -67,6 +67,8 @@ struct ModuleText {
     bool         operator==(const ModuleText&) const = default;
 };
 
+ModuleText NormalText(std::wstring icon, std::wstring text);
+
 // A ModuleText, laid out again only when it changes, drawn in its state's colors.
 class TextLine {
   public:
@@ -76,12 +78,7 @@ class TextLine {
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
 
   private:
-    ModuleText _shown{
-        .icon       = {},
-        .text       = {},
-        .state      = TextState::Normal,
-        .classIndex = 0,
-    }; // what _text holds, once laid out
-    bool     _laidOut = false;
-    IconText _text    = EmptyIconText();
+    ModuleText _shown   = NormalText(L"", L""); // what _text holds, once laid out
+    bool       _laidOut = false;
+    IconText   _text    = EmptyIconText();
 };

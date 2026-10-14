@@ -21,7 +21,6 @@ struct CompositionDevice;
 struct GraphicsDevice {
     Microsoft::WRL::ComPtr<ID3D11Device>   d3d;
     Microsoft::WRL::ComPtr<IDXGIFactory2>  dxgiFactory;
-    Microsoft::WRL::ComPtr<ID2D1Factory1>  d2dFactory;
     Microsoft::WRL::ComPtr<ID2D1Device>    d2d;
     Microsoft::WRL::ComPtr<IDWriteFactory> dwrite;
     std::shared_ptr<CompositionDevice>     composition;

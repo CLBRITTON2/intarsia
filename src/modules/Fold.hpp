@@ -9,6 +9,8 @@
 struct FoldPosition {
     float revealed;     // 0 folded, 1 unfolded
     float angleDegrees; // from the icon rotation folded to the expanded icon one unfolded
+
+    bool  operator==(const FoldPosition&) const = default;
 };
 
 // What a toggle folds away and unfolds again, starting folded. It unfolds over the module's width transition and its

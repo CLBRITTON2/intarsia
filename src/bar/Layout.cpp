@@ -1,5 +1,6 @@
 #include "bar/Layout.hpp"
 
+#include <iterator>
 #include <numeric>
 
 namespace {
@@ -17,11 +18,7 @@ namespace {
             .offsets = {},
         };
         section.offsets.reserve(lengths.size());
-        float next = start + insets.start;
-        for (const float length : lengths) {
-            section.offsets.push_back(next);
-            next += length;
-        }
+        std::exclusive_scan(lengths.begin(), lengths.end(), std::back_inserter(section.offsets), start + insets.start);
         return section;
     }
 
@@ -42,15 +39,10 @@ GroupLayout ArrangeGroup(float toggleLength, const std::vector<float>& memberLen
     GroupLayout group{
         .length       = toggle + shown,
         .toggleLength = toggle,
-        .shownStart   = toggle,
         .shownLength  = shown,
         .offsets      = {},
     };
     group.offsets.reserve(memberLengths.size());
-    float next = toggle;
-    for (const float length : memberLengths) {
-        group.offsets.push_back(next);
-        next += length;
-    }
+    std::exclusive_scan(memberLengths.begin(), memberLengths.end(), std::back_inserter(group.offsets), toggle);
     return group;
 }

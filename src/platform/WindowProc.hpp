@@ -9,6 +9,12 @@
 #include <memory>
 #include <type_traits>
 
+// The exception a window procedure caught, held for the message loop to rethrow, since exceptions cannot unwind through
+// user32.
+struct WindowProcError {
+    std::exception_ptr error;
+};
+
 // The window procedure for a window created with its Owner as the CreateWindowExW lpParam. Owner provides
 // HandleMessage(HWND, UINT, WPARAM, LPARAM) and a _windowProcError whose error member receives any exception HandleMessage
 // throws: an exception cannot unwind through user32, so it is stored and the message loop ends instead.

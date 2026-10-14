@@ -20,20 +20,8 @@ std::optional<std::wstring> Counter::TooltipText() {
 ModuleText Counter::Format(const std::string& spec) {
     const CounterReading reading = _sampler.Reading();
     switch (reading.outcome) {
-        case CounterOutcome::Pending:
-            return ModuleText{
-                .icon       = Settings().icon,
-                .text       = {},
-                .state      = TextState::Normal,
-                .classIndex = 0,
-            };
-        case CounterOutcome::Sampled:
-            return ModuleText{
-                .icon       = Settings().icon,
-                .text       = ToWide(FormatPlaceholders(spec, CounterPlaceholders(reading.value))),
-                .state      = TextState::Normal,
-                .classIndex = 0,
-            };
+        case CounterOutcome::Pending: return NormalText(Settings().icon, L"");
+        case CounterOutcome::Sampled: return NormalText(Settings().icon, ToWide(FormatPlaceholders(spec, CounterPlaceholders(reading.value))));
         case CounterOutcome::Failed:
             return ModuleText{
                 .icon       = Settings().icon,

@@ -1,6 +1,5 @@
 #include "bar/Menu.hpp"
 
-#include "bar/Bar.hpp"
 #include "bar/Box.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
@@ -77,12 +76,7 @@ MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const R
     const bool        overflow = height > maxHeight;
     const SIZE        size{.cx = std::min(DipsToWholePixels(inner + insets.left + insets.right + (overflow ? gutter : 0.0f), dpi), monitorWidth),
                            .cy = std::min(DipsToWholePixels(overflow ? maxHeight : height, dpi), monitorHeight)};
-    const D2D1_RECT_F viewport{
-        .left   = insets.left,
-        .top    = insets.top,
-        .right  = insets.left + inner,
-        .bottom = PixelsToDips(static_cast<float>(size.cy), dpi) - insets.bottom,
-    };
+    const D2D1_RECT_F viewport = D2D1::RectF(insets.left, insets.top, insets.left + inner, PixelsToDips(static_cast<float>(size.cy), dpi) - insets.bottom);
     return MenuLayout{
         .rows = std::move(rows),
         .size = size,
@@ -92,20 +86,9 @@ MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const R
                 .contentDips = content,
                 .offsetDips  = 0.0f,
             },
-        .gutter =
-            D2D1_RECT_F{
-                .left   = viewport.right,
-                .top    = viewport.top,
-                .right  = viewport.right + gutter,
-                .bottom = viewport.bottom,
-            },
-        .track =
-            D2D1_RECT_F{
-                .left   = viewport.right + scrollbar.margin.xDips,
-                .top    = viewport.top + scrollbar.margin.yDips,
-                .right  = viewport.right + scrollbar.margin.xDips + scrollbar.widthDips,
-                .bottom = viewport.bottom - scrollbar.margin.yDips,
-            },
+        .gutter = D2D1::RectF(viewport.right, viewport.top, viewport.right + gutter, viewport.bottom),
+        .track  = D2D1::RectF(viewport.right + scrollbar.margin.xDips, viewport.top + scrollbar.margin.yDips, viewport.right + scrollbar.margin.xDips + scrollbar.widthDips,
+                              viewport.bottom - scrollbar.margin.yDips),
     };
 }
 
@@ -133,12 +116,7 @@ std::optional<D2D1_RECT_F> ThumbRect(const MenuScroll& scroll, const D2D1_RECT_F
     const float shown       = (scroll.viewport.bottom - scroll.viewport.top) / scroll.contentDips;
     const float thumbLength = std::min(trackLength, std::max(kMinThumbDips, trackLength * shown));
     const float top         = track.top + ((trackLength - thumbLength) * scroll.offsetDips / maxOffset);
-    return D2D1_RECT_F{
-        .left   = track.left,
-        .top    = top,
-        .right  = track.right,
-        .bottom = top + thumbLength,
-    };
+    return D2D1::RectF(track.left, top, track.right, top + thumbLength);
 }
 
 MenuScroll ScrolledToThumb(const MenuScroll& scroll, const D2D1_RECT_F& track, float thumbTopDips) {

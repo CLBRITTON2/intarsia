@@ -1,6 +1,5 @@
 #include "modules/CommandPoller.hpp"
 
-#include "bar/Sections.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Process.hpp"
@@ -223,8 +222,8 @@ void CommandPoller::Publish(const CommandResult& result) {
         }
         _result = result;
     }
-    const std::string program = ToUtf8(_command.program.wstring());
     if (result.outcome == CommandOutcome::Failed) {
+        const std::string program = ToUtf8(_command.program.wstring());
         Log(LogLevel::Warning, "custom", "command_failed", {{.key = "module", .value = _name}, {.key = "program", .value = program}, {.key = "reason", .value = result.detail}});
     }
     _changes.Notify("custom");

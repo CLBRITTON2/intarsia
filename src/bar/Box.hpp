@@ -41,9 +41,6 @@ D2D1_RECT_F SnapRect(const PixelGrid& grid, const D2D1_RECT_F& rect);
 // rounded to the nearest. At a fractional scale a 1px line otherwise half-lights two rows of pixels and looks blurred.
 BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style);
 
-// The box DrawBox fills: bounds snapped to device pixels, rounded to style's radius, at most half its shorter side.
-D2D1_ROUNDED_RECT SnappedOutline(const PixelGrid& grid, const D2D1_RECT_F& bounds, const BoxStyle& style);
-
 // The outline of each box for Surface::ShowBackdrops, or none when backdrop has no blur.
 std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style);
 

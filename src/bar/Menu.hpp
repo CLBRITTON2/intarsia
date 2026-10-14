@@ -20,8 +20,6 @@
 #include <optional>
 #include <vector>
 
-struct WindowProcError;
-
 // One row of a shown menu, in DIPs from the menu's top left.
 struct MenuRow {
     Microsoft::WRL::ComPtr<IDWriteTextLayout> text; // null for a separator

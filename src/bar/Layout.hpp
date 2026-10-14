@@ -32,8 +32,7 @@ BarLayout ArrangeBar(const Sections<float>& lengths, float barLength, float marg
 struct GroupLayout {
     float              length;
     float              toggleLength; // the toggle inside the insets at both ends, the whole box while folded
-    float              shownStart;   // the span of the members the fold uncovers
-    float              shownLength;
+    float              shownLength;  // the span of the members the fold uncovers, from toggleLength
     std::vector<float> offsets;
 };
 

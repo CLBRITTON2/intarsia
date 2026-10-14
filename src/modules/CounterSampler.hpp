@@ -23,8 +23,6 @@ struct CounterReading {
     CounterOutcome outcome;
     double         value;  // Sampled: the instances combined
     std::string    detail; // Failed: why, for the log and the tooltip
-
-    bool           operator==(const CounterReading&) const = default;
 };
 
 // The instances' values made one by combine, 0 when there are none: a wildcard matching nothing, such as GPU engines

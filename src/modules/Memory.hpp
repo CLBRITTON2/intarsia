@@ -10,9 +10,6 @@
 #include <string>
 #include <vector>
 
-// Bytes as gibibytes (1024^3), the unit Task Manager calls GB.
-double BytesToGibibytes(std::uint64_t bytes);
-
 // The system's memory at one moment, in bytes.
 struct MemoryUsage {
     std::uint64_t totalBytes;       // physical memory

@@ -39,7 +39,7 @@ class Surface {
     void ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop);
 
   private:
-    void                                       BindRenderTarget(std::uint32_t dpi);
+    void                                       BindRenderTarget();
 
     std::shared_ptr<CompositionDevice>         _composition;
     std::uint32_t                              _dpi;

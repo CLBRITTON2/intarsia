@@ -365,6 +365,13 @@ namespace {
 
     constexpr size_t kMostCachedBoxes = 64; // a shadow fade makes one a frame, so they start over
 
+    // The box DrawBox fills: bounds snapped to device pixels, rounded to style's radius, at most half its shorter side.
+    D2D1_ROUNDED_RECT SnappedOutline(const PixelGrid& grid, const D2D1_RECT_F& bounds, const BoxStyle& style) {
+        const D2D1_RECT_F box    = SnapRect(grid, bounds);
+        const float       radius = std::max(std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f), 0.0f);
+        return D2D1::RoundedRect(box, radius, radius);
+    }
+
 } // namespace
 
 bool SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second) {
@@ -491,12 +498,6 @@ Insets ContentInsets(const BoxStyle& style) {
         .right  = style.padding.xDips + style.border.right.widthDips,
         .bottom = style.padding.yDips + style.border.bottom.widthDips,
     };
-}
-
-D2D1_ROUNDED_RECT SnappedOutline(const PixelGrid& grid, const D2D1_RECT_F& bounds, const BoxStyle& style) {
-    const D2D1_RECT_F box    = SnapRect(grid, bounds);
-    const float       radius = std::max(std::min(style.radiusDips, std::min(box.right - box.left, box.bottom - box.top) / 2.0f), 0.0f);
-    return D2D1::RoundedRect(box, radius, radius);
 }
 
 std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style) {

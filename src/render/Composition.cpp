@@ -80,6 +80,28 @@ namespace {
         return factory;
     }
 
+    // The host backdrop (source "backdrop") toned by backdrop's color matrix and cut to a mask surface's alpha (source
+    // "mask"), which antialiases a rounded edge that a geometric clip leaves stepped. A mask brush refuses a host
+    // backdrop as its source, and a color matrix is no property a brush can set, so each tone takes a factory of its own.
+    winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop) {
+        namespace composition = winrt::Windows::UI::Composition;
+        return Composing("CreateBackdropFactory", [&compositor, &backdrop] {
+            const auto values  = FactoryOf<foundation::PropertyValue, foundation::IPropertyValueStatics>("RoGetActivationFactory(PropertyValue)");
+            const auto sources = FactoryOf<composition::CompositionEffectSourceParameter, composition::ICompositionEffectSourceParameterFactory>(
+                "RoGetActivationFactory(CompositionEffectSourceParameter)");
+            const std::array<float, 20> matrix = BackdropColorMatrix(backdrop);
+            const auto                  toned  = winrt::make<D2DEffect>(CLSID_D2D1ColorMatrix, std::vector<effects::IGraphicsEffectSource>{sources.Create(L"backdrop")},
+                                                                        std::vector<foundation::IInspectable>{
+                                                          values.CreateSingleArray(matrix),
+                                                          values.CreateUInt32(static_cast<std::uint32_t>(D2D1_COLORMATRIX_ALPHA_MODE_PREMULTIPLIED)),
+                                                          values.CreateBoolean(true),
+                                                      });
+            const auto                  masked =
+                winrt::make<D2DEffect>(CLSID_D2D1AlphaMask, std::vector<effects::IGraphicsEffectSource>{toned, sources.Create(L"mask")}, std::vector<foundation::IInspectable>{});
+            return compositor.CreateEffectFactory(masked);
+        });
+    }
+
 } // namespace
 
 CompositionDevice CreateCompositionDevice(ID2D1Device* d2d) {
@@ -106,25 +128,6 @@ std::array<float, 20> BackdropColorMatrix(const Backdrop& backdrop) {
         0.0f,                        0.0f,                        0.0f,                        0.0f,
     };
     // clang-format on
-}
-
-winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop) {
-    namespace composition = winrt::Windows::UI::Composition;
-    return Composing("CreateBackdropFactory", [&compositor, &backdrop] {
-        const auto values  = FactoryOf<foundation::PropertyValue, foundation::IPropertyValueStatics>("RoGetActivationFactory(PropertyValue)");
-        const auto sources = FactoryOf<composition::CompositionEffectSourceParameter, composition::ICompositionEffectSourceParameterFactory>(
-            "RoGetActivationFactory(CompositionEffectSourceParameter)");
-        const std::array<float, 20> matrix = BackdropColorMatrix(backdrop);
-        const auto                  toned  = winrt::make<D2DEffect>(CLSID_D2D1ColorMatrix, std::vector<effects::IGraphicsEffectSource>{sources.Create(L"backdrop")},
-                                                                    std::vector<foundation::IInspectable>{
-                                                      values.CreateSingleArray(matrix),
-                                                      values.CreateUInt32(static_cast<std::uint32_t>(D2D1_COLORMATRIX_ALPHA_MODE_PREMULTIPLIED)),
-                                                      values.CreateBoolean(true),
-                                                  });
-        const auto                  masked =
-            winrt::make<D2DEffect>(CLSID_D2D1AlphaMask, std::vector<effects::IGraphicsEffectSource>{toned, sources.Create(L"mask")}, std::vector<foundation::IInspectable>{});
-        return compositor.CreateEffectFactory(masked);
-    });
 }
 
 winrt::Windows::UI::Composition::CompositionEffectFactory BackdropFactories::For(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop) {

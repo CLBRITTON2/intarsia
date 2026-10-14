@@ -96,12 +96,7 @@ Cpu::Cpu(TextModuleConfig config) :
 // A sample over a few milliseconds would also swing between 0 and 100.
 ModuleText Cpu::Format(const std::string& spec) {
     _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { Sample(); });
-    return ModuleText{
-        .icon       = Settings().icon,
-        .text       = _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }),
-        .state      = TextState::Normal,
-        .classIndex = 0,
-    };
+    return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }));
 }
 
 void Cpu::Sample() {

@@ -21,12 +21,7 @@ Window::Window(WindowConfig config, const IWindowManager& windowManager) : IconT
 
 ModuleText Window::Content() {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
-    return ModuleText{
-        .icon       = {},
-        .text       = focused.has_value() ? TruncateTitle(focused->title, Settings().maxLength) : std::wstring(),
-        .state      = TextState::Normal,
-        .classIndex = 0,
-    };
+    return NormalText(L"", focused.has_value() ? TruncateTitle(focused->title, Settings().maxLength) : std::wstring());
 }
 
 // The whole title, however long, since the bar may have cut it.

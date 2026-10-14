@@ -66,10 +66,6 @@ namespace {
         return (3.0f * rest * rest * t * a) + (3.0f * rest * t * t * b) + (t * t * t);
     }
 
-    float Lerp(float from, float to, float share) {
-        return from + ((to - from) * share);
-    }
-
     // The shadow at index, or its partner's shape in transparent when the list is too short to hold one.
     InsetShadow ShadowOrClear(const std::vector<InsetShadow>& shadows, const std::vector<InsetShadow>& partners, size_t index) {
         if (index < shadows.size()) {
@@ -81,6 +77,10 @@ namespace {
     }
 
 } // namespace
+
+float Lerp(float from, float to, float share) {
+    return from + ((to - from) * share);
+}
 
 // x rises with t for every CSS keyword, so halving finds the t whose x is progress.
 float Eased(TimingFunction timing, float progress) {
@@ -115,7 +115,7 @@ float AnimatedValue::Value(std::chrono::steady_clock::time_point now) const {
         return _to;
     }
     const float progress = std::chrono::duration<float>(now - _start) / std::chrono::duration<float>(_duration);
-    return _from + ((_to - _from) * Eased(_timing, progress));
+    return Lerp(_from, _to, Eased(_timing, progress));
 }
 
 bool AnimatedValue::Running(std::chrono::steady_clock::time_point now) const {
@@ -181,7 +181,7 @@ bool ShadowFade::Running(std::chrono::steady_clock::time_point now) const {
 }
 
 D2D1_COLOR_F MixColors(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second, float share) {
-    const float alpha = first.a + ((second.a - first.a) * share);
+    const float alpha = Lerp(first.a, second.a, share);
     if (alpha <= 0.0f) {
         return D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
     }

@@ -59,12 +59,7 @@ std::int32_t VolumePercent(float volume) {
 
 ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device) {
     if (!device.has_value()) {
-        return ModuleText{
-            .icon       = {},
-            .text       = {},
-            .state      = TextState::Normal,
-            .classIndex = 0,
-        };
+        return NormalText(L"", L"");
     }
     const std::string& format = device->muted ? config.formatMuted : config.format;
     return ModuleText{

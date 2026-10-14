@@ -7,6 +7,9 @@
 #include <chrono>
 #include <vector>
 
+// from moved toward to by share, 0 all from and 1 all to.
+float Lerp(float from, float to, float share);
+
 // How far a timing function has eased at progress, a share of the duration from 0 to 1, as a share from 0 to 1.
 float Eased(TimingFunction timing, float progress);
 

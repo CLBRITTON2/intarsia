@@ -84,7 +84,6 @@ TEST(Layout, AFoldedGroupIsItsToggleInsideItsPadding) {
     EXPECT_EQ(group.toggleLength, 28.0f);
     // The members stay where the unfolded group puts them, past the box's end.
     EXPECT_EQ(group.offsets, (std::vector<float>{28.0f, 58.0f}));
-    EXPECT_EQ(group.shownStart, 28.0f);
     EXPECT_EQ(group.shownLength, 0.0f);
 }
 
@@ -99,7 +98,6 @@ TEST(Layout, AnUnfoldedGroupPlacesItsMembersBoxToBoxAfterItsPaddedToggle) {
     EXPECT_EQ(group.length, 108.0f);
     EXPECT_EQ(group.toggleLength, 28.0f);
     EXPECT_EQ(group.offsets, (std::vector<float>{28.0f, 58.0f, 58.0f}));
-    EXPECT_EQ(group.shownStart, 28.0f);
     EXPECT_EQ(group.shownLength, 80.0f);
 }
 

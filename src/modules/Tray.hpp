@@ -21,7 +21,7 @@
 // Clicking an icon reaches its app as a click on the taskbar's icon would, and resting on one shows its tooltip.
 class Tray final : public IModule {
   public:
-    Tray(TrayConfig config, ITray& tray, ModuleStyle style);
+    Tray(const TrayConfig& config, ITray& tray, ModuleStyle style);
     ~Tray() override;
     Tray(const Tray&)                  = delete;
     Tray&       operator=(const Tray&) = delete;
@@ -68,13 +68,12 @@ class Tray final : public IModule {
     bool                          LayOutItems(const RenderContext& render);
     std::vector<const ItemStyle*> ItemStyles() const;
 
-    TrayConfig                    _config;
+    std::wstring                  _icon;
     ITray&                        _tray;
     ModuleStyle                   _style;
     Fold                          _fold;
     // What the last layout read of them, so drawing and hit tests agree with one frame.
-    float             _revealedShown = 0.0f;
-    float             _angleShown    = 0.0f;
+    FoldPosition      _shown{.revealed = 0.0f, .angleDegrees = 0.0f};
     std::vector<Slot> _slots; // as last laid out with any icon in sight
     IconText          _toggle;
     // Every icon then the toggle, as if fully unfolded.

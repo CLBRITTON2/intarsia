@@ -52,8 +52,9 @@ GraphicsDevice CreateGraphicsDevice() {
     ThrowIfFailed(dxgiDevice->GetAdapter(&adapter), "IDXGIDevice::GetAdapter");
     Log(LogLevel::Info, "graphics", "device_created", {{.key = "adapter", .value = ToUtf8(AdapterName(adapter.Get()))}});
 
-    ThrowIfFailed(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, device.d2dFactory.GetAddressOf()), "D2D1CreateFactory");
-    ThrowIfFailed(device.d2dFactory->CreateDevice(dxgiDevice.Get(), &device.d2d), "ID2D1Factory1::CreateDevice");
+    ComPtr<ID2D1Factory1> d2dFactory;
+    ThrowIfFailed(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, d2dFactory.GetAddressOf()), "D2D1CreateFactory");
+    ThrowIfFailed(d2dFactory->CreateDevice(dxgiDevice.Get(), &device.d2d), "ID2D1Factory1::CreateDevice");
 
     ThrowIfFailed(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(device.dwrite.GetAddressOf())), "DWriteCreateFactory");
 

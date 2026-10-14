@@ -172,6 +172,15 @@ const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32
     return icons[static_cast<size_t>(index)];
 }
 
+ModuleText NormalText(std::wstring icon, std::wstring text) {
+    return ModuleText{
+        .icon       = std::move(icon),
+        .text       = std::move(text),
+        .state      = TextState::Normal,
+        .classIndex = 0,
+    };
+}
+
 bool TextLine::Update(const RenderContext& render, ModuleText content) {
     if (_laidOut && content == _shown) {
         return false;

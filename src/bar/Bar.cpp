@@ -70,8 +70,8 @@ namespace {
 
     // What a module's box is filled with: its background, or its hover under the cursor. A group's hover lights its
     // toggle alone, over the group's background, so a group's fill is the toggle's and clear at rest.
-    D2D1_COLOR_F BoxFill(const ModuleEntry& entry, bool pointed) {
-        if (pointed) {
+    D2D1_COLOR_F BoxFill(const ModuleEntry& entry, bool hovered) {
+        if (hovered) {
             return entry.style.hover;
         }
         return entry.group != nullptr ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f) : entry.style.box.background;
@@ -402,11 +402,6 @@ void Bar::BuildContexts() {
     ForEachEntry(_modules, [this](const ModuleEntry& entry) { _contexts.emplace(&entry.style, ModuleContext(entry.style)); });
 }
 
-const RenderContext& Bar::ContextFor(const ModuleStyle& style) const {
-    return _contexts.at(&style);
-}
-
-// A module box spans the bar's thickness less the sections' margin and insets on both sides.
 float Bar::BoxCrossLength() const {
     const SectionStyle& section   = _config.style.section;
     const float         thickness = CrossLength(_surface->Context()->GetSize(), _axis);
@@ -471,7 +466,7 @@ void Bar::Redraw() {
 bool Bar::LayOutModules() {
     bool changed = false;
     // Every module lays out, so none is left holding stale content.
-    ForEachEntry(_modules, [this, &changed](const ModuleEntry& entry) { changed = entry.module->Layout(ContextFor(entry.style)) || changed; });
+    ForEachEntry(_modules, [this, &changed](const ModuleEntry& entry) { changed = entry.module->Layout(_contexts.at(&entry.style)) || changed; });
     return changed;
 }
 
@@ -610,7 +605,7 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
             const std::vector<float> memberLengths = BoxLengths(entry.members);
             const GroupLayout        group         = ArrangeMembers(entry, memberLengths);
             placedEntry.toggleBounds               = PlaceBox(entry, start, group.toggleLength).bounds;
-            placedEntry.shownBounds                = PlaceBox(entry, start + group.shownStart, group.shownLength).bounds;
+            placedEntry.shownBounds                = PlaceBox(entry, start + group.toggleLength, group.shownLength).bounds;
             for (size_t member = 0; member < entry.members.size(); ++member) {
                 placedEntry.members.push_back(PlaceInRoom(entry.members[member], start + group.offsets[member], memberLengths[member]));
             }
@@ -622,7 +617,7 @@ std::vector<Bar::PlacedEntry> Bar::PlaceSection(const std::vector<ModuleEntry>& 
 
 void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
     DrawBox(_surface->Context(), *_brushes, *_boxes, box.bounds, style.box, _boxFades.at(box.module).Color(_frameTime));
-    box.module->Draw(ContextFor(style), box.contentOrigin);
+    box.module->Draw(_contexts.at(&style), box.contentOrigin);
 }
 
 void Bar::DrawGroup(const PlacedEntry& placed) {
@@ -634,7 +629,7 @@ void Bar::DrawGroup(const PlacedEntry& placed) {
     if (toggleFill.a > 0.0f) {
         DrawBox(context, *_brushes, *_boxes, placed.toggleBounds, style.box, toggleFill);
     }
-    placed.box.module->Draw(ContextFor(style), placed.box.contentOrigin);
+    placed.box.module->Draw(_contexts.at(&style), placed.box.contentOrigin);
     context->PushAxisAlignedClip(placed.shownBounds, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t member = 0; member < placed.members.size(); ++member) {
         DrawModule(placed.members[member], placed.entry->members[member].style);
@@ -659,7 +654,6 @@ std::vector<D2D1_ROUNDED_RECT> Bar::SectionBackdrops(const std::vector<const Sec
     return BackdropOutlines(style.backdrop, PixelGridOf(_surface->Context()), sections, style.box);
 }
 
-// The section's box, then each module.
 void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout) {
     if (layout.length <= 0.0f) {
         return;
@@ -676,7 +670,6 @@ void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayo
     }
 }
 
-// Mouse positions are client pixels, and modules lay out in DIPs.
 const Bar::HitBox* Bar::BoxAt(POINT client) const {
     const D2D1_POINT_2F point = ClientDips(client, _placement.dpi);
     const auto          box   = std::ranges::find_if(_hitBoxes, [point](const HitBox& candidate) { return Contains(candidate.bounds, point); });
@@ -693,14 +686,16 @@ void Bar::HandleInput(POINT client, ModuleInput input) {
         return;
     }
     const std::optional<ModuleAction>& action = ActionFor(box->module->Actions(), input);
-    if (const auto* command = action.has_value() ? std::get_if<Command>(&*action) : nullptr) {
-        _launcher.Launch(*command);
-    } else if (const auto* windowManagerCommand = action.has_value() ? std::get_if<WindowManagerCommand>(&*action) : nullptr) {
-        _windowManager.RunCommand(windowManagerCommand->text);
-    } else if (const auto* menu = action.has_value() ? std::get_if<MenuAction>(&*action) : nullptr) {
-        if (!menuWasShown || !menuOwner.has_value() || menuOwner->module != box->module) {
-            _menuOwner = MenuOwner{.module = box->module, .onSelect = menu->onSelect};
-            _lister->List(menu->command, menu->timeout);
+    if (action.has_value()) {
+        if (const auto* command = std::get_if<Command>(&*action)) {
+            _launcher.Launch(*command);
+        } else if (const auto* windowManagerCommand = std::get_if<WindowManagerCommand>(&*action)) {
+            _windowManager.RunCommand(windowManagerCommand->text);
+        } else if (const auto* menu = std::get_if<MenuAction>(&*action)) {
+            if (!menuWasShown || !menuOwner.has_value() || menuOwner->module != box->module) {
+                _menuOwner = MenuOwner{.module = box->module, .onSelect = menu->onSelect};
+                _lister->List(menu->command, menu->timeout);
+            }
         }
     } else if (input == ModuleInput::LeftClick) {
         box->module->Click(ContentPoint(client, *box));

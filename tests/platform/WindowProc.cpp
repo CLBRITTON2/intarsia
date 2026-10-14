@@ -5,16 +5,11 @@
 #include <windows.h>
 
 #include <cstdint>
-#include <exception>
 #include <stdexcept>
 
 namespace {
 
     constexpr wchar_t kOwnerClass[] = L"IntarsiaWindowProcTest";
-
-    struct OwnerWindowProcError {
-        std::exception_ptr error;
-    };
 
     // Holds its window the way App holds its control window, and throws once the window exists, as App's constructor
     // can.
@@ -38,9 +33,9 @@ namespace {
             return DefWindowProcW(window, message, wParam, lParam);
         }
 
-        std::int32_t&        _messages;
-        OwnerWindowProcError _windowProcError;
-        UniqueOwnedWindow    _window;
+        std::int32_t&     _messages;
+        WindowProcError   _windowProcError;
+        UniqueOwnedWindow _window;
     };
 
 } // namespace

@@ -39,12 +39,7 @@ std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {
 
 ModuleText FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state) {
     if (!state.has_value()) {
-        return ModuleText{
-            .icon       = {},
-            .text       = {},
-            .state      = TextState::Normal,
-            .classIndex = 0,
-        };
+        return NormalText(L"", L"");
     }
     switch (state->charge) {
         case ChargeState::Discharging:
@@ -56,20 +51,8 @@ ModuleText FormatBattery(const BatteryConfig& config, const std::optional<Batter
                                                                            TextState::Normal,
                 .classIndex = 0,
             };
-        case ChargeState::Charging:
-            return ModuleText{
-                .icon       = config.iconCharging,
-                .text       = ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))),
-                .state      = TextState::Normal,
-                .classIndex = 0,
-            };
-        case ChargeState::Plugged:
-            return ModuleText{
-                .icon       = config.iconPlugged,
-                .text       = ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))),
-                .state      = TextState::Normal,
-                .classIndex = 0,
-            };
+        case ChargeState::Charging: return NormalText(config.iconCharging, ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))));
+        case ChargeState::Plugged: return NormalText(config.iconPlugged, ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))));
     }
     throw std::invalid_argument(std::format("unknown battery charge {}", static_cast<std::int32_t>(state->charge)));
 }
