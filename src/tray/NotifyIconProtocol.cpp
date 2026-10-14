@@ -57,7 +57,9 @@ namespace {
         }
         if ((message.flags & NIF_ICON) != 0) {
             const bool same = icon.pixels != nullptr && pixels != nullptr && *icon.pixels == *pixels;
-            icon.pixels     = same ? icon.pixels : std::move(pixels);
+            if (!same) {
+                icon.pixels = std::move(pixels);
+            }
         }
         if ((message.flags & NIF_STATE) != 0 && (message.stateMask & NIS_HIDDEN) != 0) {
             icon.hidden = (message.state & NIS_HIDDEN) != 0;
@@ -129,8 +131,12 @@ IconRectQuery ParseIconRectQuery(std::span<const std::byte> payload) {
 
 std::optional<RECT> QueriedIconRect(const IconRectQuery& query, const std::vector<TrayIcon>& icons, const std::vector<TrayIconRect>& rects, POINT cursor) {
     const bool byGuid = query.guid != GUID{};
-    const auto icon   = std::ranges::find_if(
-        icons, [&query, byGuid](const TrayIcon& candidate) { return byGuid ? candidate.guid == query.guid : candidate.owner == query.owner && candidate.id == query.id; });
+    const auto icon   = std::ranges::find_if(icons, [&query, byGuid](const TrayIcon& candidate) {
+        if (byGuid) {
+            return candidate.guid == query.guid;
+        }
+        return candidate.owner == query.owner && candidate.id == query.id;
+    });
     if (icon == icons.end()) {
         return std::nullopt;
     }
@@ -199,16 +205,23 @@ std::wstring DrawableTooltip(std::wstring_view tip) {
     std::wstring kept;
     kept.reserve(tip.size());
     std::ranges::copy_if(tip, std::back_inserter(kept), [](wchar_t unit) { return unit != L'\r'; });
-    std::ranges::replace_if(kept, [](wchar_t unit) { return unit != L'\n' && IsUnsafeCharacter(unit); }, L'�');
+    std::ranges::replace_if(kept, [](wchar_t unit) { return unit != L'\n' && IsUnsafeCharacter(unit); }, kReplacementCharacter);
     return ReplaceLoneSurrogates(kept);
 }
 
 std::vector<std::uint32_t> ClickEvents(TrayButton button, std::uint32_t version) {
     const bool notifies = version >= NOTIFYICON_VERSION;
     switch (button) {
-        case TrayButton::Left: return notifies ? std::vector<std::uint32_t>{WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT} : std::vector<std::uint32_t>{WM_LBUTTONDOWN, WM_LBUTTONUP};
+        case TrayButton::Left:
+            if (notifies) {
+                return {WM_LBUTTONDOWN, WM_LBUTTONUP, NIN_SELECT};
+            }
+            return {WM_LBUTTONDOWN, WM_LBUTTONUP};
         case TrayButton::Right:
-            return notifies ? std::vector<std::uint32_t>{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU} : std::vector<std::uint32_t>{WM_RBUTTONDOWN, WM_RBUTTONUP};
+            if (notifies) {
+                return {WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU};
+            }
+            return {WM_RBUTTONDOWN, WM_RBUTTONUP};
         case TrayButton::Middle: return {WM_MBUTTONDOWN, WM_MBUTTONUP};
     }
     throw std::invalid_argument(std::format("unknown tray button {}", static_cast<std::int32_t>(button)));

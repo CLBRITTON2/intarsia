@@ -4,9 +4,7 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <format>
 #include <limits>
-#include <stdexcept>
 #include <utility>
 
 using Microsoft::WRL::ComPtr;
@@ -71,14 +69,28 @@ namespace {
         return (size.height / 2.0f) - ((inkTop + inkBottom) / 2.0f);
     }
 
+    float GapDips(IDWriteTextLayout* icon, IDWriteTextLayout* text, float iconGapDips) {
+        if (icon != nullptr && text != nullptr) {
+            return iconGapDips;
+        }
+        return 0.0f;
+    }
+
+    // The icon, the gap and the text side by side along a horizontal bar, stacked down a vertical one.
+    D2D1_SIZE_F CombinedSize(Axis axis, D2D1_SIZE_F iconSize, float gapDips, D2D1_SIZE_F textSize) {
+        if (axis == Axis::Horizontal) {
+            return D2D1::SizeF(iconSize.width + gapDips + textSize.width, std::max(iconSize.height, textSize.height));
+        }
+        return D2D1::SizeF(std::max(iconSize.width, textSize.width), iconSize.height + gapDips + textSize.height);
+    }
+
     IconText Combined(Axis axis, ComPtr<IDWriteTextLayout> icon, ComPtr<IDWriteTextLayout> text, float iconGapDips) {
         const D2D1_SIZE_F         iconSize    = SizeOf(Metrics(icon.Get()));
         const float               inkShift    = InkShift(icon.Get(), iconSize);
         const DWRITE_TEXT_METRICS textMetrics = Metrics(text.Get());
         const D2D1_SIZE_F         textSize    = SizeOf(textMetrics);
-        const float               gap         = icon != nullptr && text != nullptr ? iconGapDips : 0.0f;
-        const D2D1_SIZE_F         size        = axis == Axis::Horizontal ? D2D1::SizeF(iconSize.width + gap + textSize.width, std::max(iconSize.height, textSize.height)) :
-                                                                           D2D1::SizeF(std::max(iconSize.width, textSize.width), iconSize.height + gap + textSize.height);
+        const float               gap         = GapDips(icon.Get(), text.Get(), iconGapDips);
+        const D2D1_SIZE_F         size        = CombinedSize(axis, iconSize, gap, textSize);
         return IconText{
             .icon             = std::move(icon),
             .text             = std::move(text),
@@ -125,7 +137,10 @@ IconText LayOutIconText(const RenderContext& render, std::wstring_view icon, std
         ThrowIfFailed(iconLayout->SetFontFamilyName(render.iconFont, all), "IDWriteTextLayout::SetFontFamilyName");
         ThrowIfFailed(iconLayout->SetFontSize(render.iconSizeDips, all), "IDWriteTextLayout::SetFontSize");
     }
-    ComPtr<IDWriteTextLayout> textLayout = text.empty() ? nullptr : CreateText(render, text, 0.0f);
+    ComPtr<IDWriteTextLayout> textLayout;
+    if (!text.empty()) {
+        textLayout = CreateText(render, text, 0.0f);
+    }
     return Combined(render.axis, std::move(iconLayout), std::move(textLayout), render.iconGapDips);
 }
 
@@ -164,49 +179,4 @@ IconText EmptyIconText() {
         .gapDips          = 0.0f,
         .size             = {.width = 0.0f, .height = 0.0f},
     };
-}
-
-const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32_t percent) {
-    const auto count = static_cast<std::int32_t>(icons.size());
-    const auto index = std::clamp(std::clamp(percent, 0, 100) * count / 101, 0, count - 1);
-    return icons[static_cast<size_t>(index)];
-}
-
-ModuleText NormalText(std::wstring icon, std::wstring text) {
-    return ModuleText{
-        .icon       = std::move(icon),
-        .text       = std::move(text),
-        .state      = TextState::Normal,
-        .classIndex = 0,
-    };
-}
-
-bool TextLine::Update(const RenderContext& render, ModuleText content) {
-    if (_laidOut && content == _shown) {
-        return false;
-    }
-    _text    = LayOutIconText(render, content.icon, content.text);
-    _shown   = std::move(content);
-    _laidOut = true;
-    return true;
-}
-
-D2D1_SIZE_F TextLine::Size() const {
-    return _text.size;
-}
-
-void TextLine::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
-    switch (_shown.state) {
-        case TextState::Normal: DrawIconText(render, origin, _text, render.accent, render.foreground); return;
-        case TextState::Alert: DrawIconText(render, origin, _text, render.accent, render.alert); return;
-        case TextState::Warning: DrawIconText(render, origin, _text, render.warning.icon, render.warning.text); return;
-        case TextState::Critical: DrawIconText(render, origin, _text, render.critical.icon, render.critical.text); return;
-        case TextState::Muted: DrawIconText(render, origin, _text, render.muted.icon, render.muted.text); return;
-        case TextState::Classed: {
-            const StateBrushes& brushes = render.classes.at(_shown.classIndex);
-            DrawIconText(render, origin, _text, brushes.icon, brushes.text);
-            return;
-        }
-    }
-    throw std::invalid_argument(std::format("unknown text state {}", static_cast<std::int32_t>(_shown.state)));
 }

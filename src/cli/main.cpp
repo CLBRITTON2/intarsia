@@ -14,10 +14,14 @@
 #include <format>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace {
 
-    std::string Check(const std::filesystem::path& configPath) {
+    constexpr std::string_view kCliUsage = "usage: intarsia-cli check [--config <path>]\n"
+                                           "       intarsia-cli monitors [--config <path>]";
+
+    std::string                Check(const std::filesystem::path& configPath) {
         LoadConfig(configPath);
         return std::format("{} and {} load\n", ToUtf8(configPath.wstring()), ToUtf8(StylePath(configPath).wstring()));
     }

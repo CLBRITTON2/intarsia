@@ -1,9 +1,10 @@
 #include "modules/Window.hpp"
 
+#include "modules/Placeholders.hpp"
 #include "platform/Text.hpp"
 
-#include <cstdint>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -11,6 +12,11 @@ namespace {
 
     bool              IsHighSurrogate(wchar_t unit) {
         return unit >= 0xD800 && unit <= 0xDBFF;
+    }
+
+    // The values a window tooltip can name: {title}, the whole title.
+    std::vector<Placeholder> WindowPlaceholders(std::wstring_view title) {
+        return {{.name = "title", .value = ToUtf8(title)}};
     }
 
 } // namespace
@@ -21,7 +27,10 @@ Window::Window(WindowConfig config, const IWindowManager& windowManager) : IconT
 
 ModuleText Window::Content() {
     const std::optional<FocusedWindow> focused = _windowManager.Focused();
-    return NormalText(L"", focused.has_value() ? TruncateTitle(focused->title, Settings().maxLength) : std::wstring());
+    if (!focused.has_value()) {
+        return NormalText(L"", L"");
+    }
+    return NormalText(L"", TruncateTitle(focused->title, Settings().maxLength));
 }
 
 // The whole title, however long, since the bar may have cut it.
@@ -31,10 +40,6 @@ std::optional<std::wstring> Window::TooltipText() {
         return std::nullopt;
     }
     return ToWide(FormatPlaceholders(*Settings().tooltip, WindowPlaceholders(focused->title)));
-}
-
-std::vector<Placeholder> WindowPlaceholders(std::wstring_view title) {
-    return {{.name = "title", .value = ToUtf8(title)}};
 }
 
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {

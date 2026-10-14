@@ -7,7 +7,6 @@
 #include <windows.h>
 
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>

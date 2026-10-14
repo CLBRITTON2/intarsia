@@ -5,7 +5,6 @@
 #include "modules/TextModule.hpp"
 #include "modules/Ticks.hpp"
 
-#include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>

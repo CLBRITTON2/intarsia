@@ -185,6 +185,6 @@ D2D1_COLOR_F MixColors(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second, fl
     if (alpha <= 0.0f) {
         return D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
     }
-    const auto channel = [&](float from, float to) { return ((from * first.a) + (((to * second.a) - (from * first.a)) * share)) / alpha; };
+    const auto channel = [&](float from, float to) { return Lerp(from * first.a, to * second.a, share) / alpha; };
     return D2D1::ColorF(channel(first.r, second.r), channel(first.g, second.g), channel(first.b, second.b), alpha);
 }

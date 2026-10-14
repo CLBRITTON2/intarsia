@@ -6,10 +6,11 @@
 //
 //   tray_sender.exe --class <window class the bar's tray registered, from --tray-class>
 
-#include "tray/NotifyIconProtocol.hpp"
 #include "support/TrayPayload.hpp"
+#include "tray/NotifyIconProtocol.hpp"
 
 #include <windows.h>
+
 #include <shellapi.h>
 
 #include <algorithm>
@@ -138,14 +139,22 @@ namespace {
             case 5: {
                 TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kCallback);
                 data.data.flags     = NIF_STATE;
-                data.data.state     = (random() % 2) == 0 ? static_cast<std::uint32_t>(NIS_HIDDEN) : 0u;
                 data.data.stateMask = static_cast<std::uint32_t>(NIS_HIDDEN);
+                if ((random() % 2) == 0) {
+                    data.data.state = static_cast<std::uint32_t>(NIS_HIDDEN);
+                } else {
+                    data.data.state = 0;
+                }
                 return Send(tray, owner, data);
             }
             case 6: return Send(tray, owner, NotifyData(NIM_DELETE, Handle32(owner), id, 0, kCallback));
             default: {
                 TrayNotifyData data = NotifyData(NIM_SETVERSION, Handle32(owner), id, 0, kCallback);
-                data.data.version   = (random() % 2) == 0 ? NOTIFYICON_VERSION_4 : NOTIFYICON_VERSION;
+                if ((random() % 2) == 0) {
+                    data.data.version = NOTIFYICON_VERSION_4;
+                } else {
+                    data.data.version = NOTIFYICON_VERSION;
+                }
                 return Send(tray, owner, data);
             }
         }
@@ -173,7 +182,9 @@ namespace {
         std::uint64_t taken  = 0;
         auto          report = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (true) {
-            taken += SendOne(tray, owners, random) ? 1 : 0;
+            if (SendOne(tray, owners, random)) {
+                ++taken;
+            }
             ++sent;
             // About every 20 s an owner dies without deleting its icons, and a new one takes its place.
             if (random() % 200 == 0) {

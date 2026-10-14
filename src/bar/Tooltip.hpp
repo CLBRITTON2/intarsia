@@ -1,10 +1,9 @@
 #pragma once
 
-#include "bar/Box.hpp"
+#include "bar/Canvas.hpp"
 #include "config/Config.hpp"
-#include "render/BrushCache.hpp"
+#include "platform/Handle.hpp"
 #include "render/Graphics.hpp"
-#include "render/Surface.hpp"
 
 #include <windows.h>
 
@@ -30,7 +29,6 @@ RECT TooltipRect(const TooltipAnchor& anchor, SIZE size);
 class Tooltip {
   public:
     Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat);
-    ~Tooltip();
     Tooltip(const Tooltip&)               = delete;
     Tooltip&    operator=(const Tooltip&) = delete;
 
@@ -41,14 +39,10 @@ class Tooltip {
     void Hide();
 
   private:
-    void                  ReleaseSurface();
-
-    const GraphicsDevice& _graphics;
-    const Config&         _config;
-    IDWriteTextFormat*    _textFormat;
-    HWND                  _window;
+    const GraphicsDevice&                _graphics;
+    const Config&                        _config;
+    IDWriteTextFormat*                   _textFormat;
+    UniqueReleased<HWND, &DestroyWindow> _window;
     // Only while shown: Show creates it at the text's size and Hide releases it.
-    std::unique_ptr<Surface>    _surface;
-    std::unique_ptr<BrushCache> _brushes;
-    std::unique_ptr<BoxCache>   _boxes;
+    std::unique_ptr<Canvas> _canvas;
 };

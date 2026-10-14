@@ -9,7 +9,9 @@ template <std::ranges::input_range Names>
 std::string JoinNames(const Names& names) {
     std::string joined;
     for (const std::string_view name : names) {
-        joined += joined.empty() ? "" : ", ";
+        if (!joined.empty()) {
+            joined += ", ";
+        }
         joined += name;
     }
     return joined;
@@ -32,8 +34,9 @@ bool IsControlByte(char character);
 
 // Controls (C0, DEL, C1), the line and paragraph separators (U+2028, U+2029) that break a drawn line, the
 // bidirectional marks, embeddings, overrides and isolates, which can make drawn text read as something other than what
-// it holds (Trojan Source, CVE-2021-42574), and the invisible byte order mark (U+FEFF). All are single UTF-16 units.
-bool IsUnsafeCharacter(wchar_t unit);
+// it holds (Trojan Source, CVE-2021-42574), and the invisible byte order mark (U+FEFF). All are single UTF-16 units, so
+// UTF-16 text can be checked one wchar_t at a time.
+bool IsUnsafeCharacter(char32_t code);
 
 // Whether bytes are well-formed UTF-8 (no overlong forms, encoded surrogates or code points past U+10FFFF).
 bool IsValidUtf8(std::string_view bytes);

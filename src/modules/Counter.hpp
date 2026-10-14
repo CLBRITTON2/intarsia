@@ -5,7 +5,6 @@
 #include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>

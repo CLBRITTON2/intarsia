@@ -34,9 +34,7 @@ bool WindowList::LayOutItems(const RenderContext& render) {
     std::vector<Slot> slots;
     slots.reserve(shown.size());
     for (size_t index = 0; index < shown.size(); ++index) {
-        // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
-        const auto kept = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.window.handle == shown[index].handle && slot.pixels == pixels[index]; });
-        auto bitmap     = kept != _slots.end() ? kept->bitmap : (pixels[index] != nullptr && pixels[index]->width > 0 ? CreateIconBitmap(render.context, *pixels[index]) : nullptr);
+        auto bitmap = BitmapFor(render, shown[index], pixels[index]);
         slots.push_back(Slot{
             .window = shown[index],
             .pixels = pixels[index],
@@ -68,8 +66,22 @@ void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     }
 }
 
+Microsoft::WRL::ComPtr<ID2D1Bitmap> WindowList::BitmapFor(const RenderContext& render, const ManagedWindow& window, const std::shared_ptr<const IconPixels>& pixels) const {
+    const auto kept = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.window.handle == window.handle && slot.pixels == pixels; });
+    if (kept != _slots.end()) {
+        return kept->bitmap;
+    }
+    if (pixels != nullptr && pixels->width > 0) {
+        return CreateIconBitmap(render.context, *pixels);
+    }
+    return nullptr;
+}
+
 const ItemStyle& WindowList::StyleOf(const Slot& slot) const {
-    return slot.window.focused ? _style.focused : _style.item;
+    if (slot.window.focused) {
+        return _style.focused;
+    }
+    return _style.item;
 }
 
 std::vector<const ItemStyle*> WindowList::ItemStyles() const {
@@ -86,7 +98,7 @@ std::optional<std::uint32_t> WindowList::MillisecondsUntilChange() const {
 }
 
 bool WindowList::Hover(std::optional<D2D1_POINT_2F> point) {
-    const bool changed = _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
+    const bool changed = _hovered.Set(ItemUnderCursor(_row, point));
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
     return changed;
 }

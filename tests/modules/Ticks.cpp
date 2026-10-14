@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <string>
 
 namespace {

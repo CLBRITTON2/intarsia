@@ -1,6 +1,5 @@
 #include "bar/MenuLister.hpp"
 
-#include "modules/CommandPoller.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Process.hpp"
@@ -9,11 +8,21 @@
 
 #include <algorithm>
 #include <format>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
 
 namespace {
+
+    // Null when the item has no tooltip. ReadItem checks the field is a string first.
+    std::optional<std::string> TooltipOf(const nlohmann::json& item) {
+        const auto tooltip = item.find("tooltip");
+        if (tooltip == item.end()) {
+            return std::nullopt;
+        }
+        return tooltip->get<std::string>();
+    }
 
     MenuItem ReadItem(const nlohmann::json& item) {
         if (!item.is_object()) {
@@ -47,7 +56,7 @@ namespace {
             .id      = id->get<std::string>(),
             .text    = text->get<std::string>(),
             .active  = active != item.end() && active->get<bool>(),
-            .tooltip = tooltip == item.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
+            .tooltip = TooltipOf(item),
         };
         RequireDrawable(entry.id, "id", L"");
         RequireDrawable(entry.text, "text", L"");

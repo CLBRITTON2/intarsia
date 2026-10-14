@@ -43,6 +43,13 @@ namespace {
         }
     }
 
+    IWICImagingFactory* ImagingOf(const std::shared_ptr<const ReaderApartment>& apartment) {
+        if (apartment == nullptr) {
+            return nullptr;
+        }
+        return apartment->Imaging();
+    }
+
 } // namespace
 
 HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
@@ -64,7 +71,7 @@ HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
 WindowIcons::WindowIcons(ChangeSignal& changes, std::chrono::milliseconds retryAfter) :
     _changes(changes), _retryAfter(retryAfter), _reader(kMaxQueuedReads, [this] {
         const std::shared_ptr<const ReaderApartment> apartment = EnterReaderApartment();
-        return WorkQueue<std::intptr_t>::Process([this, apartment](const std::intptr_t& window) { Read(apartment == nullptr ? nullptr : apartment->Imaging(), window); });
+        return WorkQueue<std::intptr_t>::Process([this, apartment](const std::intptr_t& window) { Read(ImagingOf(apartment), window); });
     }) {}
 
 std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
@@ -95,9 +102,11 @@ void WindowIcons::ForgetClosed() {
 void WindowIcons::Read(IWICImagingFactory* imaging, std::intptr_t window) {
     std::shared_ptr<const IconPixels> pixels;
     try {
-        HICON icon = imaging != nullptr ? WindowIcon(ToWindow(window), kIconTimeoutMs) : nullptr;
-        if (icon != nullptr) {
-            pixels = std::make_shared<const IconPixels>(IconToPixels(*imaging, icon));
+        if (imaging != nullptr) {
+            HICON icon = WindowIcon(ToWindow(window), kIconTimeoutMs);
+            if (icon != nullptr) {
+                pixels = std::make_shared<const IconPixels>(IconToPixels(*imaging, icon));
+            }
         }
     } catch (const Win32Error& error) {
         Log(LogLevel::Warning, "window_icons", "read_failed", {{.key = "window", .value = std::to_string(window)}, {.key = "reason", .value = error.what()}});
@@ -109,8 +118,12 @@ void WindowIcons::Read(IWICImagingFactory* imaging, std::intptr_t window) {
         if (icon == _icons.end()) {
             return;
         }
-        icon->second.retryAt = pixels == nullptr ? std::optional(std::chrono::steady_clock::now() + _retryAfter) : std::nullopt;
-        icon->second.pixels  = std::move(pixels);
+        if (pixels == nullptr) {
+            icon->second.retryAt = std::chrono::steady_clock::now() + _retryAfter;
+        } else {
+            icon->second.retryAt.reset();
+        }
+        icon->second.pixels = std::move(pixels);
     }
     _changes.Notify("window_icons");
 }

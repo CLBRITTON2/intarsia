@@ -1,5 +1,7 @@
 #include "Harness.hpp"
 
+#include "Capture.hpp"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -79,42 +81,6 @@ module {
                 FocusWindow(kSecondWindowId),  "command focus --next-workspace", "command toggle-tiling-direction"};
     }
 
-    constexpr std::string_view kWindowsConfig = R"(
-return {
-    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
-    window_manager = "glazewm",
-    modules_left = { "apps" },
-    modules_center = {},
-    modules_right = {},
-    layouts = {},
-    modules = { apps = { type = "windows" } },
-}
-)";
-
-    constexpr std::uint32_t    kFocusedColor = 0x2E86C1;
-
-    constexpr std::string_view kFocusedStyle = R"(
-bar {
-  font: Segoe UI
-  size: 13
-  color: #e0def4
-}
-section {
-  margin: 4
-  padding: 3
-  background: #191724
-}
-module {
-  item {
-    padding: 2 6
-    margin: 0 1
-    focused {
-      background: #2e86c1
-    }
-  }
-}
-)";
-
     constexpr std::string_view kWorkspacesConfig = R"(
 return {
     bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
@@ -127,27 +93,7 @@ return {
 }
 )";
 
-    constexpr std::uint32_t    kTextColor  = 0xE0DEF4;
-    constexpr std::uint32_t    kAlertColor = 0xE74C3C;
-
-    // Large text, so glyph stems cover whole pixels in the exact color.
-    constexpr std::string_view kAlertStyle = R"(
-bar {
-  font: Segoe UI
-  size: 24
-  color: #e0def4
-}
-section {
-  margin: 4
-  padding: 3
-  background: #191724
-}
-module {
-  alert {
-    color: #e74c3c
-  }
-}
-)";
+    constexpr std::uint32_t    kFocusedColor = 0x2E86C1;
 
     // The test server shows the binding mode "resize" and the vertical direction while the focus index is odd.
     constexpr std::string_view kModesConfig = R"(
@@ -189,35 +135,28 @@ tiling {
 }
 )";
 
-    constexpr std::uint32_t    kEmptyColor = 0xF39C12;
+} // namespace
 
-    constexpr std::string_view kStatesStyle = R"(
-bar {
-  font: Segoe UI
-  size: 13
-  color: #e0def4
+TEST(GlazeWm, ClicksAlongTheBarSendEachItemsCommandInOrder) {
+    const integration::TestWindow first(L" 1");
+    const integration::TestWindow second(L" 2");
+    const integration::RunningBar bar("clicks", ClicksConfig("top"), kStyle);
+
+    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAreArray(EveryClickCommand()));
 }
-section {
-  margin: 4
-  padding: 3
-  background: #191724
+
+TEST(GlazeWm, ClicksDownASideBarSendEachItemsCommandInOrder) {
+    const integration::TestWindow first(L" 1");
+    const integration::TestWindow second(L" 2");
+    const integration::RunningBar bar("side-clicks", ClicksConfig("left"), kStyle);
+
+    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAreArray(EveryClickCommand()));
 }
-module {
-  item {
-    padding: 2 6
-    margin: 0 1
-    empty {
-      background: #f39c12
-    }
-    focused {
-      background: #2e86c1
-    }
-  }
-}
-)";
+
+namespace {
 
     // A tiling module the rejecting server never gives a direction, styled so any drawing of it shows.
-    constexpr std::string_view  kRejectedStyle = R"(
+    constexpr std::string_view kRejectedStyle = R"(
 bar {
   font: Segoe UI
   size: 13
@@ -240,31 +179,7 @@ tiling {
 }
 )";
 
-    std::optional<std::int32_t> TilingSpan(const integration::RunningBar& bar) {
-        HWND window = bar.PrimaryBar();
-        if (window == nullptr) {
-            return std::nullopt;
-        }
-        return integration::ColumnSpan(integration::CaptureScreenOver(window), kTilingColor);
-    }
-
 } // namespace
-
-TEST(GlazeWm, ClicksAlongTheBarSendEachItemsCommandInOrder) {
-    const integration::TestWindow first(L" 1");
-    const integration::TestWindow second(L" 2");
-    const integration::RunningBar bar("clicks", ClicksConfig("top"), kStyle);
-
-    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAreArray(EveryClickCommand()));
-}
-
-TEST(GlazeWm, ClicksDownASideBarSendEachItemsCommandInOrder) {
-    const integration::TestWindow first(L" 1");
-    const integration::TestWindow second(L" 2");
-    const integration::RunningBar bar("side-clicks", ClicksConfig("left"), kStyle);
-
-    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAreArray(EveryClickCommand()));
-}
 
 TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
     const integration::RunningBar bar("rejected", ClicksConfig("top"), kRejectedStyle, integration::GlazeWmTestServer(L"rejecting"));
@@ -315,6 +230,18 @@ TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActive) {
     EXPECT_TRUE(bar.StopsDrawing(kModeColor, std::chrono::seconds(5))) << "the binding mode still drew once it ended";
 }
 
+namespace {
+
+    std::optional<std::int32_t> TilingSpan(const integration::RunningBar& bar) {
+        HWND window = bar.PrimaryBar();
+        if (window == nullptr) {
+            return std::nullopt;
+        }
+        return integration::ColumnSpan(integration::CaptureScreenOver(window), kTilingColor);
+    }
+
+} // namespace
+
 TEST(GlazeWm, ShowsTheConfiguredTextForTheTilingDirection) {
     integration::RunningBar     bar("tiling-text", kModesConfig, kModesStyle);
     std::optional<std::int32_t> horizontal;
@@ -337,6 +264,37 @@ TEST(GlazeWm, ShowsTheConfiguredTextForTheTilingDirection) {
         << "the direction's box stayed " << horizontal.value_or(-1) << " px wide for the shorter vertical text, now " << vertical.value_or(-1);
     integration::Log("tiling_spans", std::format("horizontal={} vertical={}", horizontal.value_or(-1), vertical.value_or(-1)));
 }
+
+namespace {
+
+    constexpr std::uint32_t    kEmptyColor = 0xF39C12;
+
+    constexpr std::string_view kStatesStyle = R"(
+bar {
+  font: Segoe UI
+  size: 13
+  color: #e0def4
+}
+section {
+  margin: 4
+  padding: 3
+  background: #191724
+}
+module {
+  item {
+    padding: 2 6
+    margin: 0 1
+    empty {
+      background: #f39c12
+    }
+    focused {
+      background: #2e86c1
+    }
+  }
+}
+)";
+
+} // namespace
 
 TEST(GlazeWm, StylesAnEmptyWorkspaceApartFromTheFocusedOne) {
     integration::RunningBar bar("workspace-states", kWorkspacesConfig, kStatesStyle);
@@ -367,6 +325,32 @@ TEST(GlazeWm, TakesClicksAgainOnceARestartedServerIsBack) {
                 ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace", "command toggle-tiling-direction"));
 }
 
+namespace {
+
+    constexpr std::uint32_t kTextColor  = 0xE0DEF4;
+    constexpr std::uint32_t kAlertColor = 0xE74C3C;
+
+    // Large text, so glyph stems cover whole pixels in the exact color.
+    constexpr std::string_view kAlertStyle = R"(
+bar {
+  font: Segoe UI
+  size: 24
+  color: #e0def4
+}
+section {
+  margin: 4
+  padding: 3
+  background: #191724
+}
+module {
+  alert {
+    color: #e74c3c
+  }
+}
+)";
+
+} // namespace
+
 TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosing) {
     integration::RunningBar bar("disconnect", kWorkspacesConfig, kAlertStyle);
     // Until its first connection's answers arrive, the bar draws "not connected yet" in the alert color too.
@@ -385,29 +369,64 @@ TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosing) {
     EXPECT_TRUE(bar.Draws(kAlertColor, std::chrono::seconds(2))) << "no pixel drew in the alert color within 2 s of the server closing";
 }
 
-TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
-    const integration::TestWindow first(L" 1");
-    const integration::TestWindow second(L" 2");
-    integration::RunningBar       bar("focus", kWindowsConfig, kFocusedStyle);
+namespace {
 
-    std::optional<double>         firstColumn;
-    ASSERT_TRUE(integration::Eventually(
-        [&] {
-            firstColumn = bar.MeanColumnOf(kFocusedColor);
-            return firstColumn.has_value();
-        },
-        std::chrono::seconds(5)))
-        << "the first window's item never drew in the focused color";
-    integration::Log("focused_color_found", std::format("color=#{:06x} mean_column={:.1f}", kFocusedColor, firstColumn.value_or(-1)));
+    constexpr std::string_view kWindowsConfig = R"(
+return {
+    bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
+    window_manager = "glazewm",
+    modules_left = { "apps" },
+    modules_center = {},
+    modules_right = {},
+    layouts = {},
+    modules = { apps = { type = "windows" } },
+}
+)";
+
+    constexpr std::string_view kFocusedStyle = R"(
+bar {
+  font: Segoe UI
+  size: 13
+  color: #e0def4
+}
+section {
+  margin: 4
+  padding: 3
+  background: #191724
+}
+module {
+  item {
+    padding: 2 6
+    margin: 0 1
+    focused {
+      background: #2e86c1
+    }
+  }
+}
+)";
+
+} // namespace
+
+TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
+    const integration::TestWindow     first(L" 1");
+    const integration::TestWindow     second(L" 2");
+    integration::RunningBar           bar("focus", kWindowsConfig, kFocusedStyle);
+
+    const std::optional<std::int32_t> drawn = bar.DrawnColumn(kFocusedColor, std::chrono::seconds(5));
+    if (!drawn.has_value()) {
+        FAIL() << "the first window's item never drew in the focused color";
+    }
+    const std::int32_t firstColumn = *drawn;
+    integration::Log("focused_color_found", std::format("color=#{:06x} column={}", kFocusedColor, firstColumn));
 
     bar.PushFocus(1);
     std::optional<double> secondColumn;
     EXPECT_TRUE(integration::Eventually(
         [&] {
             secondColumn = bar.MeanColumnOf(kFocusedColor);
-            return firstColumn.has_value() && secondColumn.has_value() && *secondColumn > *firstColumn;
+            return secondColumn.has_value() && *secondColumn > firstColumn;
         },
         std::chrono::seconds(5)))
-        << "the focused color stayed at column " << firstColumn.value_or(-1) << ", now " << secondColumn.value_or(-1);
+        << "the focused color stayed at column " << firstColumn << ", now " << secondColumn.value_or(-1);
     integration::Log("focused_color_found", std::format("color=#{:06x} mean_column={:.1f}", kFocusedColor, secondColumn.value_or(-1)));
 }

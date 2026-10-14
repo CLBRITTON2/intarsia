@@ -1,6 +1,7 @@
+#include "platform/Process.hpp"
+#include "platform/CommandLine.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
-#include "platform/Process.hpp"
 #include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
@@ -8,12 +9,11 @@
 
 #include <shellapi.h>
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <future>
-#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -27,12 +27,13 @@ namespace {
 
     // What a program started with this command line sees as its arguments, split the way the C runtime splits them.
     std::vector<std::wstring> RoundTrip(const std::vector<std::wstring>& arguments) {
-        const std::wstring                                  line  = L"program.exe " + JoinArguments(arguments);
-        std::int32_t                                        count = 0;
-        const std::unique_ptr<LPWSTR, decltype(&LocalFree)> argv(CommandLineToArgvW(line.c_str(), &count), &LocalFree);
-        std::vector<std::wstring>                           split;
+        const std::wstring        line  = L"program.exe " + JoinArguments(arguments);
+        std::int32_t              count = 0;
+        LPWSTR*                   argv  = CommandLineToArgvW(line.c_str(), &count);
+        const UniqueLocal         owned(static_cast<HLOCAL>(argv));
+        std::vector<std::wstring> split;
         for (std::int32_t index = 1; index < count; ++index) {
-            split.emplace_back(argv.get()[index]);
+            split.emplace_back(argv[index]);
         }
         return split;
     }
@@ -145,6 +146,38 @@ TEST(Process, ProgramsResolveThroughPath) {
     EXPECT_EQ(cmd->filename(), L"cmd.exe");
 }
 
+TEST(Process, MissingProgramsDoNotResolve) {
+    EXPECT_FALSE(ResolveProgram(L"intarsia-no-such-program").has_value());
+    EXPECT_FALSE(ResolveProgram(L"C:\\intarsia\\no-such-program.exe").has_value());
+}
+
+// SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
+// when the file exists there.
+TEST(Process, RelativePathsWithDirectoriesDoNotResolve) {
+    const std::filesystem::path cmd      = SystemProgram(L"cmd");
+    const std::wstring          relative = std::filesystem::relative(cmd, std::filesystem::current_path()).wstring();
+    EXPECT_FALSE(ResolveProgram(relative).has_value());
+    EXPECT_FALSE(ResolveProgram(L".\\cmd.exe").has_value());
+    EXPECT_FALSE(ResolveProgram(L"System32\\cmd.exe").has_value());
+    EXPECT_FALSE(ResolveProgram(L"\\Windows\\System32\\cmd.exe").has_value());
+    EXPECT_FALSE(ResolveProgram(L"C:cmd.exe").has_value());
+}
+
+// A relative PATH entry (".", an empty one, "bin") names wherever the bar happened to start, never a place a program is
+// installed.
+TEST(Process, RelativePathEntriesAreNotSearched) {
+    const StubDirectory directory;
+    SetEnvironmentVariableW(L"PATH", (L".;;..\\" + directory.Get().filename().wstring()).c_str());
+    EXPECT_FALSE(ResolveProgram(kStubName).has_value());
+
+    SetEnvironmentVariableW(L"PATH", (L".;" + directory.Get().wstring()).c_str());
+    const std::optional<std::filesystem::path> found = ResolveProgram(kStubName);
+    if (!found.has_value()) {
+        FAIL() << "the absolute entry was not searched";
+    }
+    EXPECT_TRUE(std::filesystem::equivalent(found->parent_path(), directory.Get()));
+}
+
 TEST(Process, CaptureOutputReturnsWhatTheCommandPrinted) {
     EXPECT_EQ(CaptureOutput(Cmd({L"/c", L"echo hello"}), std::chrono::seconds(10), 1024, NeverSignaled().get()), "hello\r\n");
 }
@@ -208,25 +241,6 @@ TEST(Process, StreamLinesFailsPastTheLineCap) {
                 ThrowsWith<CommandError>("printed a line longer than 8 bytes"));
 }
 
-TEST(Process, RunOrFailureReturnsWhatTheRunReturns) {
-    const std::variant<std::string, RunFailure> result = RunOrFailure([] { return std::string("printed"); });
-    EXPECT_EQ(std::get<std::string>(result), "printed");
-}
-
-TEST(Process, RunOrFailureShowsACommandErrorAsItsMessage) {
-    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw CommandError("timed out"); });
-    const RunFailure&                           failure = std::get<RunFailure>(result);
-    EXPECT_EQ(failure.reason, "timed out");
-    EXPECT_EQ(failure.detail, "timed out");
-}
-
-TEST(Process, RunOrFailureShowsAWin32ErrorAsCouldNotRun) {
-    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw Win32Error("CreateProcessW", E_ACCESSDENIED); });
-    const RunFailure&                           failure = std::get<RunFailure>(result);
-    EXPECT_EQ(failure.reason, "could not run");
-    EXPECT_THAT(failure.detail, testing::HasSubstr("CreateProcessW"));
-}
-
 TEST(Process, StreamLinesEndsWhenItsCommandExitsWhileAProcessOutsideTheJobHoldsItsOutput) {
     std::future<std::uint32_t> streamed;
     std::future_status         status = std::future_status::timeout;
@@ -249,34 +263,21 @@ TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(30));
 }
 
-TEST(Process, MissingProgramsDoNotResolve) {
-    EXPECT_FALSE(ResolveProgram(L"intarsia-no-such-program").has_value());
-    EXPECT_FALSE(ResolveProgram(L"C:\\intarsia\\no-such-program.exe").has_value());
+TEST(Process, RunOrFailureReturnsWhatTheRunReturns) {
+    const std::variant<std::string, RunFailure> result = RunOrFailure([] { return std::string("printed"); });
+    EXPECT_EQ(std::get<std::string>(result), "printed");
 }
 
-// SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
-// when the file exists there.
-TEST(Process, RelativePathsWithDirectoriesDoNotResolve) {
-    const std::filesystem::path cmd      = SystemProgram(L"cmd");
-    const std::wstring          relative = std::filesystem::relative(cmd, std::filesystem::current_path()).wstring();
-    EXPECT_FALSE(ResolveProgram(relative).has_value());
-    EXPECT_FALSE(ResolveProgram(L".\\cmd.exe").has_value());
-    EXPECT_FALSE(ResolveProgram(L"System32\\cmd.exe").has_value());
-    EXPECT_FALSE(ResolveProgram(L"\\Windows\\System32\\cmd.exe").has_value());
-    EXPECT_FALSE(ResolveProgram(L"C:cmd.exe").has_value());
+TEST(Process, RunOrFailureShowsACommandErrorAsItsMessage) {
+    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw CommandError("timed out"); });
+    const RunFailure&                           failure = std::get<RunFailure>(result);
+    EXPECT_EQ(failure.reason, "timed out");
+    EXPECT_EQ(failure.detail, "timed out");
 }
 
-// A relative PATH entry (".", an empty one, "bin") names wherever the bar happened to start, never a place a program is
-// installed.
-TEST(Process, RelativePathEntriesAreNotSearched) {
-    const StubDirectory directory;
-    SetEnvironmentVariableW(L"PATH", (L".;;..\\" + directory.Get().filename().wstring()).c_str());
-    EXPECT_FALSE(ResolveProgram(kStubName).has_value());
-
-    SetEnvironmentVariableW(L"PATH", (L".;" + directory.Get().wstring()).c_str());
-    const std::optional<std::filesystem::path> found = ResolveProgram(kStubName);
-    if (!found.has_value()) {
-        FAIL() << "the absolute entry was not searched";
-    }
-    EXPECT_TRUE(std::filesystem::equivalent(found->parent_path(), directory.Get()));
+TEST(Process, RunOrFailureShowsAWin32ErrorAsCouldNotRun) {
+    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw Win32Error("CreateProcessW", E_ACCESSDENIED); });
+    const RunFailure&                           failure = std::get<RunFailure>(result);
+    EXPECT_EQ(failure.reason, "could not run");
+    EXPECT_THAT(failure.detail, testing::HasSubstr("CreateProcessW"));
 }

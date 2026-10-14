@@ -8,8 +8,8 @@
 
 #include <shellapi.h>
 
-#include <cstdint>
 #include <charconv>
+#include <cstdint>
 #include <format>
 
 namespace {
@@ -63,8 +63,8 @@ std::vector<std::wstring> CommandLineArguments() {
     if (raw == nullptr) {
         ThrowLastError("CommandLineToArgvW");
     }
-    const UniqueReleased<HLOCAL, &LocalFree> owned(static_cast<HLOCAL>(raw));
-    std::vector<std::wstring>                arguments;
+    const UniqueLocal         owned(static_cast<HLOCAL>(raw));
+    std::vector<std::wstring> arguments;
     for (std::int32_t index = 1; index < count; ++index) {
         arguments.emplace_back(raw[index]);
     }

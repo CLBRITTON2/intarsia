@@ -1,11 +1,33 @@
 #include "modules/Custom.hpp"
 
+#include "modules/Placeholders.hpp"
 #include "platform/Text.hpp"
 
 #include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+namespace {
+
+    // The values a custom format can name: {text}, what the command printed.
+    std::vector<Placeholder> CustomPlaceholders(const std::string& text) {
+        return {{.name = "text", .value = text}};
+    }
+
+    // A json alert draws in the alert color, a json class in that class's colors.
+    TextState SucceededState(const CommandResult& result) {
+        if (result.alert) {
+            return TextState::Alert;
+        }
+        if (result.classIndex.has_value()) {
+            return TextState::Classed;
+        }
+        return TextState::Normal;
+    }
+
+} // namespace
 
 Custom::Custom(const CustomConfig& config, const CommandPoller& poller) : TextModule(config.text, "custom", CustomPlaceholders(std::string())), _poller(poller) {}
 
@@ -32,9 +54,7 @@ ModuleText Custom::Format(const std::string& spec) {
             return ModuleText{
                 .icon       = Settings().icon,
                 .text       = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))),
-                .state      = result.alert             ? TextState::Alert :
-                         result.classIndex.has_value() ? TextState::Classed :
-                                                         TextState::Normal,
+                .state      = SucceededState(result),
                 .classIndex = result.classIndex.value_or(0),
             };
         case CommandOutcome::Failed:
@@ -46,8 +66,4 @@ ModuleText Custom::Format(const std::string& spec) {
             };
     }
     throw std::invalid_argument(std::format("unknown command outcome {}", static_cast<std::int32_t>(result.outcome)));
-}
-
-std::vector<Placeholder> CustomPlaceholders(const std::string& text) {
-    return {{.name = "text", .value = text}};
 }

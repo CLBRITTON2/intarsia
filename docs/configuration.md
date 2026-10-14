@@ -92,7 +92,7 @@ A monitor uses the last layout it qualifies for, so list them in increasing `min
 ## modules
 
 Each entry is a name you choose and a table with a `type`. You can define the same type several times under different
-names, and `style.conf` styles each one in a block named after it (`work_clock:`).
+names, and `style.conf` styles each one in a block named after it (`work_clock { ... }`).
 
 ### Common keys
 

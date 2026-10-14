@@ -64,15 +64,23 @@ add_library(intarsia_core STATIC
   src/audio/CoreAudio.cpp
   src/bar/Bar.cpp
   src/bar/Box.cpp
+  src/bar/Dock.cpp
   src/bar/FrameStats.cpp
   src/battery/PowerStatus.cpp
   src/bar/Layout.cpp
   src/cli/CliOptions.cpp
   src/bar/Menu.cpp
+  src/bar/MenuLayout.cpp
   src/bar/MenuLister.cpp
+  src/bar/PixelGrid.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
+  src/config/LuaSandbox.cpp
   src/config/Style.cpp
+  src/config/StyleShapes.cpp
+  src/config/StyleTree.cpp
+  src/config/StyleValues.cpp
+  src/config/TableReader.cpp
   src/modules/AnimatedValue.cpp
   src/modules/Audio.cpp
   src/modules/Battery.cpp
@@ -84,6 +92,7 @@ add_library(intarsia_core STATIC
   src/modules/Network.cpp
   src/modules/Placeholders.cpp
   src/network/IpHelper.cpp
+  src/network/Wlan.cpp
   src/modules/CommandPoller.cpp
   src/modules/Counter.cpp
   src/modules/CounterSampler.cpp
@@ -93,6 +102,7 @@ add_library(intarsia_core STATIC
   src/modules/Group.cpp
   src/modules/ItemRow.cpp
   src/modules/ModuleFactory.cpp
+  src/modules/TextLine.cpp
   src/modules/TextModule.cpp
   src/modules/Ticks.cpp
   src/modules/Tray.cpp
@@ -103,6 +113,7 @@ add_library(intarsia_core STATIC
   src/platform/AppBar.cpp
   src/platform/ChangeSignal.cpp
   src/platform/ComScope.cpp
+  src/platform/CommandLine.cpp
   src/platform/Console.cpp
   src/platform/Edid.cpp
   src/platform/Errors.cpp
@@ -110,6 +121,7 @@ add_library(intarsia_core STATIC
   src/platform/FrameClock.cpp
   src/platform/Handle.cpp
   src/platform/KnownFolder.cpp
+  src/platform/Launcher.cpp
   src/platform/Log.cpp
   src/platform/Monitors.cpp
   src/platform/PeerProcess.cpp
@@ -182,8 +194,9 @@ if(BUILD_TESTING)
     tests/bar/Box.cpp
     tests/bar/FrameStats.cpp
     tests/bar/Layout.cpp
-    tests/bar/Menu.cpp
+    tests/bar/MenuLayout.cpp
     tests/bar/MenuLister.cpp
+    tests/bar/PixelGrid.cpp
     tests/bar/Tooltip.cpp
     tests/cli/CliOptions.cpp
     tests/config/Config.cpp
@@ -254,7 +267,7 @@ if(BUILD_TESTING)
   # Runs the real bar against the test GlazeWM server below, so ctest runs it apart from the unit tests by its label.
   # The bar's manifest makes it per monitor DPI aware too, so every rect, column and cursor position is in the bar's
   # physical pixels.
-  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/Actions.cpp tests/integration/Cli.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
+  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/ChildProcess.cpp tests/integration/Capture.cpp tests/integration/Actions.cpp tests/integration/Cli.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
                                       tests/integration/GlazeWm.cpp tests/integration/Group.cpp tests/integration/Hover.cpp tests/integration/Input.cpp
                                       tests/integration/Menu.cpp tests/integration/Monitors.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp
                                       tests/integration/TrayApp.cpp)
@@ -268,7 +281,7 @@ if(BUILD_TESTING)
   # The program the integration tests' actions and custom commands run.
   add_executable(integration_argv_recorder WIN32 tests/integration/ArgvRecorder.cpp)
   set_target_properties(integration_argv_recorder PROPERTIES OUTPUT_NAME argv_recorder)
-  target_link_libraries(integration_argv_recorder PRIVATE intarsia_flags)
+  target_link_libraries(integration_argv_recorder PRIVATE intarsia_core)
 
   # The command the process tests capture to keep its output pipe open from outside its job.
   add_executable(test_pipe_holder tests/support/PipeHolder.cpp)

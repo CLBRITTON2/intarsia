@@ -2,7 +2,7 @@
 
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
-#include "modules/IconText.hpp"
+#include "modules/TextLine.hpp"
 
 #include <utility>
 

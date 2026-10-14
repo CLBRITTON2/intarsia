@@ -20,8 +20,8 @@ namespace {
         if (length == 0) {
             return "no message";
         }
-        std::wstring message(buffer, length);
-        LocalFree(buffer);
+        const UniqueLocal owned(static_cast<HLOCAL>(buffer));
+        std::wstring      message(buffer, length);
         while (!message.empty() && (message.back() == L'\r' || message.back() == L'\n' || message.back() == L' ')) {
             message.pop_back();
         }
@@ -31,6 +31,13 @@ namespace {
     // pdhmsg.h defines its codes as DWORD, while PDH calls return a signed PDH_STATUS.
     bool IsStatus(PDH_STATUS status, DWORD code) {
         return static_cast<DWORD>(status) == code;
+    }
+
+    std::wstring InstanceName(const PDH_FMT_COUNTERVALUE_ITEM_W& item) {
+        if (item.szName == nullptr) {
+            return {};
+        }
+        return item.szName;
     }
 
     // A rate before its second sample, a counter whose instances all just appeared, or a rate whose raw values ran
@@ -103,7 +110,7 @@ std::optional<std::vector<CounterInstance>> PerformanceCounter::Instances() cons
         PDH_FMT_COUNTERVALUE_ITEM_W item{};
         std::memcpy(&item, buffer.data() + (index * sizeof(item)), sizeof(item));
         if (item.FmtValue.CStatus == PDH_CSTATUS_VALID_DATA || item.FmtValue.CStatus == PDH_CSTATUS_NEW_DATA) {
-            instances.push_back(CounterInstance{.name = item.szName != nullptr ? std::wstring(item.szName) : std::wstring(), .value = item.FmtValue.doubleValue});
+            instances.push_back(CounterInstance{.name = InstanceName(item), .value = item.FmtValue.doubleValue});
         }
     }
     return instances;

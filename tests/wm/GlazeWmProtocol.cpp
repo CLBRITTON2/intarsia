@@ -165,6 +165,19 @@ TEST(GlazeWmProtocol, FocusWindowCommandRefusesIdsThatAreNotUuids) {
     EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7g"), glazewm::ProtocolError);
 }
 
+TEST(GlazeWmProtocol, FocusCommandAddressesTheWorkspaceByName) {
+    EXPECT_EQ(glazewm::FocusWorkspaceCommand("5"), "command focus --workspace 5");
+    EXPECT_TRUE(glazewm::IsCommand(glazewm::FocusWorkspaceCommand("5")));
+    EXPECT_FALSE(glazewm::IsCommand(glazewm::kQueryMonitors));
+}
+
+TEST(GlazeWmProtocol, FocusCommandRefusesNamesThatWouldSplitIntoMoreArguments) {
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1 --workspace 2"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\tclose"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\n"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWorkspaceCommand(""), glazewm::ProtocolError);
+}
+
 TEST(GlazeWmProtocol, ErrorsQuoteOnlyAShortEscapedExcerpt) {
     const std::string hostile = "\"\n" + std::string(10'000, 'x');
     try {
@@ -190,17 +203,4 @@ TEST(GlazeWmProtocol, GateSendsTheFirstQueryAndHoldsTheRestOfABurst) {
     // An answer with no events behind it sends nothing more.
     EXPECT_FALSE(gate.Answered());
     EXPECT_TRUE(gate.RequestQuery());
-}
-
-TEST(GlazeWmProtocol, FocusCommandAddressesTheWorkspaceByName) {
-    EXPECT_EQ(glazewm::FocusWorkspaceCommand("5"), "command focus --workspace 5");
-    EXPECT_TRUE(glazewm::IsCommand(glazewm::FocusWorkspaceCommand("5")));
-    EXPECT_FALSE(glazewm::IsCommand(glazewm::kQueryMonitors));
-}
-
-TEST(GlazeWmProtocol, FocusCommandRefusesNamesThatWouldSplitIntoMoreArguments) {
-    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1 --workspace 2"), glazewm::ProtocolError);
-    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\tclose"), glazewm::ProtocolError);
-    EXPECT_THROW(glazewm::FocusWorkspaceCommand("1\n"), glazewm::ProtocolError);
-    EXPECT_THROW(glazewm::FocusWorkspaceCommand(""), glazewm::ProtocolError);
 }

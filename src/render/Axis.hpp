@@ -30,3 +30,5 @@ D2D1_RECT_F MainCrossRect(Axis axis, float mainStart, float mainLength, float cr
 // Whether point lies in rect, its left and top edges in and its right and bottom edges out.
 bool        Contains(const D2D1_RECT_F& rect, D2D1_POINT_2F point);
 D2D1_RECT_F Offset(const D2D1_RECT_F& rect, D2D1_POINT_2F by);
+// The part both rects cover, whose right is left of its left or bottom above its top when they do not meet.
+D2D1_RECT_F Intersection(const D2D1_RECT_F& first, const D2D1_RECT_F& second);

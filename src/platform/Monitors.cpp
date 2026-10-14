@@ -124,6 +124,15 @@ namespace {
         }
     }
 
+    // Nullopt when the target reports no friendly name.
+    std::optional<std::string> FriendlyName(const DISPLAYCONFIG_TARGET_DEVICE_NAME& target) {
+        std::string name = ToUtf8(target.monitorFriendlyDeviceName);
+        if (name.empty()) {
+            return std::nullopt;
+        }
+        return name;
+    }
+
     ActivePath ReadPath(const DISPLAYCONFIG_PATH_INFO& path) {
         DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
         source.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
@@ -139,15 +148,14 @@ namespace {
         target.header.id        = path.targetInfo.id;
         ThrowIfWin32Failed(static_cast<DWORD>(DisplayConfigGetDeviceInfo(&target.header)), "DisplayConfigGetDeviceInfo(target name)");
 
-        const std::string name       = ToUtf8(target.monitorFriendlyDeviceName);
-        std::string       connection = ConnectionName(target.outputTechnology);
-        const bool        internal   = connection == "internal";
+        std::string connection = ConnectionName(target.outputTechnology);
+        const bool  internal   = connection == "internal";
         return ActivePath{
             .sourceDevice = source.viewGdiDeviceName,
             .target =
                 DisplayTarget{
                     .id         = TargetId(target.monitorDevicePath),
-                    .name       = name.empty() ? std::nullopt : std::optional<std::string>(name),
+                    .name       = FriendlyName(target),
                     .connection = std::move(connection),
                     .internal   = internal,
                 },

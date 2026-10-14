@@ -1,9 +1,10 @@
 #include "Harness.hpp"
 
-#include "../platform/Loopback.hpp"
+#include "Capture.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
+#include "support/Loopback.hpp"
 
 #include <gtest/gtest.h>
 
@@ -29,66 +30,7 @@ namespace integration {
         constexpr std::chrono::seconds      kStartLimit{15};
         constexpr std::chrono::seconds      kExitLimit{10};
 
-        // Windows quotes arguments as CommandLineToArgvW reads them back, so a path holding spaces survives.
-        std::wstring Quoted(const std::wstring& argument) {
-            std::wstring quoted  = L"\"";
-            size_t       slashes = 0;
-            for (const wchar_t unit : argument) {
-                if (unit == L'\\') {
-                    ++slashes;
-                    continue;
-                }
-                quoted.append(unit == L'"' ? (slashes * 2) + 1 : slashes, L'\\');
-                slashes = 0;
-                quoted += unit;
-            }
-            quoted.append(slashes * 2, L'\\');
-            return quoted + L"\"";
-        }
-
-        UniqueHandle InheritableFile(const std::filesystem::path& path) {
-            SECURITY_ATTRIBUTES inherit{
-                .nLength              = sizeof(SECURITY_ATTRIBUTES),
-                .lpSecurityDescriptor = nullptr,
-                .bInheritHandle       = TRUE,
-            };
-            return OwnHandle(
-                CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
-                "CreateFileW(child output)");
-        }
-
-        UniqueHandle KillOnCloseJob() {
-            UniqueHandle                         job = OwnHandle(CreateJobObjectW(nullptr, nullptr), "CreateJobObjectW");
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if (!SetInformationJobObject(job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
-                ThrowLastError("SetInformationJobObject");
-            }
-            return job;
-        }
-
-        struct ProcessWindows {
-            DWORD             processId;
-            std::vector<HWND> windows;
-        };
-
-        BOOL CALLBACK CollectProcessWindow(HWND window, LPARAM collection) {
-            auto* collected = reinterpret_cast<ProcessWindows*>(collection); // NOLINT(performance-no-int-to-ptr)
-            DWORD owner     = 0;
-            GetWindowThreadProcessId(window, &owner);
-            if (owner == collected->processId) {
-                collected->windows.push_back(window);
-            }
-            return TRUE;
-        }
-
-        std::vector<HWND> TopLevelWindows(std::uint32_t processId) {
-            ProcessWindows collection{.processId = processId, .windows = {}};
-            EnumWindows(CollectProcessWindow, reinterpret_cast<LPARAM>(&collection));
-            return collection.windows;
-        }
-
-        std::string ReadAll(const std::filesystem::path& path) {
+        std::string                         ReadAll(const std::filesystem::path& path) {
             std::ifstream file(path, std::ios::binary);
             if (!file) {
                 throw std::runtime_error(std::format("cannot open {}", path.string()));
@@ -159,8 +101,16 @@ namespace integration {
             return client;
         }
 
+        // A bar taller than it is wide runs down a side of the monitor.
         bool Vertical(const RECT& client) {
             return client.bottom - client.top > client.right - client.left;
+        }
+
+        std::int32_t LengthAlongBar(const RECT& client) {
+            if (Vertical(client)) {
+                return client.bottom;
+            }
+            return client.right;
         }
 
         void SendAndWait(HWND window, std::uint32_t message, WPARAM wParam, LPARAM lParam, std::string_view what) {
@@ -171,7 +121,11 @@ namespace integration {
         }
 
         void LogPixelCount(std::uint32_t rgb, const std::optional<size_t>& count) {
-            Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, count.has_value() ? std::to_string(*count) : std::string("no_bar")));
+            if (!count.has_value()) {
+                Log("pixels_counted", std::format("color=#{:06x} count=no_bar", rgb));
+                return;
+            }
+            Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, *count));
         }
 
         std::uint16_t FreePort() {
@@ -207,8 +161,7 @@ namespace integration {
             return nullptr;
         }
 
-        // The client point offset pixels along the bar from its start, on the middle line across it. A bar taller than it
-        // is wide runs down a side of the monitor.
+        // The client point offset pixels along the bar from its start, on the middle line across it.
         POINT AlongBar(HWND bar, std::int32_t offset) {
             const RECT client = ClientRect(bar);
             if (Vertical(client)) {
@@ -240,89 +193,10 @@ namespace integration {
     }
 
     std::string LogValue(std::string_view value) {
-        return !value.empty() && value.find(' ') == std::string_view::npos ? std::string(value) : std::format("\"{}\"", value);
-    }
-
-    ChildProcess::ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
-                               const std::filesystem::path& stderrPath) : _job(KillOnCloseJob()), _id(0) {
-        std::wstring commandLine = Quoted(program.wstring());
-        for (const std::wstring& argument : arguments) {
-            commandLine += L" " + Quoted(argument);
+        if (!value.empty() && value.find(' ') == std::string_view::npos) {
+            return std::string(value);
         }
-        const UniqueHandle  output = InheritableFile(stdoutPath);
-        const UniqueHandle  errors = InheritableFile(stderrPath);
-        SECURITY_ATTRIBUTES inherit{
-            .nLength              = sizeof(SECURITY_ATTRIBUTES),
-            .lpSecurityDescriptor = nullptr,
-            .bInheritHandle       = TRUE,
-        };
-        HANDLE readEnd  = nullptr;
-        HANDLE writeEnd = nullptr;
-        if (!CreatePipe(&readEnd, &writeEnd, &inherit, 0)) {
-            ThrowLastError("CreatePipe(child stdin)");
-        }
-        const UniqueHandle input(readEnd);
-        _input = UniqueHandle(writeEnd);
-        // Only the child's end is inherited, so the pipe reaches end of file once this side closes.
-        if (!SetHandleInformation(_input.get(), HANDLE_FLAG_INHERIT, 0)) {
-            ThrowLastError("SetHandleInformation(child stdin)");
-        }
-        STARTUPINFOW        startup{};
-        PROCESS_INFORMATION started{};
-        startup.cb         = sizeof(startup);
-        startup.dwFlags    = STARTF_USESTDHANDLES;
-        startup.hStdInput  = input.get();
-        startup.hStdOutput = output.get();
-        startup.hStdError  = errors.get();
-        if (!CreateProcessW(program.c_str(), commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &started)) {
-            ThrowLastError(std::format("CreateProcessW({})", program.string()));
-        }
-        _process = UniqueHandle(started.hProcess);
-        const UniqueHandle thread(started.hThread);
-        _id = started.dwProcessId;
-        // Suspended until it is in the job, so nothing it starts escapes the kill on close.
-        if (!AssignProcessToJobObject(_job.get(), _process.get())) {
-            TerminateProcess(_process.get(), 1);
-            ThrowLastError("AssignProcessToJobObject");
-        }
-        ResumeThread(thread.get());
-    }
-
-    std::uint32_t ChildProcess::Id() const {
-        return _id;
-    }
-
-    bool ChildProcess::Running() const {
-        return WaitForSingleObject(_process.get(), 0) == WAIT_TIMEOUT;
-    }
-
-    std::optional<std::uint32_t> ChildProcess::Close(std::chrono::milliseconds limit) const {
-        for (HWND window : TopLevelWindows(_id)) {
-            PostMessageW(window, WM_CLOSE, 0, 0);
-        }
-        if (WaitForSingleObject(_process.get(), static_cast<DWORD>(limit.count())) != WAIT_OBJECT_0) {
-            return std::nullopt;
-        }
-        DWORD code = 0;
-        if (!GetExitCodeProcess(_process.get(), &code)) {
-            ThrowLastError("GetExitCodeProcess");
-        }
-        return static_cast<std::uint32_t>(code);
-    }
-
-    void ChildProcess::Kill() const {
-        if (Running()) {
-            TerminateProcess(_process.get(), 1);
-            WaitForSingleObject(_process.get(), INFINITE);
-        }
-    }
-
-    void ChildProcess::WriteLine(std::string_view line) const {
-        const std::string text    = std::string(line) + "\n";
-        DWORD             written = 0;
-        if (!WriteFile(_input.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) || written != text.size()) {
-            ThrowLastError(std::format("WriteFile(child stdin, '{}')", line));
-        }
+        return std::format("\"{}\"", value);
     }
 
     TestWindow::TestWindow(std::wstring_view suffix) {
@@ -392,7 +266,10 @@ namespace integration {
     }
 
     std::vector<std::string> RecordedLines(const std::filesystem::path& path) {
-        return std::filesystem::exists(path) ? ReadLines(path) : std::vector<std::string>{};
+        if (!std::filesystem::exists(path)) {
+            return {};
+        }
+        return ReadLines(path);
     }
 
     void PumpFor(std::chrono::milliseconds duration) {
@@ -414,8 +291,7 @@ namespace integration {
     }
 
     std::uint32_t SweepClicks(HWND bar) {
-        const RECT         client = ClientRect(bar);
-        const std::int32_t length = Vertical(client) ? client.bottom : client.right;
+        const std::int32_t length = LengthAlongBar(ClientRect(bar));
         std::uint32_t      clicks = 0;
         for (std::int32_t offset = 0; offset < length; offset += kSweepStepPixels) {
             SendClick(bar, offset);
@@ -438,99 +314,6 @@ namespace integration {
         if (!SetCursorPos(_position.x, _position.y)) {
             Log("cursor_restore_failed", std::format("x={} y={} error={}", _position.x, _position.y, GetLastError()));
         }
-    }
-
-    RECT ScreenRect(HWND window) {
-        RECT rect{};
-        if (!GetWindowRect(window, &rect)) {
-            ThrowLastError("GetWindowRect");
-        }
-        return rect;
-    }
-
-    Capture CaptureScreenOver(HWND window) {
-        const RECT rect = ScreenRect(window);
-        Capture    capture{
-               .width  = rect.right - rect.left,
-               .height = rect.bottom - rect.top,
-               .pixels = {},
-        };
-        capture.pixels.resize(static_cast<size_t>(capture.width) * static_cast<size_t>(capture.height));
-
-        HDC screen = GetDC(nullptr);
-        if (screen == nullptr) {
-            throw std::runtime_error("GetDC(screen) failed");
-        }
-        HDC     memory = CreateCompatibleDC(screen);
-        HBITMAP bitmap = CreateCompatibleBitmap(screen, capture.width, capture.height);
-        HGDIOBJ old    = SelectObject(memory, bitmap);
-        // CAPTUREBLT takes layered windows too, as the bar is one.
-        const BOOL copied = BitBlt(memory, 0, 0, capture.width, capture.height, screen, rect.left, rect.top, SRCCOPY | CAPTUREBLT);
-        SelectObject(memory, old);
-        // A negative height asks for rows top to bottom.
-        BITMAPINFO info{};
-        info.bmiHeader = BITMAPINFOHEADER{
-            .biSize          = sizeof(BITMAPINFOHEADER),
-            .biWidth         = capture.width,
-            .biHeight        = -capture.height,
-            .biPlanes        = 1,
-            .biBitCount      = 32,
-            .biCompression   = BI_RGB,
-            .biSizeImage     = 0,
-            .biXPelsPerMeter = 0,
-            .biYPelsPerMeter = 0,
-            .biClrUsed       = 0,
-            .biClrImportant  = 0,
-        };
-        const std::int32_t rows = GetDIBits(memory, bitmap, 0, static_cast<UINT>(capture.height), capture.pixels.data(), &info, DIB_RGB_COLORS);
-        DeleteObject(bitmap);
-        DeleteDC(memory);
-        ReleaseDC(nullptr, screen);
-        if (!copied) {
-            ThrowLastError("BitBlt(screen)");
-        }
-        if (rows != capture.height) {
-            throw std::runtime_error(std::format("GetDIBits copied {} of {} rows", rows, capture.height));
-        }
-        for (std::uint32_t& pixel : capture.pixels) {
-            pixel &= 0xFFFFFF;
-        }
-        return capture;
-    }
-
-    size_t CountPixels(const Capture& capture, std::uint32_t rgb) {
-        return static_cast<size_t>(std::ranges::count(capture.pixels, rgb));
-    }
-
-    std::optional<std::int32_t> ColumnSpan(const Capture& capture, std::uint32_t rgb) {
-        std::optional<std::int32_t> leftmost;
-        std::optional<std::int32_t> rightmost;
-        for (size_t index = 0; index < capture.pixels.size(); ++index) {
-            if (capture.pixels[index] == rgb) {
-                const auto column = static_cast<std::int32_t>(index % static_cast<size_t>(capture.width));
-                leftmost          = std::min(leftmost.value_or(column), column);
-                rightmost         = std::max(rightmost.value_or(column), column);
-            }
-        }
-        if (!leftmost.has_value() || !rightmost.has_value()) {
-            return std::nullopt;
-        }
-        return *rightmost - *leftmost + 1;
-    }
-
-    std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb) {
-        double sum   = 0;
-        size_t count = 0;
-        for (size_t index = 0; index < capture.pixels.size(); ++index) {
-            if (capture.pixels[index] == rgb) {
-                sum += static_cast<double>(index % static_cast<size_t>(capture.width));
-                ++count;
-            }
-        }
-        if (count == 0) {
-            return std::nullopt;
-        }
-        return sum / static_cast<double>(count);
     }
 
     std::filesystem::path ArgvRecorderPath() {
@@ -570,12 +353,12 @@ namespace integration {
         _bar.emplace(Executable(INTARSIA_EXE),
                      std::vector<std::wstring>{L"--config", configPath.wstring(), L"--log", (_workDirectory / "intarsia-file.log").wstring(), L"--glazewm-port",
                                                std::to_wstring(_port), L"--tray-class", std::wstring(kTrayClass)},
-                     _workDirectory / "bar.out", _workDirectory / "bar.err");
+                     _workDirectory / "bar.out", BarErrors());
         Log("bar_started", std::format("pid={} program={}", _bar->Id(), LogValue(INTARSIA_EXE)));
         if (!Eventually([this] { return !Events(_testServer.readyEvent).empty() && PrimaryBar() != nullptr; }, kStartLimit)) {
             PrintLogs();
             throw std::runtime_error(std::format("the bar did not log {} and show a bar on the primary monitor within {} s (bar log {})", _testServer.readyEvent,
-                                                 kStartLimit.count(), (_workDirectory / "bar.err").string()));
+                                                 kStartLimit.count(), BarErrors().string()));
         }
         const RECT client = ClientRect(PrimaryBar());
         Log("bar_ready",
@@ -588,9 +371,9 @@ namespace integration {
             if (_bar.has_value()) {
                 const std::optional<std::uint32_t> code = Close();
                 if (!code.has_value()) {
-                    ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (bar log " << (_workDirectory / "bar.err").string() << ")";
+                    ADD_FAILURE() << "the bar did not exit within " << kExitLimit.count() << " s of WM_CLOSE (bar log " << BarErrors().string() << ")";
                 } else if (*code != 0) {
-                    ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << (_workDirectory / "bar.err").string() << ")";
+                    ADD_FAILURE() << "the bar exited with code " << *code << " on WM_CLOSE (bar log " << BarErrors().string() << ")";
                 }
             }
             PrintLogs();
@@ -599,7 +382,7 @@ namespace integration {
 
     void RunningBar::PrintLogs() const {
         // The bar's lines name their component, the server's plain text needs its source.
-        for (const std::string& line : ReadLines(_workDirectory / "bar.err")) {
+        for (const std::string& line : ReadLines(BarErrors())) {
             std::cout << "    " << line << std::endl;
         }
         for (std::uint32_t start = 1; start <= _serverStarts; ++start) {
@@ -760,13 +543,13 @@ namespace integration {
 
     std::vector<std::string> RunningBar::LogLines(std::string_view text) const {
         std::vector<std::string> matching;
-        std::ranges::copy_if(ReadLines(_workDirectory / "bar.err"), std::back_inserter(matching), [text](const std::string& line) { return line.find(text) != std::string::npos; });
+        std::ranges::copy_if(ReadLines(BarErrors()), std::back_inserter(matching), [text](const std::string& line) { return line.find(text) != std::string::npos; });
         return matching;
     }
 
     std::vector<std::string> RunningBar::Events(std::string_view event) const {
         std::vector<std::string> matching;
-        std::ranges::copy_if(ReadLines(_workDirectory / "bar.err"), std::back_inserter(matching), [event](const std::string& line) { return EventOf(line) == event; });
+        std::ranges::copy_if(ReadLines(BarErrors()), std::back_inserter(matching), [event](const std::string& line) { return EventOf(line) == event; });
         return matching;
     }
 
@@ -833,6 +616,10 @@ namespace integration {
             Log("bar_still_running", std::format("pid={} after_ms={}", pid, MillisecondsSince(closing)));
         }
         return code;
+    }
+
+    std::filesystem::path RunningBar::BarErrors() const {
+        return _workDirectory / "bar.err";
     }
 
     std::filesystem::path RunningBar::ServerOutput(std::uint32_t start) const {

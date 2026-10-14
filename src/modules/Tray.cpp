@@ -39,22 +39,19 @@ bool Tray::Layout(const RenderContext& render) {
 
 bool Tray::LayOutItems(const RenderContext& render) {
     const FoldPosition position = _fold.At(render.frameTime);
-    const float        revealed = position.revealed;
     bool               changed  = !_laidOut || position != _shown;
     _shown                      = position;
 
     // Folded, the icons wait out of sight as last shown, so unfolding uploads only those that are new or redrawn since.
     const size_t count = _slots.size();
-    if (revealed > 0.0f) {
+    if (position.revealed > 0.0f) {
         const std::vector<TrayIcon> shown = ShownIcons(_tray.Icons());
         if (!std::ranges::equal(shown, _slots, {}, {}, &Slot::icon)) {
             changed = changed || shown.size() != _slots.size();
             std::vector<Slot> slots;
             slots.reserve(shown.size());
             for (size_t index = 0; index < shown.size(); ++index) {
-                // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
-                const auto kept   = std::ranges::find_if(_slots, [&](const Slot& slot) { return slot.icon.pixels == shown[index].pixels; });
-                auto       bitmap = kept != _slots.end() ? kept->bitmap : CreateIconBitmap(render.context, *shown[index].pixels);
+                auto bitmap = BitmapFor(render, shown[index]);
                 // changed is already true when the counts differ, so _slots[index] is only read while it exists.
                 changed = changed || _slots[index].icon.pixels != shown[index].pixels;
                 slots.push_back(Slot{.icon = shown[index], .bitmap = std::move(bitmap)});
@@ -158,8 +155,8 @@ void Tray::MiddleClick(D2D1_POINT_2F point) {
 }
 
 bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
-    const bool  changed = _hovered.Set(point.has_value() ? ItemUnder(*point) : std::nullopt);
-    const Slot* slot    = point.has_value() ? SlotAt(*point) : nullptr;
+    const bool  changed = _hovered.Set(ItemUnder(point));
+    const Slot* slot    = SlotOf(_hovered.Get());
     if (_popup.has_value() && (slot == nullptr || !SameIcon(slot->icon, *_popup))) {
         _tray.ClosePopup(*_popup);
         _popup.reset();
@@ -204,7 +201,10 @@ std::optional<D2D1_RECT_F> Tray::TooltipItemBox() const {
 
 // The icons end where the toggle's margin begins.
 float Tray::IconsLength() const {
-    return _row.boxes.empty() ? 0.0f : MainStart(_row.boxes.back(), _row.axis) - MainOf(_style.toggle.margin, _row.axis);
+    if (_row.boxes.empty()) {
+        return 0.0f;
+    }
+    return MainStart(_row.boxes.back(), _row.axis) - MainOf(_style.toggle.margin, _row.axis);
 }
 
 float Tray::RevealedLength() const {
@@ -216,16 +216,36 @@ float Tray::ToggleShift() const {
 }
 
 D2D1_POINT_2F Tray::RowPoint(D2D1_POINT_2F point) const {
-    return MainOf(point, _row.axis) < RevealedLength() ? point : MovedAlong(point, ToggleShift(), _row.axis);
+    if (MainOf(point, _row.axis) < RevealedLength()) {
+        return point;
+    }
+    return MovedAlong(point, ToggleShift(), _row.axis);
 }
 
-std::optional<size_t> Tray::ItemUnder(D2D1_POINT_2F point) const {
-    return ItemAt(_row, RowPoint(point));
+std::optional<size_t> Tray::ItemUnder(std::optional<D2D1_POINT_2F> point) const {
+    if (!point.has_value()) {
+        return std::nullopt;
+    }
+    return ItemAt(_row, RowPoint(*point));
 }
 
 const Tray::Slot* Tray::SlotAt(D2D1_POINT_2F point) const {
-    const std::optional<size_t> index = ItemUnder(point);
-    return index.has_value() && *index < _slots.size() ? &_slots[*index] : nullptr;
+    return SlotOf(ItemUnder(point));
+}
+
+const Tray::Slot* Tray::SlotOf(std::optional<size_t> item) const {
+    if (!item.has_value() || *item >= _slots.size()) {
+        return nullptr;
+    }
+    return &_slots[*item];
+}
+
+Microsoft::WRL::ComPtr<ID2D1Bitmap> Tray::BitmapFor(const RenderContext& render, const TrayIcon& icon) const {
+    const auto kept = std::ranges::find_if(_slots, [&icon](const Slot& slot) { return slot.icon.pixels == icon.pixels; });
+    if (kept != _slots.end()) {
+        return kept->bitmap;
+    }
+    return CreateIconBitmap(render.context, *icon.pixels);
 }
 
 bool Tray::ToggleAt(D2D1_POINT_2F point) const {

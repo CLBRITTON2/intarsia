@@ -1,9 +1,8 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/IconText.hpp"
 #include "modules/IconTextModule.hpp"
-#include "modules/Placeholders.hpp"
+#include "modules/TextLine.hpp"
 #include "network/INetwork.hpp"
 
 #include <cstdint>
@@ -29,10 +28,7 @@ class Network final : public IconTextModule<NetworkConfig> {
     bool            _showsRates;
 };
 
-// The values every network format can name, from the state.
-std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state);
-
-ModuleText               FormatNetwork(const NetworkConfig& config, const NetworkState& state);
+ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state);
 
 // Whether a format drawn on the bar (not the tooltip, read only as it shows) names {down} or {up}.
 bool ShowsRates(const NetworkConfig& config);

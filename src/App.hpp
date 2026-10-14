@@ -3,6 +3,7 @@
 #include "LaunchOptions.hpp"
 #include "audio/IAudio.hpp"
 #include "bar/Bar.hpp"
+#include "bar/Dock.hpp"
 #include "battery/IBattery.hpp"
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
@@ -11,8 +12,8 @@
 #include "network/IpHelper.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/FileWatcher.hpp"
+#include "platform/Launcher.hpp"
 #include "platform/Monitors.hpp"
-#include "platform/Process.hpp"
 #include "platform/WindowProc.hpp"
 #include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
@@ -21,8 +22,8 @@
 
 #include <windows.h>
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <memory>
@@ -56,6 +57,8 @@ class App {
     void        RebuildBarsIfMonitorsChanged();
     // Destroys the bars and schedules a new graphics device, which RecreateDevice builds the bars on.
     void HandleDeviceLost();
+    // The wait before a new device replaces the bars' lost one, read before the bars go.
+    std::chrono::milliseconds RetryAfterLoss() const;
     // Twice the last wait, up to kLongestDeviceRetry.
     std::chrono::milliseconds LongerDeviceRetry() const;
     // Logs event with reason and schedules the next try after wait.

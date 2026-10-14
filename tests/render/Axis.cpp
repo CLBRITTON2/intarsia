@@ -18,3 +18,16 @@ TEST(Offset, MovesEveryEdgeByThePoint) {
     EXPECT_FLOAT_EQ(moved.right, 13.0f);
     EXPECT_FLOAT_EQ(moved.bottom, -16.0f);
 }
+
+TEST(Intersection, KeepsThePartBothRectsCover) {
+    const D2D1_RECT_F shared = Intersection(D2D1::RectF(0.0f, 0.0f, 20.0f, 10.0f), D2D1::RectF(15.0f, 5.0f, 40.0f, 30.0f));
+    EXPECT_FLOAT_EQ(shared.left, 15.0f);
+    EXPECT_FLOAT_EQ(shared.top, 5.0f);
+    EXPECT_FLOAT_EQ(shared.right, 20.0f);
+    EXPECT_FLOAT_EQ(shared.bottom, 10.0f);
+}
+
+TEST(Intersection, OfRectsThatDoNotMeetIsEmpty) {
+    const D2D1_RECT_F apart = Intersection(D2D1::RectF(0.0f, 0.0f, 10.0f, 10.0f), D2D1::RectF(20.0f, 0.0f, 30.0f, 10.0f));
+    EXPECT_LT(apart.right, apart.left);
+}

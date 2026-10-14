@@ -3,8 +3,8 @@
 #include "audio/IAudio.hpp"
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
-#include "modules/IconText.hpp"
 #include "modules/IconTextModule.hpp"
+#include "modules/TextLine.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -27,9 +27,6 @@ class Audio final : public IconTextModule<AudioConfig> {
 
     IAudio&    _audio;
 };
-
-// The volume as the formats get it: a whole percent.
-std::int32_t VolumePercent(float volume);
 
 // The icon and text for device, empty while there is none.
 ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device);

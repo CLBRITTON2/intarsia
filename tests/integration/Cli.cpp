@@ -1,5 +1,7 @@
 #include "Harness.hpp"
 
+#include "ChildProcess.hpp"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 

@@ -1,9 +1,11 @@
 #include "App.hpp"
 
 #include "audio/CoreAudio.hpp"
+#include "bar/Dock.hpp"
 #include "battery/PowerStatus.hpp"
 #include "modules/Network.hpp"
 #include "network/IpHelper.hpp"
+#include "platform/AppBar.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Monitors.hpp"
@@ -12,11 +14,9 @@
 #include "tray/ShellNotifyIcon.hpp"
 #include "wm/WindowManagerFactory.hpp"
 
-#include <shellscalingapi.h>
-
-#include <cstdint>
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <format>
 #include <memory>
@@ -31,6 +31,8 @@ namespace {
     constexpr std::uint32_t kWatcherFailed  = WM_APP + 3;
     // Posted by the window manager backend and the command pollers when what modules show has changed.
     constexpr std::uint32_t kSourcesChanged = WM_APP + 4;
+    constexpr std::uint32_t kDeviceLost     = WM_APP + 5;
+    constexpr std::uint32_t kTrayFailed     = WM_APP + 6;
     // Editors save in several writes, so the reload waits until the file has been quiet this long.
     constexpr std::chrono::milliseconds kConfigSettle{100};
     // How long a config that failed to load must stay unchanged before the failure ends the app.
@@ -43,8 +45,6 @@ namespace {
     // Docking or undocking sends several WM_DISPLAYCHANGE while monitors come up, so bars are rebuilt once it is quiet.
     constexpr UINT_PTR      kDisplaysTimer    = 2;
     constexpr std::uint32_t kDisplaysSettleMs = 500;
-    constexpr std::uint32_t kDeviceLost       = WM_APP + 5;
-    constexpr std::uint32_t kTrayFailed       = WM_APP + 6;
     // Windows is often still switching adapters when a device is lost, so the new device waits a moment, backing off
     // while each new device is lost before it draws a frame.
     constexpr UINT_PTR                  kDeviceTimer = 3;
@@ -53,14 +53,7 @@ namespace {
     // Long enough that a window with no icon at all costs a read only now and then.
     constexpr std::chrono::milliseconds kWindowIconRetry{10000};
 
-    bool                                ShowsAudioFlow(const Config& config, AudioFlow flow) {
-        return AnyModuleInConfig(config, [flow](const ModuleInstance& instance) {
-            const auto* audio = std::get_if<AudioConfig>(&instance.settings);
-            return audio != nullptr && audio->flow == flow;
-        });
-    }
-
-    bool ReadsNetworkRates(const Config& config) {
+    bool                                ReadsNetworkRates(const Config& config) {
         return AnyModuleInConfig(config, [](const ModuleInstance& instance) {
             const auto* network = std::get_if<NetworkConfig>(&instance.settings);
             return network != nullptr && ReadsRates(*network);
@@ -80,44 +73,17 @@ namespace {
         return create();
     }
 
-    BarPlacement PlacementForMonitor(HMONITOR monitor) {
-        const MONITORINFOEXW info = MonitorInfo(monitor);
-
-        std::uint32_t        dpiX     = 0;
-        std::uint32_t        dpiY     = 0;
-        const HRESULT        dpiFound = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-        if (FAILED(dpiFound)) {
-            throw MonitorGoneError(std::format("GetDpiForMonitor failed with 0x{:08X} for a listed handle", static_cast<std::uint32_t>(dpiFound)));
+    std::string YesOrNo(bool value) {
+        if (value) {
+            return "yes";
         }
-        return BarPlacement{
-            .monitor     = monitor,
-            .monitorRect = info.rcMonitor,
-            .dpi         = dpiX,
-        };
-    }
-
-    std::vector<BarPlacement> PlacementsFor(const std::vector<HMONITOR>& monitors) {
-        std::vector<BarPlacement> placements;
-        placements.reserve(monitors.size());
-        for (HMONITOR monitor : monitors) {
-            placements.push_back(PlacementForMonitor(monitor));
-        }
-        return placements;
-    }
-
-    // A monitor swapped for another at the same place and scale changes only its description. A monitor that goes
-    // while it is read has changed too.
-    bool MonitorsDiffer(const std::vector<BarPlacement>& placements, const std::vector<MonitorDescription>& descriptions) {
-        try {
-            const std::vector<HMONITOR> monitors = ListMonitors();
-            return PlacementsFor(monitors) != placements || DescribeMonitors(monitors) != descriptions;
-        } catch (const MonitorGoneError&) { return true; }
+        return "no";
     }
 
     // One line per target, so a user finds the id to write in bar.monitors.
     void LogMonitor(const MonitorDescription& description, bool shown) {
-        const std::string primaryField = description.primary ? "yes" : "no";
-        const std::string barField     = shown ? "yes" : "no";
+        const std::string primaryField = YesOrNo(description.primary);
+        const std::string barField     = YesOrNo(shown);
         if (description.targets.empty()) {
             Log(LogLevel::Info, "app", "monitor", {{.key = "id", .value = "none"}, {.key = "primary", .value = primaryField}, {.key = "bar", .value = barField}});
             return;
@@ -316,7 +282,10 @@ void App::MatchSourcesToConfig() {
 // While the tray is the first taskbar window, the bars' own SHAppBarMessage calls would land in this process and never
 // reach Explorer.
 AppBarRoute App::AppBarRouteForTray() const {
-    return _tray != nullptr && _trayClass == kTaskbarClass ? AppBarRoute::Taskbar : AppBarRoute::Shell;
+    if (_tray != nullptr && _trayClass == kTaskbarClass) {
+        return AppBarRoute::Taskbar;
+    }
+    return AppBarRoute::Shell;
 }
 
 // A monitor added, removed, moved, resized or rescaled gets fresh bars. The window manager and the command pollers
@@ -340,11 +309,17 @@ void App::HandleDeviceLost() {
     if (std::ranges::none_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->DeviceLost(); })) {
         return;
     }
-    // A device that drew a frame was working, so the wait starts short again.
-    const bool drew = std::ranges::any_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->HasPresented(); });
+    const std::chrono::milliseconds wait = RetryAfterLoss();
     _bars.clear();
-    RetryDeviceLater("recovering_device", std::format("0x{:08X}", static_cast<std::uint32_t>(_graphics.d3d->GetDeviceRemovedReason())),
-                     drew ? kFirstDeviceRetry : LongerDeviceRetry());
+    RetryDeviceLater("recovering_device", std::format("0x{:08X}", static_cast<std::uint32_t>(_graphics.d3d->GetDeviceRemovedReason())), wait);
+}
+
+// A device that drew a frame was working, so the wait starts short again.
+std::chrono::milliseconds App::RetryAfterLoss() const {
+    if (std::ranges::any_of(_bars, [](const std::unique_ptr<Bar>& bar) { return bar->HasPresented(); })) {
+        return kFirstDeviceRetry;
+    }
+    return LongerDeviceRetry();
 }
 
 std::chrono::milliseconds App::LongerDeviceRetry() const {

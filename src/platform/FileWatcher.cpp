@@ -3,10 +3,11 @@
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 
-#include <cstdint>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <format>
 #include <stdexcept>
@@ -19,6 +20,14 @@ namespace {
 
     // ReadDirectoryChangesW needs a DWORD-aligned buffer.
     constexpr size_t kBufferDwords = size_t{16} * 1024;
+
+    // A change waiting out the settle time ends the wait with it.
+    DWORD SettleWaitMs(bool pending, std::chrono::milliseconds settle) {
+        if (pending) {
+            return static_cast<DWORD>(settle.count());
+        }
+        return INFINITE;
+    }
 
 } // namespace
 
@@ -71,7 +80,7 @@ void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
     try {
         startRead();
         while (true) {
-            const DWORD timeout = pending ? static_cast<DWORD>(_settle.count()) : INFINITE;
+            const DWORD timeout = SettleWaitMs(pending, _settle);
             const DWORD woke    = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, timeout);
             if (woke == WAIT_OBJECT_0) {
                 break;

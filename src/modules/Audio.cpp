@@ -10,6 +10,16 @@
 
 namespace {
 
+    // The volume as the formats get it: a whole percent.
+    std::int32_t VolumePercent(float volume) {
+        return static_cast<std::int32_t>(std::lround(volume * 100.0f));
+    }
+
+    // A whole percent as a volume, within 0 to 1.
+    float PercentVolume(std::int32_t percent) {
+        return static_cast<float>(std::clamp(percent, 0, 100)) / 100.0f;
+    }
+
     std::vector<Placeholder> AudioPlaceholders(const AudioDevice& device) {
         return {{.name = "volume", .value = std::int64_t{VolumePercent(device.volume)}}, {.name = "device", .value = ToUtf8(device.name)}};
     }
@@ -53,25 +63,24 @@ std::optional<std::wstring> Audio::TooltipText() {
     return ToWide(FormatPlaceholders(*Settings().tooltip, AudioPlaceholders(*device)));
 }
 
-std::int32_t VolumePercent(float volume) {
-    return static_cast<std::int32_t>(std::lround(volume * 100.0f));
-}
-
 ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device) {
     if (!device.has_value()) {
         return NormalText(L"", L"");
     }
-    const std::string& format = device->muted ? config.formatMuted : config.format;
-    return ModuleText{
-        .icon       = device->muted ? config.iconMuted : config.icon,
-        .text       = ToWide(FormatPlaceholders(format, AudioPlaceholders(*device))),
-        .state      = device->muted ? TextState::Muted : TextState::Normal,
-        .classIndex = 0,
-    };
+    if (device->muted) {
+        return ModuleText{
+            .icon       = config.iconMuted,
+            .text       = ToWide(FormatPlaceholders(config.formatMuted, AudioPlaceholders(*device))),
+            .state      = TextState::Muted,
+            .classIndex = 0,
+        };
+    }
+    return NormalText(config.icon, ToWide(FormatPlaceholders(config.format, AudioPlaceholders(*device))));
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {
-    const std::int32_t step    = direction == ScrollDirection::Up ? stepPercent : -stepPercent;
-    const std::int32_t percent = std::clamp(VolumePercent(volume) + step, 0, 100);
-    return static_cast<float>(percent) / 100.0f;
+    if (direction == ScrollDirection::Up) {
+        return PercentVolume(VolumePercent(volume) + stepPercent);
+    }
+    return PercentVolume(VolumePercent(volume) - stepPercent);
 }

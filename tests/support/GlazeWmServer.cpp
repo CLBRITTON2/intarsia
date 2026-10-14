@@ -7,7 +7,7 @@
 // Under integration and rejecting, a stdin line "focus <n>" focuses the nth listed window and sends the events a focus change does,
 // then prints "pushed focus <n>" once they are sent.
 
-#include "../platform/Loopback.hpp"
+#include "Loopback.hpp"
 
 #include <array>
 #include <chrono>
@@ -155,13 +155,32 @@ namespace {
         const std::vector<HWND>& windows = collection.windows;
         std::string              children;
         for (size_t index = 0; index < windows.size(); ++index) {
-            children += std::format(R"({}{{"type":"window","id":"{}","handle":{},"hasFocus":{}}})", index == 0 ? "" : ",", Uuid(index),
-                                    reinterpret_cast<std::intptr_t>(windows[index]), index == focused % std::max<size_t>(windows.size(), 1) ? "true" : "false");
+            if (index > 0) {
+                children += ",";
+            }
+            children += std::format(R"({{"type":"window","id":"{}","handle":{},"hasFocus":{}}})", Uuid(index), reinterpret_cast<std::intptr_t>(windows[index]),
+                                    index == focused % windows.size());
         }
         return std::format(R"({{"monitors":[{{"type":"monitor","handle":{},"children":[)"
                            R"({{"type":"workspace","name":"1","displayName":null,"hasFocus":false,"isDisplayed":false,"children":[]}},)"
                            R"({{"type":"workspace","name":"2","displayName":"web","hasFocus":true,"isDisplayed":true,"children":[{{"type":"split","children":[{}]}}]}}]}}]}})",
                            monitor, children);
+    }
+
+    // The binding mode "resize" is active while the focus index is odd.
+    std::string_view BindingModes(size_t focused) {
+        if (focused % 2 == 0) {
+            return R"({"bindingModes":[]})";
+        }
+        return R"({"bindingModes":[{"name":"resize","displayName":null}]})";
+    }
+
+    // The direction is vertical while the focus index is odd.
+    std::string_view TilingDirection(size_t focused) {
+        if (focused % 2 == 0) {
+            return "horizontal";
+        }
+        return "vertical";
     }
 
     // The focused window, binding modes and tiling direction all follow the focus index, so a change sends all three.
@@ -202,9 +221,9 @@ namespace {
                 } else if (text == "query monitors") {
                     loopback::SendText(peer, Response(text, Monitors(focused, DrivenByStdin(scenario))));
                 } else if (text == "query binding-modes") {
-                    loopback::SendText(peer, Response(text, focused % 2 == 0 ? R"({"bindingModes":[]})" : R"({"bindingModes":[{"name":"resize","displayName":null}]})"));
+                    loopback::SendText(peer, Response(text, BindingModes(focused)));
                 } else if (text == "query tiling-direction") {
-                    loopback::SendText(peer, Response(text, std::format(R"({{"tilingDirection":"{}","directionContainer":{{}}}})", focused % 2 == 0 ? "horizontal" : "vertical")));
+                    loopback::SendText(peer, Response(text, std::format(R"({{"tilingDirection":"{}","directionContainer":{{}}}})", TilingDirection(focused))));
                 } else {
                     loopback::SendText(peer, Response(text, R"({"subscriptionId":null})"));
                 }

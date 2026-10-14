@@ -24,11 +24,18 @@ namespace {
         return ToUtf8(DrawableText(std::string_view(*target.name)));
     }
 
+    std::string YesOrNo(bool value) {
+        if (value) {
+            return "yes";
+        }
+        return "no";
+    }
+
     std::vector<Row> Rows(const std::vector<MonitorDescription>& descriptions, const BarConfig& bar) {
         std::vector<Row> rows{Row{"id", "name", "connection", "primary", "bar"}};
         for (const MonitorDescription& description : descriptions) {
-            const std::string primaryCell = description.primary ? "yes" : "no";
-            const std::string barCell     = ShowsBarOn(bar, description) ? "yes" : "no";
+            const std::string primaryCell = YesOrNo(description.primary);
+            const std::string barCell     = YesOrNo(ShowsBarOn(bar, description));
             if (description.targets.empty()) {
                 rows.push_back(Row{"none", "none", "none", primaryCell, barCell});
             }

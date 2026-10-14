@@ -142,54 +142,6 @@ TEST(Config, ValidConfigParsesIntoTypedValues) {
     EXPECT_EQ(SettingsOf<WindowConfig>(config.modules.left, 0).maxLength, 80u);
 }
 
-TEST(Config, MonitorsReadsEachEntryKind) {
-    const Config config = LoadText(Replace(kValidConfig, R"(monitors = { "*" })", R"(monitors = { "primary", "internal", "DEL41A8-7XYZ123", "BOE0B4D" })"));
-    EXPECT_EQ(config.bar.monitors, (std::vector<MonitorMatch>{PrimaryMonitor{}, InternalMonitor{}, MonitorWithId{.id = "DEL41A8-7XYZ123"}, MonitorWithId{.id = "BOE0B4D"}}));
-    EXPECT_EQ(LoadText(kValidConfig).bar.monitors, std::vector<MonitorMatch>{AllMonitors{}});
-}
-
-TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
-    const auto withMonitors = [](std::string_view list) { return Replace(kValidConfig, R"(monitors = { "*" })", "monitors = " + std::string(list)); };
-    EXPECT_THAT([&] { return LoadText(Replace(kValidConfig, R"(, monitors = { "*" })", "")); }, ThrowsWith<ConfigError>("bar.monitors is missing"));
-    EXPECT_THAT([&] { return LoadText(withMonitors("{}")); }, ThrowsWith<ConfigError>("bar.monitors is empty"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ThrowsWith<ConfigError>("lists 'primary' twice"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "internal", "BOE0B4D", "internal" })")); }, ThrowsWith<ConfigError>("bar.monitors lists 'internal' twice"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ThrowsWith<ConfigError>("lists '*' beside other entries"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ThrowsWith<ConfigError>("lists 'Primary', which is not"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ThrowsWith<ConfigError>("intarsia-cli monitors lists each monitor's id"));
-}
-
-TEST(Config, ShowsBarOnMatchesAnyEntry) {
-    const auto bar = [](std::vector<MonitorMatch> monitors) {
-        return BarConfig{
-            .edge          = Edge::Top,
-            .layer         = Layer::Top,
-            .space         = Space::Reserve,
-            .thicknessDips = 32.0F,
-            .monitors      = std::move(monitors),
-        };
-    };
-    const MonitorDescription laptop{
-        .monitor = nullptr,
-        .primary = true,
-        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal", .internal = true}},
-    };
-    const MonitorDescription desk{
-        .monitor = nullptr,
-        .primary = false,
-        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort", .internal = false}},
-    };
-    const MonitorDescription pathless{.monitor = nullptr, .primary = false, .targets = {}};
-    EXPECT_TRUE(ShowsBarOn(bar({AllMonitors{}}), pathless));
-    EXPECT_TRUE(ShowsBarOn(bar({PrimaryMonitor{}}), laptop));
-    EXPECT_FALSE(ShowsBarOn(bar({PrimaryMonitor{}}), desk));
-    EXPECT_TRUE(ShowsBarOn(bar({InternalMonitor{}}), laptop));
-    EXPECT_FALSE(ShowsBarOn(bar({InternalMonitor{}}), desk));
-    EXPECT_TRUE(ShowsBarOn(bar({PrimaryMonitor{}, MonitorWithId{.id = "DEL41A8-7XYZ123"}}), desk));
-    EXPECT_FALSE(ShowsBarOn(bar({MonitorWithId{.id = "DEL41A8"}}), desk));
-    EXPECT_FALSE(ShowsBarOn(bar({MonitorWithId{.id = "DEL41A8"}}), pathless));
-}
-
 TEST(Config, MissingFileIsAnError) {
     EXPECT_THAT([] { return LoadConfig(std::filesystem::temp_directory_path() / "intarsia-test-missing.lua"); }, ThrowsWith<ConfigError>("cannot open config file"));
 }
@@ -202,34 +154,17 @@ TEST(Config, MissingStyleIsAnError) {
     std::filesystem::remove_all(directory);
 }
 
-TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
-    const Config       config = LoadStyled(kValidConfig, std::string(kValidStyle) + "time {\n  color: #ff0000\n  icon {\n    color: #00ff00\n  }\n}\n");
-    const ModuleStyle& time   = config.modules.center.at(0).style;
-    EXPECT_FLOAT_EQ(time.color.r, 1.0f);
-    EXPECT_FLOAT_EQ(time.icon.color.g, 1.0f);
-    // The window module takes the bar's color, since no block names it.
-    EXPECT_FLOAT_EQ(config.modules.left.at(0).style.color.r, 0xe0 / 255.0f);
+TEST(Config, ConfigFilesMustBeUtf8) {
+    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); },
+                testing::ThrowsMessage<ConfigError>(testing::AllOf(testing::HasSubstr("config file"), testing::HasSubstr("is not valid UTF-8"))));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, "// \xC0\xAF"); }, ThrowsWith<ConfigError>("style file"));
 }
 
-TEST(Config, StyleIdsMustNameADefinedModule) {
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie {\n  color: #ff0000\n}\n"); },
-                ThrowsWith<ConfigError>("style.conf:7: tmie: names no module"));
-}
-
-TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "\nmodule {\n  colour: #ff0000\n}\n"); },
-                ThrowsWith<ConfigError>("style.conf:9: module: colour is not a property"));
-}
-
-TEST(Config, AModuleMayNotTakeTheNameOfAStyleBlock) {
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "menu" })", R"(        menu = { type = "cpu" },)")); }, ThrowsWith<ConfigError>("names a block of style.conf's own"));
-}
-
-TEST(Config, TrayTakesItsToggleIcon) {
-    const Config config = LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray", icon = ">" },)"));
-    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Tray});
-    EXPECT_EQ(SettingsOf<TrayConfig>(config.modules.right, 0).icon, L">");
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray" },)")); }, ThrowsWith<ConfigError>("modules.icons.icon is missing"));
+TEST(Config, FilesPastTheirSizeCapAreAnError) {
+    EXPECT_THAT([] { return LoadText(std::string(kValidConfig) + "-- " + std::string(size_t{1} << 20, 'x')); }, ThrowsWith<ConfigError>("is larger than 1024 KiB"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "// " + std::string(size_t{64} << 10, 'x')); }, ThrowsWith<ConfigError>("is larger than 64 KiB"));
+    const std::string atTheCap = std::string(kValidStyle) + "// " + std::string((size_t{64} << 10) - kValidStyle.size() - 3, 'x');
+    EXPECT_NO_THROW(LoadStyled(kValidConfig, atTheCap));
 }
 
 TEST(Config, LuaSyntaxAndRuntimeErrorsAreReported) {
@@ -299,19 +234,6 @@ TEST(Config, ModuleTableKeysMustBeStrings) {
                 ThrowsWith<ConfigError>("modules has a key that is not a string"));
 }
 
-TEST(Config, ConfigFilesMustBeUtf8) {
-    EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); },
-                testing::ThrowsMessage<ConfigError>(testing::AllOf(testing::HasSubstr("config file"), testing::HasSubstr("is not valid UTF-8"))));
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, "// \xC0\xAF"); }, ThrowsWith<ConfigError>("style file"));
-}
-
-TEST(Config, FilesPastTheirSizeCapAreAnError) {
-    EXPECT_THAT([] { return LoadText(std::string(kValidConfig) + "-- " + std::string(size_t{1} << 20, 'x')); }, ThrowsWith<ConfigError>("is larger than 1024 KiB"));
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "// " + std::string(size_t{64} << 10, 'x')); }, ThrowsWith<ConfigError>("is larger than 64 KiB"));
-    const std::string atTheCap = std::string(kValidStyle) + "// " + std::string((size_t{64} << 10) - kValidStyle.size() - 3, 'x');
-    EXPECT_NO_THROW(LoadStyled(kValidConfig, atTheCap));
-}
-
 // Lua escapes in valid UTF-8 source still build any bytes.
 TEST(Config, ConfigStringsMustBeUtf8) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(icon = "x")", R"(icon = "\xff")")); }, ThrowsWith<ConfigError>("modules.time.icon is not valid UTF-8"));
@@ -320,11 +242,77 @@ TEST(Config, ConfigStringsMustBeUtf8) {
                 ThrowsWith<ConfigError>("a key of modules is not valid UTF-8"));
 }
 
-// A relative path with a directory part would resolve against the bar's current directory.
-TEST(Config, ActionsRefuseRelativePathsWithDirectories) {
-    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { ".\\cmd.exe" })")); }, ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
-    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { "System32\\cmd.exe" })")); },
-                ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
+TEST(Config, ModuleNamesUseASafeAlphabet) {
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "two words" })", R"(        ["two words"] = { type = "cpu", format = "{usage}", icon = "", interval = 1 },)")); },
+                ThrowsWith<ConfigError>("is not a valid module name"));
+}
+
+TEST(Config, AModuleMayNotTakeTheNameOfAStyleBlock) {
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "menu" })", R"(        menu = { type = "cpu" },)")); }, ThrowsWith<ConfigError>("names a block of style.conf's own"));
+}
+
+TEST(Config, TypeMustBeAKnownModuleType) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
+                ThrowsWith<ConfigError>("modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
+                                        "network, battery, tray, custom, counter, group, got 'teapot'"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ThrowsWith<ConfigError>("modules.time.type is missing"));
+}
+
+TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
+    const Config config = LoadText(WithRightModules(R"({ "cpu", "cpu_slow" })", R"(        cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
+        cpu_slow = { type = "cpu", format = "{usage}", icon = "", interval = 5 },)"));
+    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Cpu}));
+    EXPECT_EQ(config.modules.right.at(1).name, "cpu_slow");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(5));
+}
+
+TEST(Config, MonitorsReadsEachEntryKind) {
+    const Config config = LoadText(Replace(kValidConfig, R"(monitors = { "*" })", R"(monitors = { "primary", "internal", "DEL41A8-7XYZ123", "BOE0B4D" })"));
+    EXPECT_EQ(config.bar.monitors, (std::vector<MonitorMatch>{PrimaryMonitor{}, InternalMonitor{}, MonitorWithId{.id = "DEL41A8-7XYZ123"}, MonitorWithId{.id = "BOE0B4D"}}));
+    EXPECT_EQ(LoadText(kValidConfig).bar.monitors, std::vector<MonitorMatch>{AllMonitors{}});
+}
+
+TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
+    const auto withMonitors = [](std::string_view list) { return Replace(kValidConfig, R"(monitors = { "*" })", "monitors = " + std::string(list)); };
+    EXPECT_THAT([&] { return LoadText(Replace(kValidConfig, R"(, monitors = { "*" })", "")); }, ThrowsWith<ConfigError>("bar.monitors is missing"));
+    EXPECT_THAT([&] { return LoadText(withMonitors("{}")); }, ThrowsWith<ConfigError>("bar.monitors is empty"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ThrowsWith<ConfigError>("lists 'primary' twice"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "internal", "BOE0B4D", "internal" })")); }, ThrowsWith<ConfigError>("bar.monitors lists 'internal' twice"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ThrowsWith<ConfigError>("lists '*' beside other entries"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ThrowsWith<ConfigError>("lists 'Primary', which is not"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ThrowsWith<ConfigError>("intarsia-cli monitors lists each monitor's id"));
+}
+
+TEST(Config, ShowsBarOnMatchesAnyEntry) {
+    const auto bar = [](std::vector<MonitorMatch> monitors) {
+        return BarConfig{
+            .edge          = Edge::Top,
+            .layer         = Layer::Top,
+            .space         = Space::Reserve,
+            .thicknessDips = 32.0F,
+            .monitors      = std::move(monitors),
+        };
+    };
+    const MonitorDescription laptop{
+        .monitor = nullptr,
+        .primary = true,
+        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal", .internal = true}},
+    };
+    const MonitorDescription desk{
+        .monitor = nullptr,
+        .primary = false,
+        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort", .internal = false}},
+    };
+    const MonitorDescription pathless{.monitor = nullptr, .primary = false, .targets = {}};
+    EXPECT_TRUE(ShowsBarOn(bar({AllMonitors{}}), pathless));
+    EXPECT_TRUE(ShowsBarOn(bar({PrimaryMonitor{}}), laptop));
+    EXPECT_FALSE(ShowsBarOn(bar({PrimaryMonitor{}}), desk));
+    EXPECT_TRUE(ShowsBarOn(bar({InternalMonitor{}}), laptop));
+    EXPECT_FALSE(ShowsBarOn(bar({InternalMonitor{}}), desk));
+    EXPECT_TRUE(ShowsBarOn(bar({PrimaryMonitor{}, MonitorWithId{.id = "DEL41A8-7XYZ123"}}), desk));
+    EXPECT_FALSE(ShowsBarOn(bar({MonitorWithId{.id = "DEL41A8"}}), desk));
+    EXPECT_FALSE(ShowsBarOn(bar({MonitorWithId{.id = "DEL41A8"}}), pathless));
 }
 
 TEST(Config, ListsMayOnlyShowDefinedModules) {
@@ -334,6 +322,46 @@ TEST(Config, ListsMayOnlyShowDefinedModules) {
 
 TEST(Config, EveryDefinedModuleMustBeShown) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ThrowsWith<ConfigError>("modules.time is defined but no _modules list or group shows it"));
+}
+
+TEST(Config, TheLastLayoutAnEdgeReachesReplacesTheLists) {
+    const Config config = LoadText(WithLayouts(R"({
+        { min_length = 1921, modules_left = {}, modules_center = { "time" }, modules_right = { "title" } },
+        { min_length = 3000, modules_left = { "time" }, modules_center = {}, modules_right = {} },
+    })"));
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 1920.0f).left), std::vector<ModuleKind>{ModuleKind::Window});
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 1921.0f).right), std::vector<ModuleKind>{ModuleKind::Window});
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 2999.5f).center), std::vector<ModuleKind>{ModuleKind::Clock});
+    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 3000.0f).left), std::vector<ModuleKind>{ModuleKind::Clock});
+    EXPECT_TRUE(ModulesForEdgeLength(config, 3000.0f).right.empty());
+}
+
+TEST(Config, AModuleOnlyALayoutShowsCountsAsShown) {
+    const Config config = LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = { "time" }, modules_right = {} } })"),
+                                           R"(modules_center = { "time" })", "modules_center = {}"));
+    EXPECT_TRUE(config.modules.center.empty());
+    EXPECT_EQ(config.layouts.at(0).modules.center.at(0).name, "time");
+}
+
+TEST(Config, LayoutsAreRequiredAndNamedByTheirPlaceInErrors) {
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "layouts = {},", "")); }, ThrowsWith<ConfigError>("layouts is missing"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {} } })")); },
+                ThrowsWith<ConfigError>("layouts[1].modules_right is missing"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {}, edge = "top" } })")); },
+                ThrowsWith<ConfigError>("layouts[1].edge is not a known key"));
+    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = { "clock" }, modules_center = {}, modules_right = {} } })")); },
+                ThrowsWith<ConfigError>("layouts[1].modules_left shows 'clock', which is not defined in modules"));
+}
+
+TEST(Config, EachLayoutMustStartPastTheOneBefore) {
+    EXPECT_THAT(
+        [] {
+            return LoadText(WithLayouts(R"({
+            { min_length = 2560, modules_left = {}, modules_center = {}, modules_right = {} },
+            { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {} },
+        })"));
+        },
+        ThrowsWith<ConfigError>("layouts[2].min_length is 1921, it must be greater than the layout before it (2560)"));
 }
 
 namespace {
@@ -421,44 +449,10 @@ TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
     EXPECT_NO_THROW(LoadStyled(config, std::string(kValidStyle) + "weather {\n  sunny {\n    color: #ff0000\n  }\n}\n"));
 }
 
-TEST(Config, TheLastLayoutAnEdgeReachesReplacesTheLists) {
-    const Config config = LoadText(WithLayouts(R"({
-        { min_length = 1921, modules_left = {}, modules_center = { "time" }, modules_right = { "title" } },
-        { min_length = 3000, modules_left = { "time" }, modules_center = {}, modules_right = {} },
-    })"));
-    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 1920.0f).left), std::vector<ModuleKind>{ModuleKind::Window});
-    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 1921.0f).right), std::vector<ModuleKind>{ModuleKind::Window});
-    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 2999.5f).center), std::vector<ModuleKind>{ModuleKind::Clock});
-    EXPECT_EQ(Kinds(ModulesForEdgeLength(config, 3000.0f).left), std::vector<ModuleKind>{ModuleKind::Clock});
-    EXPECT_TRUE(ModulesForEdgeLength(config, 3000.0f).right.empty());
-}
-
-TEST(Config, AModuleOnlyALayoutShowsCountsAsShown) {
-    const Config config = LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = { "time" }, modules_right = {} } })"),
-                                           R"(modules_center = { "time" })", "modules_center = {}"));
-    EXPECT_TRUE(config.modules.center.empty());
-    EXPECT_EQ(config.layouts.at(0).modules.center.at(0).name, "time");
-}
-
-TEST(Config, LayoutsAreRequiredAndNamedByTheirPlaceInErrors) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "layouts = {},", "")); }, ThrowsWith<ConfigError>("layouts is missing"));
-    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {} } })")); },
-                ThrowsWith<ConfigError>("layouts[1].modules_right is missing"));
-    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {}, edge = "top" } })")); },
-                ThrowsWith<ConfigError>("layouts[1].edge is not a known key"));
-    EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = { "clock" }, modules_center = {}, modules_right = {} } })")); },
-                ThrowsWith<ConfigError>("layouts[1].modules_left shows 'clock', which is not defined in modules"));
-}
-
-TEST(Config, EachLayoutMustStartPastTheOneBefore) {
-    EXPECT_THAT(
-        [] {
-            return LoadText(WithLayouts(R"({
-            { min_length = 2560, modules_left = {}, modules_center = {}, modules_right = {} },
-            { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {} },
-        })"));
-        },
-        ThrowsWith<ConfigError>("layouts[2].min_length is 1921, it must be greater than the layout before it (2560)"));
+TEST(Config, TooltipIsOptional) {
+    EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
+    const Config config = LoadText(WithClockKeys(kValidConfig, R"(tooltip = "{time:%A %d %B %Y}")"));
+    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{time:%A %d %B %Y}");
 }
 
 TEST(Config, TilingModulesNeedATilingWindowManager) {
@@ -495,27 +489,6 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
     EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(horizontal = "H", )", "")); }, ThrowsWith<ConfigError>("modules.tiling.horizontal is missing"));
 }
 
-TEST(Config, ModuleNamesUseASafeAlphabet) {
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "two words" })", R"(        ["two words"] = { type = "cpu", format = "{usage}", icon = "", interval = 1 },)")); },
-                ThrowsWith<ConfigError>("is not a valid module name"));
-}
-
-TEST(Config, TypeMustBeAKnownModuleType) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ThrowsWith<ConfigError>("modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
-                                        "network, battery, tray, custom, counter, group, got 'teapot'"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ThrowsWith<ConfigError>("modules.time.type is missing"));
-}
-
-TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
-    const Config config = LoadText(WithRightModules(R"({ "cpu", "cpu_slow" })", R"(        cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
-        cpu_slow = { type = "cpu", format = "{usage}", icon = "", interval = 5 },)"));
-    EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Cpu, ModuleKind::Cpu}));
-    EXPECT_EQ(config.modules.right.at(1).name, "cpu_slow");
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 0).format, "{usage}%");
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.right, 1).interval, std::chrono::seconds(5));
-}
-
 // Audio needs no window manager, so it loads with window_manager "windows".
 TEST(Config, AudioParsesItsFormatsIconsAndStep) {
     const std::string audio =
@@ -550,6 +523,13 @@ TEST(Config, BatteryParsesItsFormatsIconsAndThresholds) {
                 ThrowsWith<ConfigError>("modules.power.icons must hold at least one icon, emptiest first"));
 }
 
+TEST(Config, TrayTakesItsToggleIcon) {
+    const Config config = LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray", icon = ">" },)"));
+    EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Tray});
+    EXPECT_EQ(SettingsOf<TrayConfig>(config.modules.right, 0).icon, L">");
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray" },)")); }, ThrowsWith<ConfigError>("modules.icons.icon is missing"));
+}
+
 TEST(Config, ActionsResolveToAbsoluteExecutables) {
     const Config         config  = LoadText(WithClockKeys(kValidConfig, R"(on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" }, on_middle_click = { "cmd" })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
@@ -561,6 +541,27 @@ TEST(Config, ActionsResolveToAbsoluteExecutables) {
     EXPECT_TRUE(actions.middleClick.has_value());
     EXPECT_FALSE(actions.rightClick.has_value());
     EXPECT_FALSE(actions.scrollDown.has_value());
+}
+
+TEST(Config, ActionsMustNameAnExistingExecutable) {
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, "on_click = {}")); }, ThrowsWith<ConfigError>("modules.time.on_click must name a program"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { "intarsia-no-such-program" })")); },
+                ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
+}
+
+// A relative path with a directory part would resolve against the bar's current directory.
+TEST(Config, ActionsRefuseRelativePathsWithDirectories) {
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { ".\\cmd.exe" })")); }, ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { "System32\\cmd.exe" })")); },
+                ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
+}
+
+TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
+    const std::filesystem::path script = std::filesystem::temp_directory_path() / "intarsia-test-action.bat";
+    std::ofstream(script) << "@echo off\n";
+    const std::string config = WithClockKeys(kValidConfig, "on_click = { [[" + script.string() + "]] }");
+    EXPECT_THAT([&config] { return LoadText(config); }, ThrowsWith<ConfigError>("which is not an .exe"));
+    std::filesystem::remove(script);
 }
 
 TEST(Config, WindowManagerActionsSendTheirTextAsWritten) {
@@ -575,6 +576,11 @@ TEST(Config, WindowManagerActionsSendTheirTextAsWritten) {
     EXPECT_THAT([&glazeWm] { return LoadText(WithClockKeys(glazeWm, R"(on_click = { window_manager = "" })")); }, ThrowsWith<ConfigError>("must be a command on one line"));
     EXPECT_THAT([&glazeWm] { return LoadText(WithClockKeys(glazeWm, R"(on_click = { window_manager = "x", extra = 1 })")); },
                 ThrowsWith<ConfigError>("modules.time.on_click.extra is not a known key"));
+}
+
+TEST(Config, WindowManagerActionsNeedAWindowManagerThatTakesCommands) {
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { window_manager = "focus --next-workspace" })")); },
+                ThrowsWith<ConfigError>("window_manager 'windows' takes none"));
 }
 
 TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
@@ -597,25 +603,6 @@ TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
                 ThrowsWith<ConfigError>("modules.time.on_click.extra is not a known key"));
     EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd", "/c", "pick" } } })")); },
                 ThrowsWith<ConfigError>("modules.time.on_click.menu.on_select may not run cmd.exe"));
-}
-
-TEST(Config, WindowManagerActionsNeedAWindowManagerThatTakesCommands) {
-    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { window_manager = "focus --next-workspace" })")); },
-                ThrowsWith<ConfigError>("window_manager 'windows' takes none"));
-}
-
-TEST(Config, ActionsMustNameAnExistingExecutable) {
-    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, "on_click = {}")); }, ThrowsWith<ConfigError>("modules.time.on_click must name a program"));
-    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { "intarsia-no-such-program" })")); },
-                ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
-}
-
-TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
-    const std::filesystem::path script = std::filesystem::temp_directory_path() / "intarsia-test-action.bat";
-    std::ofstream(script) << "@echo off\n";
-    const std::string config = WithClockKeys(kValidConfig, "on_click = { [[" + script.string() + "]] }");
-    EXPECT_THAT([&config] { return LoadText(config); }, ThrowsWith<ConfigError>("which is not an .exe"));
-    std::filesystem::remove(script);
 }
 
 TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
@@ -652,6 +639,45 @@ TEST(Config, CustomModulesNeedARun) {
     EXPECT_THAT([] { return LoadText(WithCustomRun("timeout = 5,")); }, ThrowsWith<ConfigError>("run"));
     EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "forever", timeout = 5,)")); }, ThrowsWith<ConfigError>("run"));
     EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "interval",)")); }, ThrowsWith<ConfigError>("timeout"));
+}
+
+TEST(Config, CounterModulesReadTheirPathAndCombine) {
+    const Config         config  = LoadText(WithRightModules(
+        R"({ "gpu" })", R"(        gpu = { type = "counter", counter = "\\Processor(*)\\% Processor Time", combine = "max", format = "{value:.0f}%", icon = "", interval = 2 },)"));
+    const CounterConfig& counter = SettingsOf<CounterConfig>(config.modules.right, 0);
+    EXPECT_EQ(counter.path, L"\\Processor(*)\\% Processor Time");
+    EXPECT_EQ(counter.combine, CounterCombine::Max);
+    EXPECT_EQ(counter.text.interval, std::chrono::seconds(2));
+}
+
+TEST(Config, CounterPathsMustNameALocalCounterThisSystemHas) {
+    const auto load = [](std::string_view path) {
+        return LoadText(WithRightModules(
+            R"({ "c" })", std::format(R"(        c = {{ type = "counter", counter = "{}", combine = "sum", format = "{{value}}", icon = "", interval = 1 }},)", path)));
+    };
+    EXPECT_THAT([&load] { return load(R"(\\No Such Object\\Nothing)"); }, ThrowsWith<ConfigError>("modules.c.counter names no counter this system has: PdhAddEnglishCounterW"));
+    EXPECT_THAT([&load] { return load(R"(\\Processor(_Total)\\No Such Counter)"); }, ThrowsWith<ConfigError>("modules.c.counter names no counter this system has"));
+    EXPECT_THAT([&load] { return load(R"(Processor(_Total)\\% Processor Time)"); }, ThrowsWith<ConfigError>("modules.c.counter must be a local counter path"));
+    EXPECT_THAT([&load] { return load(R"(\\\\otherhost\\Processor(_Total)\\% Processor Time)"); }, ThrowsWith<ConfigError>("modules.c.counter must be a local counter path"));
+}
+
+TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
+    const Config       config = LoadStyled(kValidConfig, std::string(kValidStyle) + "time {\n  color: #ff0000\n  icon {\n    color: #00ff00\n  }\n}\n");
+    const ModuleStyle& time   = config.modules.center.at(0).style;
+    EXPECT_FLOAT_EQ(time.color.r, 1.0f);
+    EXPECT_FLOAT_EQ(time.icon.color.g, 1.0f);
+    // The window module takes the bar's color, since no block names it.
+    EXPECT_FLOAT_EQ(config.modules.left.at(0).style.color.r, 0xe0 / 255.0f);
+}
+
+TEST(Config, StyleIdsMustNameADefinedModule) {
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie {\n  color: #ff0000\n}\n"); },
+                ThrowsWith<ConfigError>("style.conf:7: tmie: names no module"));
+}
+
+TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "\nmodule {\n  colour: #ff0000\n}\n"); },
+                ThrowsWith<ConfigError>("style.conf:9: module: colour is not a property"));
 }
 
 namespace {
@@ -699,26 +725,6 @@ TEST(Config, DeclaredClassesAreClassNamesOfTheirOwn) {
     EXPECT_THAT([] { return LoadText(WithWeather(R"({ "rain", "sunny", "snow", "sunny" })")); }, ThrowsWith<ConfigError>("modules.weather.classes lists 'sunny' twice"));
 }
 
-TEST(Config, CounterModulesReadTheirPathAndCombine) {
-    const Config         config  = LoadText(WithRightModules(
-        R"({ "gpu" })", R"(        gpu = { type = "counter", counter = "\\Processor(*)\\% Processor Time", combine = "max", format = "{value:.0f}%", icon = "", interval = 2 },)"));
-    const CounterConfig& counter = SettingsOf<CounterConfig>(config.modules.right, 0);
-    EXPECT_EQ(counter.path, L"\\Processor(*)\\% Processor Time");
-    EXPECT_EQ(counter.combine, CounterCombine::Max);
-    EXPECT_EQ(counter.text.interval, std::chrono::seconds(2));
-}
-
-TEST(Config, CounterPathsMustNameALocalCounterThisSystemHas) {
-    const auto load = [](std::string_view path) {
-        return LoadText(WithRightModules(
-            R"({ "c" })", std::format(R"(        c = {{ type = "counter", counter = "{}", combine = "sum", format = "{{value}}", icon = "", interval = 1 }},)", path)));
-    };
-    EXPECT_THAT([&load] { return load(R"(\\No Such Object\\Nothing)"); }, ThrowsWith<ConfigError>("modules.c.counter names no counter this system has: PdhAddEnglishCounterW"));
-    EXPECT_THAT([&load] { return load(R"(\\Processor(_Total)\\No Such Counter)"); }, ThrowsWith<ConfigError>("modules.c.counter names no counter this system has"));
-    EXPECT_THAT([&load] { return load(R"(Processor(_Total)\\% Processor Time)"); }, ThrowsWith<ConfigError>("modules.c.counter must be a local counter path"));
-    EXPECT_THAT([&load] { return load(R"(\\\\otherhost\\Processor(_Total)\\% Processor Time)"); }, ThrowsWith<ConfigError>("modules.c.counter must be a local counter path"));
-}
-
 // The config cannot read files, load chunks (load takes bytecode, which Lua does not verify), reach outside the
 // process, catch its abort (a protected call could swallow it), hide from it (Lua runs a __gc metamethod with hooks
 // off), or run a pattern match (a short pattern backtracks for longer than the bar lives, inside C calls the
@@ -764,12 +770,6 @@ TEST(Config, ManyModulesFitOnTheLuaStack) {
     }
     names += "}";
     EXPECT_EQ(LoadText(WithRightModules(names, definitions)).modules.right.size(), 200u);
-}
-
-TEST(Config, TooltipIsOptional) {
-    EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
-    const Config config = LoadText(WithClockKeys(kValidConfig, R"(tooltip = "{time:%A %d %B %Y}")"));
-    EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{time:%A %d %B %Y}");
 }
 
 TEST(Config, AnEndlessConfigIsStoppedWithAnError) {

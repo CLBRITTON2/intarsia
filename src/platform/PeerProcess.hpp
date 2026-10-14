@@ -1,9 +1,6 @@
 #pragma once
 
-#include <windows.h>
-
 #include <cstdint>
-#include <filesystem>
 #include <stdexcept>
 #include <string_view>
 
@@ -17,9 +14,6 @@ class PeerVerificationError : public std::runtime_error {
 // The process holding the server end of the loopback connection from 127.0.0.1:clientPort to 127.0.0.1:serverPort.
 // Naming the connection rather than the listener means a process that took the port after the connect cannot pass.
 std::uint32_t LoopbackPeerProcess(std::uint16_t clientPort, std::uint16_t serverPort);
-
-// The executable a process opened with PROCESS_QUERY_LIMITED_INFORMATION runs. Throws Win32Error.
-std::filesystem::path ProcessImage(HANDLE process);
 
 // Throws PeerVerificationError unless the process runs as the current user, at no lower integrity level, and its
 // executable is named imageName.

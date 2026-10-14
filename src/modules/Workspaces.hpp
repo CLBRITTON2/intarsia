@@ -47,9 +47,6 @@ class Workspaces final : public IModule {
     std::wstring           _disconnectedText;
     bool                   _laidOut = false;
     std::vector<IconText>  _labels; // one per shown workspace
-    ItemRow                _row;
-    IconText               _disconnected;
+    ItemRow                _row          = EmptyItemRow();
+    IconText               _disconnected = EmptyIconText();
 };
-
-// The style a workspace draws in: focused before occupied before empty.
-const ItemStyle& WorkspaceStyle(const Workspace& workspace, const ModuleStyle& style);

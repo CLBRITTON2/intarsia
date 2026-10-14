@@ -9,19 +9,33 @@
 
 namespace {
 
+    // The std::format pattern for one value formatted by spec.
+    std::string FieldPattern(std::string_view spec) {
+        if (spec.empty()) {
+            return "{}";
+        }
+        return std::format("{{:{}}}", spec);
+    }
+
     std::string FormatOne(const Placeholder& placeholder, std::string_view spec) {
-        const std::string pattern = spec.empty() ? std::string("{}") : std::format("{{:{}}}", spec);
+        const std::string pattern = FieldPattern(spec);
         return std::visit([&pattern](const auto& value) { return std::vformat(pattern, std::make_format_args(value)); }, placeholder.value);
     }
 
     std::string PlaceholderList(const std::vector<Placeholder>& placeholders) {
         std::string names;
         for (const Placeholder& placeholder : placeholders) {
-            names += names.empty() ? "{" : ", {";
+            if (!names.empty()) {
+                names += ", ";
+            }
+            names += "{";
             names += placeholder.name;
             names += "}";
         }
-        return names.empty() ? std::string("none") : names;
+        if (names.empty()) {
+            return "none";
+        }
+        return names;
     }
 
     // Walks the format, giving literal text to onText and each {name:spec} field to onField, with an empty spec when
@@ -55,7 +69,11 @@ namespace {
             }
             const std::string_view inside = format.substr(index + 1, close - index - 1);
             const size_t           colon  = inside.find(':');
-            onField(inside.substr(0, colon), colon == std::string_view::npos ? std::string_view() : inside.substr(colon + 1));
+            if (colon == std::string_view::npos) {
+                onField(inside, std::string_view());
+            } else {
+                onField(inside.substr(0, colon), inside.substr(colon + 1));
+            }
             index = close + 1;
         }
     }
@@ -90,7 +108,10 @@ std::string FormatRate(double bytesPerSecond) {
         value /= 1000.0;
         ++unit;
     }
-    return unit == 0 ? std::format("{:.0f} {}", value, kUnits[unit]) : std::format("{:.1f} {}", value, kUnits[unit]);
+    if (unit == 0) {
+        return std::format("{:.0f} {}", value, kUnits[unit]);
+    }
+    return std::format("{:.1f} {}", value, kUnits[unit]);
 }
 
 void RequirePlaceholders(std::string_view key, const std::string& format, const std::vector<Placeholder>& samples) {

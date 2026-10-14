@@ -2,15 +2,16 @@
 
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
+#include "platform/Process.hpp"
 #include "platform/Text.hpp"
 #include "platform/Token.hpp"
 
 #include <winsock2.h>
+
 #include <iphlpapi.h>
 
-#include <cstdint>
-#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -59,15 +60,6 @@ std::uint32_t LoopbackPeerProcess(std::uint16_t clientPort, std::uint16_t server
         }
     }
     throw PeerVerificationError(std::format("no connection from 127.0.0.1:{} to 127.0.0.1:{} is open", clientPort, serverPort));
-}
-
-std::filesystem::path ProcessImage(HANDLE process) {
-    std::array<wchar_t, 32768> path{};
-    DWORD                      length = static_cast<DWORD>(path.size());
-    if (!QueryFullProcessImageNameW(process, 0, path.data(), &length)) {
-        ThrowLastError("QueryFullProcessImageNameW");
-    }
-    return {std::wstring(path.data(), length)};
 }
 
 void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName) {

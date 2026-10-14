@@ -1,298 +1,62 @@
 #include "config/Config.hpp"
 
+#include "config/LuaSandbox.hpp"
 #include "config/Style.hpp"
-#include "platform/Errors.hpp"
-#include "platform/Handle.hpp"
+#include "config/TableReader.hpp"
 #include "platform/Edid.hpp"
 #include "platform/KnownFolder.hpp"
 #include "platform/Monitors.hpp"
 #include "platform/PerformanceCounter.hpp"
 #include "platform/Text.hpp"
 
-#include <lauxlib.h>
 #include <lua.h>
-#include <lualib.h>
 #include <shlobj.h>
 
-#include <cstdint>
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <format>
 #include <fstream>
+#include <functional>
 #include <initializer_list>
-#include <limits>
 #include <map>
-#include <ranges>
-#include <set>
-#include <string_view>
+#include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
 
 namespace {
 
-    using LuaState = UniqueReleased<lua_State*, &lua_close>;
+    // Many times any real file. The style's is smaller because vars multiply it (each value is capped, not the sheet).
+    constexpr size_t kMaxConfigFileBytes = size_t{1} << 20;
+    constexpr size_t kMaxStyleFileBytes  = size_t{64} << 10;
 
-    // Reads one Lua table with raw access only: a metamethod raising an error outside lua_pcall hits Lua's panic handler,
-    // which aborts the process.
-    class TableReader {
-      public:
-        TableReader(lua_State* lua, std::int32_t index, std::string source, std::string path) : _lua(lua), _index(index), _source(std::move(source)), _path(std::move(path)) {}
-
-        bool Has(std::string_view key) const {
-            Reserve(1);
-            lua_pushlstring(_lua, key.data(), key.size());
-            const std::int32_t type = lua_rawget(_lua, _index);
-            lua_pop(_lua, 1);
-            return type != LUA_TNIL;
+    // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
+    // converting one later cannot fail.
+    std::string ReadFile(const std::filesystem::path& path, std::string_view what, size_t maxBytes) {
+        std::ifstream file(path, std::ios::binary);
+        if (!file) {
+            throw ConfigError(std::format("cannot open {} file {}", what, ToUtf8(path.wstring())));
         }
-
-        TableReader Table(std::string_view key) const {
-            PushField(key, LUA_TTABLE, "a table");
-            return TableReader(_lua, lua_gettop(_lua), _source, KeyPath(key));
+        std::string text(maxBytes + 1, '\0');
+        file.read(text.data(), static_cast<std::streamsize>(text.size()));
+        if (file.bad()) {
+            throw ConfigError(std::format("cannot read {} file {}", what, ToUtf8(path.wstring())));
         }
-
-        std::string String(std::string_view key) const {
-            PushField(key, LUA_TSTRING, "a string");
-            std::string value = StringAt(-1, KeyPath(key));
-            lua_pop(_lua, 1);
-            return value;
+        text.resize(static_cast<size_t>(file.gcount()));
+        if (text.size() > maxBytes) {
+            throw ConfigError(std::format("{} file {} is larger than {} KiB", what, ToUtf8(path.wstring()), maxBytes >> 10));
         }
-
-        float Number(std::string_view key) const {
-            PushField(key, LUA_TNUMBER, "a number");
-            const auto value = static_cast<float>(lua_tonumber(_lua, -1));
-            lua_pop(_lua, 1);
-            return value;
+        if (!IsValidUtf8(text)) {
+            throw ConfigError(std::format("{} file {} is not valid UTF-8", what, ToUtf8(path.wstring())));
         }
-
-        // A sequence of strings such as { "clock", "cpu" }.
-        std::vector<std::string> StringList(std::string_view key) const {
-            PushField(key, LUA_TTABLE, "a list of strings");
-            const std::int32_t listIndex = lua_gettop(_lua);
-            const auto         length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
-            RequirePlainList(listIndex, key, length);
-            std::vector<std::string> values;
-            values.reserve(static_cast<size_t>(length));
-            for (lua_Integer position = 1; position <= length; ++position) {
-                if (lua_rawgeti(_lua, listIndex, position) != LUA_TSTRING) {
-                    throw Error(std::format("{}[{}] must be a string, got {}", KeyPath(key), position, luaL_typename(_lua, -1)));
-                }
-                values.push_back(StringAt(-1, std::format("{}[{}]", KeyPath(key), position)));
-                lua_pop(_lua, 1);
-            }
-            lua_pop(_lua, 1);
-            return values;
-        }
-
-        // A sequence of tables such as { { min_length = 1921 } }, each read as layouts[1] and so on.
-        std::vector<TableReader> TableList(std::string_view key) const {
-            PushField(key, LUA_TTABLE, "a list of tables");
-            const std::int32_t listIndex = lua_gettop(_lua);
-            const auto         length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
-            RequirePlainList(listIndex, key, length);
-            std::vector<TableReader> entries;
-            entries.reserve(static_cast<size_t>(length));
-            for (lua_Integer position = 1; position <= length; ++position) {
-                Reserve(1);
-                if (lua_rawgeti(_lua, listIndex, position) != LUA_TTABLE) {
-                    throw Error(std::format("{}[{}] must be a table, got {}", KeyPath(key), position, luaL_typename(_lua, -1)));
-                }
-                entries.emplace_back(_lua, lua_gettop(_lua), _source, std::format("{}[{}]", KeyPath(key), position));
-            }
-            return entries;
-        }
-
-        // Every key of the table, which must all be strings.
-        std::vector<std::string> Keys() const {
-            std::vector<std::string> keys;
-            Reserve(2);
-            lua_pushnil(_lua);
-            while (lua_next(_lua, _index) != 0) {
-                if (lua_type(_lua, -2) != LUA_TSTRING) {
-                    throw Error(std::format("{} has a key that is not a string", TableName()));
-                }
-                keys.push_back(StringAt(-2, std::format("a key of {}", TableName())));
-                lua_pop(_lua, 1);
-            }
-            return keys;
-        }
-
-        void RejectUnknownKeys(const std::vector<std::string_view>& known) const {
-            for (const std::string& key : Keys()) {
-                if (std::ranges::find(known, key) == known.end()) {
-                    throw Error(std::format("{} is not a known key", KeyPath(key)));
-                }
-            }
-        }
-
-        std::string KeyPath(std::string_view key) const {
-            return _path.empty() ? std::string(key) : std::format("{}.{}", _path, key);
-        }
-
-        ConfigError Error(std::string_view message) const {
-            return ConfigError(std::format("{}: {}", _source, message));
-        }
-
-      private:
-        std::string TableName() const {
-            return _path.empty() ? std::string("the returned table") : _path;
-        }
-
-        // ReadFile checked the source, but a Lua escape ("\xff", "\u{D800}") still builds any bytes.
-        std::string StringAt(std::int32_t index, std::string_view name) const {
-            size_t                 length = 0;
-            const char*            data   = lua_tolstring(_lua, index, &length);
-            const std::string_view value(data, length);
-            if (!IsValidUtf8(value)) {
-                throw Error(std::format("{} is not valid UTF-8", name));
-            }
-            return std::string(value);
-        }
-
-        size_t CountKeys(std::int32_t tableIndex) const {
-            size_t count = 0;
-            Reserve(2);
-            lua_pushnil(_lua);
-            while (lua_next(_lua, tableIndex) != 0) {
-                ++count;
-                lua_pop(_lua, 1);
-            }
-            return count;
-        }
-
-        void RequirePlainList(std::int32_t listIndex, std::string_view key, lua_Integer length) const {
-            if (CountKeys(listIndex) != static_cast<size_t>(length)) {
-                throw Error(std::format("{} must be a plain list, it has keys other than 1 to {}", KeyPath(key), length));
-            }
-        }
-
-        // Every table read stays on the stack while its TableReader lives, one slot per module, so the stack can grow past
-        // the LUA_MINSTACK slots Lua guarantees. Pushing past the allocated stack is unchecked in a release build.
-        void Reserve(std::int32_t slots) const {
-            if (lua_checkstack(_lua, slots) == 0) {
-                throw Error(std::format("Lua cannot grow its stack by {} slots to read {}", slots, TableName()));
-            }
-        }
-
-        // Leaves room for StringList's element on top of the field.
-        void PushField(std::string_view key, std::int32_t expectedType, std::string_view expectedName) const {
-            Reserve(2);
-            lua_pushlstring(_lua, key.data(), key.size());
-            const std::int32_t type = lua_rawget(_lua, _index);
-            if (type == LUA_TNIL) {
-                throw Error(std::format("{} is missing", KeyPath(key)));
-            }
-            if (type != expectedType) {
-                throw Error(std::format("{} must be {}, got {}", KeyPath(key), expectedName, lua_typename(_lua, type)));
-            }
-        }
-
-        lua_State*   _lua;
-        std::int32_t _index;
-        std::string  _source;
-        std::string  _path;
-    };
-
-    // Whole numbers are read through a float, which holds every whole number up to 2^24 exactly.
-    constexpr float kMaxWholeNumber = 16777216.0f;
-
-    float           PositiveNumber(const TableReader& table, std::string_view key) {
-        const float value = table.Number(key);
-        if (!(value > 0.0f) || !std::isfinite(value)) {
-            throw table.Error(std::format("{} must be greater than 0, got {}", table.KeyPath(key), value));
-        }
-        return value;
-    }
-
-    std::int64_t PositiveWholeNumber(const TableReader& table, std::string_view key) {
-        const float value = PositiveNumber(table, key);
-        if (value != std::floor(value) || value > kMaxWholeNumber) {
-            throw table.Error(std::format("{} must be a whole number up to {}, got {}", table.KeyPath(key), kMaxWholeNumber, value));
-        }
-        return static_cast<std::int64_t>(value);
-    }
-
-    // Far inside the 32-bit millisecond waits these reach, which wrap past about 49.7 days.
-    constexpr std::int64_t kLongestWaitSeconds = 86400;
-
-    std::chrono::seconds   Seconds(const TableReader& table, std::string_view key) {
-        const std::int64_t value = PositiveWholeNumber(table, key);
-        if (value > kLongestWaitSeconds) {
-            throw table.Error(std::format("{} must be at most {} seconds, got {}", table.KeyPath(key), kLongestWaitSeconds, value));
-        }
-        return std::chrono::seconds(value);
-    }
-
-    // Far past any monitor, and small enough that the bar's edges in device pixels fit 32-bit coordinates.
-    constexpr float kThickestBarDips = 10000.0f;
-
-    float           BarThickness(const TableReader& bar) {
-        const float value = PositiveNumber(bar, "thickness");
-        if (value > kThickestBarDips) {
-            throw bar.Error(std::format("{} must be at most {}, got {}", bar.KeyPath("thickness"), kThickestBarDips, value));
-        }
-        return value;
-    }
-
-    // A set rather than a scan of the entries before each one, since a config's loop can build a list of any length.
-    void RejectRepeats(const TableReader& table, std::string_view key, const std::vector<std::string>& entries) {
-        std::set<std::string_view> seen;
-        for (const std::string& entry : entries) {
-            if (!seen.insert(entry).second) {
-                throw table.Error(std::format("{} lists '{}' twice", table.KeyPath(key), entry));
-            }
-        }
-    }
-
-    std::vector<MonitorMatch> ReadMonitorMatches(const TableReader& bar) {
-        const std::vector<std::string> entries = bar.StringList("monitors");
-        if (entries.empty()) {
-            throw bar.Error(std::format(R"({} is empty: list "*" for every monitor, "primary", "internal" or a monitor id)", bar.KeyPath("monitors")));
-        }
-        RejectRepeats(bar, "monitors", entries);
-        std::vector<MonitorMatch> matches;
-        matches.reserve(entries.size());
-        for (const std::string& entry : entries) {
-            if (entry == "*") {
-                if (entries.size() != 1) {
-                    throw bar.Error(std::format("{} lists '*' beside other entries, and '*' alone already matches every monitor", bar.KeyPath("monitors")));
-                }
-                matches.emplace_back(AllMonitors{});
-            } else if (entry == "primary") {
-                matches.emplace_back(PrimaryMonitor{});
-            } else if (entry == "internal") {
-                matches.emplace_back(InternalMonitor{});
-            } else if (IsMonitorId(entry)) {
-                matches.emplace_back(MonitorWithId{.id = entry});
-            } else {
-                throw bar.Error(std::format(R"({} lists '{}', which is not "*", "primary", "internal" or a monitor id such as DEL41A8-7XYZ123 (intarsia-cli )"
-                                            "monitors lists each monitor's id)",
-                                            bar.KeyPath("monitors"), entry));
-            }
-        }
-        return matches;
-    }
-
-    // One word a config key accepts and the value it stands for.
-    template <typename Value>
-    struct Keyword {
-        std::string_view name;
-        Value            value;
-    };
-
-    template <typename Value, size_t Count>
-    Value ParseKeyword(const TableReader& table, std::string_view key, const std::array<Keyword<Value>, Count>& keywords) {
-        const std::string value = table.String(key);
-        const auto        entry = std::ranges::find(keywords, value, &Keyword<Value>::name);
-        if (entry == keywords.end()) {
-            throw table.Error(std::format("{} must be one of {}, got '{}'", table.KeyPath(key), JoinNames(keywords | std::views::transform(&Keyword<Value>::name)), value));
-        }
-        return entry->value;
+        return text;
     }
 
     constexpr std::array<Keyword<WindowManagerKind>, 2> kWindowManagers{
@@ -328,166 +92,44 @@ namespace {
         {.name = "group", .value = ModuleKind::Group},
     }};
 
-    TextModuleConfig                              ReadTextModuleConfig(const TableReader& module);
-    WindowConfig                                  ReadWindowConfig(const TableReader& window);
-    CustomConfig                                  ReadCustomConfig(const TableReader& module);
-    CounterConfig                                 ReadCounterConfig(const TableReader& module);
-    AudioConfig                                   ReadAudioConfig(const TableReader& module);
-    NetworkConfig                                 ReadNetworkConfig(const TableReader& module);
-    BatteryConfig                                 ReadBatteryConfig(const TableReader& module);
-    GroupConfig                                   ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style);
+    // Far past any monitor, and small enough that the bar's edges in device pixels fit 32-bit coordinates.
+    constexpr float kThickestBarDips = 10000.0f;
 
-    // definitions, sheet and style are for a group, whose members are modules of their own.
-    ModuleSettings ReadModuleSettings(const TableReader& module, ModuleKind kind, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
-        switch (kind) {
-            case ModuleKind::Clock:
-            case ModuleKind::Cpu:
-            case ModuleKind::Memory: return ReadTextModuleConfig(module);
-            case ModuleKind::Window: return ReadWindowConfig(module);
-            case ModuleKind::Custom: return ReadCustomConfig(module);
-            case ModuleKind::Counter: return ReadCounterConfig(module);
-            case ModuleKind::Audio: return ReadAudioConfig(module);
-            case ModuleKind::Network: return ReadNetworkConfig(module);
-            case ModuleKind::Battery: return ReadBatteryConfig(module);
-            case ModuleKind::Workspaces:
-            case ModuleKind::Windows:
-            case ModuleKind::BindingMode: module.RejectUnknownKeys({"type"}); return std::monostate{};
-            case ModuleKind::TilingDirection:
-                module.RejectUnknownKeys({"type", "horizontal", "vertical"});
-                return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
-            case ModuleKind::Tray: module.RejectUnknownKeys({"type", "icon"}); return TrayConfig{.icon = ToWide(module.String("icon"))};
-            case ModuleKind::Group: return ReadGroupConfig(module, definitions, sheet, style);
+    float           BarThickness(const TableReader& bar) {
+        const float value = PositiveNumber(bar, "thickness");
+        if (value > kThickestBarDips) {
+            throw bar.Error(std::format("{} must be at most {}, got {}", bar.KeyPath("thickness"), kThickestBarDips, value));
         }
-        throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
+        return value;
     }
 
-    ModuleInstance ReadModuleInstance(const TableReader& definitions, const std::string& name, const TableReader& module, ModuleKind kind, const StyleSheet& sheet,
-                                      const StyleConfig& style) {
-        ModuleSettings      settings = ReadModuleSettings(module, kind, definitions, sheet, style);
-        const CustomConfig* custom   = std::get_if<CustomConfig>(&settings);
-        ModuleStyle         styled   = ResolveModuleStyle(sheet, style, kind, name, custom != nullptr ? custom->classes : std::vector<std::string>{});
-        return ModuleInstance{
-            .name     = name,
-            .kind     = kind,
-            .settings = std::move(settings),
-            .style    = std::move(styled),
-        };
-    }
-
-    // The table of a module a list shows, which must be defined in the modules table, one table per module.
-    TableReader DefinedModule(const TableReader& lists, std::string_view listKey, const TableReader& definitions, const std::string& name) {
-        if (!definitions.Has(name)) {
-            throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
+    std::vector<MonitorMatch> ReadMonitorMatches(const TableReader& bar) {
+        const std::vector<std::string> entries = bar.StringList("monitors");
+        if (entries.empty()) {
+            throw bar.Error(std::format(R"({} is empty: list "*" for every monitor, "primary", "internal" or a monitor id)", bar.KeyPath("monitors")));
         }
-        return definitions.Table(name);
-    }
-
-    std::vector<ModuleInstance> ReadModuleList(const TableReader& lists, const TableReader& definitions, std::string_view listKey, const StyleSheet& sheet,
-                                               const StyleConfig& style) {
-        std::vector<ModuleInstance> instances;
-        for (const std::string& name : lists.StringList(listKey)) {
-            const TableReader module = DefinedModule(lists, listKey, definitions, name);
-            instances.push_back(ReadModuleInstance(definitions, name, module, ParseKeyword(module, "type", kModuleTypes), sheet, style));
-        }
-        return instances;
-    }
-
-    // A group's members are read before any check that they are shown nowhere else, which needs the whole config.
-    GroupConfig ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
-        group.RejectUnknownKeys({"type", "icon", "modules"});
-        std::wstring icon = ToWide(group.String("icon"));
-        if (icon.empty()) {
-            throw group.Error(std::format("{} must be a glyph to click, as \"+\": a group with an empty icon could never unfold", group.KeyPath("icon")));
-        }
-        const std::vector<std::string> names = group.StringList("modules");
-        if (names.empty()) {
-            throw group.Error(std::format("{} must name at least one module", group.KeyPath("modules")));
-        }
-        RejectRepeats(group, "modules", names);
-        std::vector<ModuleInstance> members;
-        members.reserve(names.size());
-        for (const std::string& name : names) {
-            const TableReader module = DefinedModule(group, "modules", definitions, name);
-            const ModuleKind  kind   = ParseKeyword(module, "type", kModuleTypes);
-            if (kind == ModuleKind::Group) {
-                throw group.Error(std::format("{} lists '{}', which is a group: groups do not nest", group.KeyPath("modules"), name));
-            }
-            members.push_back(ReadModuleInstance(definitions, name, module, kind, sheet, style));
-        }
-        return GroupConfig{.icon = std::move(icon), .members = std::move(members)};
-    }
-
-    Sections<ModuleInstance> ReadSections(const TableReader& lists, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
-        return Sections<ModuleInstance>{
-            .left   = ReadModuleList(lists, definitions, "modules_left", sheet, style),
-            .center = ReadModuleList(lists, definitions, "modules_center", sheet, style),
-            .right  = ReadModuleList(lists, definitions, "modules_right", sheet, style),
-        };
-    }
-
-    // ModulesForEdgeLength takes the last layout an edge reaches, so each must start past the one before.
-    std::vector<LayoutConfig> ReadLayouts(const TableReader& root, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
-        std::vector<LayoutConfig> layouts;
-        for (const TableReader& layout : root.TableList("layouts")) {
-            layout.RejectUnknownKeys({"min_length", "modules_left", "modules_center", "modules_right"});
-            const float minLength = PositiveNumber(layout, "min_length");
-            if (!layouts.empty() && minLength <= layouts.back().minLengthDips) {
-                throw layout.Error(
-                    std::format("{} is {}, it must be greater than the layout before it ({})", layout.KeyPath("min_length"), minLength, layouts.back().minLengthDips));
-            }
-            layouts.push_back(LayoutConfig{.minLengthDips = minLength, .modules = ReadSections(layout, definitions, sheet, style)});
-        }
-        return layouts;
-    }
-
-    // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
-    void RejectUnshownModules(const TableReader& definitions, const Config& config) {
-        for (const std::string& name : definitions.Keys()) {
-            if (name.empty() || !std::ranges::all_of(name, IsNameCharacter)) {
-                throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
-            }
-            if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
-                throw definitions.Error(std::format("{} is defined but no _modules list or group shows it", definitions.KeyPath(name)));
-            }
-        }
-    }
-
-    // A module's style block is named for it, beside the style's own top-level blocks.
-    void RejectReservedModuleNames(const TableReader& definitions) {
-        for (const std::string& name : definitions.Keys()) {
-            if (IsReservedModuleName(name)) {
-                throw definitions.Error(std::format("{} names a block of style.conf's own: give the module another name", definitions.KeyPath(name)));
-            }
-        }
-    }
-
-    // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
-    void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
-        std::vector<const Sections<ModuleInstance>*> lists{&config.modules};
-        for (const LayoutConfig& layout : config.layouts) {
-            lists.push_back(&layout.modules);
-        }
-        std::map<std::string, std::string, std::less<>> groupOf;
-        for (const Sections<ModuleInstance>* sections : lists) {
-            ForEachInSections(*sections, [&](const ModuleInstance& instance) {
-                const auto* group = std::get_if<GroupConfig>(&instance.settings);
-                if (group == nullptr) {
-                    return;
+        RejectRepeats(bar, "monitors", entries);
+        std::vector<MonitorMatch> matches;
+        matches.reserve(entries.size());
+        for (const std::string& entry : entries) {
+            if (entry == "*") {
+                if (entries.size() != 1) {
+                    throw bar.Error(std::format("{} lists '*' beside other entries, and '*' alone already matches every monitor", bar.KeyPath("monitors")));
                 }
-                for (const ModuleInstance& member : group->members) {
-                    const auto listed = [&member](const ModuleInstance& shown) { return shown.name == member.name; };
-                    if (std::ranges::any_of(lists, [&listed](const Sections<ModuleInstance>* other) { return AnyInSections(*other, listed); })) {
-                        throw definitions.Error(
-                            std::format("{} is a member of group '{}', so no _modules list may show it as well", definitions.KeyPath(member.name), instance.name));
-                    }
-                    const auto [entry, added] = groupOf.try_emplace(member.name, instance.name);
-                    if (!added && entry->second != instance.name) {
-                        throw definitions.Error(std::format("{} is a member of both group '{}' and group '{}', and one group shows it", definitions.KeyPath(member.name),
-                                                            entry->second, instance.name));
-                    }
-                }
-            });
+                matches.emplace_back(AllMonitors{});
+            } else if (entry == "primary") {
+                matches.emplace_back(PrimaryMonitor{});
+            } else if (entry == "internal") {
+                matches.emplace_back(InternalMonitor{});
+            } else if (IsMonitorId(entry)) {
+                matches.emplace_back(MonitorWithId{.id = entry});
+            } else {
+                throw bar.Error(std::format(R"({} lists '{}', which is not "*", "primary", "internal" or a monitor id such as DEL41A8-7XYZ123 (intarsia-cli )"
+                                            "monitors lists each monitor's id)",
+                                            bar.KeyPath("monitors"), entry));
+            }
         }
+        return matches;
     }
 
     // A command is { program, arguments... }. The program must resolve to an .exe: a .bat or .cmd would run through
@@ -501,8 +143,7 @@ namespace {
         if (!program.has_value()) {
             throw module.Error(std::format("{} names '{}', which is not an existing file or a program on PATH", module.KeyPath(key), argv.front()));
         }
-        const std::wstring extension = program->extension().wstring();
-        if (CompareStringOrdinal(extension.c_str(), static_cast<std::int32_t>(extension.size()), L".exe", 4, TRUE) != CSTR_EQUAL) {
+        if (!SameFileName(program->extension().wstring(), L".exe")) {
             throw module.Error(std::format("{} resolves to {}, which is not an .exe", module.KeyPath(key), ToUtf8(program->wstring())));
         }
         std::vector<std::wstring> arguments;
@@ -558,37 +199,6 @@ namespace {
         return ModuleAction(ReadCommand(module, key));
     }
 
-    bool SendsWindowManagerCommands(const ModuleActions& actions) {
-        return std::ranges::any_of(std::array{&actions.click, &actions.rightClick, &actions.middleClick, &actions.scrollUp, &actions.scrollDown},
-                                   [](const std::optional<ModuleAction>* action) { return action->has_value() && std::holds_alternative<WindowManagerCommand>(**action); });
-    }
-
-    // The actions in a module's settings, or null for a module that takes none.
-    const ModuleActions* ActionsOf(const ModuleSettings& settings) {
-        if (const auto* text = std::get_if<TextModuleConfig>(&settings)) {
-            return &text->actions;
-        }
-        if (const auto* window = std::get_if<WindowConfig>(&settings)) {
-            return &window->actions;
-        }
-        if (const auto* audio = std::get_if<AudioConfig>(&settings)) {
-            return &audio->actions;
-        }
-        if (const auto* network = std::get_if<NetworkConfig>(&settings)) {
-            return &network->actions;
-        }
-        if (const auto* battery = std::get_if<BatteryConfig>(&settings)) {
-            return &battery->actions;
-        }
-        if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
-            return &custom->text.actions;
-        }
-        if (const auto* counter = std::get_if<CounterConfig>(&settings)) {
-            return &counter->text.actions;
-        }
-        return nullptr;
-    }
-
     ModuleActions ReadActions(const TableReader& module) {
         return ModuleActions{
             .click       = ReadAction(module, "on_click"),
@@ -607,7 +217,10 @@ namespace {
     }
 
     std::optional<std::string> ReadTooltip(const TableReader& module) {
-        return module.Has("tooltip") ? std::optional<std::string>(module.String("tooltip")) : std::nullopt;
+        if (!module.Has("tooltip")) {
+            return std::nullopt;
+        }
+        return module.String("tooltip");
     }
 
     TextModuleConfig ReadTextFields(const TableReader& module) {
@@ -774,107 +387,216 @@ namespace {
         };
     }
 
-    // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
-    // converting one later cannot fail.
-    std::string ReadFile(const std::filesystem::path& path, std::string_view what, size_t maxBytes) {
-        std::ifstream file(path, std::ios::binary);
-        if (!file) {
-            throw ConfigError(std::format("cannot open {} file {}", what, ToUtf8(path.wstring())));
+    GroupConfig ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style);
+
+    // definitions, sheet and style are for a group, whose members are modules of their own.
+    ModuleSettings ReadModuleSettings(const TableReader& module, ModuleKind kind, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        switch (kind) {
+            case ModuleKind::Clock:
+            case ModuleKind::Cpu:
+            case ModuleKind::Memory: return ReadTextModuleConfig(module);
+            case ModuleKind::Window: return ReadWindowConfig(module);
+            case ModuleKind::Custom: return ReadCustomConfig(module);
+            case ModuleKind::Counter: return ReadCounterConfig(module);
+            case ModuleKind::Audio: return ReadAudioConfig(module);
+            case ModuleKind::Network: return ReadNetworkConfig(module);
+            case ModuleKind::Battery: return ReadBatteryConfig(module);
+            case ModuleKind::Workspaces:
+            case ModuleKind::Windows:
+            case ModuleKind::BindingMode: module.RejectUnknownKeys({"type"}); return std::monostate{};
+            case ModuleKind::TilingDirection:
+                module.RejectUnknownKeys({"type", "horizontal", "vertical"});
+                return TilingDirectionConfig{.horizontal = ToWide(module.String("horizontal")), .vertical = ToWide(module.String("vertical"))};
+            case ModuleKind::Tray: module.RejectUnknownKeys({"type", "icon"}); return TrayConfig{.icon = ToWide(module.String("icon"))};
+            case ModuleKind::Group: return ReadGroupConfig(module, definitions, sheet, style);
         }
-        std::string text(maxBytes + 1, '\0');
-        file.read(text.data(), static_cast<std::streamsize>(text.size()));
-        if (file.bad()) {
-            throw ConfigError(std::format("cannot read {} file {}", what, ToUtf8(path.wstring())));
-        }
-        text.resize(static_cast<size_t>(file.gcount()));
-        if (text.size() > maxBytes) {
-            throw ConfigError(std::format("{} file {} is larger than {} KiB", what, ToUtf8(path.wstring()), maxBytes >> 10));
-        }
-        if (!IsValidUtf8(text)) {
-            throw ConfigError(std::format("{} file {} is not valid UTF-8", what, ToUtf8(path.wstring())));
-        }
-        return text;
+        throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
     }
 
-    // Many times any real file. The style's is smaller because vars multiply it (each value is capped, not the sheet).
-    constexpr size_t kMaxConfigFileBytes = size_t{1} << 20;
-    constexpr size_t kMaxStyleFileBytes  = size_t{64} << 10;
-    // Far more than any real config needs (a few thousand instructions), and still under a second to reach.
-    constexpr std::int32_t kMaxConfigInstructions = 50'000'000;
-    // Far more than any real config allocates (a few hundred KiB with the libraries), and a string built in one C call
-    // runs no instructions for the count hook to see.
-    constexpr size_t kMaxConfigMemoryBytes = size_t{16} << 20;
-
-    // What the Lua state may use, and whether it was stopped, shared with the allocator and the hook through the
-    // allocator's user data.
-    struct LuaLimits {
-        lua_Alloc allocate; // Lua's own allocator, which the limited one bounds
-        void*     allocateData;
-        size_t    usedBytes;
-        size_t    limitBytes;
-        bool      runaway;
-    };
-
-    // Lua's own allocator with a ceiling: a refused request raises a memory error inside the lua_pcall.
-    void* LimitedAlloc(void* userData, void* block, size_t oldSize, size_t newSize) {
-        auto* limits = static_cast<LuaLimits*>(userData);
-        // oldSize is the block's size only for a live block, else a tag of what is being allocated.
-        const size_t held = block == nullptr ? 0 : oldSize;
-        if (newSize > held && newSize - held > limits->limitBytes - limits->usedBytes) {
-            return nullptr;
+    // The classes a custom module declares, none for any other module.
+    std::vector<std::string> ClassesOf(const ModuleSettings& settings) {
+        if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
+            return custom->classes;
         }
-        void* resized = limits->allocate(limits->allocateData, block, oldSize, newSize);
-        if (newSize != 0 && resized == nullptr) {
-            return nullptr;
+        return {};
+    }
+
+    ModuleInstance ReadModuleInstance(const TableReader& definitions, const std::string& name, const TableReader& module, ModuleKind kind, const StyleSheet& sheet,
+                                      const StyleConfig& style) {
+        ModuleSettings settings = ReadModuleSettings(module, kind, definitions, sheet, style);
+        ModuleStyle    styled   = ResolveModuleStyle(sheet, style, kind, name, ClassesOf(settings));
+        return ModuleInstance{
+            .name     = name,
+            .kind     = kind,
+            .settings = std::move(settings),
+            .style    = std::move(styled),
+        };
+    }
+
+    // The table of a module a list shows, which must be defined in the modules table, one table per module.
+    TableReader DefinedModule(const TableReader& lists, std::string_view listKey, const TableReader& definitions, const std::string& name) {
+        if (!definitions.Has(name)) {
+            throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
         }
-        limits->usedBytes = limits->usedBytes - held + newSize;
-        return resized;
+        return definitions.Table(name);
     }
 
-    // Puts the limited allocator over the state's own, counting from what the state holds already so that freeing it
-    // later balances.
-    void LimitAllocations(lua_State* lua, LuaLimits& limits) {
-        limits.allocate  = lua_getallocf(lua, &limits.allocateData);
-        limits.usedBytes = (static_cast<size_t>(lua_gc(lua, LUA_GCCOUNT)) << 10) + static_cast<size_t>(lua_gc(lua, LUA_GCCOUNTB));
-        lua_setallocf(lua, LimitedAlloc, &limits);
-    }
-
-    LuaLimits& LimitsOf(lua_State* lua) {
-        void* userData = nullptr;
-        lua_getallocf(lua, &userData);
-        return *static_cast<LuaLimits*>(userData);
-    }
-
-    // Called once the count is reached. The error raised is catchable, so from here on every instruction raises again
-    // until it reaches LoadConfig's own call, though no protected call is left in the sandbox to catch it.
-    void AbortRunawayConfig(lua_State* lua, lua_Debug*) {
-        LimitsOf(lua).runaway = true;
-        lua_sethook(lua, AbortRunawayConfig, LUA_MASKCOUNT, 1);
-        luaL_error(lua, "the config ran %d instructions without finishing, is there an endless loop?", kMaxConfigInstructions);
-    }
-
-    void OpenLibrary(lua_State* lua, const char* name, lua_CFunction open) {
-        luaL_requiref(lua, name, open, 1);
-        lua_pop(lua, 1);
-    }
-
-    // A config's error() can hold any bytes, and the message reaches a console that refuses ones that are not UTF-8.
-    std::string PopErrorMessage(lua_State* lua) {
-        const char* message = lua_tostring(lua, -1);
-        std::string text    = message == nullptr ? std::string("non-string Lua error") : ToUtf8(DrawableText(std::string_view(message)));
-        lua_pop(lua, 1);
-        return text;
-    }
-
-    // The ConfigError for a load or call that did not return LUA_OK.
-    ConfigError LuaError(lua_State* lua, std::int32_t status, std::string_view source) {
-        if (LimitsOf(lua).runaway) {
-            return ConfigError(std::format("{}: the config ran {} instructions without finishing, is there an endless loop?", source, kMaxConfigInstructions));
+    std::vector<ModuleInstance> ReadModuleList(const TableReader& lists, const TableReader& definitions, std::string_view listKey, const StyleSheet& sheet,
+                                               const StyleConfig& style) {
+        std::vector<ModuleInstance> instances;
+        for (const std::string& name : lists.StringList(listKey)) {
+            const TableReader module = DefinedModule(lists, listKey, definitions, name);
+            instances.push_back(ReadModuleInstance(definitions, name, module, ParseKeyword(module, "type", kModuleTypes), sheet, style));
         }
-        if (status == LUA_ERRMEM) {
-            return ConfigError(std::format("{}: the config used more than {} MiB of memory", source, kMaxConfigMemoryBytes >> 20));
+        return instances;
+    }
+
+    // A group's members are read before any check that they are shown nowhere else, which needs the whole config.
+    GroupConfig ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        group.RejectUnknownKeys({"type", "icon", "modules"});
+        std::wstring icon = ToWide(group.String("icon"));
+        if (icon.empty()) {
+            throw group.Error(std::format("{} must be a glyph to click, as \"+\": a group with an empty icon could never unfold", group.KeyPath("icon")));
         }
-        return ConfigError(PopErrorMessage(lua));
+        const std::vector<std::string> names = group.StringList("modules");
+        if (names.empty()) {
+            throw group.Error(std::format("{} must name at least one module", group.KeyPath("modules")));
+        }
+        RejectRepeats(group, "modules", names);
+        std::vector<ModuleInstance> members;
+        members.reserve(names.size());
+        for (const std::string& name : names) {
+            const TableReader module = DefinedModule(group, "modules", definitions, name);
+            const ModuleKind  kind   = ParseKeyword(module, "type", kModuleTypes);
+            if (kind == ModuleKind::Group) {
+                throw group.Error(std::format("{} lists '{}', which is a group: groups do not nest", group.KeyPath("modules"), name));
+            }
+            members.push_back(ReadModuleInstance(definitions, name, module, kind, sheet, style));
+        }
+        return GroupConfig{.icon = std::move(icon), .members = std::move(members)};
+    }
+
+    Sections<ModuleInstance> ReadSections(const TableReader& lists, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        return Sections<ModuleInstance>{
+            .left   = ReadModuleList(lists, definitions, "modules_left", sheet, style),
+            .center = ReadModuleList(lists, definitions, "modules_center", sheet, style),
+            .right  = ReadModuleList(lists, definitions, "modules_right", sheet, style),
+        };
+    }
+
+    // ModulesForEdgeLength takes the last layout an edge reaches, so each must start past the one before.
+    std::vector<LayoutConfig> ReadLayouts(const TableReader& root, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
+        std::vector<LayoutConfig> layouts;
+        for (const TableReader& layout : root.TableList("layouts")) {
+            layout.RejectUnknownKeys({"min_length", "modules_left", "modules_center", "modules_right"});
+            const float minLength = PositiveNumber(layout, "min_length");
+            if (!layouts.empty() && minLength <= layouts.back().minLengthDips) {
+                throw layout.Error(
+                    std::format("{} is {}, it must be greater than the layout before it ({})", layout.KeyPath("min_length"), minLength, layouts.back().minLengthDips));
+            }
+            layouts.push_back(LayoutConfig{.minLengthDips = minLength, .modules = ReadSections(layout, definitions, sheet, style)});
+        }
+        return layouts;
+    }
+
+    // A module's style block is named for it, beside the style's own top-level blocks.
+    void RejectReservedModuleNames(const TableReader& definitions) {
+        for (const std::string& name : definitions.Keys()) {
+            if (IsReservedModuleName(name)) {
+                throw definitions.Error(std::format("{} names a block of style.conf's own: give the module another name", definitions.KeyPath(name)));
+            }
+        }
+    }
+
+    // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
+    void RejectUnshownModules(const TableReader& definitions, const Config& config) {
+        for (const std::string& name : definitions.Keys()) {
+            if (name.empty() || !std::ranges::all_of(name, IsNameCharacter)) {
+                throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
+            }
+            if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
+                throw definitions.Error(std::format("{} is defined but no _modules list or group shows it", definitions.KeyPath(name)));
+            }
+        }
+    }
+
+    // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
+    void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
+        std::vector<const Sections<ModuleInstance>*> lists{&config.modules};
+        for (const LayoutConfig& layout : config.layouts) {
+            lists.push_back(&layout.modules);
+        }
+        std::map<std::string, std::string, std::less<>> groupOf;
+        for (const Sections<ModuleInstance>* sections : lists) {
+            ForEachInSections(*sections, [&](const ModuleInstance& instance) {
+                const auto* group = std::get_if<GroupConfig>(&instance.settings);
+                if (group == nullptr) {
+                    return;
+                }
+                for (const ModuleInstance& member : group->members) {
+                    const auto listed = [&member](const ModuleInstance& shown) { return shown.name == member.name; };
+                    if (std::ranges::any_of(lists, [&listed](const Sections<ModuleInstance>* other) { return AnyInSections(*other, listed); })) {
+                        throw definitions.Error(
+                            std::format("{} is a member of group '{}', so no _modules list may show it as well", definitions.KeyPath(member.name), instance.name));
+                    }
+                    const auto [entry, added] = groupOf.try_emplace(member.name, instance.name);
+                    if (!added && entry->second != instance.name) {
+                        throw definitions.Error(std::format("{} is a member of both group '{}' and group '{}', and one group shows it", definitions.KeyPath(member.name),
+                                                            entry->second, instance.name));
+                    }
+                }
+            });
+        }
+    }
+
+    bool SendsWindowManagerCommands(const ModuleActions& actions) {
+        return std::ranges::any_of(std::array{&actions.click, &actions.rightClick, &actions.middleClick, &actions.scrollUp, &actions.scrollDown},
+                                   [](const std::optional<ModuleAction>* action) { return action->has_value() && std::holds_alternative<WindowManagerCommand>(**action); });
+    }
+
+    // The actions in a module's settings, or null for a module that takes none.
+    const ModuleActions* ActionsOf(const ModuleSettings& settings) {
+        if (const auto* text = std::get_if<TextModuleConfig>(&settings)) {
+            return &text->actions;
+        }
+        if (const auto* window = std::get_if<WindowConfig>(&settings)) {
+            return &window->actions;
+        }
+        if (const auto* audio = std::get_if<AudioConfig>(&settings)) {
+            return &audio->actions;
+        }
+        if (const auto* network = std::get_if<NetworkConfig>(&settings)) {
+            return &network->actions;
+        }
+        if (const auto* battery = std::get_if<BatteryConfig>(&settings)) {
+            return &battery->actions;
+        }
+        if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
+            return &custom->text.actions;
+        }
+        if (const auto* counter = std::get_if<CounterConfig>(&settings)) {
+            return &counter->text.actions;
+        }
+        return nullptr;
+    }
+
+    // window_manager 'windows' has no workspaces or tiling and takes no commands, so no module may need them.
+    void RejectWhatNeedsAWindowManager(const TableReader& root, const Config& config) {
+        if (config.windowManager != WindowManagerKind::Windows) {
+            return;
+        }
+        for (const ModuleKind kind : {ModuleKind::Workspaces, ModuleKind::Windows, ModuleKind::BindingMode, ModuleKind::TilingDirection}) {
+            if (ShowsKind(config, kind)) {
+                throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", TypeName(kind)));
+            }
+        }
+        const bool sendsCommands = AnyModuleInConfig(config, [](const ModuleInstance& instance) {
+            const ModuleActions* actions = ActionsOf(instance.settings);
+            return actions != nullptr && SendsWindowManagerCommands(*actions);
+        });
+        if (sendsCommands) {
+            throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
+        }
     }
 
 } // namespace
@@ -897,60 +619,8 @@ std::filesystem::path StylePath(const std::filesystem::path& configPath) {
 
 Config LoadConfig(const std::filesystem::path& path) {
     const std::string source = ToUtf8(path.wstring());
-    const std::string chunk  = ReadFile(path, "config", kMaxConfigFileBytes);
-
-    // Declared before the state, whose close frees through the limited allocator.
-    LuaLimits limits{
-        .allocate     = nullptr,
-        .allocateData = nullptr,
-        .usedBytes    = 0,
-        .limitBytes   = kMaxConfigMemoryBytes,
-        .runaway      = false,
-    };
-    const LuaState lua(luaL_newstate());
-    if (lua == nullptr) {
-        throw ConfigError("luaL_newstate failed to allocate a Lua state");
-    }
-    LimitAllocations(lua.get(), limits);
-    // Only libraries that cannot reach the filesystem or other processes: base minus its loaders. load goes too, since it
-    // accepts precompiled chunks and Lua does not verify bytecode, pcall since a config is data with nothing to recover
-    // from, and setmetatable since Lua runs a __gc metamethod with hooks off, where an endless loop could not be stopped.
-    OpenLibrary(lua.get(), LUA_GNAME, luaopen_base);
-    OpenLibrary(lua.get(), LUA_STRLIBNAME, luaopen_string);
-    OpenLibrary(lua.get(), LUA_TABLIBNAME, luaopen_table);
-    OpenLibrary(lua.get(), LUA_MATHLIBNAME, luaopen_math);
-    for (const char* removed : {"dofile", "loadfile", "load", "pcall", "xpcall", "setmetatable"}) {
-        lua_pushnil(lua.get());
-        lua_setglobal(lua.get(), removed);
-    }
-    // Pattern matching backtracks in C, out of the count hook's reach, and a short pattern can take exponential time.
-    // The string metatable's __index is this same table, so the method form goes too.
-    lua_getglobal(lua.get(), LUA_STRLIBNAME);
-    for (const char* removed : {"find", "match", "gmatch", "gsub"}) {
-        lua_pushnil(lua.get());
-        lua_setfield(lua.get(), -2, removed);
-    }
-    lua_pop(lua.get(), 1);
-    // Reload runs on the UI thread, so a config that never finishes would freeze the bar: stop it instead.
-    lua_sethook(lua.get(), AbortRunawayConfig, LUA_MASKCOUNT, kMaxConfigInstructions);
-
-    const std::string  chunkName = "@" + source;
-    const std::int32_t loaded    = luaL_loadbufferx(lua.get(), chunk.data(), chunk.size(), chunkName.c_str(), "t");
-    if (loaded != LUA_OK) {
-        throw LuaError(lua.get(), loaded, source);
-    }
-    const std::int32_t ran = lua_pcall(lua.get(), 0, 1, 0);
-    // What follows pushes strings outside any protected call, where a refused allocation reaches Lua's panic handler and
-    // aborts the bar. Only the reader allocates from here on, so the config's ceiling has done its job.
-    limits.limitBytes = std::numeric_limits<size_t>::max();
-    if (ran != LUA_OK) {
-        throw LuaError(lua.get(), ran, source);
-    }
-    if (lua_type(lua.get(), -1) != LUA_TTABLE) {
-        throw ConfigError(std::format("{}: must return a table, got {}", source, luaL_typename(lua.get(), -1)));
-    }
-
-    const TableReader root(lua.get(), lua_gettop(lua.get()), source, "");
+    const LuaSandbox  sandbox(ReadFile(path, "config", kMaxConfigFileBytes), source);
+    const TableReader root(sandbox.State(), lua_gettop(sandbox.State()), source, "");
     root.RejectUnknownKeys({"bar", "window_manager", "modules_left", "modules_center", "modules_right", "layouts", "modules"});
 
     const std::filesystem::path stylePath   = StylePath(path);
@@ -988,22 +658,7 @@ Config LoadConfig(const std::filesystem::path& path) {
         }
     });
     RequireDeclaredClasses(sheet, declared);
-
-    if (config.windowManager == WindowManagerKind::Windows) {
-        for (const ModuleKind kind : {ModuleKind::Workspaces, ModuleKind::Windows, ModuleKind::BindingMode, ModuleKind::TilingDirection}) {
-            if (ShowsKind(config, kind)) {
-                throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", TypeName(kind)));
-            }
-        }
-        const bool sendsCommands = AnyModuleInConfig(config, [](const ModuleInstance& instance) {
-            const ModuleActions* actions = ActionsOf(instance.settings);
-            return actions != nullptr && SendsWindowManagerCommands(*actions);
-        });
-        if (sendsCommands) {
-            throw root.Error("a window_manager action needs a window manager that takes commands, window_manager 'windows' takes none");
-        }
-    }
-
+    RejectWhatNeedsAWindowManager(root, config);
     return config;
 }
 
@@ -1035,4 +690,11 @@ bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& description) {
 
 bool ShowsKind(const Config& config, ModuleKind kind) {
     return AnyModuleInConfig(config, [kind](const ModuleInstance& instance) { return instance.kind == kind; });
+}
+
+bool ShowsAudioFlow(const Config& config, AudioFlow flow) {
+    return AnyModuleInConfig(config, [flow](const ModuleInstance& instance) {
+        const auto* audio = std::get_if<AudioConfig>(&instance.settings);
+        return audio != nullptr && audio->flow == flow;
+    });
 }

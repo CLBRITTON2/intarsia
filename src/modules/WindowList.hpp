@@ -42,6 +42,8 @@ class WindowList final : public IModule {
     };
 
     const ItemStyle& StyleOf(const Slot& slot) const;
+    // A bitmap already made from the same window's same pixels is kept: making one costs an upload to the GPU.
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> BitmapFor(const RenderContext& render, const ManagedWindow& window, const std::shared_ptr<const IconPixels>& pixels) const;
     // Layout's work before the fades follow it.
     bool                          LayOutItems(const RenderContext& render);
     std::vector<const ItemStyle*> ItemStyles() const;

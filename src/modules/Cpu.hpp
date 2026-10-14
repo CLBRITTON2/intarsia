@@ -7,7 +7,6 @@
 #include "platform/Log.hpp"
 #include "platform/PerformanceCounter.hpp"
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -22,10 +21,6 @@ struct CpuTimes {
 
 // Busy share of the time between two samples, 0 to 100.
 std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
-
-// The clock speed Task Manager shows: the base frequency scaled by the processor's performance, which passes 100%
-// while boosting.
-double CpuGigahertz(double baseMegahertz, double performancePercent);
 
 // Each logical processor's usage in its number's order, four to a line, as "0:  12%  1:   3%  ...". Instances that
 // are not a processor's number (_Total) are left out.

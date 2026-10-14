@@ -1,6 +1,7 @@
 #pragma once
 
-#include "bar/Box.hpp"
+#include "bar/Canvas.hpp"
+#include "bar/Dock.hpp"
 #include "bar/FrameStats.hpp"
 #include "bar/Layout.hpp"
 #include "bar/Menu.hpp"
@@ -13,15 +14,14 @@
 #include "modules/ModuleFactory.hpp"
 #include "platform/AppBar.hpp"
 #include "platform/FrameClock.hpp"
-#include "platform/Process.hpp"
+#include "platform/Launcher.hpp"
 #include "platform/WindowProc.hpp"
 #include "render/Axis.hpp"
-#include "render/BrushCache.hpp"
 #include "render/Graphics.hpp"
 #include "render/RenderContext.hpp"
-#include "render/Surface.hpp"
 
 #include <windows.h>
+#include <wrl/client.h>
 
 #include <chrono>
 #include <cstdint>
@@ -38,14 +38,6 @@ enum class ModuleInput : std::uint8_t {
     ScrollDown
 };
 
-struct BarPlacement {
-    HMONITOR      monitor;
-    RECT          monitorRect;
-    std::uint32_t dpi;
-
-    bool          operator==(const BarPlacement& other) const;
-};
-
 // One appbar window docked to one edge of one monitor, drawing its own module instances. When the graphics device is
 // lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.
 class Bar {
@@ -58,6 +50,12 @@ class Bar {
 
     static void RegisterWindowClass(HINSTANCE instance);
 
+    // True once drawing failed because the graphics device was lost. The bar draws nothing more.
+    bool DeviceLost() const;
+
+    // True once a frame reached the screen, which shows the device worked.
+    bool HasPresented() const;
+
     // Lays out and draws every module from its current data, then schedules the next self-driven change.
     void Render();
 
@@ -68,69 +66,52 @@ class Bar {
     // next change, so a fade the change started runs on the frame clock.
     void Redraw();
 
-    // True once drawing failed because the graphics device was lost. The bar draws nothing more.
-    bool DeviceLost() const;
-
-    // True once a frame reached the screen, which shows the device worked.
-    bool HasPresented() const;
-
   private:
     template <typename Owner>
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+
+    // Everything the constructor does once the window exists.
+    void Build(HINSTANCE instance);
+    // Stops drawing and posts to control, once.
+    void ReportDeviceLost(const DeviceLostError& error);
+
     // A lost device from any message is reported instead of ending the process.
     LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    // Everything the constructor does once the window exists.
-    void Build(HINSTANCE instance);
-    void Dock();
-    void PlaceInZOrder(HWND insertAfter);
-    // What a module lays out and draws with: the bar's fonts and the module's own colors.
-    RenderContext ModuleContext(const ModuleStyle& style) const;
+    void    Dock();
+    void    PlaceInZOrder(HWND insertAfter);
+
+    // Sets the time the next frame draws at, in the bar and in every module's context.
+    void                                  StampFrameTime();
+    std::chrono::steady_clock::time_point NextFrameTime() const;
+    void                                  ScheduleNextChange();
+    // How long until the bar next changes by itself: 0 while a box fades, else the earliest module change, null when
+    // none is coming.
+    std::optional<std::uint32_t> NextChangeWait() const;
+    bool                         BoxFading() const;
+
     // Every module's context, made again whenever the surface's size changes, since each spans the bar's thickness.
     void BuildContexts();
-    // Sets the time the next frame draws at, in the bar and in every module's context.
-    void  StampFrameTime();
-    float BoxCrossLength() const;
-    // Whether any module's content changed.
-    bool LayOutModules();
-    // A group's length takes in the revealed share of its members'.
-    std::vector<float> BoxLengths(const std::vector<ModuleEntry>& entries) const;
-    GroupLayout        ArrangeMembers(const ModuleEntry& entry, const std::vector<float>& memberLengths) const;
-    void               Draw();
-    // Where a module's box was last drawn, and where its content starts, for routing clicks to it.
-    struct HitBox {
-        IModule*      module;
-        D2D1_RECT_F   bounds;
-        D2D1_POINT_2F contentOrigin;
-    };
-    // One entry as placed for a frame: its box and, for a group, its toggle's span, its members' boxes in its members'
-    // order, and the span the fold uncovers of them, outside of which they neither draw nor take the cursor.
-    struct PlacedEntry {
-        const ModuleEntry*  entry;
-        HitBox              box;
-        D2D1_RECT_F         toggleBounds;
-        std::vector<HitBox> members;
-        D2D1_RECT_F         shownBounds;
-    };
+    // What a module lays out and draws with: the bar's fonts and the module's own colors.
+    RenderContext ModuleContext(const ModuleStyle& style) const;
 
-    HitBox                   PlaceBox(const ModuleEntry& entry, float start, float length) const;
-    HitBox                   PlaceInRoom(const ModuleEntry& entry, float start, float length) const;
-    std::vector<PlacedEntry> PlaceSection(const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) const;
-    // The section's box, inside the bar's margin.
-    D2D1_RECT_F                    SectionBounds(const SectionLayout& layout) const;
-    std::vector<D2D1_ROUNDED_RECT> SectionBackdrops(const std::vector<const SectionLayout*>& layouts) const;
-    void                           DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
-    // The module's box (its background, or fading to its hover under the cursor), then the module.
-    void DrawModule(const HitBox& box, const ModuleStyle& style);
+    // Whether any module's content changed.
+    bool        LayOutModules();
+    BarGeometry Geometry() const;
+    // Places every module's box for the frame, tells each module where its content lands on screen, and hovers what
+    // now lies under a cursor that has not moved.
+    PlacedBar PlaceModules();
+
+    void      Draw();
+    void      Paint(const PlacedBar& placed);
+    void      DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
     // The group's box, its hover fading in over the toggle's span alone under the cursor, the toggle, then its members.
     void DrawGroup(const PlacedEntry& placed);
-    // Fades every box toward its fill for where the cursor now is.
-    void FadeBoxesToHover();
-    bool BoxFading() const;
-    void ScheduleNextChange();
-    // Stops drawing and posts to control, once.
-    void ReportDeviceLost(const DeviceLostError& error);
+    // The module's box (its background, or fading to its hover under the cursor), then the module.
+    void                           DrawModule(const HitBox& box, const ModuleStyle& style);
+    std::vector<D2D1_ROUNDED_RECT> SectionBackdrops(const std::vector<const SectionLayout*>& layouts) const;
+
     // The box under a point in client pixels, or null between modules.
     const HitBox* BoxAt(POINT client) const;
     // A point in client pixels as DIPs from the box's content origin, as modules take input.
@@ -138,13 +119,16 @@ class Bar {
     // Runs the module's action for the input, or for a click or scroll without one, lets the module handle it. Any input
     // closes the menu, and a menu action starts listing unless it is the click toggling its own module's menu closed.
     void HandleInput(POINT client, ModuleInput input);
+    // A cursor move: hovers what it is over and draws the bar if that changed.
+    void MoveCursor(POINT client);
     // Hovers the module and item under the cursor, restarting hover tracking and hiding any tooltip whenever either
     // changes. Returns whether one did, and the bar needs drawing.
     bool HoverAt(POINT client);
-    // A cursor move: hovers what it is over and draws the bar if that changed.
-    void MoveCursor(POINT client);
+    // Fades every box toward its fill for where the cursor now is.
+    void FadeBoxesToHover();
     // Hides the tooltip and waits for the cursor to rest again before showing the next one.
     void RestartHover();
+
     void ShowTooltip();
     // Where a popup beside a span of the bar goes, the span in DIPs from the bar's top left.
     TooltipAnchor AnchorFor(const D2D1_RECT_F& span) const;
@@ -181,12 +165,10 @@ class Bar {
     std::optional<MenuOwner>              _menuOwner; // null once any other input came after the menu's
 
     // Null until the constructor has docked the window and knows its size.
-    std::unique_ptr<Surface>                              _surface;
+    std::unique_ptr<Canvas>                               _canvas;
     std::unique_ptr<Tooltip>                              _tooltip;
     std::unique_ptr<Menu>                                 _menu;
-    std::unique_ptr<MenuLister>                           _lister; // posts to the window, so it stops before the window goes
-    std::unique_ptr<BrushCache>                           _brushes;
-    std::unique_ptr<BoxCache>                             _boxes;
+    std::unique_ptr<MenuLister>                           _lister;   // posts to the window, so it stops before the window goes
     std::unordered_map<const ModuleStyle*, RenderContext> _contexts; // by the style of the entry it belongs to
     std::unordered_map<const IModule*, ColorFade>         _boxFades; // every module's box fill, members included
     Microsoft::WRL::ComPtr<IDWriteTextFormat>             _textFormat;

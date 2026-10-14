@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -62,6 +63,21 @@ namespace {
         return values->front();
     }
 
+    // The clock speed Task Manager shows: the base frequency scaled by the processor's performance, which passes 100%
+    // while boosting.
+    double CpuGigahertz(double baseMegahertz, double performancePercent) {
+        return baseMegahertz * performancePercent / 100.0 / 1000.0;
+    }
+
+    // _Total is among the instances and never passes the busiest core.
+    std::int32_t BusiestCorePercent(const std::vector<CounterInstance>& cores) {
+        const auto busiest = std::ranges::max_element(cores, {}, &CounterInstance::value);
+        if (busiest == cores.end()) {
+            return 0;
+        }
+        return static_cast<std::int32_t>(std::lround(busiest->value));
+    }
+
 } // namespace
 
 std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
@@ -74,10 +90,6 @@ std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
         return 0;
     }
     return static_cast<std::int32_t>(((total - idle) * 100 + (total / 2)) / total);
-}
-
-double CpuGigahertz(double baseMegahertz, double performancePercent) {
-    return baseMegahertz * performancePercent / 100.0 / 1000.0;
 }
 
 Cpu::Cpu(TextModuleConfig config) :
@@ -119,9 +131,7 @@ void Cpu::Sample() {
             _cores->Collect();
             const std::optional<std::vector<CounterInstance>> cores = _cores->Instances();
             if (cores.has_value()) {
-                // _Total is among the instances and never passes the busiest core.
-                const auto max         = std::ranges::max_element(*cores, {}, &CounterInstance::value);
-                _sample.maxCorePercent = max == cores->end() ? 0 : static_cast<std::int32_t>(std::lround(max->value));
+                _sample.maxCorePercent = BusiestCorePercent(*cores);
                 _sample.cores          = FormatCoreUsage(*cores);
             }
         }
@@ -147,7 +157,11 @@ std::string FormatCoreUsage(const std::vector<CounterInstance>& instances) {
     std::string text;
     for (size_t index = 0; index < cores.size(); ++index) {
         if (index > 0) {
-            text += index % kPerLine == 0 ? "\n" : "  ";
+            if (index % kPerLine == 0) {
+                text += "\n";
+            } else {
+                text += "  ";
+            }
         }
         text += std::format("{:>2}: {:>3}%", cores[index].first, cores[index].second);
     }

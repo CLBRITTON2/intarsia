@@ -39,11 +39,25 @@ namespace {
     constexpr DWORD kRetryMs = 2000;
 
     EDataFlow       CoreAudioFlow(AudioFlow flow) {
-        return flow == AudioFlow::Output ? eRender : eCapture;
+        if (flow == AudioFlow::Output) {
+            return eRender;
+        }
+        return eCapture;
     }
 
     std::string FlowName(AudioFlow flow) {
-        return flow == AudioFlow::Output ? "output" : "input";
+        if (flow == AudioFlow::Output) {
+            return "output";
+        }
+        return "input";
+    }
+
+    // While attaching fails, the worker wakes to retry even when nothing signals it.
+    DWORD AttachWaitMs(bool failing) {
+        if (failing) {
+            return kRetryMs;
+        }
+        return INFINITE;
     }
 
     // Tells the worker when the default device of its flow changes. The notification threads must not call back into
@@ -90,13 +104,21 @@ namespace {
         CoreAudio& _audio;
     };
 
+    // Empty unless value holds a string.
+    std::wstring PropertyText(const PROPVARIANT& value) {
+        if (value.vt == VT_LPWSTR && value.pwszVal != nullptr) {
+            return value.pwszVal;
+        }
+        return {};
+    }
+
     std::wstring FriendlyName(IMMDevice* device) {
         ComPtr<IPropertyStore> store;
         ThrowIfFailed(device->OpenPropertyStore(STGM_READ, &store), "IMMDevice::OpenPropertyStore");
         PROPVARIANT value;
         PropVariantInit(&value);
         ThrowIfFailed(store->GetValue(PKEY_Device_FriendlyName, &value), "IPropertyStore::GetValue(PKEY_Device_FriendlyName)");
-        std::wstring name = value.vt == VT_LPWSTR && value.pwszVal != nullptr ? std::wstring(value.pwszVal) : std::wstring();
+        std::wstring name = PropertyText(value);
         PropVariantClear(&value);
         return name;
     }
@@ -131,7 +153,7 @@ namespace {
         }
 
         void SetMuted(bool muted) const {
-            ThrowIfFailed(_volume->SetMute(muted ? TRUE : FALSE, nullptr), "IAudioEndpointVolume::SetMute");
+            ThrowIfFailed(_volume->SetMute(muted, nullptr), "IAudioEndpointVolume::SetMute");
         }
 
       private:
@@ -248,7 +270,11 @@ void CoreAudio::Run(HANDLE stopEvent) {
                     devices = std::make_unique<Devices>(*this, CoreAudioFlow(_flow));
                 }
                 endpoint = devices->DefaultEndpoint(*this);
-                Publish(endpoint == nullptr ? std::nullopt : std::optional<AudioDevice>(endpoint->Read()));
+                if (endpoint == nullptr) {
+                    Publish(std::nullopt);
+                } else {
+                    Publish(endpoint->Read());
+                }
                 if (failing) {
                     Log(LogLevel::Info, "audio", "recovered", {{.key = "flow", .value = FlowName(_flow)}});
                 }
@@ -264,7 +290,7 @@ void CoreAudio::Run(HANDLE stopEvent) {
                 failing = true;
             }
         }
-        const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, failing ? kRetryMs : INFINITE);
+        const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, AttachWaitMs(failing));
         if (woke == WAIT_FAILED) {
             Log(LogLevel::Error, "audio", "wait_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "error", .value = std::to_string(GetLastError())}});
             Publish(std::nullopt);

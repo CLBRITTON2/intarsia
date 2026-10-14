@@ -4,11 +4,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <vector>
-
-constexpr std::string_view kCliUsage = "usage: intarsia-cli check [--config <path>]\n"
-                                       "       intarsia-cli monitors [--config <path>]";
 
 enum class CliCommand : std::uint8_t {
     Check,   // load the config and its style as the bar would, and report the first error

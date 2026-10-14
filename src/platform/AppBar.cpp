@@ -1,8 +1,11 @@
 #include "platform/AppBar.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Handle.hpp"
 #include "platform/Log.hpp"
 #include "platform/Monitors.hpp"
+#include "platform/Process.hpp"
+#include "platform/Text.hpp"
 
 #include <shlwapi.h>
 
@@ -22,7 +25,27 @@ namespace {
     // The bar waits on the answer, so a hung Explorer must not hold it for long.
     constexpr std::uint32_t kTaskbarTimeoutMs = 2000;
 
-    std::uint32_t           ShellEdge(Edge edge) {
+    // Another intarsia, or any other tray that forwards, would send the message straight back.
+    bool IsExplorer(HWND window) {
+        DWORD processId = 0;
+        if (GetWindowThreadProcessId(window, &processId) == 0 || processId == GetCurrentProcessId()) {
+            return false;
+        }
+        // Null for a process of another user, whose taskbar is not this desktop's anyway.
+        HANDLE raw = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        if (raw == nullptr) {
+            return false;
+        }
+        const UniqueHandle process(raw);
+        try {
+            return SameFileName(ProcessImage(process.get()).filename().wstring(), L"explorer.exe");
+        } catch (const Win32Error& error) {
+            Log(LogLevel::Warning, "tray", "taskbar_unreadable", {{.key = "process", .value = std::to_string(processId)}, {.key = "reason", .value = error.what()}});
+            return false;
+        }
+    }
+
+    std::uint32_t ShellEdge(Edge edge) {
         switch (edge) {
             case Edge::Top: return ABE_TOP;
             case Edge::Bottom: return ABE_BOTTOM;
@@ -97,6 +120,16 @@ namespace {
     }
 
 } // namespace
+
+HWND ExplorerTaskbar(const std::wstring& windowClass) {
+    for (HWND candidate = FindWindowExW(nullptr, nullptr, windowClass.c_str(), nullptr); candidate != nullptr;
+         candidate      = FindWindowExW(nullptr, candidate, windowClass.c_str(), nullptr)) {
+        if (IsExplorer(candidate)) {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
 
 AppBarCommand AppBarRequest(std::uint32_t message, const APPBARDATA& data, std::uint64_t result, std::uint32_t resultProcess) {
     return AppBarCommand{

@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -16,6 +16,14 @@ namespace {
         std::wstring  name;
     };
 
+    // The last record's offset is 0, which ends the buffer.
+    DWORD NextEntryOffset(size_t index, size_t count, size_t recordBytes) {
+        if (index + 1 == count) {
+            return 0;
+        }
+        return static_cast<DWORD>(recordBytes);
+    }
+
     // Lays records out the way ReadDirectoryChangesW does: DWORD-aligned, each pointing at the next.
     std::vector<std::byte> ChangeBuffer(const std::vector<ChangeRecord>& records) {
         const size_t           kHeaderBytes = offsetof(FILE_NOTIFY_INFORMATION, FileName);
@@ -23,10 +31,9 @@ namespace {
         for (size_t index = 0; index < records.size(); ++index) {
             const size_t            nameBytes   = records[index].name.size() * sizeof(wchar_t);
             const size_t            recordBytes = (kHeaderBytes + nameBytes + sizeof(DWORD) - 1) / sizeof(DWORD) * sizeof(DWORD);
-            const bool              last        = index + 1 == records.size();
 
             FILE_NOTIFY_INFORMATION header{};
-            header.NextEntryOffset = last ? 0 : static_cast<DWORD>(recordBytes);
+            header.NextEntryOffset = NextEntryOffset(index, records.size(), recordBytes);
             header.Action          = records[index].action;
             header.FileNameLength  = static_cast<DWORD>(nameBytes);
 

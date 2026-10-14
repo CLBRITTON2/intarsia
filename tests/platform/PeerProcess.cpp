@@ -1,8 +1,8 @@
 #include "platform/PeerProcess.hpp"
 
-#include "Loopback.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
+#include "support/Loopback.hpp"
 #include "support/ThrowsWith.hpp"
 
 #include <sddl.h>
@@ -11,7 +11,6 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -45,8 +44,8 @@ namespace {
         if (!ConvertStringSidToSidW(L"S-1-16-4096", &sid)) {
             ThrowLastError("ConvertStringSidToSidW");
         }
-        const std::unique_ptr<void, decltype(&LocalFree)> ownedSid(sid, &LocalFree);
-        TOKEN_MANDATORY_LABEL                             label{.Label = {.Sid = sid, .Attributes = SE_GROUP_INTEGRITY}};
+        const UniqueLocal     ownedSid(sid);
+        TOKEN_MANDATORY_LABEL label{.Label = {.Sid = sid, .Attributes = SE_GROUP_INTEGRITY}};
         if (!SetTokenInformation(low.get(), TokenIntegrityLevel, &label, sizeof(label) + GetLengthSid(sid))) {
             ThrowLastError("SetTokenInformation(TokenIntegrityLevel)");
         }

@@ -43,5 +43,16 @@ struct ModuleEntry {
     std::vector<ModuleEntry> members; // a group's, in the order it lists them
 };
 
+// Every entry of every section, each group's members right after it.
+template <typename Visit>
+void ForEachEntry(const Sections<ModuleEntry>& modules, Visit visit) {
+    ForEachInSections(modules, [&visit](const ModuleEntry& entry) {
+        visit(entry);
+        for (const ModuleEntry& member : entry.members) {
+            visit(member);
+        }
+    });
+}
+
 // Fresh module instances for one bar, in the order its sections list them.
 Sections<ModuleEntry> CreateModules(const Sections<ModuleInstance>& modules, const ModuleSources& sources);

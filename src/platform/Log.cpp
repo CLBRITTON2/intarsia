@@ -42,7 +42,11 @@ namespace {
     std::string FormatLine(LogLevel level, std::string_view component, std::string_view event, std::initializer_list<LogField> fields) {
         std::string line = LogHead(level, component, event);
         for (const LogField& field : fields) {
-            line += PrintsBare(field.value) ? std::format(" {}={}", field.key, field.value) : std::format(" {}=\"{}\"", field.key, LogExcerpt(field.value, kValueExcerptBytes));
+            if (PrintsBare(field.value)) {
+                line += std::format(" {}={}", field.key, field.value);
+            } else {
+                line += std::format(" {}=\"{}\"", field.key, LogExcerpt(field.value, kValueExcerptBytes));
+            }
         }
         line += '\n';
         return line;

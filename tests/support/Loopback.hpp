@@ -200,6 +200,14 @@ namespace loopback {
         SendFrame(peer, 0x1, text);
     }
 
+    // RFC 6455 section 5.2: a 7-bit length of 126 is followed by a 16-bit length, 127 by a 64-bit one.
+    inline size_t ExtendedLengthBytes(std::uint64_t length) {
+        if (length == 126) {
+            return 2;
+        }
+        return 8;
+    }
+
     // The next text message from the client, answering pings on the way, or nullopt once it closes. Assumes the client
     // never fragments, which WinHTTP does not for the short commands the bar sends.
     inline std::optional<std::string> ReceiveText(const Socket& peer) {
@@ -213,7 +221,7 @@ namespace loopback {
             std::uint64_t      length = static_cast<std::uint8_t>(header[1]) & 0x7Fu;
             if (length == 126 || length == 127) {
                 std::array<char, 8> extended{};
-                const size_t        bytes = length == 126 ? 2 : 8;
+                const size_t        bytes = ExtendedLengthBytes(length);
                 ReceiveExactly(peer, extended.data(), bytes);
                 length = 0;
                 for (size_t index = 0; index < bytes; ++index) {

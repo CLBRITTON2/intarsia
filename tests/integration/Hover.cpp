@@ -1,5 +1,7 @@
 #include "Harness.hpp"
 
+#include "Capture.hpp"
+
 #include <gtest/gtest.h>
 
 #include <windows.h>

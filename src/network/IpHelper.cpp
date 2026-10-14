@@ -1,9 +1,9 @@
 #include "network/IpHelper.hpp"
 
+#include "network/Wlan.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
-#include "platform/Text.hpp"
 
 // winsock2.h must come before iphlpapi.h, which leaves out every declaration that takes a socket address without it.
 #include <winsock2.h>
@@ -11,7 +11,6 @@
 
 #include <iphlpapi.h>
 #include <netioapi.h>
-#include <wlanapi.h>
 
 #include <algorithm>
 #include <array>
@@ -89,17 +88,6 @@ namespace {
         SetEvent(linkEvent);
     }
 
-    // Only the notifications that change what State shows, since the WLAN service also reports every scan.
-    void WINAPI WakeOnWlanChange(PWLAN_NOTIFICATION_DATA data, PVOID linkEvent) {
-        const bool connectionChanged = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_ACM &&
-            (data->NotificationCode == wlan_notification_acm_connection_complete || data->NotificationCode == wlan_notification_acm_disconnected);
-        const bool signalChanged = data->NotificationSource == WLAN_NOTIFICATION_SOURCE_MSM &&
-            (data->NotificationCode == wlan_notification_msm_signal_quality_change || data->NotificationCode == wlan_notification_msm_roaming_end);
-        if (connectionChanged || signalChanged) {
-            SetEvent(linkEvent);
-        }
-    }
-
     // The Notify*Change registrations differ only in their callback's type.
     template <typename Callback>
     UniqueMibNotification RegisterMib(DWORD(WINAPI* notify)(ADDRESS_FAMILY, Callback, PVOID, BOOLEAN, HANDLE*), ADDRESS_FAMILY family, std::type_identity_t<Callback> callback,
@@ -109,47 +97,19 @@ namespace {
         return UniqueMibNotification(notification);
     }
 
-    // A WLAN API client, open for as long as it lives, that sets linkEvent when the connection or its signal changes.
-    class WlanClient {
-      public:
-        explicit WlanClient(HANDLE linkEvent) {
-            DWORD negotiated = 0;
-            ThrowIfWin32Failed(WlanOpenHandle(2, nullptr, &negotiated, &_handle), "WlanOpenHandle");
-            const DWORD registered =
-                WlanRegisterNotification(_handle, WLAN_NOTIFICATION_SOURCE_ACM | WLAN_NOTIFICATION_SOURCE_MSM, TRUE, WakeOnWlanChange, linkEvent, nullptr, nullptr);
-            if (registered != ERROR_SUCCESS) {
-                WlanCloseHandle(_handle, nullptr);
-                ThrowIfWin32Failed(registered, "WlanRegisterNotification");
-            }
+    // Without rates to sample, only a change notification wakes the worker.
+    DWORD SampleWaitMs(bool samplesRates) {
+        if (samplesRates) {
+            return kSampleMs;
         }
-        // Also unregisters the notification, waiting out a callback in progress.
-        ~WlanClient() {
-            WlanCloseHandle(_handle, nullptr);
+        return INFINITE;
+    }
+
+    NetworkLink LinkOfType(IFTYPE type) {
+        if (type == IF_TYPE_IEEE80211) {
+            return NetworkLink::Wifi;
         }
-        WlanClient(const WlanClient&)            = delete;
-        WlanClient& operator=(const WlanClient&) = delete;
-
-        // The network the interface is connected to. Throws Win32Error, with ERROR_ACCESS_DENIED when Windows keeps the
-        // network's name from apps without location access.
-        std::pair<std::wstring, std::int32_t> Connection(const GUID& interfaceGuid) const {
-            PWLAN_CONNECTION_ATTRIBUTES attributes = nullptr;
-            DWORD                       size       = 0;
-            ThrowIfWin32Failed(WlanQueryInterface(_handle, &interfaceGuid, wlan_intf_opcode_current_connection, nullptr, &size, reinterpret_cast<void**>(&attributes), nullptr),
-                               "WlanQueryInterface(current_connection)");
-            const UniqueReleased<PWLAN_CONNECTION_ATTRIBUTES, &WlanFreeMemory> owned(attributes);
-            const DOT11_SSID&                                                  ssid = owned->wlanAssociationAttributes.dot11Ssid;
-            // Anyone nearby can name a network, so its name is drawn only once it is safe to.
-            std::wstring name = DrawableText(std::string_view(reinterpret_cast<const char*>(ssid.ucSSID), std::min<ULONG>(ssid.uSSIDLength, DOT11_SSID_MAX_LENGTH)));
-            return {std::move(name), static_cast<std::int32_t>(owned->wlanAssociationAttributes.wlanSignalQuality)};
-        }
-
-      private:
-        HANDLE _handle = nullptr;
-    };
-
-    // True when the failure means the client's handle is no longer good, as after the WLAN service restarts.
-    bool WlanClientLost(HRESULT result) {
-        return result == HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE) || result == HRESULT_FROM_WIN32(RPC_S_SERVER_UNAVAILABLE) || result == HRESULT_FROM_WIN32(RPC_S_CALL_FAILED);
+        return NetworkLink::Ethernet;
     }
 
 } // namespace
@@ -181,7 +141,7 @@ void IpHelper::Run(HANDLE stopEvent) {
     FailureLog                  sampleLog("network");
     FailureLog                  wlanLog("network");
     const std::array<HANDLE, 2> events{stopEvent, _linkEvent.get()};
-    const DWORD                 timeout = _samplesRates ? kSampleMs : INFINITE;
+    const DWORD                 timeout = SampleWaitMs(_samplesRates);
     DWORD                       woke    = WAIT_TIMEOUT;
     do {
         NetworkState state = NetworkState::None();
@@ -203,7 +163,7 @@ void IpHelper::Run(HANDLE stopEvent) {
                     state.sentBytesPerSecond     = BytesPerSecond(last->sent, now.sent, seconds);
                 }
                 last                = now;
-                state.link          = row.Type == IF_TYPE_IEEE80211 ? NetworkLink::Wifi : NetworkLink::Ethernet;
+                state.link          = LinkOfType(row.Type);
                 state.interfaceName = std::wstring(row.Alias);
                 state.ipv4          = FirstIpv4(*index);
                 if (state.link == NetworkLink::Wifi) {

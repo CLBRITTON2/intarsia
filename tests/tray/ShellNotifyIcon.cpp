@@ -30,8 +30,15 @@ namespace {
     constexpr std::uint32_t kFailed      = WM_APP + 2;
     constexpr std::uint32_t kCallback    = WM_APP + 9;
 
-    std::vector<std::byte>  AddPayload(HWND owner, std::uint32_t id, HICON icon) {
-        TrayNotifyData data = NotifyData(NIM_ADD, Handle32(owner), id, NIF_MESSAGE | NIF_TIP | (icon != nullptr ? NIF_ICON : 0), kCallback);
+    std::uint32_t           AddFlags(HICON icon) {
+        if (icon == nullptr) {
+            return NIF_MESSAGE | NIF_TIP;
+        }
+        return NIF_MESSAGE | NIF_TIP | NIF_ICON;
+    }
+
+    std::vector<std::byte> AddPayload(HWND owner, std::uint32_t id, HICON icon) {
+        TrayNotifyData data = NotifyData(NIM_ADD, Handle32(owner), id, AddFlags(icon), kCallback);
         data.data.icon      = Handle32(icon);
         std::memcpy(data.data.tip.data(), L"tip", sizeof(L"tip"));
         std::vector<std::byte> bytes(sizeof(data));

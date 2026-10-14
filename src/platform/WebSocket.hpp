@@ -13,6 +13,8 @@
 #include <string>
 #include <string_view>
 
+using UniqueInternet = UniqueReleased<HINTERNET, &WinHttpCloseHandle>;
+
 // A blocking WebSocket client over WinHTTP. WinHTTP allows one send while a receive is pending, so one thread may
 // receive while another sends, but sends must not overlap each other. Close may come from any thread.
 class WebSocket {
@@ -35,8 +37,6 @@ class WebSocket {
     void Close();
 
   private:
-    using UniqueInternet = UniqueReleased<HINTERNET, &WinHttpCloseHandle>;
-
     UniqueInternet _session;
     UniqueInternet _connection;
     UniqueInternet _socket;

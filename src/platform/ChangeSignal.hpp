@@ -2,8 +2,8 @@
 
 #include <windows.h>
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 #include <string_view>
 
 // Tells the UI thread that data a module shows has changed. Posts at most one message until the UI thread acknowledges

@@ -2,8 +2,8 @@
 
 #include "platform/Text.hpp"
 
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 #include <format>
 
 namespace glazewm {
@@ -63,7 +63,10 @@ namespace glazewm {
                 const char character = id[index];
                 const bool dash      = index == 8 || index == 13 || index == 18 || index == 23;
                 const bool hex       = (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
-                if (dash ? character != '-' : !hex) {
+                if (dash && character != '-') {
+                    return false;
+                }
+                if (!dash && !hex) {
                     return false;
                 }
             }
@@ -73,7 +76,27 @@ namespace glazewm {
         // The display name when there is a non-empty one, else the name: workspaces and binding modes both have both.
         std::wstring DisplayLabel(const nlohmann::json& object, std::string_view context) {
             const nlohmann::json& displayName = Field(object, "displayName", context);
-            return DrawableText(displayName.is_string() && !displayName.get<std::string>().empty() ? displayName.get<std::string>() : StringField(object, "name", context));
+            if (displayName.is_string() && !displayName.get<std::string>().empty()) {
+                return DrawableText(displayName.get<std::string>());
+            }
+            return DrawableText(StringField(object, "name", context));
+        }
+
+        // Empty unless the message carries an error string.
+        std::string ErrorText(const nlohmann::json& message) {
+            const auto error = message.find("error");
+            if (error != message.end() && error->is_string()) {
+                return error->get<std::string>();
+            }
+            return {};
+        }
+
+        // Empty when the event's data is not an object.
+        std::string EventType(const nlohmann::json& data) {
+            if (!data.is_object()) {
+                return {};
+            }
+            return StringField(data, "eventType", "event");
         }
 
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {
@@ -138,8 +161,7 @@ namespace glazewm {
 
         const std::string messageType = StringField(message, "messageType", "message");
         const bool        success     = BoolField(message, "success", "message");
-        const auto        error       = message.find("error");
-        std::string       errorText   = error != message.end() && error->is_string() ? error->get<std::string>() : std::string();
+        std::string       errorText   = ErrorText(message);
         // Moved, never copied: nlohmann copies recursively, so a peer's deeply nested data would overflow the stack.
         const auto     dataField = message.find("data");
         nlohmann::json data      = dataField != message.end() ? std::move(*dataField) : nlohmann::json();
@@ -155,11 +177,10 @@ namespace glazewm {
             };
         }
         if (messageType == "event_subscription") {
-            const std::string eventType = data.is_object() ? StringField(data, "eventType", "event") : std::string();
             return ServerMessage{
                 .kind          = MessageKind::Event,
                 .clientMessage = "",
-                .eventType     = eventType,
+                .eventType     = EventType(data),
                 .success       = success,
                 .error         = std::move(errorText),
                 .data          = std::move(data),

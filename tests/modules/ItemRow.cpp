@@ -54,6 +54,13 @@ TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(34.0f, 20.0f)).has_value());
 }
 
+TEST(ItemRow, ItemUnderCursorFindsNothingWithTheCursorOffTheModule) {
+    const ItemStyle style = TestItemStyle(0, 0);
+    const ItemRow   row   = ArrangeItems({{.width = 10.0f, .height = 10.0f}}, {&style}, Axis::Horizontal);
+    EXPECT_EQ(ItemUnderCursor(row, D2D1::Point2F(5.0f, 5.0f)), 0u);
+    EXPECT_FALSE(ItemUnderCursor(row, std::nullopt).has_value());
+}
+
 TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
     ItemStyle style                                   = TestItemStyle(0x000000, 0x000000);
     style.hoverBackground                             = D2D1::ColorF(0xFFFFFF);

@@ -27,9 +27,8 @@ pwsh -File scripts/build.ps1 -Preset debug
 pwsh -File scripts/build.ps1 -Preset release
 ```
 
-The bar lands in `build\<preset>\intarsia.exe`, with `intarsia-cli.exe` beside it. The scripts enter the Visual
-Studio developer shell themselves and put its CMake and Ninja first on PATH, because another CMake (such as MSYS2's)
-can carry a CA bundle that fails the dependency downloads.
+The bar lands in `build\<preset>\intarsia.exe`, with `intarsia-cli.exe` beside it. Every script describes itself
+through `Get-Help`, such as `Get-Help scripts/build.ps1 -Full`.
 
 ## Test
 
@@ -37,8 +36,8 @@ can carry a CA bundle that fails the dependency downloads.
 pwsh -File scripts/run-unit-tests.ps1
 ```
 
-This builds the debug preset and runs the GoogleTest suite through ctest. `tests/` mirrors `src/`, one file per unit.
-Some tests create windows and a Direct3D device, so run them from an interactive desktop session.
+This builds the debug preset and runs the GoogleTest suite through ctest. Some tests create windows and a Direct3D
+device, so run them from an interactive desktop session.
 
 ## Integration tests
 
@@ -65,7 +64,8 @@ pwsh -File scripts/lint.ps1
 ```
 
 This checks formatting with clang-format and runs clang-tidy over `src/` and `tests/`, with the rules in
-`.clang-format` and `.clang-tidy`. It refuses any LLVM major other than 19, since formatting changes between majors.
+`.clang-format` and `.clang-tidy`. `Get-Help scripts/lint.ps1 -Full` describes the pinned LLVM version and the
+quicker `-Changed` run.
 
 ## Release
 
@@ -74,18 +74,15 @@ pwsh -File scripts/draft-changelog.ps1 -Version 0.2.0 -From v0.1.0
 pwsh -File scripts/package-release.ps1 -Version 0.2.0
 ```
 
-`draft-changelog.ps1` adds a section for the version to `CHANGELOG.md`, one line per commit since the previous
-release's tag (for the first release, pass the first commit). Edit it and commit. `package-release.ps1` then builds
-from a clean `build\dist` with the version stamped into both executables, and packages
-`build\dist\intarsia-<version>.zip` with both configs, the docs, this README, the license and the changelog, and
-`build\dist\release-notes.md` with the version's section. It refuses uncommitted changes and a version the changelog
-lacks. The Release workflow runs the tests and both steps on `windows-2022`, then `scripts/publish-release.ps1`
-publishes the zip as the GitHub release `v<version>`.
+`draft-changelog.ps1` adds the version's section to `CHANGELOG.md` to edit and commit, then `package-release.ps1`
+builds and packages the release zip in `build\dist`. The Release workflow runs the tests and both steps, then
+`scripts/publish-release.ps1` publishes the zip as a GitHub release. `Get-Help` on each script describes what it
+checks and produces.
 
 ## Run
 
 [Installing intarsia](docs/install.md) covers the starter configs, starting and stopping the bar, its options and
-its log. A source build runs as `build\release\intarsia.exe`, with the starter configs in `config\`.
+its log.
 
 ## Layout
 

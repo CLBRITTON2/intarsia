@@ -6,9 +6,9 @@
 
 #include <windows.h>
 
-#include <cstdint>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <span>
 #include <string>

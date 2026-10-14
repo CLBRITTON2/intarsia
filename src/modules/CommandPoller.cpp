@@ -1,14 +1,13 @@
 #include "modules/CommandPoller.hpp"
 
-#include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Process.hpp"
 #include "platform/Text.hpp"
 
 #include <nlohmann/json.hpp>
 
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <utility>
@@ -49,6 +48,17 @@ namespace {
         };
     }
 
+    std::optional<std::string> ReadTooltip(const nlohmann::json& value) {
+        const auto found = value.find("tooltip");
+        if (found == value.end()) {
+            return std::nullopt;
+        }
+        if (!found->is_string()) {
+            throw OutputError("printed a JSON tooltip that is not a string");
+        }
+        return found->get<std::string>();
+    }
+
     // The failure never quotes the class, which is output.
     std::optional<size_t> ReadClass(const nlohmann::json& value, bool alert, const std::vector<std::string>& classes) {
         const auto found = value.find("class");
@@ -85,11 +95,8 @@ namespace {
         if (text == value.end() || !text->is_string()) {
             throw OutputError("printed JSON without a text string");
         }
-        const auto tooltip = value.find("tooltip");
-        if (tooltip != value.end() && !tooltip->is_string()) {
-            throw OutputError("printed a JSON tooltip that is not a string");
-        }
-        const auto alert = value.find("alert");
+        std::optional<std::string> tooltip = ReadTooltip(value);
+        const auto                 alert   = value.find("alert");
         if (alert != value.end() && !alert->is_boolean()) {
             throw OutputError("printed a JSON alert that is not true or false");
         }
@@ -98,7 +105,7 @@ namespace {
         CommandResult result{
             .outcome    = CommandOutcome::Succeeded,
             .text       = text->get<std::string>(),
-            .tooltip    = tooltip == value.end() ? std::nullopt : std::optional<std::string>(tooltip->get<std::string>()),
+            .tooltip    = std::move(tooltip),
             .alert      = alerted,
             .classIndex = ReadClass(value, alerted, classes),
             .detail     = {},
@@ -111,17 +118,6 @@ namespace {
     }
 
 } // namespace
-
-void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed) {
-    std::wstring wide;
-    try {
-        wide = ToWide(text);
-    } catch (const Win32Error&) { throw OutputError(std::format("{} is not UTF-8", field)); }
-    const auto unsafe = std::ranges::find_if(wide, [allowed](wchar_t unit) { return IsUnsafeCharacter(unit) && allowed.find(unit) == std::wstring_view::npos; });
-    if (unsafe != wide.end()) {
-        throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<std::uint32_t>(*unsafe)));
-    }
-}
 
 CommandResult ParseOutput(std::string_view output, CustomOutput format, const std::vector<std::string>& classes) {
     try {

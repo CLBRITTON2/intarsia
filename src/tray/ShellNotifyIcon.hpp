@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/AppBar.hpp"
 #include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
@@ -19,9 +20,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-// The class of the taskbar window, which Shell_NotifyIcon and SHAppBarMessage send to.
-inline constexpr wchar_t kTaskbarClass[] = L"Shell_TrayWnd";
 
 // The notification area, taken over from the taskbar. Shell_NotifyIcon and SHAppBarMessage send WM_COPYDATA to the
 // first kTaskbarClass window in z-order, so a hidden topmost window of that class, kept first, receives every app's
@@ -103,9 +101,6 @@ class ShellNotifyIcon final : public ITray {
     // Started by the constructor once every member above exists.
     std::thread _thread;
 };
-
-// Explorer's window of the class, or null while Explorer shows none. Never this process's own window.
-HWND ExplorerTaskbar(const std::wstring& windowClass);
 
 // Tells every app that a taskbar started, as Explorer does after a restart (TaskbarCreated), so each adds its icons
 // again and they reach a tray created after them.

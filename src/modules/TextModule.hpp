@@ -1,9 +1,9 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/IconText.hpp"
 #include "modules/IconTextModule.hpp"
 #include "modules/Placeholders.hpp"
+#include "modules/TextLine.hpp"
 
 #include <cstdint>
 #include <optional>

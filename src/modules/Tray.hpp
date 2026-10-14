@@ -60,10 +60,14 @@ class Tray final : public IModule {
     float ToggleShift() const;
     // A point on the module as a point on the whole row, so the row's items can be hit where they are drawn.
     D2D1_POINT_2F         RowPoint(D2D1_POINT_2F point) const;
-    std::optional<size_t> ItemUnder(D2D1_POINT_2F point) const;
+    std::optional<size_t> ItemUnder(std::optional<D2D1_POINT_2F> point) const;
     // The shown icon under point, or null over the toggle or between items.
     const Slot* SlotAt(D2D1_POINT_2F point) const;
+    // The shown icon at an item's index, or null for the toggle or no item.
+    const Slot* SlotOf(std::optional<size_t> item) const;
     bool        ToggleAt(D2D1_POINT_2F point) const;
+    // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> BitmapFor(const RenderContext& render, const TrayIcon& icon) const;
     // Layout's work before the fades follow it.
     bool                          LayOutItems(const RenderContext& render);
     std::vector<const ItemStyle*> ItemStyles() const;

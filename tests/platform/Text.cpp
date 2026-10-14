@@ -1,5 +1,5 @@
-#include "platform/Errors.hpp"
 #include "platform/Text.hpp"
+#include "platform/Errors.hpp"
 
 #include <gtest/gtest.h>
 
@@ -63,15 +63,6 @@ TEST(Text, LogExcerptEscapesBytesThatAreNotUtf8AndKeepsThoseThatAre) {
     EXPECT_NO_THROW(ToWide(excerpt));
 }
 
-TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
-    const std::wstring text{
-        L'a', static_cast<wchar_t>(0xD800), L'b', static_cast<wchar_t>(0xDC00), static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), static_cast<wchar_t>(0xD800)};
-    const std::wstring replaced = ReplaceLoneSurrogates(text);
-    EXPECT_EQ(replaced,
-              (std::wstring{L'a', kReplacementCharacter, L'b', kReplacementCharacter, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacementCharacter}));
-    EXPECT_NO_THROW(ToUtf8(replaced));
-}
-
 // A C1 control, a bidi override and a line separator are valid UTF-8 and would still reorder or break the log line.
 TEST(Text, LogExcerptEscapesUnsafeCodePointsThatAreValidUtf8) {
     std::string text = "a\xC2\x85"
@@ -81,6 +72,15 @@ TEST(Text, LogExcerptEscapesUnsafeCodePointsThatAreValidUtf8) {
             "d";
     text += kIsolate;
     EXPECT_EQ(LogExcerpt(text, 100), "a\\u0085b\\u202ec\\u2028d\\u2066");
+}
+
+TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
+    const std::wstring text{
+        L'a', static_cast<wchar_t>(0xD800), L'b', static_cast<wchar_t>(0xDC00), static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), static_cast<wchar_t>(0xD800)};
+    const std::wstring replaced = ReplaceLoneSurrogates(text);
+    EXPECT_EQ(replaced,
+              (std::wstring{L'a', kReplacementCharacter, L'b', kReplacementCharacter, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacementCharacter}));
+    EXPECT_NO_THROW(ToUtf8(replaced));
 }
 
 TEST(Text, IsValidUtf8AcceptsWellFormedSequencesOnly) {

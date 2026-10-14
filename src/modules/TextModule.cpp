@@ -2,8 +2,8 @@
 
 #include "modules/Ticks.hpp"
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <format>
 #include <utility>
 

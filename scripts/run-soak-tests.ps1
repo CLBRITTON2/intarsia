@@ -669,20 +669,18 @@ function Invoke-Scenario([string] $name, [int] $run) {
         if ($failures.Count -eq 0) {
             $baseline = $samples[$warmupSeconds]
             $final    = $samples[$samples.Count - 1]
+            $limits   = [ordered]@{ PrivateMB = $maxPrivateGrowthMB; Handles = $maxHandleGrowth; Gdi = $maxGuiObjectGrowth; User = $maxGuiObjectGrowth; Threads = $maxThreadGrowth }
             if ($Seconds -ge $longRunSeconds) {
                 # The first half's growth is caches filling, and a leak keeps growing through the second.
                 $settled = $samples.GetRange([int] ($samples.Count / 2), $samples.Count - [int] ($samples.Count / 2)).ToArray()
-                $limits  = [ordered]@{ PrivateMB = $maxPrivateGrowthMB; Handles = $maxHandleGrowth; Gdi = $maxGuiObjectGrowth; User = $maxGuiObjectGrowth; Threads = $maxThreadGrowth }
                 foreach ($property in $limits.Keys) {
                     $perHour = Get-GrowthPerHour $settled $property
                     if ($perHour -gt $limits[$property]) { $failures.Add("$property grew $([math]::Round($perHour, 1)) an hour over the second half, past $($limits[$property])") }
                 }
             } else {
-                if ($final.PrivateMB - $baseline.PrivateMB -gt $maxPrivateGrowthMB) { $failures.Add("private memory grew $($baseline.PrivateMB) to $($final.PrivateMB) MB") }
-                if ($final.Handles - $baseline.Handles -gt $maxHandleGrowth) { $failures.Add("handles grew $($baseline.Handles) to $($final.Handles)") }
-                if ($final.Gdi - $baseline.Gdi -gt $maxGuiObjectGrowth) { $failures.Add("GDI objects grew $($baseline.Gdi) to $($final.Gdi)") }
-                if ($final.User - $baseline.User -gt $maxGuiObjectGrowth) { $failures.Add("USER objects grew $($baseline.User) to $($final.User)") }
-                if ($final.Threads - $baseline.Threads -gt $maxThreadGrowth) { $failures.Add("threads grew $($baseline.Threads) to $($final.Threads)") }
+                foreach ($property in $limits.Keys) {
+                    if ($final.$property - $baseline.$property -gt $limits[$property]) { $failures.Add("$property grew $($baseline.$property) to $($final.$property)") }
+                }
             }
             $cpuPercent = ($final.Cpu - $baseline.Cpu).TotalMilliseconds / (($samples.Count - 1 - $warmupSeconds) * 10.0)
             if ($name -eq 'idle' -and $cpuPercent -gt $maxIdleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU while nearly idle") }
@@ -745,11 +743,6 @@ function Invoke-Scenario([string] $name, [int] $run) {
 & (Join-Path $PSScriptRoot 'build.ps1') -Preset debug
 if ($Preset -eq 'release') {
     & (Join-Path $PSScriptRoot 'build.ps1') -Preset release
-}
-foreach ($exe in @($barExe, $serverExe, $senderExe, $retitlerExe)) {
-    if (-not (Test-Path $exe)) {
-        throw "$exe not found after building the debug and $Preset presets"
-    }
 }
 
 $results = for ($run = 0; $run -lt $Scenario.Count; ++$run) {

@@ -2,6 +2,8 @@
 
 #include "render/ShownPresent.hpp"
 
+#include <windows.h>
+
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -25,3 +27,6 @@ struct FrameStats {
 // the display has shown `shown`. No stats starts them.
 FrameStats WithFrame(const std::optional<FrameStats>& stats, std::chrono::steady_clock::time_point at, std::chrono::steady_clock::duration present, std::uint32_t presented,
                      const std::optional<ShownPresent>& shown);
+
+// Writes stats to the log as the animation_frames event of the bar on monitorRect.
+void LogAnimationFrames(const FrameStats& stats, const RECT& monitorRect);

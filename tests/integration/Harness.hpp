@@ -1,10 +1,11 @@
 #pragma once
 
-#include "platform/Handle.hpp"
+#include "ChildProcess.hpp"
 
 #include <windows.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -21,28 +22,6 @@ namespace integration {
     inline constexpr std::wstring_view kWindowTitle = L"intarsia integration";
     // The bar's --tray-class, one no app uses, so the bar never takes the desktop's tray.
     inline constexpr std::wstring_view kTrayClass = L"IntarsiaIntegrationTray";
-
-    // A child process with stdin on a pipe and stdout and stderr in files, killed with its job if the test ends without
-    // closing it.
-    class ChildProcess {
-      public:
-        ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
-                     const std::filesystem::path& stderrPath);
-
-        std::uint32_t Id() const;
-        bool          Running() const;
-        // Posts WM_CLOSE to every top-level window of the process, hidden ones included, as taskkill without /F does,
-        // then waits for it to exit. The exit code, or nullopt when it is still running after limit.
-        std::optional<std::uint32_t> Close(std::chrono::milliseconds limit) const;
-        void                         Kill() const;
-        void                         WriteLine(std::string_view line) const;
-
-      private:
-        UniqueHandle  _job;
-        UniqueHandle  _input;
-        UniqueHandle  _process;
-        std::uint32_t _id;
-    };
 
     // A visible, minimized top-level window titled kWindowTitle plus suffix, so the test server lists it.
     class TestWindow {
@@ -92,22 +71,6 @@ namespace integration {
       private:
         POINT _position;
     };
-
-    // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
-    struct Capture {
-        std::int32_t               width;
-        std::int32_t               height;
-        std::vector<std::uint32_t> pixels;
-    };
-
-    RECT ScreenRect(HWND window);
-    // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
-    Capture CaptureScreenOver(HWND window);
-    size_t  CountPixels(const Capture& capture, std::uint32_t rgb);
-    // Columns from the leftmost pixel in rgb to the rightmost, both counted, or nullopt when there are none.
-    std::optional<std::int32_t> ColumnSpan(const Capture& capture, std::uint32_t rgb);
-    // The mean column of the pixels in rgb, or nullopt when there are none.
-    std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb);
 
     // argv_recorder.exe (tests/integration/ArgvRecorder.cpp), for a config's actions and custom commands to name.
     std::filesystem::path ArgvRecorderPath();
@@ -184,7 +147,9 @@ namespace integration {
         // Sweeps once, logs each command it sent with how many clicks sent it, and returns them all.
         std::vector<std::string> Sweep(std::uint32_t attempt) const;
         // Prints the bar's log and every server's stderr, each line tagged with its file.
-        void                        PrintLogs() const;
+        void PrintLogs() const;
+        // The bar's structured stderr log.
+        std::filesystem::path       BarErrors() const;
         std::filesystem::path       ServerOutput(std::uint32_t start) const;
         std::filesystem::path       ServerErrors(std::uint32_t start) const;
 

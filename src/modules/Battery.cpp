@@ -1,10 +1,46 @@
 #include "modules/Battery.hpp"
 
+#include "modules/Placeholders.hpp"
 #include "platform/Text.hpp"
 
+#include <cstdint>
 #include <format>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
+
+namespace {
+
+    // Empty while the batteries do not report it.
+    std::string HealthText(std::optional<std::int32_t> healthPercent) {
+        if (!healthPercent.has_value()) {
+            return std::string();
+        }
+        return std::to_string(*healthPercent);
+    }
+
+    // The values every battery format can name, from the state.
+    std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {
+        return {{.name = "capacity", .value = std::int64_t{state.percent}},
+                {.name = "time", .value = FormatTimeLeft(state.secondsLeft)},
+                {.name = "health", .value = HealthText(state.healthPercent)}};
+    }
+
+    // The colors a discharging battery draws in at percent: critical at or under critical_at, then warning at or under
+    // warning_at.
+    TextState DischargingState(const BatteryConfig& config, std::int32_t percent) {
+        if (percent <= config.criticalAtPercent) {
+            return TextState::Critical;
+        }
+        if (percent <= config.warningAtPercent) {
+            return TextState::Warning;
+        }
+        return TextState::Normal;
+    }
+
+} // namespace
 
 Battery::Battery(BatteryConfig config, const IBattery& battery) : IconTextModule(std::move(config)), _battery(battery) {
     const std::vector<Placeholder> samples = BatteryPlaceholders(BatteryState{
@@ -31,12 +67,6 @@ std::optional<std::wstring> Battery::TooltipText() {
     return ToWide(FormatPlaceholders(*Settings().tooltip, BatteryPlaceholders(*state)));
 }
 
-std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {
-    return {{.name = "capacity", .value = std::int64_t{state.percent}},
-            {.name = "time", .value = FormatTimeLeft(state.secondsLeft)},
-            {.name = "health", .value = state.healthPercent.has_value() ? std::to_string(*state.healthPercent) : std::string()}};
-}
-
 ModuleText FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state) {
     if (!state.has_value()) {
         return NormalText(L"", L"");
@@ -46,9 +76,7 @@ ModuleText FormatBattery(const BatteryConfig& config, const std::optional<Batter
             return ModuleText{
                 .icon       = LevelIcon(config.icons, state->percent),
                 .text       = ToWide(FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state))),
-                .state      = state->percent <= config.criticalAtPercent ? TextState::Critical :
-                         state->percent <= config.warningAtPercent       ? TextState::Warning :
-                                                                           TextState::Normal,
+                .state      = DischargingState(config, state->percent),
                 .classIndex = 0,
             };
         case ChargeState::Charging: return NormalText(config.iconCharging, ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))));

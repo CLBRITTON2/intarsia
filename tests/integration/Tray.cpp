@@ -1,4 +1,6 @@
 #include "Harness.hpp"
+
+#include "Capture.hpp"
 #include "TrayApp.hpp"
 
 #include <gmock/gmock.h>

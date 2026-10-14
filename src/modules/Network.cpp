@@ -1,5 +1,6 @@
 #include "modules/Network.hpp"
 
+#include "modules/Placeholders.hpp"
 #include "platform/Text.hpp"
 
 #include <algorithm>
@@ -16,6 +17,16 @@ namespace {
 
     // How often a rate shown on the bar is read again, the backend's own sampling interval.
     constexpr std::uint32_t kRateTickMs = 1000;
+
+    // The values every network format can name, from the state.
+    std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {
+        return {{.name = "ssid", .value = ToUtf8(state.ssid)},
+                {.name = "signal", .value = std::int64_t{state.signalPercent.value_or(0)}},
+                {.name = "ip", .value = ToUtf8(state.ipv4)},
+                {.name = "interface", .value = ToUtf8(state.interfaceName)},
+                {.name = "down", .value = FormatRate(state.receivedBytesPerSecond)},
+                {.name = "up", .value = FormatRate(state.sentBytesPerSecond)}};
+    }
 
     // The config once every format is known to be valid. Throws ConfigError.
     NetworkConfig Validated(NetworkConfig config) {
@@ -48,7 +59,10 @@ ModuleText Network::Content() {
 }
 
 std::optional<std::uint32_t> Network::MillisecondsUntilChange() const {
-    return _showsRates ? std::optional<std::uint32_t>(kRateTickMs) : std::nullopt;
+    if (_showsRates) {
+        return kRateTickMs;
+    }
+    return std::nullopt;
 }
 
 std::optional<std::wstring> Network::TooltipText() {
@@ -56,15 +70,6 @@ std::optional<std::wstring> Network::TooltipText() {
         return std::nullopt;
     }
     return ToWide(FormatPlaceholders(*Settings().tooltip, NetworkPlaceholders(_network.State())));
-}
-
-std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {
-    return {{.name = "ssid", .value = ToUtf8(state.ssid)},
-            {.name = "signal", .value = std::int64_t{state.signalPercent.value_or(0)}},
-            {.name = "ip", .value = ToUtf8(state.ipv4)},
-            {.name = "interface", .value = ToUtf8(state.interfaceName)},
-            {.name = "down", .value = FormatRate(state.receivedBytesPerSecond)},
-            {.name = "up", .value = FormatRate(state.sentBytesPerSecond)}};
 }
 
 ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state) {

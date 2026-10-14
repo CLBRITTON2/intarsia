@@ -1,10 +1,10 @@
 #include "platform/ShellLaunch.hpp"
 
 #include "platform/ComScope.hpp"
+#include "platform/CommandLine.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Log.hpp"
-#include "platform/Process.hpp"
 #include "platform/Token.hpp"
 
 #include <windows.h>
@@ -15,8 +15,8 @@
 #include <exdisp.h>
 #include <oleauto.h>
 #include <servprov.h>
-#include <shlguid.h>
 #include <shldisp.h>
+#include <shlguid.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <wrl/client.h>

@@ -60,6 +60,14 @@ namespace integration {
             }
         }
 
+        // The icon color a send's log line names, none for a send without an icon.
+        std::string ColorField(std::optional<std::uint32_t> rgb) {
+            if (!rgb.has_value()) {
+                return "none";
+            }
+            return std::format("#{:06x}", *rgb);
+        }
+
         std::int16_t Low16(LRESULT value) {
             return static_cast<std::int16_t>(LOWORD(static_cast<DWORD>(value)));
         }
@@ -175,19 +183,17 @@ namespace integration {
 
     // The icon handle lives until the send returns, since the tray reads its pixels while the sender waits.
     bool TrayApp::SendNotify(std::uint32_t command, std::uint32_t flags, std::optional<std::uint32_t> rgb) const {
+        TrayNotifyData message = NotifyData(command, Handle32(_owner), _id, flags, kCallback);
+        message.data.version   = _version;
         std::optional<OwnedIcon> icon;
         if (rgb.has_value()) {
             icon.emplace(*rgb);
+            message.data.icon = Handle32(icon->Get());
         }
-        TrayNotifyData message = NotifyData(command, Handle32(_owner), _id, flags, kCallback);
-        message.data.icon      = icon.has_value() ? Handle32(icon->Get()) : 0;
-        message.data.version   = _version;
-        LRESULT    answer      = FALSE;
-        const bool answered    = Send(kNotifyIconCopyData, &message, sizeof(message), answer);
-        const bool taken       = answered && answer != FALSE;
-        Log("tray_sent",
-            std::format("command={} id={} version={} color={} taken={}", CommandName(command), _id, _version, rgb.has_value() ? std::format("#{:06x}", *rgb) : std::string("none"),
-                        taken));
+        LRESULT    answer   = FALSE;
+        const bool answered = Send(kNotifyIconCopyData, &message, sizeof(message), answer);
+        const bool taken    = answered && answer != FALSE;
+        Log("tray_sent", std::format("command={} id={} version={} color={} taken={}", CommandName(command), _id, _version, ColorField(rgb), taken));
         return taken;
     }
 

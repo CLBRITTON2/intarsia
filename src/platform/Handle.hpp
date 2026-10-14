@@ -20,6 +20,7 @@ template <typename Handle, auto Free>
 using UniqueReleased = std::unique_ptr<std::remove_pointer_t<Handle>, ReleaseWith<Free>>;
 
 using UniqueHandle = UniqueReleased<HANDLE, &CloseHandle>;
+using UniqueLocal  = UniqueReleased<HLOCAL, &LocalFree>;
 
 // Takes ownership of a handle a Win32 call returned, throwing with that call's last error when it is null or
 // INVALID_HANDLE_VALUE (CreateFileW fails with the latter, most other creators with null).

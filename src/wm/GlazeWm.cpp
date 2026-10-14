@@ -5,9 +5,9 @@
 #include "platform/Text.hpp"
 #include "wm/GlazeWmProtocol.hpp"
 
-#include <cstdint>
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <format>
 #include <stdexcept>
 #include <utility>
@@ -69,7 +69,10 @@ GlazeWm::~GlazeWm() {
 }
 
 std::optional<FocusedWindow> GlazeWm::Focused() const {
-    return _focus != nullptr ? _focus->Focused() : std::nullopt;
+    if (_focus == nullptr) {
+        return std::nullopt;
+    }
+    return _focus->Focused();
 }
 
 std::vector<Workspace> GlazeWm::Workspaces() const {

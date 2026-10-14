@@ -22,6 +22,22 @@ namespace {
         std::uint32_t height;
     };
 
+    // A monochrome icon has no color bitmap, so its mask gives its size.
+    HBITMAP SizedBitmap(const UniqueBitmap& color, const UniqueBitmap& mask) {
+        if (color != nullptr) {
+            return color.get();
+        }
+        return mask.get();
+    }
+
+    // A monochrome icon's mask holds the AND mask above the XOR mask, so it is twice the icon's height.
+    std::int32_t IconHeight(const BITMAP& bitmap, const UniqueBitmap& color) {
+        if (color != nullptr) {
+            return bitmap.bmHeight;
+        }
+        return bitmap.bmHeight / 2;
+    }
+
     // Copies the icon's bitmaps, since no call reports the size without them, but spares WIC's copy and its conversion.
     IconSize ReadIconSize(HICON icon) {
         ICONINFO info{};
@@ -31,12 +47,10 @@ namespace {
         const UniqueBitmap color(info.hbmColor);
         const UniqueBitmap mask(info.hbmMask);
         BITMAP             bitmap{};
-        if (GetObjectW(color != nullptr ? color.get() : mask.get(), sizeof(bitmap), &bitmap) == 0) {
+        if (GetObjectW(SizedBitmap(color, mask), sizeof(bitmap), &bitmap) == 0) {
             ThrowLastError("GetObjectW(icon bitmap)");
         }
-        // A monochrome icon has no color bitmap, and its mask holds the AND mask above the XOR mask.
-        const std::int32_t height = color != nullptr ? bitmap.bmHeight : bitmap.bmHeight / 2;
-        return IconSize{.width = static_cast<std::uint32_t>(bitmap.bmWidth), .height = static_cast<std::uint32_t>(height)};
+        return IconSize{.width = static_cast<std::uint32_t>(bitmap.bmWidth), .height = static_cast<std::uint32_t>(IconHeight(bitmap, color))};
     }
 
     void RequireReadableSize(std::uint32_t width, std::uint32_t height) {

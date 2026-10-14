@@ -15,6 +15,12 @@ enum class Edge : std::uint8_t {
     Right
 };
 
+// The class of the taskbar window, which Shell_NotifyIcon and SHAppBarMessage send to.
+inline constexpr wchar_t kTaskbarClass[] = L"Shell_TrayWnd";
+
+// Explorer's window of the class, or null while Explorer shows none. Never this process's own window.
+HWND ExplorerTaskbar(const std::wstring& windowClass);
+
 // COPYDATASTRUCT::dwData of an SHAppBarMessage call to the taskbar window.
 inline constexpr ULONG_PTR kAppBarCopyData = 0;
 

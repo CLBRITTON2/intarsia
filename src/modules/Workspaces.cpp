@@ -6,8 +6,39 @@
 #include <cstdint>
 #include <utility>
 
+namespace {
+
+    // The style a workspace draws in: focused before occupied before empty.
+    const ItemStyle& WorkspaceStyle(const Workspace& workspace, const ModuleStyle& style) {
+        if (workspace.focused) {
+            return style.focused;
+        }
+        if (workspace.occupied) {
+            return style.occupied;
+        }
+        return style.empty;
+    }
+
+    // "<name> disconnected" while the window manager is unreachable, empty while connected.
+    std::wstring DisconnectedText(const WindowManagerStatus& status) {
+        if (status.connection == Connection::Disconnected) {
+            return status.name + L" disconnected";
+        }
+        return std::wstring();
+    }
+
+    // None while the window manager is unreachable.
+    std::vector<Workspace> ShownWorkspaces(const IWindowManager& windowManager, const WindowManagerStatus& status, std::intptr_t monitor) {
+        if (status.connection == Connection::Disconnected) {
+            return std::vector<Workspace>();
+        }
+        return OnMonitor(windowManager.Workspaces(), monitor);
+    }
+
+} // namespace
+
 Workspaces::Workspaces(IWindowManager& windowManager, HMONITOR monitor, ModuleStyle style) :
-    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)), _row(EmptyItemRow()), _disconnected(EmptyIconText()) {}
+    _windowManager(windowManager), _monitor(reinterpret_cast<std::intptr_t>(monitor)), _style(std::move(style)) {}
 
 bool Workspaces::Layout(const RenderContext& render) {
     if (!LayOutItems(render)) {
@@ -19,8 +50,8 @@ bool Workspaces::Layout(const RenderContext& render) {
 
 bool Workspaces::LayOutItems(const RenderContext& render) {
     const WindowManagerStatus status           = _windowManager.Status();
-    std::wstring              disconnectedText = status.connection == Connection::Disconnected ? status.name + L" disconnected" : std::wstring();
-    std::vector<Workspace>    shown            = disconnectedText.empty() ? OnMonitor(_windowManager.Workspaces(), _monitor) : std::vector<Workspace>();
+    std::wstring              disconnectedText = DisconnectedText(status);
+    std::vector<Workspace>    shown            = ShownWorkspaces(_windowManager, status, _monitor);
     if (_laidOut && shown == _shown && disconnectedText == _disconnectedText) {
         return false;
     }
@@ -28,7 +59,11 @@ bool Workspaces::LayOutItems(const RenderContext& render) {
     _disconnectedText = std::move(disconnectedText);
     _laidOut          = true;
     _labels.clear();
-    _disconnected = _disconnectedText.empty() ? EmptyIconText() : LayOutIconText(render, L"", _disconnectedText);
+    if (_disconnectedText.empty()) {
+        _disconnected = EmptyIconText();
+    } else {
+        _disconnected = LayOutIconText(render, L"", _disconnectedText);
+    }
 
     std::vector<D2D1_SIZE_F> contents;
     for (const Workspace& workspace : _shown) {
@@ -41,7 +76,10 @@ bool Workspaces::LayOutItems(const RenderContext& render) {
 }
 
 D2D1_SIZE_F Workspaces::Size() const {
-    return _disconnectedText.empty() ? _row.size : _disconnected.size;
+    if (_disconnectedText.empty()) {
+        return _row.size;
+    }
+    return _disconnected.size;
 }
 
 void Workspaces::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
@@ -61,7 +99,7 @@ std::optional<std::uint32_t> Workspaces::MillisecondsUntilChange() const {
 }
 
 bool Workspaces::Hover(std::optional<D2D1_POINT_2F> point) {
-    const bool changed = _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
+    const bool changed = _hovered.Set(ItemUnderCursor(_row, point));
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
     return changed;
 }
@@ -92,11 +130,4 @@ std::optional<std::wstring> Workspaces::TooltipText() {
         return std::nullopt;
     }
     return DrawableText(status.detail);
-}
-
-const ItemStyle& WorkspaceStyle(const Workspace& workspace, const ModuleStyle& style) {
-    if (workspace.focused) {
-        return style.focused;
-    }
-    return workspace.occupied ? style.occupied : style.empty;
 }

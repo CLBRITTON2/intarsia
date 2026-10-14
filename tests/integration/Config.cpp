@@ -1,4 +1,6 @@
 #include "Harness.hpp"
+
+#include "Capture.hpp"
 #include "platform/Errors.hpp"
 
 #include <gmock/gmock.h>

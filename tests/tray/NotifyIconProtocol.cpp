@@ -1,4 +1,5 @@
 #include "tray/NotifyIconProtocol.hpp"
+#include "platform/Text.hpp"
 #include "support/Rect.hpp"
 #include "support/TrayPayload.hpp"
 
@@ -260,8 +261,8 @@ TEST(NotifyIconProtocol, TheSamePixelsKeepTheirPointer) {
 TEST(NotifyIconProtocol, DrawableTooltipKeepsLineBreaksAndReplacesTheUnsafe) {
     EXPECT_EQ(DrawableTooltip(L"a\r\nb"), L"a\nb");
     // The override is spelled as a number: MSVC refuses an unterminated one in a literal (C5255).
-    EXPECT_EQ(DrawableTooltip(std::wstring{L'a', L'\t', L'b', static_cast<wchar_t>(0x202E), L'c'}), L"a�b�c");
-    EXPECT_EQ(DrawableTooltip(std::wstring{L'x', static_cast<wchar_t>(0xD800), L'y'}), L"x�y");
+    EXPECT_EQ(DrawableTooltip(std::wstring{L'a', L'\t', L'b', static_cast<wchar_t>(0x202E), L'c'}), (std::wstring{L'a', kReplacementCharacter, L'b', kReplacementCharacter, L'c'}));
+    EXPECT_EQ(DrawableTooltip(std::wstring{L'x', static_cast<wchar_t>(0xD800), L'y'}), (std::wstring{L'x', kReplacementCharacter, L'y'}));
     EXPECT_EQ(DrawableTooltip(L""), L"");
 }
 

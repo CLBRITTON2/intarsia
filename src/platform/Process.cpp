@@ -1,15 +1,13 @@
 #include "platform/Process.hpp"
 
-#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
-#include "platform/Log.hpp"
 #include "platform/Text.hpp"
 #include "platform/Token.hpp"
 
 #include <sddl.h>
-#include <shellapi.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <bit>
@@ -19,7 +17,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -28,90 +25,7 @@
 
 namespace {
 
-    constexpr size_t        kMaxQueuedLaunches = 8;
-    constexpr std::uint32_t kKilledExitCode    = 1;
-
-    bool                    NeedsQuotes(std::wstring_view argument) {
-        return argument.empty() || argument.find_first_of(L" \t\n\v\"") != std::wstring_view::npos;
-    }
-
-    // The CommandLineToArgvW rules: backslashes are literal unless they precede a quote, where each one needs doubling
-    // and the quote itself needs a backslash.
-    std::wstring QuoteArgument(std::wstring_view argument) {
-        if (!NeedsQuotes(argument)) {
-            return std::wstring(argument);
-        }
-        std::wstring quoted      = L"\"";
-        size_t       backslashes = 0;
-        for (const wchar_t character : argument) {
-            if (character == L'\\') {
-                ++backslashes;
-                continue;
-            }
-            if (character == L'"') {
-                quoted.append((backslashes * 2) + 1, L'\\');
-            } else {
-                quoted.append(backslashes, L'\\');
-            }
-            backslashes = 0;
-            quoted += character;
-        }
-        quoted.append(backslashes * 2, L'\\');
-        quoted += L'"';
-        return quoted;
-    }
-
-    std::wstring PathVariable() {
-        const DWORD length = GetEnvironmentVariableW(L"PATH", nullptr, 0);
-        if (length == 0) {
-            return {};
-        }
-        std::wstring value(length, L'\0');
-        const DWORD  copied = GetEnvironmentVariableW(L"PATH", value.data(), length);
-        value.resize(copied);
-        return value;
-    }
-
-    // PATH's absolute entries, joined for SearchPathW, which resolves a relative one (".", an empty one, "bin")
-    // against the current directory.
-    std::wstring AbsoluteEntries(std::wstring_view path) {
-        std::wstring kept;
-        for (const auto entry : std::views::split(path, L';')) {
-            const std::wstring_view text(entry.begin(), entry.end());
-            if (!std::filesystem::path(text).is_absolute()) {
-                continue;
-            }
-            if (!kept.empty()) {
-                kept += L';';
-            }
-            kept += text;
-        }
-        return kept;
-    }
-
-    // ShellExecuteExW can use COM shell extensions, which need an apartment on the calling thread. Nothing here may throw
-    // out of the launcher's thread, so a failed launch is logged.
-    void Start(const Command& command) {
-        const std::wstring program    = command.program.wstring();
-        const std::wstring parameters = JoinArguments(command.arguments);
-        try {
-            const ComScope    com(ComThreading::Single, "launcher");
-            SHELLEXECUTEINFOW info{};
-            info.cbSize = sizeof(info);
-            // Zone checks stay on, so a program downloaded from the internet still gets its warning.
-            info.fMask        = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-            info.lpVerb       = L"open";
-            info.lpFile       = program.c_str();
-            info.lpParameters = parameters.empty() ? nullptr : parameters.c_str();
-            info.nShow        = SW_SHOWNORMAL;
-            if (!ShellExecuteExW(&info)) {
-                ThrowLastError("ShellExecuteExW");
-            }
-        } catch (const Win32Error& error) {
-            Log(LogLevel::Warning, "launcher", "launch_failed",
-                {{.key = "reason", .value = error.what()}, {.key = "program", .value = ToUtf8(program)}, {.key = "arguments", .value = ToUtf8(parameters)}});
-        }
-    }
+    constexpr std::uint32_t kKilledExitCode = 1;
 
     enum class Stop : std::uint8_t {
         None,
@@ -130,10 +44,18 @@ namespace {
         std::atomic<Stop> stop;
     };
 
+    // The watchdog's wait ends on its timeout or on the cancel event it waits for.
+    Stop StopFor(TP_WAIT_RESULT result) {
+        if (result == WAIT_TIMEOUT) {
+            return Stop::TimedOut;
+        }
+        return Stop::Cancelled;
+    }
+
     // Runs on a thread pool thread once cancel is signaled or the timeout passes, whichever comes first.
     void CALLBACK StopJob(PTP_CALLBACK_INSTANCE, PVOID context, PTP_WAIT, TP_WAIT_RESULT result) {
         auto* watchdog = static_cast<Watchdog*>(context);
-        watchdog->stop.store(result == WAIT_TIMEOUT ? Stop::TimedOut : Stop::Cancelled);
+        watchdog->stop.store(StopFor(result));
         TerminateJobObject(watchdog->job, kKilledExitCode);
         PostQueuedCompletionStatus(watchdog->port, 0, kStopKey, nullptr);
     }
@@ -154,32 +76,32 @@ namespace {
 
     // Only this user, at medium integrity or above, may open the pipe. Its name is predictable and it has one instance,
     // so the default descriptor (read for everyone) lets any process take it before this one opens the write end.
-    UniqueReleased<HLOCAL, &LocalFree> OwnerOnlyDescriptor() {
+    UniqueLocal OwnerOnlyDescriptor() {
         std::vector<std::byte> user   = TokenBuffer(GetCurrentProcessToken(), TokenUser, "TokenUser");
         LPWSTR                 rawSid = nullptr;
         if (!ConvertSidToStringSidW(UserSid(user), &rawSid)) {
             ThrowLastError("ConvertSidToStringSidW");
         }
-        const UniqueReleased<HLOCAL, &LocalFree> sid(static_cast<HLOCAL>(rawSid));
-        const std::wstring                       sddl       = std::format(L"D:P(A;;GA;;;{})S:(ML;;NWNR;;;ME)", rawSid);
-        PSECURITY_DESCRIPTOR                     descriptor = nullptr;
+        const UniqueLocal    sid(static_cast<HLOCAL>(rawSid));
+        const std::wstring   sddl       = std::format(L"D:P(A;;GA;;;{})S:(ML;;NWNR;;;ME)", rawSid);
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
         if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &descriptor, nullptr)) {
             ThrowLastError("ConvertStringSecurityDescriptorToSecurityDescriptorW(command output)");
         }
-        return UniqueReleased<HLOCAL, &LocalFree>(static_cast<HLOCAL>(descriptor));
+        return UniqueLocal(static_cast<HLOCAL>(descriptor));
     }
 
     // A named pipe rather than CreatePipe's, whose read end cannot be overlapped, so a read can be abandoned while a
     // process outside the job still holds the write end. The write end is inheritable, for the child's stdout. The
     // read end stays with this process.
     Pipe OutputPipe() {
-        static std::atomic<std::uint64_t>        created{0};
-        const std::wstring                       name       = std::format(L"\\\\.\\pipe\\intarsia-command-{}-{}", GetCurrentProcessId(), created.fetch_add(1));
-        const UniqueReleased<HLOCAL, &LocalFree> descriptor = OwnerOnlyDescriptor();
-        SECURITY_ATTRIBUTES                      ownerOnly{
-                                 .nLength              = sizeof(SECURITY_ATTRIBUTES),
-                                 .lpSecurityDescriptor = descriptor.get(),
-                                 .bInheritHandle       = FALSE,
+        static std::atomic<std::uint64_t> created{0};
+        const std::wstring                name       = std::format(L"\\\\.\\pipe\\intarsia-command-{}-{}", GetCurrentProcessId(), created.fetch_add(1));
+        const UniqueLocal                 descriptor = OwnerOnlyDescriptor();
+        SECURITY_ATTRIBUTES               ownerOnly{
+                          .nLength              = sizeof(SECURITY_ATTRIBUTES),
+                          .lpSecurityDescriptor = descriptor.get(),
+                          .bInheritHandle       = FALSE,
         };
         UniqueHandle        read = OwnHandle(CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
                                                               PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, 4096, 0, &ownerOnly),
@@ -235,13 +157,14 @@ namespace {
         }
 
         STARTUPINFOEXW startup{};
-        startup.StartupInfo.cb         = sizeof(startup);
-        startup.StartupInfo.dwFlags    = STARTF_USESTDHANDLES;
-        startup.StartupInfo.hStdOutput = output;
-        startup.lpAttributeList        = list;
-        const std::wstring  program    = command.program.wstring();
-        const std::wstring  arguments  = JoinArguments(command.arguments);
-        std::wstring        line       = arguments.empty() ? QuoteArgument(program) : QuoteArgument(program) + L" " + arguments;
+        startup.StartupInfo.cb            = sizeof(startup);
+        startup.StartupInfo.dwFlags       = STARTF_USESTDHANDLES;
+        startup.StartupInfo.hStdOutput    = output;
+        startup.lpAttributeList           = list;
+        const std::wstring        program = command.program.wstring();
+        std::vector<std::wstring> programAndArguments{program};
+        programAndArguments.insert(programAndArguments.end(), command.arguments.begin(), command.arguments.end());
+        std::wstring        line = JoinArguments(programAndArguments);
         PROCESS_INFORMATION process{};
         if (!CreateProcessW(program.c_str(), line.data(), nullptr, nullptr, TRUE, CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr,
                             &startup.StartupInfo, &process)) {
@@ -286,7 +209,7 @@ namespace {
                 ULONG_PTR   key       = 0;
                 OVERLAPPED* completed = nullptr;
                 const BOOL  succeeded = GetQueuedCompletionStatus(_port, &bytes, &key, &completed, INFINITE);
-                const DWORD error     = succeeded ? ERROR_SUCCESS : GetLastError();
+                const DWORD error     = GetLastError(); // read below only when succeeded is false
                 if (completed == nullptr && !succeeded) {
                     CancelIoEx(_pipe, &overlapped);
                     DWORD read = 0;
@@ -295,7 +218,10 @@ namespace {
                 }
                 if (key == kPipeKey) {
                     if (succeeded) {
-                        return _stopped ? std::nullopt : std::optional<DWORD>(bytes);
+                        if (_stopped) {
+                            return std::nullopt;
+                        }
+                        return bytes;
                     }
                     if (error == ERROR_BROKEN_PIPE || error == ERROR_OPERATION_ABORTED) {
                         return std::nullopt;
@@ -446,6 +372,21 @@ namespace {
 
 } // namespace
 
+void RestrictDllSearchToSystem32() {
+    if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)) {
+        ThrowLastError("SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)");
+    }
+}
+
+std::filesystem::path ProcessImage(HANDLE process) {
+    std::array<wchar_t, 32768> path{};
+    DWORD                      length = static_cast<DWORD>(path.size());
+    if (!QueryFullProcessImageNameW(process, 0, path.data(), &length)) {
+        ThrowLastError("QueryFullProcessImageNameW");
+    }
+    return {std::wstring(path.data(), length)};
+}
+
 std::string CaptureOutput(const Command& command, std::chrono::milliseconds timeout, size_t maxBytes, HANDLE cancel) {
     CommandRun                       run(command, cancel, timeout);
     OutputReader                     reader = run.Reader();
@@ -487,50 +428,13 @@ std::uint32_t StreamLines(const Command& command, size_t maxLineBytes, HANDLE ca
     return end.exitCode;
 }
 
-std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program) {
-    const std::filesystem::path path(program);
-    if (path.is_absolute()) {
-        std::error_code error;
-        return std::filesystem::is_regular_file(path, error) ? std::optional<std::filesystem::path>(path) : std::nullopt;
-    }
-    // SearchPathW resolves a name with any directory part against the current directory, whatever path it is given.
-    if (path.has_parent_path()) {
-        return std::nullopt;
-    }
-    // An explicit search path keeps SearchPathW from also looking in the current directory.
-    const std::wstring searchPath = AbsoluteEntries(PathVariable());
-    if (searchPath.empty()) {
-        return std::nullopt;
-    }
-    std::array<wchar_t, 32768> found{};
-    const DWORD                length = SearchPathW(searchPath.c_str(), std::wstring(program).c_str(), L".exe", static_cast<DWORD>(found.size()), found.data(), nullptr);
-    if (length == 0 || length >= found.size()) {
-        return std::nullopt;
-    }
-    return std::filesystem::path(std::wstring(found.data(), length));
-}
-
-std::wstring JoinArguments(const std::vector<std::wstring>& arguments) {
-    std::wstring line;
-    for (const std::wstring& argument : arguments) {
-        if (!line.empty()) {
-            line += L' ';
-        }
-        line += QuoteArgument(argument);
-    }
-    return line;
-}
-
-void RestrictDllSearchToSystem32() {
-    if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)) {
-        ThrowLastError("SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)");
-    }
-}
-
-Launcher::Launcher() : _queue(kMaxQueuedLaunches, [] { return WorkQueue<Command>::Process(Start); }) {}
-
-void Launcher::Launch(const Command& command) {
-    if (!_queue.Push(command)) {
-        Log(LogLevel::Warning, "launcher", "launch_dropped", {{.key = "reason", .value = "queue full"}, {.key = "program", .value = ToUtf8(command.program.wstring())}});
+void RequireDrawable(std::string_view text, std::string_view field, std::wstring_view allowed) {
+    std::wstring wide;
+    try {
+        wide = ToWide(text);
+    } catch (const Win32Error&) { throw OutputError(std::format("{} is not UTF-8", field)); }
+    const auto unsafe = std::ranges::find_if(wide, [allowed](wchar_t unit) { return IsUnsafeCharacter(unit) && allowed.find(unit) == std::wstring_view::npos; });
+    if (unsafe != wide.end()) {
+        throw OutputError(std::format("{} has control character U+{:04X}", field, static_cast<std::uint32_t>(*unsafe)));
     }
 }

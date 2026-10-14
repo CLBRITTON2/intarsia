@@ -148,26 +148,31 @@ namespace {
         return D2D1::RectF(std::min(first.left, second.left), std::min(first.top, second.top), std::max(first.right, second.right), std::max(first.bottom, second.bottom));
     }
 
+    // One shadow ring's figures: the padding box with the hole, moved in by by, cut out of it. The hole may sit partly
+    // outside the box, and even-odd filling cuts it only from a figure around it.
+    std::vector<Figure> ShadowRingFigures(const Figure& padding, const D2D1_RECT_F& hole, float by) {
+        if (IsEmpty(hole)) {
+            return {Figure{.rect = padding.rect, .radii = {}}};
+        }
+        return {Figure{.rect = Union(padding.rect, hole), .radii = {}}, Figure{.rect = hole, .radii = ShrinkAll(padding.radii, by)}};
+    }
+
     // Clipped to the box inside its border, as CSS clips an inset shadow, and painted last first, so the first is on top.
     void DrawShadows(ID2D1DeviceContext* context, BrushCache& brushes, ID2D1Factory* factory, const Figure& padding, const std::vector<InsetShadow>& shadows) {
         const ComPtr<ID2D1PathGeometry> clip = CreatePath(factory, {padding});
         context->PushLayer(D2D1::LayerParameters1(D2D1::InfiniteRect(), clip.Get()), nullptr);
         for (const InsetShadow& shadow : shadows | std::views::reverse) {
             for (const ShadowRing& ring : Rings(shadow)) {
-                const float       by   = shadow.spreadDips + ring.inset;
-                const D2D1_RECT_F hole = D2D1::RectF(padding.rect.left + shadow.xDips + by, padding.rect.top + shadow.yDips + by, padding.rect.right + shadow.xDips - by,
-                                                     padding.rect.bottom + shadow.yDips - by);
-                // The hole may sit partly outside the box, and even-odd filling cuts it only from a figure around it.
-                const std::vector<Figure> figures = IsEmpty(hole) ?
-                    std::vector<Figure>{Figure{.rect = padding.rect, .radii = {}}} :
-                    std::vector<Figure>{Figure{.rect = Union(padding.rect, hole), .radii = {}}, Figure{.rect = hole, .radii = ShrinkAll(padding.radii, by)}};
-                const D2D1_COLOR_F        color{
-                           .r = shadow.color.r,
-                           .g = shadow.color.g,
-                           .b = shadow.color.b,
-                           .a = ring.alpha,
+                const float        by   = shadow.spreadDips + ring.inset;
+                const D2D1_RECT_F  hole = D2D1::RectF(padding.rect.left + shadow.xDips + by, padding.rect.top + shadow.yDips + by, padding.rect.right + shadow.xDips - by,
+                                                      padding.rect.bottom + shadow.yDips - by);
+                const D2D1_COLOR_F color{
+                    .r = shadow.color.r,
+                    .g = shadow.color.g,
+                    .b = shadow.color.b,
+                    .a = ring.alpha,
                 };
-                context->FillGeometry(CreatePath(factory, figures).Get(), brushes.Get(color));
+                context->FillGeometry(CreatePath(factory, ShadowRingFigures(padding, hole, by)).Get(), brushes.Get(color));
             }
         }
         context->PopLayer();
@@ -226,6 +231,14 @@ namespace {
         return SameSide(first.top, second.top) && SameSide(first.right, second.right) && SameSide(first.bottom, second.bottom) && SameSide(first.left, second.left);
     }
 
+    // The ring between outer and inner, or the whole of outer when the border leaves no inside.
+    std::vector<Figure> BorderRingFigures(const Figure& outer, const Figure& inner) {
+        if (IsEmpty(inner.rect)) {
+            return {outer};
+        }
+        return {outer, inner};
+    }
+
     void DrawBorder(ID2D1DeviceContext* context, BrushCache& brushes, const Figure& outer, const Figure& inner, const Border& border) {
         const std::array<BorderSide, 4> sides = Sides(border);
         if (std::ranges::none_of(sides, IsDrawn)) {
@@ -240,7 +253,7 @@ namespace {
             return;
         }
         const ComPtr<ID2D1Factory>      factory = FactoryOf(context);
-        const ComPtr<ID2D1PathGeometry> ring    = CreatePath(factory.Get(), IsEmpty(inner.rect) ? std::vector<Figure>{outer} : std::vector<Figure>{outer, inner});
+        const ComPtr<ID2D1PathGeometry> ring    = CreatePath(factory.Get(), BorderRingFigures(outer, inner));
         auto                            widened = sides | std::views::filter([](const BorderSide& side) { return side.widthDips > 0.0f; });
         const BorderSide&               first   = *widened.begin();
         if (std::ranges::all_of(widened, [&first](const BorderSide& side) { return SameColor(side.color, first.color); })) {
@@ -256,19 +269,6 @@ namespace {
             context->FillGeometry(ring.Get(), brushes.Get(sides.at(side).color));
             context->PopLayer();
         }
-    }
-
-    float SnapCoordinate(float pixelsPerDip, float offset, float dips) {
-        return (std::round((dips + offset) * pixelsPerDip) / pixelsPerDip) - offset;
-    }
-
-    BorderSide SnapSide(float pixelsPerDip, const BorderSide& side) {
-        if (side.widthDips <= 0.0f) {
-            return side;
-        }
-        // The small allowance keeps a width that is whole pixels in float error from losing one.
-        const float pixels = std::max(std::floor((side.widthDips * pixelsPerDip) + 0.001f), 1.0f);
-        return BorderSide{.widthDips = pixels / pixelsPerDip, .color = side.color};
     }
 
     // Paints the shadows and border inside box, a snapped outline of radius, as CSS paints them over the background.
@@ -372,7 +372,25 @@ namespace {
         return D2D1::RoundedRect(box, radius, radius);
     }
 
+    BorderSide SnapSide(float pixelsPerDip, const BorderSide& side) {
+        if (side.widthDips <= 0.0f) {
+            return side;
+        }
+        // The small allowance keeps a width that is whole pixels in float error from losing one.
+        const float pixels = std::max(std::floor((side.widthDips * pixelsPerDip) + 0.001f), 1.0f);
+        return BorderSide{.widthDips = pixels / pixelsPerDip, .color = side.color};
+    }
+
 } // namespace
+
+Insets ContentInsets(const BoxStyle& style) {
+    return Insets{
+        .left   = style.padding.xDips + style.border.left.widthDips,
+        .top    = style.padding.yDips + style.border.top.widthDips,
+        .right  = style.padding.xDips + style.border.right.widthDips,
+        .bottom = style.padding.yDips + style.border.bottom.widthDips,
+    };
+}
 
 bool SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second) {
     return first.r == second.r && first.g == second.g && first.b == second.b && first.a == second.a;
@@ -383,11 +401,40 @@ bool SameShadow(const InsetShadow& first, const InsetShadow& second) {
         SameColor(first.color, second.color);
 }
 
+BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
+    const float pixelsPerDip = grid.pixelsPerDip;
+    BoxStyle    snapped      = style;
+    snapped.border           = Border{
+                  .top    = SnapSide(pixelsPerDip, style.border.top),
+                  .right  = SnapSide(pixelsPerDip, style.border.right),
+                  .bottom = SnapSide(pixelsPerDip, style.border.bottom),
+                  .left   = SnapSide(pixelsPerDip, style.border.left),
+    };
+    for (InsetShadow& shadow : snapped.shadows) {
+        shadow.xDips      = SnapLength(grid, shadow.xDips);
+        shadow.yDips      = SnapLength(grid, shadow.yDips);
+        shadow.spreadDips = SnapLength(grid, shadow.spreadDips);
+    }
+    return snapped;
+}
+
+std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style) {
+    std::vector<D2D1_ROUNDED_RECT> outlines;
+    if (!backdrop.blur) {
+        return outlines;
+    }
+    outlines.reserve(boxes.size());
+    for (const D2D1_RECT_F& box : boxes) {
+        outlines.push_back(SnappedOutline(grid, box, style));
+    }
+    return outlines;
+}
+
 BoxCache::BoxCache(ID2D1DeviceContext* context) :
     _context([context] {
-        Microsoft::WRL::ComPtr<ID2D1Device> device;
+        ComPtr<ID2D1Device> device;
         context->GetDevice(&device);
-        Microsoft::WRL::ComPtr<ID2D1DeviceContext> own;
+        ComPtr<ID2D1DeviceContext> own;
         ThrowIfDeviceFailed(device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &own), "ID2D1Device::CreateDeviceContext(box cache)");
         return own;
     }()),
@@ -414,8 +461,8 @@ void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2
     const std::uint32_t height       = SlicedLength(depth, reach);
     ID2D1Bitmap1*       bitmap       = Find(lines, radius, pixelsPerDip, width, height);
     if (bitmap == nullptr) {
-        const float                          dpi = pixelsPerDip * USER_DEFAULT_SCREEN_DPI;
-        Microsoft::WRL::ComPtr<ID2D1Bitmap1> drawn;
+        const float          dpi = pixelsPerDip * USER_DEFAULT_SCREEN_DPI;
+        ComPtr<ID2D1Bitmap1> drawn;
         ThrowIfDeviceFailed(
             _context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0,
                                    D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi),
@@ -450,66 +497,6 @@ void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2
             context->DrawBitmap(bitmap, drawnRect, 1.0f, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR, source);
         }
     }
-}
-
-PixelGrid PixelGridOf(ID2D1DeviceContext* context) {
-    float dpiX = 0.0f;
-    float dpiY = 0.0f;
-    context->GetDpi(&dpiX, &dpiY);
-    D2D1_MATRIX_3X2_F transform{};
-    context->GetTransform(&transform);
-    return PixelGrid{
-        .pixelsPerDip = dpiX / USER_DEFAULT_SCREEN_DPI,
-        .offsetX      = transform._31,
-        .offsetY      = transform._32,
-    };
-}
-
-float SnapLength(const PixelGrid& grid, float dips) {
-    return std::round(dips * grid.pixelsPerDip) / grid.pixelsPerDip;
-}
-
-D2D1_RECT_F SnapRect(const PixelGrid& grid, const D2D1_RECT_F& rect) {
-    return D2D1::RectF(SnapCoordinate(grid.pixelsPerDip, grid.offsetX, rect.left), SnapCoordinate(grid.pixelsPerDip, grid.offsetY, rect.top),
-                       SnapCoordinate(grid.pixelsPerDip, grid.offsetX, rect.right), SnapCoordinate(grid.pixelsPerDip, grid.offsetY, rect.bottom));
-}
-
-BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
-    const float pixelsPerDip = grid.pixelsPerDip;
-    BoxStyle    snapped      = style;
-    snapped.border           = Border{
-                  .top    = SnapSide(pixelsPerDip, style.border.top),
-                  .right  = SnapSide(pixelsPerDip, style.border.right),
-                  .bottom = SnapSide(pixelsPerDip, style.border.bottom),
-                  .left   = SnapSide(pixelsPerDip, style.border.left),
-    };
-    for (InsetShadow& shadow : snapped.shadows) {
-        shadow.xDips      = SnapLength(grid, shadow.xDips);
-        shadow.yDips      = SnapLength(grid, shadow.yDips);
-        shadow.spreadDips = SnapLength(grid, shadow.spreadDips);
-    }
-    return snapped;
-}
-
-Insets ContentInsets(const BoxStyle& style) {
-    return Insets{
-        .left   = style.padding.xDips + style.border.left.widthDips,
-        .top    = style.padding.yDips + style.border.top.widthDips,
-        .right  = style.padding.xDips + style.border.right.widthDips,
-        .bottom = style.padding.yDips + style.border.bottom.widthDips,
-    };
-}
-
-std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style) {
-    std::vector<D2D1_ROUNDED_RECT> outlines;
-    if (!backdrop.blur) {
-        return outlines;
-    }
-    outlines.reserve(boxes.size());
-    for (const D2D1_RECT_F& box : boxes) {
-        outlines.push_back(SnappedOutline(grid, box, style));
-    }
-    return outlines;
 }
 
 void DrawBox(ID2D1DeviceContext* context, BrushCache& brushes, BoxCache& boxes, const D2D1_RECT_F& bounds, const BoxStyle& style, const D2D1_COLOR_F& fill) {

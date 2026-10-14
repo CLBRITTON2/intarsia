@@ -20,5 +20,8 @@ int wmain(int argc, wchar_t* argv[]) { // NOLINT(misc-use-internal-linkage)
     HANDLE     copy   = nullptr;
     const BOOL copied = DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_OUTPUT_HANDLE), holder, &copy, 0, FALSE, DUPLICATE_SAME_ACCESS);
     CloseHandle(holder);
-    return copied ? 0 : 4;
+    if (!copied) {
+        return 4;
+    }
+    return 0;
 }

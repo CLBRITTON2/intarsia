@@ -2,8 +2,8 @@
 
 #include "platform/Errors.hpp"
 
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <format>
 #include <stdexcept>
@@ -31,9 +31,8 @@ namespace {
         return handle;
     }
 
-    UniqueReleased<HINTERNET, &WinHttpCloseHandle> OpenSession() {
-        UniqueReleased<HINTERNET, &WinHttpCloseHandle> session(
-            Checked(WinHttpOpen(L"intarsia", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen"));
+    UniqueInternet OpenSession() {
+        UniqueInternet session(Checked(WinHttpOpen(L"intarsia", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen"));
         // Set on the session so the request and the WebSocket made from it inherit them.
         if (!WinHttpSetTimeouts(session.get(), 0, kConnectTimeoutMs, kSendTimeoutMs, kHandshakeTimeoutMs)) {
             ThrowLastError("WinHttpSetTimeouts");

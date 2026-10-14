@@ -10,7 +10,6 @@
 #include <powrprof.h>
 
 #include <cstdint>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>

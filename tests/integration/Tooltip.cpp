@@ -1,5 +1,7 @@
 #include "Harness.hpp"
 
+#include "Capture.hpp"
+
 #include <gtest/gtest.h>
 
 #include <windows.h>
@@ -82,7 +84,10 @@ TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
     ASSERT_TRUE(integration::Eventually(
         [&] {
             HWND tooltip = bar.Tooltip();
-            tooltipSpan  = tooltip == nullptr ? std::nullopt : integration::ColumnSpan(integration::CaptureScreenOver(tooltip), kTooltipColor);
+            if (tooltip == nullptr) {
+                return false;
+            }
+            tooltipSpan = integration::ColumnSpan(integration::CaptureScreenOver(tooltip), kTooltipColor);
             return tooltipSpan.has_value();
         },
         kLimit))

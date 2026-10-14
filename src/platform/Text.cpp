@@ -10,31 +10,51 @@
 
 namespace {
 
+    // The bytes a UTF-8 sequence with this lead byte claims to hold, or 0 for a continuation byte or ASCII.
+    size_t Utf8LengthFromLead(std::uint8_t lead) {
+        if (lead >= 0xF0u) {
+            return 4;
+        }
+        if (lead >= 0xE0u) {
+            return 3;
+        }
+        if (lead >= 0xC0u) {
+            return 2;
+        }
+        return 0;
+    }
+
     // Bytes of the valid UTF-8 sequence that starts at text[at], or 0 when none does.
     size_t Utf8SequenceBytes(std::string_view text, size_t at) {
-        const auto   lead  = static_cast<std::uint8_t>(text[at]);
-        const size_t bytes = lead >= 0xF0u ? 4 : lead >= 0xE0u ? 3 : lead >= 0xC0u ? 2 : 0;
+        const size_t bytes = Utf8LengthFromLead(static_cast<std::uint8_t>(text[at]));
         if (bytes == 0 || at + bytes > text.size()) {
             return 0;
         }
         // Also rejects overlong forms, encoded surrogates and code points past U+10FFFF.
-        return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data() + at, static_cast<std::int32_t>(bytes), nullptr, 0) > 0 ? bytes : 0;
+        if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data() + at, static_cast<std::int32_t>(bytes), nullptr, 0) == 0) {
+            return 0;
+        }
+        return bytes;
+    }
+
+    // The code point bits a lead byte carries, which shrink as the sequence it starts grows.
+    char32_t LeadBits(std::uint8_t lead, size_t sequenceBytes) {
+        if (sequenceBytes == 4) {
+            return lead & 0x07u;
+        }
+        if (sequenceBytes == 3) {
+            return lead & 0x0Fu;
+        }
+        return lead & 0x1Fu;
     }
 
     // The code point of a valid UTF-8 sequence, already checked by Utf8SequenceBytes.
     char32_t DecodeUtf8(std::string_view sequence) {
-        const auto lead = static_cast<std::uint8_t>(sequence[0]);
-        char32_t   code = sequence.size() == 4 ? lead & 0x07u : sequence.size() == 3 ? lead & 0x0Fu : lead & 0x1Fu;
+        char32_t code = LeadBits(static_cast<std::uint8_t>(sequence[0]), sequence.size());
         for (size_t index = 1; index < sequence.size(); ++index) {
             code = (code << 6) | (static_cast<std::uint8_t>(sequence[index]) & 0x3Fu);
         }
         return code;
-    }
-
-    // The code points IsUnsafeCharacter describes.
-    bool IsUnsafeCodePoint(char32_t code) {
-        return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x061C || code == 0x200E || code == 0x200F || code == 0x2028 || code == 0x2029 ||
-            (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
     }
 
     std::wstring Widen(std::string_view text, std::uint32_t flags, std::string_view call) {
@@ -90,8 +110,9 @@ bool IsControlByte(char character) {
     return byte < 0x20u || byte == 0x7Fu;
 }
 
-bool IsUnsafeCharacter(wchar_t unit) {
-    return IsUnsafeCodePoint(static_cast<char32_t>(unit));
+bool IsUnsafeCharacter(char32_t code) {
+    return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x061C || code == 0x200E || code == 0x200F || code == 0x2028 || code == 0x2029 ||
+        (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
 }
 
 bool IsValidUtf8(std::string_view bytes) {
@@ -100,7 +121,10 @@ bool IsValidUtf8(std::string_view bytes) {
 
 std::string_view CharacterAt(std::string_view utf8, size_t at) {
     const size_t bytes = Utf8SequenceBytes(utf8, at);
-    return utf8.substr(at, bytes == 0 ? 1 : bytes);
+    if (bytes == 0) {
+        return utf8.substr(at, 1);
+    }
+    return utf8.substr(at, bytes);
 }
 
 std::wstring DrawableText(std::string_view bytes) {
@@ -115,7 +139,7 @@ std::wstring DrawableText(std::wstring_view text) {
 }
 
 std::string LogExcerpt(std::string_view text, size_t maxBytes) {
-    size_t kept = text.size() <= maxBytes ? text.size() : maxBytes;
+    size_t kept = std::min(text.size(), maxBytes);
     // Back off over UTF-8 continuation bytes (10xxxxxx) so the cut lands on a character boundary.
     while (kept < text.size() && kept > 0 && (static_cast<std::uint8_t>(text[kept]) & 0xC0u) == 0x80u) {
         --kept;
@@ -137,7 +161,7 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
             }
             const std::string_view sequence = shown.substr(at, bytes);
             const char32_t         code     = DecodeUtf8(sequence);
-            if (IsUnsafeCodePoint(code)) {
+            if (IsUnsafeCharacter(code)) {
                 excerpt += std::format("\\u{:04x}", static_cast<std::uint32_t>(code));
             } else {
                 excerpt += sequence;

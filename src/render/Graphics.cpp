@@ -9,8 +9,8 @@
 #include <dxgi1_3.h>
 #include <windows.h>
 
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <memory>
 #include <stdexcept>

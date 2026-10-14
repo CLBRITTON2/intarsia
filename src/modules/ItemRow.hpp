@@ -32,6 +32,9 @@ float ItemTextInset(const ItemStyle& style, Axis axis);
 // The box under point, measured from the row's origin, or nothing in a margin.
 std::optional<size_t> ItemAt(const ItemRow& row, D2D1_POINT_2F point);
 
+// The same for a module's hover: nothing while the cursor is off the module.
+std::optional<size_t> ItemUnderCursor(const ItemRow& row, std::optional<D2D1_POINT_2F> cursor);
+
 // Where a box's content starts once the row is drawn at origin.
 D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, D2D1_POINT_2F origin);
 

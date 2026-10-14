@@ -1,12 +1,12 @@
 #include "modules/ModuleFactory.hpp"
 
 #include "modules/Audio.hpp"
+#include "modules/Battery.hpp"
 #include "modules/BindingModes.hpp"
 #include "modules/Clock.hpp"
 #include "modules/Counter.hpp"
 #include "modules/Cpu.hpp"
 #include "modules/Custom.hpp"
-#include "modules/Battery.hpp"
 #include "modules/DirectionToggle.hpp"
 #include "modules/Memory.hpp"
 #include "modules/Network.hpp"
@@ -42,6 +42,13 @@ namespace {
         return *source;
     }
 
+    IAudio* AudioSourceFor(AudioFlow flow, const ModuleSources& sources) {
+        if (flow == AudioFlow::Output) {
+            return sources.audioOutput;
+        }
+        return sources.audioInput;
+    }
+
     std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources) {
         switch (instance.kind) {
             case ModuleKind::Clock: return std::make_unique<Clock>(RequireSettings<TextModuleConfig>(instance));
@@ -54,7 +61,7 @@ namespace {
             case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
             case ModuleKind::Audio: {
                 const AudioConfig& config = RequireSettings<AudioConfig>(instance);
-                return std::make_unique<Audio>(config, RequireSource(config.flow == AudioFlow::Output ? sources.audioOutput : sources.audioInput, instance));
+                return std::make_unique<Audio>(config, RequireSource(AudioSourceFor(config.flow, sources), instance));
             }
             case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), RequireSource(sources.network, instance));
             case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), RequireSource(sources.battery, instance));

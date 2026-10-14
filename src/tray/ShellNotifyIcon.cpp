@@ -3,9 +3,8 @@
 #include "platform/AppBar.hpp"
 #include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
-#include "platform/Text.hpp"
 #include "platform/Handle.hpp"
-#include "platform/PeerProcess.hpp"
+#include "platform/Process.hpp"
 #include "platform/Win32Cast.hpp"
 #include "platform/Win32Window.hpp"
 #include "render/Icon.hpp"
@@ -59,26 +58,6 @@ namespace {
         }
     }
 
-    // Another intarsia, or any other tray that forwards, would send the message straight back.
-    bool IsExplorer(HWND window) {
-        DWORD processId = 0;
-        if (GetWindowThreadProcessId(window, &processId) == 0 || processId == GetCurrentProcessId()) {
-            return false;
-        }
-        // Null for a process of another user, whose taskbar is not this desktop's anyway.
-        HANDLE raw = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
-        if (raw == nullptr) {
-            return false;
-        }
-        const UniqueHandle process(raw);
-        try {
-            return SameFileName(ProcessImage(process.get()).filename().wstring(), L"explorer.exe");
-        } catch (const Win32Error& error) {
-            Log(LogLevel::Warning, "tray", "taskbar_unreadable", {{.key = "process", .value = std::to_string(processId)}, {.key = "reason", .value = error.what()}});
-            return false;
-        }
-    }
-
     // Throws Win32Error, as for a window already gone or a process of another user.
     std::wstring WindowImage(HWND window) {
         DWORD processId = 0;
@@ -129,9 +108,16 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
     };
     const bool doubled =
         IsDoubleClick(_lastClick, click, std::chrono::milliseconds(GetDoubleClickTime()), SIZE{.cx = GetSystemMetrics(SM_CXDOUBLECLK), .cy = GetSystemMetrics(SM_CYDOUBLECLK)});
-    // A third click after a double click starts a new pair, as Windows counts them.
-    _lastClick                                   = doubled ? std::nullopt : std::optional<TrayClick>(click);
-    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, doubled ? DoubleClickEvents(button) : ClickEvents(button, icon.version), cursor);
+    std::vector<std::uint32_t> events;
+    if (doubled) {
+        // A third click after a double click starts a new pair, as Windows counts them.
+        _lastClick = std::nullopt;
+        events     = DoubleClickEvents(button);
+    } else {
+        _lastClick = click;
+        events     = ClickEvents(button, icon.version);
+    }
+    const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, events, cursor);
     if (messages.empty()) {
         Log(LogLevel::Warning, "tray", "input_refused",
             {{.key = "owner", .value = std::to_string(icon.owner)}, {.key = "callback_message", .value = std::to_string(icon.callbackMessage)}});
@@ -255,7 +241,10 @@ LRESULT ShellNotifyIcon::HandleCopyData(HWND sender, const COPYDATASTRUCT& data)
     }
     const bool applied = ApplyMessage(data);
     Forward(sender, data);
-    return applied ? TRUE : FALSE;
+    if (applied) {
+        return TRUE;
+    }
+    return FALSE;
 }
 
 bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
@@ -314,7 +303,10 @@ LRESULT ShellNotifyIcon::AnswerIconRect(const COPYDATASTRUCT& data) {
         rects.insert(rects.end(), reported.rects.begin(), reported.rects.end());
     }
     const std::optional<RECT> rect = QueriedIconRect(query, _icons, rects, *cursor);
-    return rect.has_value() ? IconRectAnswer(query.part, *rect) : 0;
+    if (!rect.has_value()) {
+        return 0;
+    }
+    return IconRectAnswer(query.part, *rect);
 }
 
 LRESULT ShellNotifyIcon::Forward(HWND sender, const COPYDATASTRUCT& data) {
@@ -415,16 +407,6 @@ void ShellNotifyIcon::RunLoop() {
 void ShellNotifyIcon::Fail(const std::exception_ptr& error) {
     SetEvent(_stopEvent.get());
     _failure.Report(error);
-}
-
-HWND ExplorerTaskbar(const std::wstring& windowClass) {
-    for (HWND candidate = FindWindowExW(nullptr, nullptr, windowClass.c_str(), nullptr); candidate != nullptr;
-         candidate      = FindWindowExW(nullptr, candidate, windowClass.c_str(), nullptr)) {
-        if (IsExplorer(candidate)) {
-            return candidate;
-        }
-    }
-    return nullptr;
 }
 
 void AnnounceTray() {

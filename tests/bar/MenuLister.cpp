@@ -1,6 +1,6 @@
 #include "bar/MenuLister.hpp"
 
-#include "modules/CommandPoller.hpp"
+#include "platform/Process.hpp"
 #include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
@@ -11,8 +11,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-namespace {} // namespace
 
 TEST(MenuLister, ParsesEntriesWithActiveOptional) {
     const std::vector<MenuItem> items = ParseMenuOutput(R"({"items":[{"id":"work","text":"Work","active":true},{"id":"home","text":"Home"}]})");
@@ -96,7 +94,10 @@ TEST(MenuLister, RefusesUndrawableTextAndTooManyItems) {
     EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"line\nbreak"}]})"); }, testing::Throws<OutputError>());
     std::string items;
     for (size_t index = 0; index <= kMaxMenuEntries; ++index) {
-        items += std::format(R"({}{{"id":"e{}","text":"E"}})", index == 0 ? "" : ",", index);
+        if (index > 0) {
+            items += ",";
+        }
+        items += std::format(R"({{"id":"e{}","text":"E"}})", index);
     }
     EXPECT_THAT([&items] { return ParseMenuOutput("{\"items\":[" + items + "]}"); }, ThrowsWith<OutputError>("more than 50 items"));
 }

@@ -53,7 +53,7 @@ std::optional<std::uint32_t> BindingModes::MillisecondsUntilChange() const {
 }
 
 bool BindingModes::Hover(std::optional<D2D1_POINT_2F> point) {
-    const bool changed = _hovered.Set(point.has_value() ? ItemAt(_row, *point) : std::nullopt);
+    const bool changed = _hovered.Set(ItemUnderCursor(_row, point));
     _fades.Follow(ItemStyles(), _hovered, std::chrono::steady_clock::now());
     return changed;
 }

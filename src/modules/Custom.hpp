@@ -2,16 +2,11 @@
 
 #include "config/Config.hpp"
 #include "modules/CommandPoller.hpp"
-#include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
 
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <vector>
-
-// The values a custom format can name: {text}, what the command printed.
-std::vector<Placeholder> CustomPlaceholders(const std::string& text);
 
 // What its command printed: format = "{text}". While the command fails it shows the reason in the alert color, and
 // nothing before the first run finishes.

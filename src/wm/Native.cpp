@@ -4,6 +4,7 @@
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -90,7 +91,7 @@ Native::UniqueHook Native::HookEvent(std::uint32_t event, std::uint32_t process,
 // control there.
 Native::UniqueHook Native::HookTitleChanges(HWND window) {
     DWORD       process = 0;
-    const DWORD thread  = window != nullptr ? GetWindowThreadProcessId(window, &process) : 0;
+    const DWORD thread  = GetWindowThreadProcessId(window, &process);
     if (thread == 0 || process == 0) {
         return UniqueHook(nullptr);
     }
@@ -139,6 +140,6 @@ std::wstring WindowTitle(HWND window) {
     }
     std::wstring       title(static_cast<size_t>(length) + 1, L'\0');
     const std::int32_t copied = GetWindowTextW(window, title.data(), length + 1);
-    title.resize(static_cast<size_t>(copied > 0 ? copied : 0));
+    title.resize(static_cast<size_t>(std::max(copied, 0)));
     return DrawableText(std::wstring_view(title));
 }
