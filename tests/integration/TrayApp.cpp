@@ -6,8 +6,6 @@
 
 #include <shellapi.h>
 
-#include <array>
-#include <cstddef>
 #include <format>
 #include <stdexcept>
 #include <string>
@@ -18,7 +16,6 @@ namespace integration {
 
         constexpr wchar_t       kOwnerClass[] = L"IntarsiaIntegrationTrayApp";
         constexpr UINT          kCallback     = WM_APP + 9;
-        constexpr std::uint32_t kIconSide     = 16;
         constexpr std::uint32_t kAnswerMs     = 5000;
 
         LRESULT CALLBACK        OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -38,26 +35,7 @@ namespace integration {
 
         class OwnedIcon {
           public:
-            explicit OwnedIcon(std::uint32_t rgb) {
-                const std::vector<std::uint32_t> pixels(size_t{kIconSide} * kIconSide, rgb | 0xFF000000U);
-                const std::array<std::byte, 32>  mask{};
-                HBITMAP                          color     = CreateBitmap(kIconSide, kIconSide, 1, 32, pixels.data());
-                HBITMAP                          maskImage = CreateBitmap(kIconSide, kIconSide, 1, 1, mask.data());
-                ICONINFO                         info{
-                                            .fIcon    = TRUE,
-                                            .xHotspot = 0,
-                                            .yHotspot = 0,
-                                            .hbmMask  = maskImage,
-                                            .hbmColor = color,
-                };
-                _icon             = color != nullptr && maskImage != nullptr ? CreateIconIndirect(&info) : nullptr;
-                const DWORD error = GetLastError();
-                DeleteObject(color);
-                DeleteObject(maskImage);
-                if (_icon == nullptr) {
-                    throw std::runtime_error(std::format("CreateIconIndirect failed with {}", error));
-                }
-            }
+            explicit OwnedIcon(std::uint32_t rgb) : _icon(CreateSolidIcon(rgb)) {}
             ~OwnedIcon() {
                 DestroyIcon(_icon);
             }

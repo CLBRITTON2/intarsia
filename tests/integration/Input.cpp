@@ -65,7 +65,7 @@ probe {
     bool RecordsAfter(const std::filesystem::path& record, size_t lines, const std::function<void()>& send) {
         send();
         const bool recorded = integration::Eventually([&] { return integration::RecordedLines(record).size() >= lines; }, kLimit);
-        integration::Log("argv_recorded", std::format("path=\"{}\" lines={} expected={}", record.string(), integration::RecordedLines(record).size(), lines));
+        integration::Log("argv_recorded", std::format("path={} lines={} expected={}", integration::LogValue(record.string()), integration::RecordedLines(record).size(), lines));
         return recorded;
     }
 

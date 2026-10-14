@@ -380,23 +380,50 @@ TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
 }
 
 TEST(NotifyIconProtocol, AnIconShownOnTwoBarsAnswersWithTheOneNearestTheCursor) {
+    const RECT leftBarIconRect{
+        .left   = -1000,
+        .top    = 0,
+        .right  = -970,
+        .bottom = 30,
+    };
+    const RECT otherIconRect{
+        .left   = 0,
+        .top    = 0,
+        .right  = 30,
+        .bottom = 30,
+    };
+    const RECT rightBarIconRect{
+        .left   = 1500,
+        .top    = 0,
+        .right  = 1530,
+        .bottom = 30,
+    };
     const std::vector<TrayIcon>     icons{Icon(5, 7)};
-    const RECT                      left{-1000, 0, -970, 30};
-    const RECT                      right{1500, 0, 1530, 30};
-    const std::vector<TrayIconRect> rects{Shown(5, 7, left), Shown(5, 8, RECT{0, 0, 30, 30}), Shown(5, 7, right)};
-    EXPECT_EQ(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = 1510, .y = 10}), right);
-    EXPECT_EQ(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = -500, .y = 400}), left);
+    const std::vector<TrayIconRect> rects{Shown(5, 7, leftBarIconRect), Shown(5, 8, otherIconRect), Shown(5, 7, rightBarIconRect)};
+    EXPECT_EQ(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = 1510, .y = 10}), rightBarIconRect);
+    EXPECT_EQ(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = -500, .y = 400}), leftBarIconRect);
 }
 
 TEST(NotifyIconProtocol, AnIconWithAGuidIsFoundByIt) {
     TrayIcon icon = Icon(5, 7);
     icon.guid     = kGuid;
-    const RECT rect{10, 0, 40, 30};
-    EXPECT_EQ(QueriedIconRect(Query(0, 0, kGuid), {icon}, {Shown(5, 7, rect)}, POINT{.x = 0, .y = 0}), rect);
+    const RECT iconRect{
+        .left   = 10,
+        .top    = 0,
+        .right  = 40,
+        .bottom = 30,
+    };
+    EXPECT_EQ(QueriedIconRect(Query(0, 0, kGuid), {icon}, {Shown(5, 7, iconRect)}, POINT{.x = 0, .y = 0}), iconRect);
 }
 
 TEST(NotifyIconProtocol, AnIconNoBarShowsHasNoRect) {
-    const std::vector<TrayIconRect> rects{Shown(5, 8, RECT{0, 0, 30, 30})};
+    const RECT otherIconRect{
+        .left   = 0,
+        .top    = 0,
+        .right  = 30,
+        .bottom = 30,
+    };
+    const std::vector<TrayIconRect> rects{Shown(5, 8, otherIconRect)};
     // Folded away, an icon the tray never had, and a GUID no icon has.
     EXPECT_FALSE(QueriedIconRect(Query(5, 7, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());

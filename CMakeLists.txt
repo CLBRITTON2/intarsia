@@ -51,6 +51,11 @@ set_source_files_properties(${LUA_SOURCES} PROPERTIES LANGUAGE CXX)
 add_library(lua STATIC ${LUA_SOURCES})
 target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
 
+# The definitions and warnings every target of ours builds with, which Lua and GoogleTest do not.
+add_library(intarsia_flags INTERFACE)
+target_compile_definitions(intarsia_flags INTERFACE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(intarsia_flags INTERFACE /W4 /WX /permissive- /utf-8)
+
 # Everything but the entry point, so the tests link the same code the bar runs.
 add_library(intarsia_core STATIC
   src/App.cpp
@@ -132,9 +137,7 @@ add_library(intarsia_core STATIC
   src/wm/WindowManagerFactory.cpp
 )
 target_include_directories(intarsia_core PUBLIC src)
-target_compile_definitions(intarsia_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(intarsia_core PUBLIC /W4 /WX /permissive- /utf-8)
-target_link_libraries(intarsia_core PUBLIC lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dxguid dwmapi windowsapp CoreMessaging shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi shlwapi pdh)
+target_link_libraries(intarsia_core PUBLIC intarsia_flags lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dxguid dwmapi windowsapp CoreMessaging shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi shlwapi pdh)
 
 # Parsing these headers is most of every file's compile time, so each target parses them once. Off for the lint, since
 # clang-tidy cannot read MSVC's precompiled headers.
@@ -265,22 +268,18 @@ if(BUILD_TESTING)
   # The program the integration tests' actions and custom commands run.
   add_executable(integration_argv_recorder WIN32 tests/integration/ArgvRecorder.cpp)
   set_target_properties(integration_argv_recorder PROPERTIES OUTPUT_NAME argv_recorder)
-  target_compile_definitions(integration_argv_recorder PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_options(integration_argv_recorder PRIVATE /W4 /WX /permissive- /utf-8)
+  target_link_libraries(integration_argv_recorder PRIVATE intarsia_flags)
 
   # The command the process tests capture to keep its output pipe open from outside its job.
   add_executable(test_pipe_holder tests/support/PipeHolder.cpp)
   set_target_properties(test_pipe_holder PROPERTIES OUTPUT_NAME pipe_holder)
-  target_compile_definitions(test_pipe_holder PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_options(test_pipe_holder PRIVATE /W4 /WX /permissive- /utf-8)
+  target_link_libraries(test_pipe_holder PRIVATE intarsia_flags)
 
-  # The soak tests' IPC server (scripts/run-soak-tests.ps1), named glazewm.exe because the bar's peer check requires
-  # it.
+  # The test GlazeWM IPC server the integration and soak tests run the bar against, named glazewm.exe because the
+  # bar's peer check requires it.
   add_executable(test_glazewm_server tests/support/GlazeWmServer.cpp)
   set_target_properties(test_glazewm_server PROPERTIES OUTPUT_NAME glazewm)
-  target_compile_definitions(test_glazewm_server PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_options(test_glazewm_server PRIVATE /W4 /WX /permissive- /utf-8)
-  target_link_libraries(test_glazewm_server PRIVATE ws2_32 bcrypt crypt32)
+  target_link_libraries(test_glazewm_server PRIVATE intarsia_flags ws2_32 bcrypt crypt32)
 
   # The soak tests' tray apps, sending the tray what apps do at their rate. It takes the payload layout from the core.
   add_executable(soak_tray_sender tests/soak/TraySender.cpp)
@@ -291,6 +290,5 @@ if(BUILD_TESTING)
   # The soak tests' foreground window, retitled as a terminal showing progress retitles itself.
   add_executable(soak_window_sender tests/soak/WindowSender.cpp)
   set_target_properties(soak_window_sender PROPERTIES OUTPUT_NAME window_sender)
-  target_compile_definitions(soak_window_sender PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_options(soak_window_sender PRIVATE /W4 /WX /permissive- /utf-8)
+  target_link_libraries(soak_window_sender PRIVATE intarsia_flags)
 endif()

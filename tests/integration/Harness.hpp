@@ -58,12 +58,13 @@ namespace integration {
 
     // Prints a line in the bar's log layout to stdout, component harness, the fields as key=value pairs.
     void Log(std::string_view event, std::string_view fields);
+    // value as one key=value field value, quoted when it is empty or holds a space.
+    std::string LogValue(std::string_view value);
 
     // Where NewWorkDirectory(name), and so a RunningBar named name, keeps its files, known before either makes it.
     std::filesystem::path WorkDirectoryPath(std::string_view name);
     // A new empty directory under the temp directory, kept after the test so its logs can be read.
     std::filesystem::path    NewWorkDirectory(std::string_view name);
-    std::uint16_t            FreePort();
     void                     WriteText(const std::filesystem::path& path, std::string_view text);
     std::vector<std::string> ReadLines(const std::filesystem::path& path);
     // ReadLines of a file a child may not have written yet, empty until it has.
@@ -75,23 +76,9 @@ namespace integration {
     // Pumps this thread's messages for duration, for a test that checks something did not happen.
     void PumpFor(std::chrono::milliseconds duration);
 
-    // The bar's window on the primary monitor, where the test server puts every workspace, or null while it has none.
-    HWND PrimaryBarWindow(std::uint32_t processId);
-
-    // The client point offset pixels along the bar from its start, on the middle line across it. A bar taller than it is
-    // wide runs down a side of the monitor.
-    POINT AlongBar(HWND bar, std::int32_t offset);
     // Sends a left click every few pixels along the bar's middle line, from its start, each handled before the next is
     // sent. The number of clicks sent.
     std::uint32_t SweepClicks(HWND bar);
-    // Sends a button-up message (WM_LBUTTONUP, WM_RBUTTONUP, WM_MBUTTONUP) at a client point and waits until the window
-    // has handled it.
-    void SendButtonUp(HWND window, std::uint32_t message, POINT client);
-    // Sends a left click offset pixels along the bar's middle line and waits until the bar has handled it.
-    void SendClick(HWND bar, std::int32_t offset);
-    // Sends one wheel notch (delta WHEEL_DELTA up, -WHEEL_DELTA down) offset pixels along the bar, in the screen
-    // coordinates a real wheel message carries, and waits until the bar has handled it.
-    void SendWheel(HWND bar, std::int32_t offset, std::int16_t delta);
     // Sends WM_KEYDOWN for a virtual key and waits until the window has handled it.
     void SendKey(HWND window, std::uint32_t virtualKey);
     // Where the real cursor was when made, where it goes back to when destroyed.
@@ -105,12 +92,6 @@ namespace integration {
       private:
         POINT _position;
     };
-
-    // Moves the real cursor offset pixels along the bar's middle line. Hover and leave come only from the real cursor:
-    // a sent WM_MOUSEMOVE starts TrackMouseEvent, which posts WM_MOUSELEAVE at once while the cursor is elsewhere.
-    void PlaceCursor(HWND bar, std::int32_t offset);
-    // The process's top-level window of a class while it is shown, or null.
-    HWND VisibleWindow(std::uint32_t processId, std::wstring_view className);
 
     // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
     struct Capture {
@@ -130,12 +111,10 @@ namespace integration {
 
     // argv_recorder.exe (tests/integration/ArgvRecorder.cpp), for a config's actions and custom commands to name.
     std::filesystem::path ArgvRecorderPath();
+    std::filesystem::path CliPath();
     // text as a Lua long string, which takes backslashes and quotes as they are.
     std::string LuaString(std::string_view text);
     std::string LuaPath(const std::filesystem::path& path);
-
-    // Each run of equal lines folded into one.
-    std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines);
 
     // The server a RunningBar starts and the bar log event that shows the bar has reached it.
     struct TestServer {
@@ -163,8 +142,12 @@ namespace integration {
         void ClickAt(std::int32_t offset) const;
         void ButtonUpAt(std::uint32_t message, std::int32_t offset) const;
         void WheelAt(std::int32_t offset, std::int16_t delta) const;
-        // Moves the real cursor offset pixels along the primary bar's middle line and logs it.
+        // Moves the real cursor offset pixels along the primary bar's middle line and logs it. Hover and leave come only
+        // from the real cursor: a sent WM_MOUSEMOVE starts TrackMouseEvent, which posts WM_MOUSELEAVE at once while the
+        // cursor is elsewhere.
         void MoveCursorTo(std::int32_t offset) const;
+        // An offset 2 pixels before the primary bar's end, where no module lies while the right section is empty.
+        std::int32_t OffsetPastLastModule() const;
         // Each is the bar's window of that kind while it is shown, or null.
         HWND Tooltip() const;
         HWND Menu() const;
@@ -203,6 +186,7 @@ namespace integration {
         // Prints the bar's log and every server's stderr, each line tagged with its file.
         void                        PrintLogs() const;
         std::filesystem::path       ServerOutput(std::uint32_t start) const;
+        std::filesystem::path       ServerErrors(std::uint32_t start) const;
 
         std::filesystem::path       _workDirectory;
         TestServer                  _testServer;

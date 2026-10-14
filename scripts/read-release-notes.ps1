@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-Dot-source to get Get-ReleaseNotes, which reads one version's notes out of CHANGELOG.md.
+Dot-source to get Get-ReleaseNotes, which reads one version's notes out of CHANGELOG.md, and the two helpers it and
+the release scripts share: Assert-Version and Find-Line.
 #>
 
 function Assert-Version([string] $version) {

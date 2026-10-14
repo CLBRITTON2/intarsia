@@ -1,5 +1,4 @@
 #include "Harness.hpp"
-#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -57,8 +56,7 @@ return {
         const std::filesystem::path configPath = directory / "config.lua";
         integration::WriteText(configPath, config);
         integration::WriteText(directory / "style.conf", kStyle);
-        const integration::ChildProcess cli(std::filesystem::path(ToWide(INTARSIA_CLI_EXE)), {std::wstring(command), L"--config", configPath.wstring()}, directory / "stdout.txt",
-                                            directory / "stderr.txt");
+        const integration::ChildProcess cli(integration::CliPath(), {std::wstring(command), L"--config", configPath.wstring()}, directory / "stdout.txt", directory / "stderr.txt");
         const std::optional<std::uint32_t> exitCode = cli.Close(kExitLimit);
         if (!exitCode.has_value()) {
             return std::nullopt;

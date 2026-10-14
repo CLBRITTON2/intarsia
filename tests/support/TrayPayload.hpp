@@ -2,7 +2,14 @@
 
 #include "tray/NotifyIconProtocol.hpp"
 
+#include <windows.h>
+
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <format>
+#include <stdexcept>
+#include <vector>
 
 // A handle as the 32-bit field the tray payload carries, which Windows sign-extends back.
 inline std::uint32_t Handle32(const void* handle) {
@@ -20,4 +27,34 @@ inline TrayNotifyData NotifyData(std::uint32_t command, std::uint32_t owner, std
     data.data.flags           = flags;
     data.data.callbackMessage = callbackMessage;
     return data;
+}
+
+// A 16 pixel icon of one opaque color, which the caller destroys with DestroyIcon.
+inline HICON CreateSolidIcon(std::uint32_t rgb) {
+    constexpr std::uint32_t          kSide = 16;
+    const std::vector<std::uint32_t> pixels(size_t{kSide} * kSide, rgb | 0xFF000000U);
+    const std::array<std::byte, 32>  mask{};
+    HBITMAP                          colorBitmap = CreateBitmap(kSide, kSide, 1, 32, pixels.data());
+    HBITMAP                          maskBitmap  = CreateBitmap(kSide, kSide, 1, 1, mask.data());
+    if (colorBitmap == nullptr || maskBitmap == nullptr) {
+        const DWORD error = GetLastError();
+        DeleteObject(colorBitmap);
+        DeleteObject(maskBitmap);
+        throw std::runtime_error(std::format("CreateBitmap failed with {}", error));
+    }
+    ICONINFO info{
+        .fIcon    = TRUE,
+        .xHotspot = 0,
+        .yHotspot = 0,
+        .hbmMask  = maskBitmap,
+        .hbmColor = colorBitmap,
+    };
+    HICON       icon  = CreateIconIndirect(&info);
+    const DWORD error = GetLastError();
+    DeleteObject(colorBitmap);
+    DeleteObject(maskBitmap);
+    if (icon == nullptr) {
+        throw std::runtime_error(std::format("CreateIconIndirect failed with {}", error));
+    }
+    return icon;
 }

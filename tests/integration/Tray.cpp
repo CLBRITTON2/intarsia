@@ -148,9 +148,8 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
         },
         kDrawn))
         << "the icon never drew with a rect";
-    const RECT rect = app.IconRect().value_or(RECT{});
-    RECT       barRect{};
-    GetWindowRect(bar.PrimaryBar(), &barRect);
+    const RECT rect    = app.IconRect().value_or(RECT{});
+    const RECT barRect = integration::ScreenRect(bar.PrimaryBar());
     integration::Log("icon_rect",
                      std::format("left={} top={} right={} bottom={} bar_left={} bar_top={} bar_bottom={} icon_column={:.1f}", rect.left, rect.top, rect.right, rect.bottom,
                                  barRect.left, barRect.top, barRect.bottom, column.value_or(-1)));

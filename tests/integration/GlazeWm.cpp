@@ -13,6 +13,7 @@
 #include <vector>
 
 using testing::ElementsAre;
+using testing::ElementsAreArray;
 
 namespace {
 
@@ -70,6 +71,12 @@ module {
 
     std::string                FocusWindow(std::string_view id) {
         return "command focus --container-id " + std::string(id);
+    }
+
+    // What a sweep along ClicksConfig's bar sends, in order, while the test's two windows are open.
+    std::vector<std::string> EveryClickCommand() {
+        return {"command focus --workspace 1", "command focus --workspace 2",    FocusWindow(kFirstWindowId),
+                FocusWindow(kSecondWindowId),  "command focus --next-workspace", "command toggle-tiling-direction"};
     }
 
     constexpr std::string_view kWindowsConfig = R"(
@@ -248,9 +255,7 @@ TEST(GlazeWm, ClicksAlongTheBarSendEachItemsCommandInOrder) {
     const integration::TestWindow second(L" 2");
     const integration::RunningBar bar("clicks", ClicksConfig("top"), kStyle);
 
-    EXPECT_THAT(bar.CommandsFromSweep(),
-                ElementsAre("command focus --workspace 1", "command focus --workspace 2", FocusWindow(kFirstWindowId), FocusWindow(kSecondWindowId),
-                            "command focus --next-workspace", "command toggle-tiling-direction"));
+    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAreArray(EveryClickCommand()));
 }
 
 TEST(GlazeWm, ClicksDownASideBarSendEachItemsCommandInOrder) {
@@ -258,9 +263,7 @@ TEST(GlazeWm, ClicksDownASideBarSendEachItemsCommandInOrder) {
     const integration::TestWindow second(L" 2");
     const integration::RunningBar bar("side-clicks", ClicksConfig("left"), kStyle);
 
-    EXPECT_THAT(bar.CommandsFromSweep(),
-                ElementsAre("command focus --workspace 1", "command focus --workspace 2", FocusWindow(kFirstWindowId), FocusWindow(kSecondWindowId),
-                            "command focus --next-workspace", "command toggle-tiling-direction"));
+    EXPECT_THAT(bar.CommandsFromSweep(), ElementsAreArray(EveryClickCommand()));
 }
 
 TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
@@ -379,15 +382,7 @@ TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosing) {
     integration::Log("pixels_counted", std::format("color=#{:06x} count={} while=connected", kAlertColor, connectedPixels));
 
     bar.StopServer();
-    size_t alertPixels = 0;
-    EXPECT_TRUE(integration::Eventually(
-        [&] {
-            alertPixels = integration::CountPixels(integration::CaptureScreenOver(bar.PrimaryBar()), kAlertColor);
-            return alertPixels > 0;
-        },
-        std::chrono::seconds(2)))
-        << "no pixel drew in the alert color within 2 s of the server closing";
-    integration::Log("pixels_counted", std::format("color=#{:06x} count={} while=disconnected", kAlertColor, alertPixels));
+    EXPECT_TRUE(bar.Draws(kAlertColor, std::chrono::seconds(2))) << "no pixel drew in the alert color within 2 s of the server closing";
 }
 
 TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
@@ -398,7 +393,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
     std::optional<double>         firstColumn;
     ASSERT_TRUE(integration::Eventually(
         [&] {
-            firstColumn = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
+            firstColumn = bar.MeanColumnOf(kFocusedColor);
             return firstColumn.has_value();
         },
         std::chrono::seconds(5)))
@@ -409,7 +404,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
     std::optional<double> secondColumn;
     EXPECT_TRUE(integration::Eventually(
         [&] {
-            secondColumn = integration::MeanColumn(integration::CaptureScreenOver(bar.PrimaryBar()), kFocusedColor);
+            secondColumn = bar.MeanColumnOf(kFocusedColor);
             return firstColumn.has_value() && secondColumn.has_value() && *secondColumn > *firstColumn;
         },
         std::chrono::seconds(5)))

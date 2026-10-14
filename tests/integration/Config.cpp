@@ -59,6 +59,10 @@ module {
 )") + std::string(rules);
     }
 
+    std::string MarkStyleWithBackground(std::string_view background) {
+        return StyleWithRules(std::format("mark {{\n  background: {}\n}}\n", background));
+    }
+
     // The primary monitor's width in DIPs, as the bar measures it against min_length.
     float PrimaryLengthDips() {
         HMONITOR    primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
@@ -117,14 +121,14 @@ return {{
 } // namespace
 
 TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
-    integration::RunningBar bar("config-resave", OneModuleConfig(R"("mark")", ""), StyleWithRules("mark {\n  background: #27ae60\n}\n"));
+    integration::RunningBar bar("config-resave", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     // Cut short, as a reload can read a file an editor is still writing.
     const std::string valid = OneModuleConfig(R"("mark")", "");
     bar.SaveConfig(std::string_view(valid).substr(0, valid.size() / 2));
     ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("config_invalid").empty(); }, kDrawn)) << "the cut-short save was not logged as invalid";
-    bar.SaveStyle(StyleWithRules("mark {\n  background: #f39c12\n}\n"));
+    bar.SaveStyle(MarkStyleWithBackground("#f39c12"));
     bar.SaveConfig(valid);
 
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the replacing save never drew";
@@ -179,20 +183,16 @@ TEST(Config, AClickOnAModulesMarginRunsNothing) {
 }
 
 TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
-    integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), StyleWithRules("mark {\n  background: #27ae60\n}\n"));
-    std::optional<double>   left;
-    ASSERT_TRUE(integration::Eventually(
-        [&] {
-            left = bar.MeanColumnOf(kGreen);
-            return left.has_value();
-        },
-        kDrawn))
-        << "the module never drew in the left section";
-    RECT client{};
-    GetClientRect(bar.PrimaryBar(), &client);
-    const double middle = static_cast<double>(client.right) / 2;
-    integration::Log("module_column", std::format("section=left column={:.1f} bar_width={}", left.value_or(-1), client.right));
-    EXPECT_LT(left.value_or(middle), middle);
+    integration::RunningBar           bar("config-move", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
+    const std::optional<std::int32_t> left = bar.DrawnColumn(kGreen, kDrawn);
+    if (!left.has_value()) {
+        FAIL() << "the module never drew in the left section";
+    }
+    const RECT         barRect  = integration::ScreenRect(bar.PrimaryBar());
+    const std::int32_t barWidth = barRect.right - barRect.left;
+    const double       middle   = static_cast<double>(barWidth) / 2;
+    integration::Log("module_column", std::format("section=left column={} bar_width={}", *left, barWidth));
+    EXPECT_LT(*left, middle);
 
     bar.SaveConfig(OneModuleConfig("", R"("mark")"));
     std::optional<double> right;
@@ -207,16 +207,16 @@ TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
 }
 
 TEST(Config, DrawsTheColorOfASavedStyle) {
-    const integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), StyleWithRules("mark {\n  background: #27ae60\n}\n"));
+    const integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the module never drew in the first style's color";
 
-    bar.SaveStyle(StyleWithRules("mark {\n  background: #f39c12\n}\n"));
+    bar.SaveStyle(MarkStyleWithBackground("#f39c12"));
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the saved style's color never drew";
     EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the first style's color still drew";
 }
 
 TEST(Config, EndsWithExitCode1AfterAnInvalidSave) {
-    integration::RunningBar bar("config-invalid", OneModuleConfig(R"("mark")", ""), StyleWithRules("mark {\n  background: #27ae60\n}\n"));
+    integration::RunningBar bar("config-invalid", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     bar.SaveConfig(OneModuleConfig(R"("mark", "missing")", ""));

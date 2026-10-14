@@ -68,6 +68,6 @@ TEST(Actions, AClickStartsItsProgramWithEachArgumentAsWritten) {
     bar.ClickAt(*column);
     ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kLimit))
         << "the click started no recorder within " << kLimit.count() << " s (" << record.string() << ")";
-    integration::Log("argv_recorded", std::format("path=\"{}\" lines={}", record.string(), integration::ReadLines(record).size()));
+    integration::Log("argv_recorded", std::format("path={} lines={}", integration::LogValue(record.string()), integration::ReadLines(record).size()));
     EXPECT_THAT(integration::ReadLines(record), ElementsAre("plain", "two words", R"(a "quoted" one)", R"(C:\dir\)", ""));
 }

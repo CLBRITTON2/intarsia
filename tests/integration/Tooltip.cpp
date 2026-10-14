@@ -91,8 +91,6 @@ TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
     // The same text in the same font spans the same columns, give or take antialiasing at its ends.
     EXPECT_NEAR(tooltipSpan.value_or(0), rulerSpan.value_or(0), 2) << "the tooltip does not show the module's tooltip text";
 
-    // The right section is empty, so its end has no module under it.
-    const RECT barRect = integration::ScreenRect(bar.PrimaryBar());
-    bar.MoveCursorTo(barRect.right - barRect.left - 2);
+    bar.MoveCursorTo(bar.OffsetPastLastModule());
     EXPECT_TRUE(integration::Eventually([&] { return bar.Tooltip() == nullptr; }, kLimit)) << "moving off the module left its tooltip shown";
 }

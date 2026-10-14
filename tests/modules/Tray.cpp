@@ -43,10 +43,17 @@ namespace {
         });
     }
 
-    // A bar window 2000 pixels wide at 1000, 20 on screen, with the module's content at 100, 4 DIPs in it.
+    constexpr RECT kBarRect{
+        .left   = 1000,
+        .top    = 20,
+        .right  = 3000,
+        .bottom = 80,
+    };
+
+    // A bar window at kBarRect on screen, with the module's content at 100, 4 DIPs in it.
     ModulePlacement Placement(std::uint32_t dpi) {
         return ModulePlacement{
-            .windowRect    = RECT{1000, 20, 3000, 80},
+            .windowRect    = kBarRect,
             .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
             .dpi           = dpi,
         };
@@ -352,8 +359,14 @@ TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     _tray.icons[0].pixels = Pixels();
     EXPECT_FALSE(module.Layout(RenderNow(Axis::Horizontal)));
     EXPECT_FLOAT_EQ(module.Size().width, folded);
+    const RECT movedBarRect{
+        .left   = 0,
+        .top    = 0,
+        .right  = 2000,
+        .bottom = 60,
+    };
     module.Place(ModulePlacement{
-        .windowRect    = RECT{0, 0, 2000, 60},
+        .windowRect    = movedBarRect,
         .contentOrigin = D2D1::Point2F(0.0f, 0.0f),
         .dpi           = 96,
     });

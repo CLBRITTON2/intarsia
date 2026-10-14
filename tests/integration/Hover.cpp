@@ -88,12 +88,6 @@ module {
 }
 )";
 
-    // The right section is empty, so its end has no module under it.
-    std::int32_t EmptyEnd(const integration::RunningBar& bar) {
-        const RECT rect = integration::ScreenRect(bar.PrimaryBar());
-        return rect.right - rect.left - 2;
-    }
-
 } // namespace
 
 TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
@@ -109,7 +103,7 @@ TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
     EXPECT_TRUE(bar.Draws(kHoverColor, kLimit)) << "the hover background never drew under the cursor";
     EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("animation_frames").empty(); }, kLimit)) << "the hover transition logged no frames";
 
-    bar.MoveCursorTo(EmptyEnd(bar));
+    bar.MoveCursorTo(bar.OffsetPastLastModule());
     EXPECT_TRUE(bar.StopsDrawing(kHoverColor, kLimit)) << "the hover background still drew after the cursor moved off";
     EXPECT_TRUE(bar.Draws(kRestColor, kLimit)) << "the rest background never came back";
 }
@@ -146,6 +140,6 @@ TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
         << "the first item did not draw the hover background alone: hovered column " << hovered.value_or(-1) << ", rest column " << rest.value_or(-1);
     integration::Log("hover_columns", std::format("hovered={:.1f} rest={:.1f}", hovered.value_or(-1), rest.value_or(-1)));
 
-    bar.MoveCursorTo(EmptyEnd(bar));
+    bar.MoveCursorTo(bar.OffsetPastLastModule());
     EXPECT_TRUE(bar.StopsDrawing(kHoverColor, kLimit)) << "the item's hover background still drew after the cursor moved off";
 }

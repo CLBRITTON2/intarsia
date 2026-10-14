@@ -129,10 +129,6 @@ namespace integration {
             return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
         }
 
-        std::string LogValue(std::string_view value) {
-            return !value.empty() && value.find(' ') == std::string_view::npos ? std::string(value) : std::format("\"{}\"", value);
-        }
-
         // The event of a bar log line, the word after its time, level and component.
         std::string_view EventOf(std::string_view line) {
             size_t at = 0;
@@ -178,10 +174,73 @@ namespace integration {
             Log("pixels_counted", std::format("color=#{:06x} count={}", rgb, count.has_value() ? std::to_string(*count) : std::string("no_bar")));
         }
 
+        std::uint16_t FreePort() {
+            const loopback::Winsock winsock;
+            return loopback::Listen().Port();
+        }
+
+        // The bar's window on the primary monitor, where the test server puts every workspace, or null while it has none.
+        HWND PrimaryBarWindow(std::uint32_t processId) {
+            HMONITOR primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
+            HWND     window  = nullptr;
+            while ((window = FindWindowExW(nullptr, window, L"IntarsiaBar", nullptr)) != nullptr) {
+                DWORD owner = 0;
+                GetWindowThreadProcessId(window, &owner);
+                if (owner == processId && MonitorFromWindow(window, MONITOR_DEFAULTTONULL) == primary) {
+                    return window;
+                }
+            }
+            return nullptr;
+        }
+
+        // The process's top-level window of a class while it is shown, or null.
+        HWND VisibleWindow(std::uint32_t processId, std::wstring_view className) {
+            const std::wstring name(className);
+            HWND               window = nullptr;
+            while ((window = FindWindowExW(nullptr, window, name.c_str(), nullptr)) != nullptr) {
+                DWORD owner = 0;
+                GetWindowThreadProcessId(window, &owner);
+                if (owner == processId && IsWindowVisible(window)) {
+                    return window;
+                }
+            }
+            return nullptr;
+        }
+
+        // The client point offset pixels along the bar from its start, on the middle line across it. A bar taller than it
+        // is wide runs down a side of the monitor.
+        POINT AlongBar(HWND bar, std::int32_t offset) {
+            const RECT client = ClientRect(bar);
+            if (Vertical(client)) {
+                return POINT{.x = client.right / 2, .y = offset};
+            }
+            return POINT{.x = offset, .y = client.bottom / 2};
+        }
+
+        void SendButtonUp(HWND window, std::uint32_t message, POINT client) {
+            // Sent, not posted, so the window handles each input before the next and none waits in its queue.
+            SendAndWait(window, message, 0, MAKELPARAM(client.x, client.y), std::format("button message {:#x} at {},{}", message, client.x, client.y));
+        }
+
+        void SendClick(HWND bar, std::int32_t offset) {
+            SendButtonUp(bar, WM_LBUTTONUP, AlongBar(bar, offset));
+        }
+
+        // Each run of equal lines folded into one.
+        std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
+            std::vector<std::string> folded;
+            std::ranges::unique_copy(lines, std::back_inserter(folded));
+            return folded;
+        }
+
     } // namespace
 
     void Log(std::string_view event, std::string_view fields) {
         std::cout << LogHead(LogLevel::Info, "harness", event) << " " << fields << std::endl;
+    }
+
+    std::string LogValue(std::string_view value) {
+        return !value.empty() && value.find(' ') == std::string_view::npos ? std::string(value) : std::format("\"{}\"", value);
     }
 
     ChildProcess::ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
@@ -308,11 +367,6 @@ namespace integration {
         return work;
     }
 
-    std::uint16_t FreePort() {
-        const loopback::Winsock winsock;
-        return loopback::Listen().Port();
-    }
-
     void WriteText(const std::filesystem::path& path, std::string_view text) {
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file << text;
@@ -359,27 +413,6 @@ namespace integration {
         return condition();
     }
 
-    HWND PrimaryBarWindow(std::uint32_t processId) {
-        HMONITOR primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
-        HWND     window  = nullptr;
-        while ((window = FindWindowExW(nullptr, window, L"IntarsiaBar", nullptr)) != nullptr) {
-            DWORD owner = 0;
-            GetWindowThreadProcessId(window, &owner);
-            if (owner == processId && MonitorFromWindow(window, MONITOR_DEFAULTTONULL) == primary) {
-                return window;
-            }
-        }
-        return nullptr;
-    }
-
-    POINT AlongBar(HWND bar, std::int32_t offset) {
-        const RECT client = ClientRect(bar);
-        if (Vertical(client)) {
-            return POINT{.x = client.right / 2, .y = offset};
-        }
-        return POINT{.x = offset, .y = client.bottom / 2};
-    }
-
     std::uint32_t SweepClicks(HWND bar) {
         const RECT         client = ClientRect(bar);
         const std::int32_t length = Vertical(client) ? client.bottom : client.right;
@@ -389,23 +422,6 @@ namespace integration {
             ++clicks;
         }
         return clicks;
-    }
-
-    void SendButtonUp(HWND window, std::uint32_t message, POINT client) {
-        // Sent, not posted, so the window handles each input before the next and none waits in its queue.
-        SendAndWait(window, message, 0, MAKELPARAM(client.x, client.y), std::format("button message {:#x} at {},{}", message, client.x, client.y));
-    }
-
-    void SendClick(HWND bar, std::int32_t offset) {
-        SendButtonUp(bar, WM_LBUTTONUP, AlongBar(bar, offset));
-    }
-
-    void SendWheel(HWND bar, std::int32_t offset, std::int16_t delta) {
-        POINT point = AlongBar(bar, offset);
-        if (!ClientToScreen(bar, &point)) {
-            ThrowLastError("ClientToScreen(bar)");
-        }
-        SendAndWait(bar, WM_MOUSEWHEEL, MAKEWPARAM(0, delta), MAKELPARAM(point.x, point.y), std::format("WM_MOUSEWHEEL delta {} at {},{}", delta, point.x, point.y));
     }
 
     void SendKey(HWND window, std::uint32_t virtualKey) {
@@ -422,29 +438,6 @@ namespace integration {
         if (!SetCursorPos(_position.x, _position.y)) {
             Log("cursor_restore_failed", std::format("x={} y={} error={}", _position.x, _position.y, GetLastError()));
         }
-    }
-
-    void PlaceCursor(HWND bar, std::int32_t offset) {
-        POINT point = AlongBar(bar, offset);
-        if (!ClientToScreen(bar, &point)) {
-            ThrowLastError("ClientToScreen(bar)");
-        }
-        if (!SetCursorPos(point.x, point.y)) {
-            ThrowLastError(std::format("SetCursorPos(bar offset {})", offset));
-        }
-    }
-
-    HWND VisibleWindow(std::uint32_t processId, std::wstring_view className) {
-        const std::wstring name(className);
-        HWND               window = nullptr;
-        while ((window = FindWindowExW(nullptr, window, name.c_str(), nullptr)) != nullptr) {
-            DWORD owner = 0;
-            GetWindowThreadProcessId(window, &owner);
-            if (owner == processId && IsWindowVisible(window)) {
-                return window;
-            }
-        }
-        return nullptr;
     }
 
     RECT ScreenRect(HWND window) {
@@ -544,18 +537,16 @@ namespace integration {
         return Executable(INTARSIA_ARGV_RECORDER).make_preferred();
     }
 
+    std::filesystem::path CliPath() {
+        return Executable(INTARSIA_CLI_EXE);
+    }
+
     std::string LuaString(std::string_view text) {
         return std::format("[==[{}]==]", text);
     }
 
     std::string LuaPath(const std::filesystem::path& path) {
         return LuaString(ToUtf8(path.wstring()));
-    }
-
-    std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
-        std::vector<std::string> folded;
-        std::ranges::unique_copy(lines, std::back_inserter(folded));
-        return folded;
     }
 
     TestServer GlazeWmTestServer(std::wstring_view scenario) {
@@ -612,7 +603,7 @@ namespace integration {
             std::cout << "    " << line << std::endl;
         }
         for (std::uint32_t start = 1; start <= _serverStarts; ++start) {
-            for (const std::string& line : ReadLines(_workDirectory / std::format("server-{}.err", start))) {
+            for (const std::string& line : ReadLines(ServerErrors(start))) {
                 std::cout << std::format("    server-{}: ", start) << line << std::endl;
             }
         }
@@ -637,13 +628,31 @@ namespace integration {
     }
 
     void RunningBar::WheelAt(std::int32_t offset, std::int16_t delta) const {
-        SendWheel(PrimaryBar(), offset, delta);
+        HWND  bar   = PrimaryBar();
+        POINT point = AlongBar(bar, offset);
+        // A real wheel message carries screen coordinates.
+        if (!ClientToScreen(bar, &point)) {
+            ThrowLastError("ClientToScreen(bar)");
+        }
+        SendAndWait(bar, WM_MOUSEWHEEL, MAKEWPARAM(0, delta), MAKELPARAM(point.x, point.y), std::format("WM_MOUSEWHEEL delta {} at {},{}", delta, point.x, point.y));
         Log("wheel", std::format("delta={} offset={}", delta, offset));
     }
 
     void RunningBar::MoveCursorTo(std::int32_t offset) const {
-        PlaceCursor(PrimaryBar(), offset);
+        HWND  bar   = PrimaryBar();
+        POINT point = AlongBar(bar, offset);
+        if (!ClientToScreen(bar, &point)) {
+            ThrowLastError("ClientToScreen(bar)");
+        }
+        if (!SetCursorPos(point.x, point.y)) {
+            ThrowLastError(std::format("SetCursorPos(bar offset {})", offset));
+        }
         Log("cursor_moved", std::format("offset={}", offset));
+    }
+
+    std::int32_t RunningBar::OffsetPastLastModule() const {
+        const RECT barRect = ScreenRect(PrimaryBar());
+        return barRect.right - barRect.left - 2;
     }
 
     HWND RunningBar::Tooltip() const {
@@ -775,7 +784,7 @@ namespace integration {
         ++_serverStarts;
         const auto started = std::chrono::steady_clock::now();
         _server.emplace(_testServer.program, std::vector<std::wstring>{L"--port", std::to_wstring(_port), L"--scenario", _testServer.scenario}, ServerOutput(_serverStarts),
-                        _workDirectory / std::format("server-{}.err", _serverStarts));
+                        ServerErrors(_serverStarts));
         if (!Eventually([this] { return !ReadLines(ServerOutput(_serverStarts)).empty(); }, kStartLimit)) {
             PrintLogs();
             throw std::runtime_error(
@@ -828,6 +837,10 @@ namespace integration {
 
     std::filesystem::path RunningBar::ServerOutput(std::uint32_t start) const {
         return _workDirectory / std::format("server-{}.out", start);
+    }
+
+    std::filesystem::path RunningBar::ServerErrors(std::uint32_t start) const {
+        return _workDirectory / std::format("server-{}.err", start);
     }
 
 } // namespace integration

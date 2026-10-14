@@ -25,7 +25,6 @@
 #include <string>
 #include <string_view>
 #include <thread>
-#include <vector>
 
 namespace {
 
@@ -35,7 +34,6 @@ namespace {
     constexpr size_t        kOwners     = 4;
     constexpr std::uint32_t kIds        = 4;
     constexpr std::uint32_t kAnswerMs   = 5000;
-    constexpr std::uint32_t kIconSide   = 16;
     // About ten messages a second across every owner.
     constexpr std::chrono::milliseconds kMessageGap{100};
 
@@ -74,29 +72,6 @@ namespace {
             throw std::runtime_error(std::format("CreateWindowExW(owner) failed with {}", GetLastError()));
         }
         return owner;
-    }
-
-    // A solid icon of one color, so every icon change carries pixels the tray has not seen.
-    HICON CreateSolidIcon(std::uint32_t color) {
-        const std::vector<std::uint32_t> pixels(size_t{kIconSide} * kIconSide, color | 0xFF000000u);
-        const std::array<std::byte, 32>  mask{};
-        HBITMAP                          colorBitmap = CreateBitmap(kIconSide, kIconSide, 1, 32, pixels.data());
-        HBITMAP                          maskBitmap  = CreateBitmap(kIconSide, kIconSide, 1, 1, mask.data());
-        ICONINFO                         info{
-                                    .fIcon    = TRUE,
-                                    .xHotspot = 0,
-                                    .yHotspot = 0,
-                                    .hbmMask  = maskBitmap,
-                                    .hbmColor = colorBitmap,
-        };
-        HICON       icon  = colorBitmap != nullptr && maskBitmap != nullptr ? CreateIconIndirect(&info) : nullptr;
-        const DWORD error = GetLastError();
-        DeleteObject(colorBitmap);
-        DeleteObject(maskBitmap);
-        if (icon == nullptr) {
-            throw std::runtime_error(std::format("CreateIconIndirect failed with {}", error));
-        }
-        return icon;
     }
 
     // Tooltips as apps write them: a name, a status with a changing number, or two lines.

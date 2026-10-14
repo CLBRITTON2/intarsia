@@ -3,8 +3,8 @@
 Soak tests the running bar. Fails on a crash, a leak or a hang.
 
 .DESCRIPTION
-Each scenario runs build\debug\intarsia.exe with a generated config against build\debug\glazewm.exe, a test IPC server
-(tests/support/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
+Each scenario runs build\<Preset>\intarsia.exe with a generated config against build\debug\glazewm.exe, a test IPC
+server (tests/support/GlazeWmServer.cpp) on a free port, and samples the bar every second: memory, handles, GDI and USER
 objects, threads, CPU, and whether its windows still answer messages. A scenario fails when the bar exits, stops
 answering, logs a fatal error, grows past the thresholds after warming up, or does not exit cleanly on WM_CLOSE. Once
 warmed up it also fails when a monitor lacks exactly one bar along its top edge.
@@ -22,6 +22,9 @@ The popup scenario moves the real cursor onto the clock until its tooltip shows 
 clock to open its menu and closes it with Escape, so every show makes and drops a tooltip's and a menu's surfaces. It
 fails when too few of either showed. Leave the mouse alone while it runs: it puts the cursor back when it ends.
 
+-Scenario picks scenarios and -Seconds sets how long each runs. A run of 600 seconds or more judges growth by its trend
+per hour over the run's second half instead, as in -Seconds 3600 -Scenario normal,tray for an hour-long check.
+
 Run it from an interactive desktop session: the bar needs a desktop to draw on.
 #>
 param(
@@ -32,8 +35,7 @@ param(
     [ValidateSet('debug', 'release')]
     [string] $Preset = 'debug',
     # Each scenario's config, style and logs go in a directory of its own under this one.
-    [string] $LogRoot = [System.IO.Path]::GetTempPath(),
-    [switch] $NoBuild
+    [string] $LogRoot = [System.IO.Path]::GetTempPath()
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -66,6 +68,10 @@ $maxRetitleCpuPercent = 6
 # menu its command), but most must land.
 $popupCycleSeconds = 2
 $minPopupShowShare = 0.5
+# Programs the generated configs run, with backslashes doubled for a Lua string.
+$cmdPath        = 'C:\\Windows\\System32\\cmd.exe'
+$pingPath       = 'C:\\Windows\\System32\\PING.EXE'
+$powershellPath = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 
 Add-Type -Namespace Soak -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetGuiResources(IntPtr process, uint flags);
@@ -346,17 +352,14 @@ function Format-CustomModule([string[]] $command, [int] $timeout, [string] $outp
 # the custom endless (prints past the output cap), hang (outlives its timeout), fail (exits nonzero) and json, and the
 # tray, last so its toggle sits at the bar's right end whatever it unfolds.
 function New-SoakConfig([string] $path, [int] $revision, [string[]] $optional) {
-    $cmd  = 'C:\\Windows\\System32\\cmd.exe'
-    $ping = 'C:\\Windows\\System32\\PING.EXE'
-    $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
     $optionalModules = [ordered]@{
         # Prints until the output cap kills it, every second.
-        endless = Format-CustomModule @($cmd, '/c', 'for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx') 5 'text'
+        endless = Format-CustomModule @($cmdPath, '/c', 'for /l %i in () do @echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx') 5 'text'
         # Outlives its timeout, with a child of its own, every second.
-        hang    = Format-CustomModule @($cmd, '/c', "$ping -n 30 127.0.0.1") 1 'text'
-        fail    = Format-CustomModule @($cmd, '/c', 'exit 3') 5 'text'
+        hang    = Format-CustomModule @($cmdPath, '/c', "$pingPath -n 30 127.0.0.1") 1 'text'
+        fail    = Format-CustomModule @($cmdPath, '/c', 'exit 3') 5 'text'
         # A process slow to start, printing JSON. cmd.exe would keep the backslashes of escaped quotes.
-        json    = Format-CustomModule @($powershell, '-NoProfile', '-Command', '''{\"text\":\"ok\",\"tooltip\":\"line\",\"alert\":true}''') 5 'json'
+        json    = Format-CustomModule @($powershellPath, '-NoProfile', '-Command', '''{\"text\":\"ok\",\"tooltip\":\"line\",\"alert\":true}''') 5 'json'
         tray    = '{ type = "tray", icon = ">" }'
     }
     $shown       = @($optionalModules.Keys | Where-Object { $_ -in $optional })
@@ -392,9 +395,9 @@ $definitions
     [System.IO.File]::WriteAllText($path, $config)
 }
 
-# The idle scenario's modules without a window manager: the foreground window's title, a clock, and cpu and memory in
-# the stats group.
-function New-RetitleConfig([string] $path) {
+# The idle scenario's modules without a window manager: the foreground window's title, the clock module $clock defines,
+# and cpu and memory in the stats group.
+function New-WindowsConfig([string] $path, [string] $clock) {
     $config = @"
 return {
     bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips, monitors = { "*" } },
@@ -405,7 +408,7 @@ return {
     layouts = {},
     modules = {
         title = { type = "window", max_length = 60, tooltip = "{title}" },
-        clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1 },
+        clock = $clock,
         stats = { type = "group", icon = ">", modules = { "cpu", "memory" } },
         cpu = { type = "cpu", format = "{usage}%", icon = "", interval = 1 },
         memory = { type = "memory", format = "{used:.1f}", icon = "", interval = 1 },
@@ -415,32 +418,20 @@ return {
     [System.IO.File]::WriteAllText($path, $config)
 }
 
+function New-RetitleConfig([string] $path) {
+    New-WindowsConfig $path '{ type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1 }'
+}
+
 # The retitle modules with a clock whose tooltip shows on hover and whose click opens a two entry menu.
 function New-PopupConfig([string] $path) {
-    $powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-    $ping       = 'C:\\Windows\\System32\\PING.EXE'
     # cmd.exe would keep the backslashes of escaped quotes.
-    $items      = '''{\"items\":[{\"id\":\"one\",\"text\":\"One\"},{\"id\":\"two\",\"text\":\"Two\"}]}'''
-    $config = @"
-return {
-    bar = { edge = "top", layer = "top", space = "reserve", thickness = $barThicknessDips, monitors = { "*" } },
-    window_manager = "windows",
-    modules_left = { "stats", "title" },
-    modules_center = { "clock" },
-    modules_right = {},
-    layouts = {},
-    modules = {
-        title = { type = "window", max_length = 60, tooltip = "{title}" },
-        clock = { type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1, tooltip = "{time:%A %d %B %Y}",
-                  on_click = { menu = { command = { "$powershell", "-NoProfile", "-Command", "$items" }, timeout = 5,
-                                        on_select = { "$ping", "-n", "1" } } } },
-        stats = { type = "group", icon = ">", modules = { "cpu", "memory" } },
-        cpu = { type = "cpu", format = "{usage}%", icon = "", interval = 1 },
-        memory = { type = "memory", format = "{used:.1f}", icon = "", interval = 1 },
-    },
-}
+    $items = '''{\"items\":[{\"id\":\"one\",\"text\":\"One\"},{\"id\":\"two\",\"text\":\"Two\"}]}'''
+    $clock = @"
+{ type = "clock", format = "{time:%H:%M:%S}", icon = "", interval = 1, tooltip = "{time:%A %d %B %Y}",
+                  on_click = { menu = { command = { "$powershellPath", "-NoProfile", "-Command", "$items" }, timeout = 5,
+                                        on_select = { "$pingPath", "-n", "1" } } } }
 "@
-    [System.IO.File]::WriteAllText($path, $config)
+    New-WindowsConfig $path $clock
 }
 
 # A style that draws every box the bar has: sections, the tooltip and the menu over a blurred backdrop, module boxes with hover,
@@ -751,15 +742,13 @@ function Invoke-Scenario([string] $name, [int] $run) {
     }
 }
 
-if (-not $NoBuild) {
-    & (Join-Path $PSScriptRoot 'build.ps1') -Preset debug
-    if ($Preset -eq 'release') {
-        & (Join-Path $PSScriptRoot 'build.ps1') -Preset release
-    }
+& (Join-Path $PSScriptRoot 'build.ps1') -Preset debug
+if ($Preset -eq 'release') {
+    & (Join-Path $PSScriptRoot 'build.ps1') -Preset release
 }
 foreach ($exe in @($barExe, $serverExe, $senderExe, $retitlerExe)) {
     if (-not (Test-Path $exe)) {
-        throw "$exe not found, build the debug preset first"
+        throw "$exe not found after building the debug and $Preset presets"
     }
 }
 

@@ -31,9 +31,14 @@ namespace {
         return ScrollOver(400.0f, offsetDips);
     }
 
-    const D2D1_RECT_F    kTrack = D2D1::RectF(106, 4, 110, 104);
+    constexpr RECT kMonitor{
+        .left   = 0,
+        .top    = 0,
+        .right  = 1920,
+        .bottom = 1080,
+    };
 
-    constexpr RECT       kMonitor{0, 0, 1920, 1080};
+    const D2D1_RECT_F    kTrack = D2D1::RectF(106, 4, 110, 104);
 
     const ScrollbarStyle kScrollbar{
         .widthDips  = 4,
@@ -102,14 +107,32 @@ TEST(Menu, AFailuresRowCannotBePicked) {
 }
 
 TEST(Menu, AnEntrysTooltipGoesUnderItsRowOrAboveItNearTheMonitorsBottom) {
+    const RECT rowRect{
+        .left   = 1600,
+        .top    = 300,
+        .right  = 1800,
+        .bottom = 320,
+    };
     constexpr SIZE kSize{.cx = 100, .cy = 30};
-    const RECT     below = TooltipRect(RowTooltipAnchor(RECT{1600, 300, 1800, 320}, kMonitor, 96), kSize);
+    const RECT     below = TooltipRect(RowTooltipAnchor(rowRect, kMonitor, 96), kSize);
     EXPECT_EQ(below.left, 1650);
     EXPECT_EQ(below.top, 320);
-    const RECT above = TooltipRect(RowTooltipAnchor(RECT{1600, 900, 1800, 920}, kMonitor, 96), kSize);
+    const RECT nearBottomRowRect{
+        .left   = 1600,
+        .top    = 900,
+        .right  = 1800,
+        .bottom = 920,
+    };
+    const RECT above = TooltipRect(RowTooltipAnchor(nearBottomRowRect, kMonitor, 96), kSize);
     EXPECT_EQ(above.top, 870);
     // A tooltip wider than its row near the monitor's edge stays on the monitor.
-    const RECT wide = TooltipRect(RowTooltipAnchor(RECT{1700, 300, 1900, 320}, kMonitor, 96), SIZE{.cx = 400, .cy = 30});
+    const RECT nearRightRowRect{
+        .left   = 1700,
+        .top    = 300,
+        .right  = 1900,
+        .bottom = 320,
+    };
+    const RECT wide = TooltipRect(RowTooltipAnchor(nearRightRowRect, kMonitor, 96), SIZE{.cx = 400, .cy = 30});
     EXPECT_EQ(wide.right, 1920);
 }
 
@@ -194,8 +217,14 @@ TEST(Menu, RowsPastMaxHeightScrollBesideTheScrollBar) {
 }
 
 TEST(Menu, AMenuNeverOutgrowsItsMonitor) {
+    const RECT smallMonitorRect{
+        .left   = 0,
+        .top    = 0,
+        .right  = 60,
+        .bottom = 30,
+    };
     const MenuStyle  style  = PaddedMenu();
-    const MenuLayout layout = LayOutMenu({MeasuredRow(50, style.item, 0), MeasuredRow(80, style.item, 1)}, style, RECT{0, 0, 60, 30}, 96);
+    const MenuLayout layout = LayOutMenu({MeasuredRow(50, style.item, 0), MeasuredRow(80, style.item, 1)}, style, smallMonitorRect, 96);
     EXPECT_EQ(layout.size.cx, 60);
     EXPECT_EQ(layout.size.cy, 30);
 }
@@ -206,7 +235,13 @@ TEST(Menu, RowTextIsCutAtTheNarrowerOfMaxWidthAndTheMonitor) {
     style.scrollbar    = kScrollbar;
     // Less the gutter, the box's padding and the row's margin and padding, on both sides.
     EXPECT_FLOAT_EQ(MenuTextWidth(style, style.item, kMonitor, 96), 270.0f);
-    EXPECT_FLOAT_EQ(MenuTextWidth(style, style.item, RECT{0, 0, 200, 1080}, 96), 170.0f);
+    const RECT narrowMonitorRect{
+        .left   = 0,
+        .top    = 0,
+        .right  = 200,
+        .bottom = 1080,
+    };
+    EXPECT_FLOAT_EQ(MenuTextWidth(style, style.item, narrowMonitorRect, 96), 170.0f);
     // A 200 pixel monitor at 150% is 133 DIPs wide.
-    EXPECT_NEAR(MenuTextWidth(style, style.item, RECT{0, 0, 200, 1080}, 144), 103.333f, 0.001f);
+    EXPECT_NEAR(MenuTextWidth(style, style.item, narrowMonitorRect, 144), 103.333f, 0.001f);
 }

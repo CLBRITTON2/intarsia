@@ -80,7 +80,12 @@ namespace {
     }
 
     // A monitor above the primary has negative coordinates.
-    constexpr RECT kAbovePrimary{100, -2100, 130, -2070};
+    constexpr RECT kAbovePrimary{
+        .left   = 100,
+        .top    = -2100,
+        .right  = 130,
+        .bottom = -2070,
+    };
 
     // Answers every icon rect query with kAbovePrimary, as the tray answers one.
     LRESULT CALLBACK AnswerAbovePrimary(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
