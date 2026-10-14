@@ -5,22 +5,13 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <initializer_list>
 #include <string>
 
 namespace {
 
-    // UTF-8 from its bytes, for a bidi mark that a string literal must not hold as text.
-    std::string Utf8(std::initializer_list<std::uint8_t> bytes) {
-        std::string text;
-        for (const std::uint8_t byte : bytes) {
-            text += static_cast<char>(byte);
-        }
-        return text;
-    }
-
-    const std::string kOverride = Utf8({0xE2, 0x80, 0xAE}); // U+202E
-    const std::string kIsolate  = Utf8({0xE2, 0x81, 0xA6}); // U+2066
+    // Bidi marks as bytes, which a string literal must not hold as text.
+    const std::string kOverride{'\xE2', '\x80', '\xAE'}; // U+202E
+    const std::string kIsolate{'\xE2', '\x81', '\xA6'};  // U+2066
 
 } // namespace
 
@@ -75,9 +66,9 @@ TEST(Text, LogExcerptEscapesBytesThatAreNotUtf8AndKeepsThoseThatAre) {
 TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
     const std::wstring text{
         L'a', static_cast<wchar_t>(0xD800), L'b', static_cast<wchar_t>(0xDC00), static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), static_cast<wchar_t>(0xD800)};
-    const std::wstring replaced     = ReplaceLoneSurrogates(text);
-    constexpr auto     kReplacement = static_cast<wchar_t>(0xFFFD);
-    EXPECT_EQ(replaced, (std::wstring{L'a', kReplacement, L'b', kReplacement, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacement}));
+    const std::wstring replaced = ReplaceLoneSurrogates(text);
+    EXPECT_EQ(replaced,
+              (std::wstring{L'a', kReplacementCharacter, L'b', kReplacementCharacter, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacementCharacter}));
     EXPECT_NO_THROW(ToUtf8(replaced));
 }
 
@@ -103,21 +94,20 @@ TEST(Text, IsValidUtf8AcceptsWellFormedSequencesOnly) {
 }
 
 TEST(Text, DrawableTextReplacesUnsafeCharactersAndInvalidBytes) {
-    constexpr auto kReplacement = static_cast<wchar_t>(0xFFFD);
-    std::string    text         = kOverride;
+    std::string text = kOverride;
     text += "ab\x01\xE2\x80\xA9";
-    EXPECT_EQ(DrawableText(text), (std::wstring{kReplacement, L'a', L'b', kReplacement, kReplacement}));
+    EXPECT_EQ(DrawableText(text), (std::wstring{kReplacementCharacter, L'a', L'b', kReplacementCharacter, kReplacementCharacter}));
     const std::wstring invalid = DrawableText("\xFF\xC0\xAF");
     EXPECT_FALSE(invalid.empty());
-    EXPECT_TRUE(std::ranges::all_of(invalid, [](wchar_t unit) { return unit == kReplacement; }));
+    EXPECT_TRUE(std::ranges::all_of(invalid, [](wchar_t unit) { return unit == kReplacementCharacter; }));
 }
 
 TEST(Text, DrawableWideTextReplacesUnsafeCharactersAndLoneSurrogates) {
-    constexpr auto     kReplacement = static_cast<wchar_t>(0xFFFD);
     const std::wstring text{static_cast<wchar_t>(0x202E), L'a', static_cast<wchar_t>(0x200F), static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00),
                             static_cast<wchar_t>(0xDC00), L'\t'};
     EXPECT_EQ(DrawableText(std::wstring_view(text)),
-              (std::wstring{kReplacement, L'a', kReplacement, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacement, kReplacement}));
+              (std::wstring{kReplacementCharacter, L'a', kReplacementCharacter, static_cast<wchar_t>(0xD83D), static_cast<wchar_t>(0xDE00), kReplacementCharacter,
+                            kReplacementCharacter}));
 }
 
 TEST(Text, UnsafeCharactersAreControlsSeparatorsAndBidiMarks) {

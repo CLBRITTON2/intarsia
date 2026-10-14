@@ -2,6 +2,7 @@
 
 #include "../network/FakeNetwork.hpp"
 #include "TextOnlyRender.hpp"
+#include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -20,14 +21,7 @@ namespace {
             .iconsWifi          = {L"0", L"1", L"2", L"3", L"4"},
             .iconEthernet       = L"E",
             .iconDisconnected   = L"X",
-            .actions =
-                {
-                    .click       = std::nullopt,
-                    .rightClick  = std::nullopt,
-                    .middleClick = std::nullopt,
-                    .scrollUp    = std::nullopt,
-                    .scrollDown  = std::nullopt,
-                },
+            .actions            = kNoActions,
         };
     }
 
@@ -118,5 +112,5 @@ TEST(Network, AFormatNamingAnUnknownValueIsAConfigError) {
     FakeNetwork   network;
     NetworkConfig config = TestConfig();
     config.formatWifi    = "{essid}";
-    EXPECT_THAT([&] { return Network(config, network); }, testing::ThrowsMessage<ConfigError>(testing::HasSubstr("network format_wifi '{essid}' is not a valid format")));
+    EXPECT_THAT([&] { return Network(config, network); }, ThrowsWith<ConfigError>("network format_wifi '{essid}' is not a valid format"));
 }

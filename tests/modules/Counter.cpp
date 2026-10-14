@@ -1,6 +1,8 @@
 #include "modules/Counter.hpp"
+
+#include "TestStyle.hpp"
+#include "support/ChangeTarget.hpp"
 #include "support/Eventually.hpp"
-#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
@@ -17,24 +19,13 @@ namespace {
         return CounterConfig{
                       .path    = std::move(path),
                       .combine = CounterCombine::Average,
-                      .text =
-                TextModuleConfig{
-                              .format   = std::move(format),
-                              .tooltip  = std::nullopt,
-                              .icon     = L"",
-                              .interval = std::chrono::seconds(1),
-                              .actions  = {},
-                },
+                      .text    = TextConfigWithFormat(std::move(format)),
         };
     }
 
     class CounterModule : public testing::Test {
-      public:
-        CounterModule() : _changes(_target.Get(), kChanged) {}
-
       protected:
-        MessageWindow _target;
-        ChangeSignal  _changes;
+        ChangeTarget _target{kChanged};
     };
 
 } // namespace
@@ -45,7 +36,7 @@ TEST(Counter, TheValueIsANumberAndTheRateIsBytesPerSecond) {
 
 TEST_F(CounterModule, FormatsAreCheckedAgainstTheValues) {
     const CounterConfig  config = WithFormat(L"\\Processor(_Total)\\% Processor Time", "{value:.0f}%");
-    const CounterSampler sampler("cpu", config, _changes);
+    const CounterSampler sampler("cpu", config, _target.signal);
     EXPECT_NO_THROW(Counter(config, sampler));
     EXPECT_THROW(Counter(WithFormat(config.path, "{usage}"), sampler), ConfigError);
     EXPECT_THROW(Counter(WithFormat(config.path, "{rate:.1f}"), sampler), ConfigError);
@@ -54,7 +45,7 @@ TEST_F(CounterModule, FormatsAreCheckedAgainstTheValues) {
 // The sampler notifies only on a new outcome, so this tick is what redraws a new value.
 TEST_F(CounterModule, ChangesByItsNextIntervalTick) {
     const CounterConfig                config = WithFormat(L"\\Processor(_Total)\\% Processor Time", "{value}");
-    const CounterSampler               sampler("cpu", config, _changes);
+    const CounterSampler               sampler("cpu", config, _target.signal);
     const Counter                      module(config, sampler);
     const std::optional<std::uint32_t> wait = module.MillisecondsUntilChange();
     ASSERT_TRUE(wait.has_value()) << "a counter waits for no change, so it shows its first sample forever";
@@ -63,7 +54,7 @@ TEST_F(CounterModule, ChangesByItsNextIntervalTick) {
 
 TEST_F(CounterModule, AFailingCounterShowsTheReasonAsItsTooltip) {
     const CounterConfig  config = WithFormat(L"\\No Such Object\\Nothing", "{value}");
-    const CounterSampler sampler("gone", config, _changes);
+    const CounterSampler sampler("gone", config, _target.signal);
     Counter              module(config, sampler);
     EXPECT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Failed; }, std::chrono::seconds(2)));
     const std::optional<std::wstring> tooltip = module.TooltipText();

@@ -15,14 +15,7 @@ TEST(Window, LayoutReportsAChangeOnlyWhenTheTitleChanges) {
         WindowConfig{
                           .maxLength = 50,
                           .tooltip   = std::nullopt,
-                          .actions =
-                              {
-                                  .click       = std::nullopt,
-                                  .rightClick  = std::nullopt,
-                                  .middleClick = std::nullopt,
-                                  .scrollUp    = std::nullopt,
-                                  .scrollDown  = std::nullopt,
-                },
+                          .actions   = kNoActions,
         },
         windowManager);
 

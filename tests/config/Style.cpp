@@ -1,5 +1,7 @@
 #include "config/Style.hpp"
 
+#include "support/ThrowsWith.hpp"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -30,10 +32,6 @@ namespace {
         return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), kind, name, {});
     }
 
-    auto ConfigErrorWith(std::string_view text) {
-        return testing::ThrowsMessage<ConfigError>(testing::HasSubstr(std::string(text)));
-    }
-
     // Channels as 0 to 255 so a failure reads like the style that caused it.
     std::array<std::int32_t, 4> Rgba(const D2D1_COLOR_F& color) {
         return {static_cast<std::int32_t>(std::lround(color.r * 255.0f)), static_cast<std::int32_t>(std::lround(color.g * 255.0f)),
@@ -61,11 +59,11 @@ TEST(Style, TheBarBlockSetsTheFontAndColorEveryModuleInherits) {
 }
 
 TEST(Style, TheBarMustSetFontSizeAndColor) {
-    EXPECT_THAT([] { return ResolveBarStyle(Parse("bar {\n  size: 15\n  color: #fff\n}\n")); }, ConfigErrorWith("style.conf:1: bar must set font, as font: Segoe UI"));
-    EXPECT_THAT([] { return ResolveBarStyle(Parse("")); }, ConfigErrorWith("must have a bar block"));
-    EXPECT_THAT([] { return Parse("bar {\n  font: \"Some Font\"\n}\n"); }, ConfigErrorWith("bar: font takes the family unquoted"));
-    EXPECT_THAT([] { return Parse("bar {\n  font: A, B\n}\n"); }, ConfigErrorWith("one font family, not a list"));
-    EXPECT_THAT([] { return Parse("bar {\n  padding: 2\n}\n"); }, ConfigErrorWith("bar: padding is not a property bar takes, which are: font, size, color"));
+    EXPECT_THAT([] { return ResolveBarStyle(Parse("bar {\n  size: 15\n  color: #fff\n}\n")); }, ThrowsWith<ConfigError>("style.conf:1: bar must set font, as font: Segoe UI"));
+    EXPECT_THAT([] { return ResolveBarStyle(Parse("")); }, ThrowsWith<ConfigError>("must have a bar block"));
+    EXPECT_THAT([] { return Parse("bar {\n  font: \"Some Font\"\n}\n"); }, ThrowsWith<ConfigError>("bar: font takes the family unquoted"));
+    EXPECT_THAT([] { return Parse("bar {\n  font: A, B\n}\n"); }, ThrowsWith<ConfigError>("one font family, not a list"));
+    EXPECT_THAT([] { return Parse("bar {\n  padding: 2\n}\n"); }, ThrowsWith<ConfigError>("bar: padding is not a property bar takes, which are: font, size, color"));
 }
 
 TEST(Style, ColorsTakeHexFormsAnOpacityAndTransparent) {
@@ -75,21 +73,21 @@ TEST(Style, ColorsTakeHexFormsAnOpacityAndTransparent) {
     EXPECT_EQ(Rgba(StyleOf(blocks, ModuleKind::Cpu, "c").color), (std::array<std::int32_t, 4>{255, 0, 0, 128}));
     EXPECT_EQ(Rgba(StyleOf(blocks, ModuleKind::Cpu, "d").color), (std::array<std::int32_t, 4>{255, 0, 0, 64}));
     EXPECT_EQ(Rgba(StyleOf(blocks, ModuleKind::Cpu, "e").color), kNone);
-    EXPECT_THAT([] { return Parse("module {\n  color: red\n}\n"); }, ConfigErrorWith("module: color must be a color"));
-    EXPECT_THAT([] { return Parse("module {\n  color: #12345\n}\n"); }, ConfigErrorWith("must be a color"));
-    EXPECT_THAT([] { return Parse("module {\n  color: #12345g\n}\n"); }, ConfigErrorWith("not a hex digit"));
-    EXPECT_THAT([] { return Parse("module {\n  color: #fff 120%\n}\n"); }, ConfigErrorWith("percentage from 0% to 100%"));
-    EXPECT_THAT([] { return Parse("module {\n  color: rgb(1, 2, 3)\n}\n"); }, ConfigErrorWith("must be a color"));
+    EXPECT_THAT([] { return Parse("module {\n  color: red\n}\n"); }, ThrowsWith<ConfigError>("module: color must be a color"));
+    EXPECT_THAT([] { return Parse("module {\n  color: #12345\n}\n"); }, ThrowsWith<ConfigError>("must be a color"));
+    EXPECT_THAT([] { return Parse("module {\n  color: #12345g\n}\n"); }, ThrowsWith<ConfigError>("not a hex digit"));
+    EXPECT_THAT([] { return Parse("module {\n  color: #fff 120%\n}\n"); }, ThrowsWith<ConfigError>("percentage from 0% to 100%"));
+    EXPECT_THAT([] { return Parse("module {\n  color: rgb(1, 2, 3)\n}\n"); }, ThrowsWith<ConfigError>("must be a color"));
 }
 
 TEST(Style, VarsAreReadThroughTheirNames) {
     const ModuleStyle style = StyleOf("vars {\n  accent: #ff0000\n  dim: 50%\n}\ncpu {\n  color: $accent\n  background: $accent $dim\n}\n", ModuleKind::Cpu, "cpu");
     EXPECT_EQ(Rgba(style.color), kRed);
     EXPECT_EQ(Rgba(style.box.background), (std::array<std::int32_t, 4>{255, 0, 0, 128}));
-    EXPECT_THAT([] { return WithBar("cpu {\n  color: $nope\n}\n"); }, ConfigErrorWith("style.conf:7: color: $nope names no var"));
-    EXPECT_THAT([] { return WithBar("cpu {\n  color: $\n}\n"); }, ConfigErrorWith("$ must be followed by the name of a var"));
-    EXPECT_THAT([] { return Parse("vars {\n  a: #fff\n  b: $a\n}\n"); }, ConfigErrorWith("vars > b: a var cannot use another var"));
-    EXPECT_THAT([] { return Parse("vars {\n  a {\n    b: #fff\n  }\n}\n"); }, ConfigErrorWith("vars > a: vars holds name: value lines"));
+    EXPECT_THAT([] { return WithBar("cpu {\n  color: $nope\n}\n"); }, ThrowsWith<ConfigError>("style.conf:7: color: $nope names no var"));
+    EXPECT_THAT([] { return WithBar("cpu {\n  color: $\n}\n"); }, ThrowsWith<ConfigError>("$ must be followed by the name of a var"));
+    EXPECT_THAT([] { return Parse("vars {\n  a: #fff\n  b: $a\n}\n"); }, ThrowsWith<ConfigError>("vars > b: a var cannot use another var"));
+    EXPECT_THAT([] { return Parse("vars {\n  a {\n    b: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("vars > a: vars holds name: value lines"));
 }
 
 TEST(Style, AModulesOwnBlockWinsOverTheModuleBlock) {
@@ -164,7 +162,7 @@ tray {
     EXPECT_FLOAT_EQ(style.item.padding.xDips, 4.0f);
     EXPECT_FLOAT_EQ(style.item.radiusDips, 6.0f);
     EXPECT_THAT([] { return Parse("module {\n  item {\n    toggle {\n      focused {\n        color: #fff\n      }\n    }\n  }\n}\n"); },
-                ConfigErrorWith("module > item > toggle: focused is not a block module > item > toggle holds, which are: none"));
+                ThrowsWith<ConfigError>("module > item > toggle: focused is not a block module > item > toggle holds, which are: none"));
 }
 
 TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
@@ -177,7 +175,7 @@ TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
     // With no hover block the box keeps its background under the cursor.
     EXPECT_EQ(Rgba(StyleOf("module {\n  background: #111111\n}\n", ModuleKind::Cpu, "cpu").hover), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
     EXPECT_THAT([] { return Parse("cpu {\n  hover {\n    color: #fff\n  }\n}\n"); },
-                ConfigErrorWith("cpu > hover: color is not a property cpu > hover takes, which are: background"));
+                ThrowsWith<ConfigError>("cpu > hover: color is not a property cpu > hover takes, which are: background"));
 }
 
 TEST(Style, BatteryLevelsColorTheTextAndTheIconOverTheModulesOwn) {
@@ -217,14 +215,15 @@ TEST(Style, MutedColorsTheAudioTextAndIcon) {
 
 TEST(Style, OwnedStatesTakeColorOnlyAndBelongToTheirModuleType) {
     EXPECT_THAT([] { return Parse("power {\n  warning {\n    padding: 2\n  }\n}\n"); },
-                ConfigErrorWith("power > warning: padding is not a property power > warning takes, which are: color"));
-    EXPECT_THAT([] { return Parse("power {\n  warning {\n    icon {\n      size: 20\n    }\n  }\n}\n"); }, ConfigErrorWith("which are: color"));
-    EXPECT_THAT([] { return Parse("module {\n  warning {\n    color: #fff\n  }\n}\n"); }, ConfigErrorWith("module: warning is not a block module holds"));
+                ThrowsWith<ConfigError>("power > warning: padding is not a property power > warning takes, which are: color"));
+    EXPECT_THAT([] { return Parse("power {\n  warning {\n    icon {\n      size: 20\n    }\n  }\n}\n"); }, ThrowsWith<ConfigError>("which are: color"));
+    EXPECT_THAT([] { return Parse("module {\n  warning {\n    color: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("module: warning is not a block module holds"));
     EXPECT_THAT([] { return StyleOf("cpu {\n  warning {\n    color: #fff\n  }\n}\n", ModuleKind::Cpu, "cpu"); },
-                ConfigErrorWith("cpu > warning: warning colors only battery modules, and cpu is a cpu module"));
+                ThrowsWith<ConfigError>("cpu > warning: warning colors only battery modules, and cpu is a cpu module"));
     EXPECT_THAT([] { return StyleOf("power {\n  muted {\n    color: #fff\n  }\n}\n", ModuleKind::Battery, "power"); },
-                ConfigErrorWith("power > muted: muted colors only audio modules, and power is a battery module"));
-    EXPECT_THAT([] { return Parse("cpu {\n  alert {\n    icon {\n      color: #fff\n    }\n  }\n}\n"); }, ConfigErrorWith("cpu > alert: icon is not a block cpu > alert holds"));
+                ThrowsWith<ConfigError>("power > muted: muted colors only audio modules, and power is a battery module"));
+    EXPECT_THAT([] { return Parse("cpu {\n  alert {\n    icon {\n      color: #fff\n    }\n  }\n}\n"); },
+                ThrowsWith<ConfigError>("cpu > alert: icon is not a block cpu > alert holds"));
 }
 
 TEST(Style, ItemHoverChangesColorsAndLosesToAStatesOwnColors) {
@@ -254,9 +253,9 @@ ws {
     // With no hover block an item keeps its colors under the cursor.
     const ModuleStyle plain = StyleOf("module {\n  item {\n    color: #ff0000\n  }\n}\n", ModuleKind::Windows, "apps");
     EXPECT_EQ(Rgba(plain.item.hoverColor), kRed);
-    EXPECT_THAT([] { return Parse("module {\n  item {\n    hover {\n      padding: 2\n    }\n  }\n}\n"); }, ConfigErrorWith("which are: color, background"));
+    EXPECT_THAT([] { return Parse("module {\n  item {\n    hover {\n      padding: 2\n    }\n  }\n}\n"); }, ThrowsWith<ConfigError>("which are: color, background"));
     EXPECT_THAT([] { return Parse("module {\n  icon {\n    hover {\n      color: #fff\n    }\n  }\n}\n"); },
-                ConfigErrorWith("module > icon: hover is not a block module > icon holds"));
+                ThrowsWith<ConfigError>("module > icon: hover is not a block module > icon holds"));
 }
 
 TEST(Style, TheMenuBlockStylesTheMenuItsEntriesAndTheActiveEntry) {
@@ -293,8 +292,8 @@ menu {
     EXPECT_FLOAT_EQ(menu.active.padding.xDips, 8.0f);
     // With no menu block the entries take the bar's color.
     EXPECT_EQ(Rgba(ResolveBarStyle(Parse(kBar)).menu.item.color), kBarColor);
-    EXPECT_THAT([] { return Parse("menu {\n  icon {\n    color: #fff\n  }\n}\n"); }, ConfigErrorWith("menu: icon is not a block menu holds, which are: item, scrollbar"));
-    EXPECT_THAT([] { return Parse("menu {\n  item {\n    transition: color 1s\n  }\n}\n"); }, ConfigErrorWith("menu > item: transition is not a property"));
+    EXPECT_THAT([] { return Parse("menu {\n  icon {\n    color: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("menu: icon is not a block menu holds, which are: item, scrollbar"));
+    EXPECT_THAT([] { return Parse("menu {\n  item {\n    transition: color 1s\n  }\n}\n"); }, ThrowsWith<ConfigError>("menu > item: transition is not a property"));
 }
 
 TEST(Style, TheMenuBlockCapsTheMenuAndStylesItsScrollBar) {
@@ -312,9 +311,9 @@ TEST(Style, TheMenuBlockCapsTheMenuAndStylesItsScrollBar) {
     EXPECT_EQ(plain.maxWidthDips, std::nullopt);
     EXPECT_EQ(plain.maxHeightDips, std::nullopt);
     EXPECT_FLOAT_EQ(plain.scrollbar.widthDips, 0.0f);
-    EXPECT_THAT([] { return Parse("menu {\n  scrollbar {\n    color: #fff\n  }\n}\n"); }, ConfigErrorWith("menu > scrollbar: color is not a property"));
-    EXPECT_THAT([] { return Parse("tooltip {\n  max-width: 100\n}\n"); }, ConfigErrorWith("tooltip: max-width is not a property"));
-    EXPECT_THAT([] { return Parse("menu {\n  max-width: 0\n}\n"); }, ConfigErrorWith("must be more than 0"));
+    EXPECT_THAT([] { return Parse("menu {\n  scrollbar {\n    color: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("menu > scrollbar: color is not a property"));
+    EXPECT_THAT([] { return Parse("tooltip {\n  max-width: 100\n}\n"); }, ThrowsWith<ConfigError>("tooltip: max-width is not a property"));
+    EXPECT_THAT([] { return Parse("menu {\n  max-width: 0\n}\n"); }, ThrowsWith<ConfigError>("must be more than 0"));
 }
 
 TEST(Style, BorderSetsEverySideAWidthAndColor) {
@@ -326,8 +325,8 @@ TEST(Style, BorderSetsEverySideAWidthAndColor) {
     EXPECT_FLOAT_EQ(bar.section.margin.yDips, 5.0f);
     EXPECT_FLOAT_EQ(bar.section.box.padding.xDips, 4.0f);
     EXPECT_FLOAT_EQ(ResolveBarStyle(WithBar("section {\n  border: none\n}\n")).section.box.border.left.widthDips, 0.0f);
-    EXPECT_THAT([] { return Parse("section {\n  border: 1\n}\n"); }, ConfigErrorWith("must be none, or a width and a color"));
-    EXPECT_THAT([] { return Parse("section {\n  border: 1 solid #fff\n}\n"); }, ConfigErrorWith("must be a color"));
+    EXPECT_THAT([] { return Parse("section {\n  border: 1\n}\n"); }, ThrowsWith<ConfigError>("must be none, or a width and a color"));
+    EXPECT_THAT([] { return Parse("section {\n  border: 1 solid #fff\n}\n"); }, ThrowsWith<ConfigError>("must be a color"));
 }
 
 TEST(Style, EachSideTakesItsOwnBorderOverItsBlocksAndAMoreSpecificBlocksOverEither) {
@@ -350,9 +349,7 @@ TEST(Style, ShadowsAreInsetAndKeepTheirOrder) {
         WithBar("section {\n  shadow: 0 1 2 #ffffff 50%, -1 0 #000000\n}\nworkspaces {\n  item {\n    focused {\n      shadow: 0 -1 1 2 #ff0000\n    }\n  }\n}\n");
     const StyleConfig               bar     = ResolveBarStyle(sheet);
     const std::vector<InsetShadow>& shadows = bar.section.box.shadows;
-    if (shadows.size() != 2) {
-        FAIL() << "section has " << shadows.size() << " shadows, not 2";
-    }
+    ASSERT_EQ(shadows.size(), 2u);
     EXPECT_FLOAT_EQ(shadows[0].xDips, 0.0f);
     EXPECT_FLOAT_EQ(shadows[0].yDips, 1.0f);
     EXPECT_FLOAT_EQ(shadows[0].blurDips, 2.0f);
@@ -361,19 +358,17 @@ TEST(Style, ShadowsAreInsetAndKeepTheirOrder) {
     EXPECT_FLOAT_EQ(shadows[1].xDips, -1.0f);
     EXPECT_FLOAT_EQ(shadows[1].blurDips, 0.0f);
     const ModuleStyle workspaces = ResolveModuleStyle(sheet, bar, ModuleKind::Workspaces, "workspaces", {});
-    if (workspaces.focused.shadows.size() != 1) {
-        FAIL() << "the focused item has " << workspaces.focused.shadows.size() << " shadows, not 1";
-    }
+    ASSERT_EQ(workspaces.focused.shadows.size(), 1u);
     EXPECT_FLOAT_EQ(workspaces.focused.shadows[0].yDips, -1.0f);
     EXPECT_FLOAT_EQ(workspaces.focused.shadows[0].spreadDips, 2.0f);
     EXPECT_TRUE(workspaces.item.shadows.empty());
     EXPECT_TRUE(ResolveBarStyle(WithBar("tooltip {\n  shadow: none\n}\n")).tooltip.box.shadows.empty());
-    EXPECT_THAT([] { return Parse("section {\n  shadow: 0 1 -2 #000\n}\n"); }, ConfigErrorWith("negative blur"));
-    EXPECT_THAT([] { return Parse("section {\n  shadow: 1 #000\n}\n"); }, ConfigErrorWith("must be none, or shadows"));
-    EXPECT_THAT([] { return Parse("section {\n  shadow: 0 1 2\n}\n"); }, ConfigErrorWith("must be none, or shadows"));
-    EXPECT_THAT([] { return Parse("section {\n  shadow: 0 1 #000,\n}\n"); }, ConfigErrorWith("must be none, or shadows"));
+    EXPECT_THAT([] { return Parse("section {\n  shadow: 0 1 -2 #000\n}\n"); }, ThrowsWith<ConfigError>("negative blur"));
+    EXPECT_THAT([] { return Parse("section {\n  shadow: 1 #000\n}\n"); }, ThrowsWith<ConfigError>("must be none, or shadows"));
+    EXPECT_THAT([] { return Parse("section {\n  shadow: 0 1 2\n}\n"); }, ThrowsWith<ConfigError>("must be none, or shadows"));
+    EXPECT_THAT([] { return Parse("section {\n  shadow: 0 1 #000,\n}\n"); }, ThrowsWith<ConfigError>("must be none, or shadows"));
     EXPECT_THAT([] { return Parse("module {\n  item {\n    hover {\n      shadow: 0 1 #000\n    }\n  }\n}\n"); },
-                ConfigErrorWith("module > item > hover: shadow is not a property"));
+                ThrowsWith<ConfigError>("module > item > hover: shadow is not a property"));
 }
 
 TEST(Style, SectionsTooltipsAndMenusTakeTheSystemsBlurAndNothingElseDoes) {
@@ -391,8 +386,8 @@ TEST(Style, SectionsTooltipsAndMenusTakeTheSystemsBlurAndNothingElseDoes) {
               }));
     EXPECT_EQ(bar.tooltip.backdrop, none);
     EXPECT_EQ(bar.menu.backdrop, none);
-    EXPECT_THAT([] { return Parse("tooltip {\n  blur: 20\n}\n"); }, ConfigErrorWith("tooltip: blur must be on or off"));
-    EXPECT_THAT([] { return Parse("module {\n  blur: on\n}\n"); }, ConfigErrorWith("module: blur is not a property"));
+    EXPECT_THAT([] { return Parse("tooltip {\n  blur: 20\n}\n"); }, ThrowsWith<ConfigError>("tooltip: blur must be on or off"));
+    EXPECT_THAT([] { return Parse("module {\n  blur: on\n}\n"); }, ThrowsWith<ConfigError>("module: blur is not a property"));
 }
 
 TEST(Style, BrightnessAndSaturateToneTheBlur) {
@@ -405,14 +400,14 @@ TEST(Style, BrightnessAndSaturateToneTheBlur) {
               }));
     EXPECT_FLOAT_EQ(bar.tooltip.backdrop.brightness, 0.4f);
     EXPECT_FLOAT_EQ(bar.tooltip.backdrop.saturation, 1.0f);
-    EXPECT_THAT([] { return Parse("section {\n  brightness: 0.4\n}\n"); }, ConfigErrorWith("section: brightness tones the system's blur, so it takes blur: on beside it"));
-    EXPECT_THAT([] { return Parse("section {\n  blur: off\n  saturate: 2\n}\n"); }, ConfigErrorWith("takes blur: on beside it"));
-    EXPECT_THAT([] { return Parse("section {\n  blur: on\n  saturate: -1\n}\n"); }, ConfigErrorWith("section: saturate must be 0 or more"));
+    EXPECT_THAT([] { return Parse("section {\n  brightness: 0.4\n}\n"); }, ThrowsWith<ConfigError>("section: brightness tones the system's blur, so it takes blur: on beside it"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: off\n  saturate: 2\n}\n"); }, ThrowsWith<ConfigError>("takes blur: on beside it"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: on\n  saturate: -1\n}\n"); }, ThrowsWith<ConfigError>("section: saturate must be 0 or more"));
 }
 
 TEST(Style, ModulesTakeNoSize) {
-    EXPECT_THAT([] { return Parse("module {\n  width: 3\n}\n"); }, ConfigErrorWith("module: width is not a property"));
-    EXPECT_THAT([] { return Parse("module {\n  height: 3\n}\n"); }, ConfigErrorWith("module: height is not a property"));
+    EXPECT_THAT([] { return Parse("module {\n  width: 3\n}\n"); }, ThrowsWith<ConfigError>("module: width is not a property"));
+    EXPECT_THAT([] { return Parse("module {\n  height: 3\n}\n"); }, ThrowsWith<ConfigError>("module: height is not a property"));
 }
 
 TEST(Style, ModulesTakeAMarginButTheirHoverDoesNot) {
@@ -420,7 +415,7 @@ TEST(Style, ModulesTakeAMarginButTheirHoverDoesNot) {
     EXPECT_FLOAT_EQ(style.margin.yDips, 6.0f);
     EXPECT_FLOAT_EQ(style.margin.xDips, 2.0f);
     EXPECT_FLOAT_EQ(StyleOf("module {\n  margin: 1\n}\n", ModuleKind::Clock, "date").margin.xDips, 1.0f);
-    EXPECT_THAT([] { return Parse("ws {\n  hover {\n    margin: 1\n  }\n}\n"); }, ConfigErrorWith("ws > hover: margin is not a property"));
+    EXPECT_THAT([] { return Parse("ws {\n  hover {\n    margin: 1\n  }\n}\n"); }, ThrowsWith<ConfigError>("ws > hover: margin is not a property"));
 }
 
 TEST(Style, ATrayTakesItsTransitionsAndItsUnfoldedIconsRotation) {
@@ -505,43 +500,45 @@ TEST(Style, ATrayTakesItsWidthAndBackgroundTransitionsFromOneList) {
 
 TEST(Style, TransitionsAndRotationsAreATraysOrGroupsOnly) {
     EXPECT_THAT([] { return StyleOf("cpu {\n  transition: background 1s, width 1s\n}\n", ModuleKind::Cpu, "cpu"); },
-                ConfigErrorWith("cpu: transition: width animates a tray or group as it unfolds, and cpu is a cpu module"));
-    EXPECT_THAT([] { return StyleOf("time {\n  icon {\n    rotate: 10\n  }\n}\n", ModuleKind::Clock, "time"); }, ConfigErrorWith("time: rotate animates a tray or group"));
+                ThrowsWith<ConfigError>("cpu: transition: width animates a tray or group as it unfolds, and cpu is a cpu module"));
+    EXPECT_THAT([] { return StyleOf("time {\n  icon {\n    rotate: 10\n  }\n}\n", ModuleKind::Clock, "time"); }, ThrowsWith<ConfigError>("time: rotate animates a tray or group"));
     EXPECT_THAT([] { return StyleOf("time {\n  expanded {\n    icon {\n      rotate: 10\n    }\n  }\n}\n", ModuleKind::Clock, "time"); },
-                ConfigErrorWith("time: expanded animates a tray or group"));
-    EXPECT_THAT([] { return Parse("module {\n  icon {\n    rotate: 10\n  }\n}\n"); }, ConfigErrorWith("module > icon: rotate is not a property"));
-    EXPECT_THAT([] { return Parse("module {\n  expanded {\n    icon {\n      rotate: 10\n    }\n  }\n}\n"); }, ConfigErrorWith("module: expanded is not a block module holds"));
+                ThrowsWith<ConfigError>("time: expanded animates a tray or group"));
+    EXPECT_THAT([] { return Parse("module {\n  icon {\n    rotate: 10\n  }\n}\n"); }, ThrowsWith<ConfigError>("module > icon: rotate is not a property"));
+    EXPECT_THAT([] { return Parse("module {\n  expanded {\n    icon {\n      rotate: 10\n    }\n  }\n}\n"); },
+                ThrowsWith<ConfigError>("module: expanded is not a block module holds"));
 }
 
 TEST(Style, TransitionsAreCheckedAsTheyParse) {
-    EXPECT_THAT([] { return Parse("tray {\n  transition: color 1s\n}\n"); }, ConfigErrorWith("tray: transition animates background, width here, not color"));
-    EXPECT_THAT([] { return Parse("module {\n  transition: width 1s\n}\n"); }, ConfigErrorWith("module: transition animates background here, not width"));
-    EXPECT_THAT([] { return Parse("tray {\n  icon {\n    transition: width 1s\n  }\n}\n"); }, ConfigErrorWith("animates rotate here, not width"));
-    EXPECT_THAT([] { return Parse("module {\n  item {\n    transition: background 1s, width 1s\n  }\n}\n"); }, ConfigErrorWith("animates color, background here, not width"));
-    EXPECT_THAT([] { return Parse("module {\n  hover {\n    transition: background 1s\n  }\n}\n"); }, ConfigErrorWith("module > hover: transition is not a property"));
-    EXPECT_THAT([] { return Parse("tray {\n  transition: width fast\n}\n"); }, ConfigErrorWith("duration in ms or s"));
-    EXPECT_THAT([] { return Parse("tray {\n  transition: width 1s bouncy\n}\n"); }, ConfigErrorWith("timing function 'bouncy'"));
-    EXPECT_THAT([] { return Parse("tray {\n  transition: width\n}\n"); }, ConfigErrorWith("must be none, or transitions separated by commas"));
-    EXPECT_THAT([] { return Parse("tray {\n  transition: width 1s,\n}\n"); }, ConfigErrorWith("must be none, or transitions separated by commas"));
-    EXPECT_THAT([] { return Parse("tray {\n  expanded {\n    background: #fff\n  }\n}\n"); }, ConfigErrorWith("tray > expanded: background is not a property"));
-    EXPECT_THAT([] { return Parse("tray {\n  expanded {\n    icon {\n      color: #fff\n    }\n  }\n}\n"); }, ConfigErrorWith("which are: rotate"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: color 1s\n}\n"); }, ThrowsWith<ConfigError>("tray: transition animates background, width here, not color"));
+    EXPECT_THAT([] { return Parse("module {\n  transition: width 1s\n}\n"); }, ThrowsWith<ConfigError>("module: transition animates background here, not width"));
+    EXPECT_THAT([] { return Parse("tray {\n  icon {\n    transition: width 1s\n  }\n}\n"); }, ThrowsWith<ConfigError>("animates rotate here, not width"));
+    EXPECT_THAT([] { return Parse("module {\n  item {\n    transition: background 1s, width 1s\n  }\n}\n"); },
+                ThrowsWith<ConfigError>("animates color, background here, not width"));
+    EXPECT_THAT([] { return Parse("module {\n  hover {\n    transition: background 1s\n  }\n}\n"); }, ThrowsWith<ConfigError>("module > hover: transition is not a property"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: width fast\n}\n"); }, ThrowsWith<ConfigError>("duration in ms or s"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: width 1s bouncy\n}\n"); }, ThrowsWith<ConfigError>("timing function 'bouncy'"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: width\n}\n"); }, ThrowsWith<ConfigError>("must be none, or transitions separated by commas"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: width 1s,\n}\n"); }, ThrowsWith<ConfigError>("must be none, or transitions separated by commas"));
+    EXPECT_THAT([] { return Parse("tray {\n  expanded {\n    background: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("tray > expanded: background is not a property"));
+    EXPECT_THAT([] { return Parse("tray {\n  expanded {\n    icon {\n      color: #fff\n    }\n  }\n}\n"); }, ThrowsWith<ConfigError>("which are: rotate"));
 }
 
 TEST(Style, NumbersMustBeFiniteUnitlessAndInRange) {
-    EXPECT_THAT([] { return Parse("module {\n  padding: inf\n}\n"); }, ConfigErrorWith("must be a number with no unit"));
-    EXPECT_THAT([] { return Parse("module {\n  padding: 4px\n}\n"); }, ConfigErrorWith("must be a number with no unit, as 4, not '4px'"));
-    EXPECT_THAT([] { return Parse("module {\n  padding: 20000\n}\n"); }, ConfigErrorWith("must be a number from -10000 to 10000"));
-    EXPECT_THAT([] { return Parse("module {\n  padding: -1\n}\n"); }, ConfigErrorWith("must be 0 or more"));
-    EXPECT_THAT([] { return Parse("module {\n  item {\n    weight: nan\n  }\n}\n"); }, ConfigErrorWith("a weight from 100 to 900"));
-    EXPECT_THAT([] { return Parse("tray {\n  transition: width nanms\n}\n"); }, ConfigErrorWith("duration in ms or s"));
-    EXPECT_THAT([] { return Parse("tray {\n  transition: width 60000s\n}\n"); }, ConfigErrorWith("from 0 to 60s"));
-    EXPECT_THAT([] { return Parse("section {\n  blur: on\n  brightness: inf\n}\n"); }, ConfigErrorWith("section: brightness must be a number"));
+    EXPECT_THAT([] { return Parse("module {\n  padding: inf\n}\n"); }, ThrowsWith<ConfigError>("must be a number with no unit"));
+    EXPECT_THAT([] { return Parse("module {\n  padding: 4px\n}\n"); }, ThrowsWith<ConfigError>("must be a number with no unit, as 4, not '4px'"));
+    EXPECT_THAT([] { return Parse("module {\n  padding: 20000\n}\n"); }, ThrowsWith<ConfigError>("must be a number from -10000 to 10000"));
+    EXPECT_THAT([] { return Parse("module {\n  padding: -1\n}\n"); }, ThrowsWith<ConfigError>("must be 0 or more"));
+    EXPECT_THAT([] { return Parse("module {\n  item {\n    weight: nan\n  }\n}\n"); }, ThrowsWith<ConfigError>("a weight from 100 to 900"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: width nanms\n}\n"); }, ThrowsWith<ConfigError>("duration in ms or s"));
+    EXPECT_THAT([] { return Parse("tray {\n  transition: width 60000s\n}\n"); }, ThrowsWith<ConfigError>("from 0 to 60s"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: on\n  brightness: inf\n}\n"); }, ThrowsWith<ConfigError>("section: brightness must be a number"));
 }
 
 TEST(Style, CommentsAndBlankLinesAreIgnoredAndLinesStillCount) {
     const ModuleStyle style = StyleOf("// a note\n\ncpu { // the processor\n  color: #ff0000 // red\n}\n", ModuleKind::Cpu, "cpu");
     EXPECT_EQ(Rgba(style.color), kRed);
-    EXPECT_THAT([] { return Parse("// a\n\ncpu {\n  colour: #fff\n}\n"); }, ConfigErrorWith("style.conf:4: cpu: colour is not a property"));
+    EXPECT_THAT([] { return Parse("// a\n\ncpu {\n  colour: #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:4: cpu: colour is not a property"));
     EXPECT_NO_THROW(Parse("cpu {\r\n  color: #fff\r\n}\r\n"));
 }
 
@@ -552,53 +549,54 @@ TEST(Style, BlocksAndPropertiesShareLinesThroughSemicolonsAndBraces) {
     EXPECT_EQ(Rgba(StyleOf("ws { item { focused { color: #ff0000 } } }\n", ModuleKind::Workspaces, "ws").focused.color), kRed);
     EXPECT_EQ(Rgba(StyleOf("cpu\n{\n\tcolor: #ff0000;\n}", ModuleKind::Cpu, "cpu").color), kRed);
     EXPECT_EQ(Rgba(StyleOf("cpu { color: #ff0000 // red }\n}\n", ModuleKind::Cpu, "cpu").color), kRed);
-    EXPECT_THAT([] { return Parse("cpu { color: #fff; color: #000 }\n"); }, ConfigErrorWith("style.conf:1: color: is already set on line 1 of the same block"));
+    EXPECT_THAT([] { return Parse("cpu { color: #fff; color: #000 }\n"); }, ThrowsWith<ConfigError>("style.conf:1: color: is already set on line 1 of the same block"));
 }
 
 TEST(Style, UnbalancedBracesAreErrorsNamingTheirLine) {
-    EXPECT_THAT([] { return Parse("cpu {\n  icon {\n    color: #fff\n  }\n"); }, ConfigErrorWith("style.conf:1: cpu: the block opened here is never closed"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff\n}\n}\n"); }, ConfigErrorWith("style.conf:4: } closes no block"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff\n  icon\n"); }, ConfigErrorWith("style.conf:3: icon: ends the file"));
+    EXPECT_THAT([] { return Parse("cpu {\n  icon {\n    color: #fff\n  }\n"); }, ThrowsWith<ConfigError>("style.conf:1: cpu: the block opened here is never closed"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff\n}\n}\n"); }, ThrowsWith<ConfigError>("style.conf:4: } closes no block"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff\n  icon\n"); }, ThrowsWith<ConfigError>("style.conf:3: icon: ends the file"));
 }
 
 TEST(Style, CssFormsAreErrorsNamingTheFormToUse) {
     EXPECT_THAT([] { return Parse(".cpu {\n  color: #fff\n}\n"); },
-                ConfigErrorWith("style.conf:1: '.cpu' is a selector, and style.conf has none: blocks are names nested inside each other"));
-    EXPECT_THAT([] { return Parse("#cpu {\n  color: #fff\n}\n"); }, ConfigErrorWith("'#cpu' is a selector"));
-    EXPECT_THAT([] { return Parse("* {\n  color: #fff\n}\n"); }, ConfigErrorWith("'*' is a selector"));
-    EXPECT_THAT([] { return Parse("cpu {\n  item:hover {\n    color: #fff\n  }\n}\n"); }, ConfigErrorWith("style.conf:2: 'item:hover' is a selector, and style.conf has none"));
-    EXPECT_THAT([] { return Parse("cpu {\n  item > hover {\n    color: #fff\n  }\n}\n"); }, ConfigErrorWith("style.conf:2: 'item > hover' is a selector"));
-    EXPECT_THAT([] { return Parse("cpu, memory {\n  color: #fff\n}\n"); }, ConfigErrorWith("'cpu, memory' is a selector"));
-    EXPECT_THAT([] { return Parse(":root {\n  --accent: #fff\n}\n"); }, ConfigErrorWith(":root is CSS: define values in a vars block and write them as $name"));
-    EXPECT_THAT([] { return Parse("vars {\n  --accent: #fff\n}\n"); }, ConfigErrorWith("style.conf:2: --name is a CSS custom property"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color: var(--accent)\n}\n"); }, ConfigErrorWith("color: var() is CSS"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff !important\n}\n"); }, ConfigErrorWith("color: !important is CSS"));
-    EXPECT_THAT([] { return Parse("@media (min-width: 100) {\n}\n"); }, ConfigErrorWith("style.conf:1: @media is a CSS at-rule"));
-    EXPECT_THAT([] { return Parse("/* note */\ncpu {\n  color: #fff\n}\n"); }, ConfigErrorWith("style.conf:1: /* */ is not a comment here"));
-    EXPECT_THAT([] { return Parse("cpu:\n  color: #fff\n"); }, ConfigErrorWith("style.conf:1: cpu: has no value: a property is cpu: value, and a block opens with cpu {"));
+                ThrowsWith<ConfigError>("style.conf:1: '.cpu' is a selector, and style.conf has none: blocks are names nested inside each other"));
+    EXPECT_THAT([] { return Parse("#cpu {\n  color: #fff\n}\n"); }, ThrowsWith<ConfigError>("'#cpu' is a selector"));
+    EXPECT_THAT([] { return Parse("* {\n  color: #fff\n}\n"); }, ThrowsWith<ConfigError>("'*' is a selector"));
+    EXPECT_THAT([] { return Parse("cpu {\n  item:hover {\n    color: #fff\n  }\n}\n"); },
+                ThrowsWith<ConfigError>("style.conf:2: 'item:hover' is a selector, and style.conf has none"));
+    EXPECT_THAT([] { return Parse("cpu {\n  item > hover {\n    color: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("style.conf:2: 'item > hover' is a selector"));
+    EXPECT_THAT([] { return Parse("cpu, memory {\n  color: #fff\n}\n"); }, ThrowsWith<ConfigError>("'cpu, memory' is a selector"));
+    EXPECT_THAT([] { return Parse(":root {\n  --accent: #fff\n}\n"); }, ThrowsWith<ConfigError>(":root is CSS: define values in a vars block and write them as $name"));
+    EXPECT_THAT([] { return Parse("vars {\n  --accent: #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:2: --name is a CSS custom property"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color: var(--accent)\n}\n"); }, ThrowsWith<ConfigError>("color: var() is CSS"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff !important\n}\n"); }, ThrowsWith<ConfigError>("color: !important is CSS"));
+    EXPECT_THAT([] { return Parse("@media (min-width: 100) {\n}\n"); }, ThrowsWith<ConfigError>("style.conf:1: @media is a CSS at-rule"));
+    EXPECT_THAT([] { return Parse("/* note */\ncpu {\n  color: #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:1: /* */ is not a comment here"));
+    EXPECT_THAT([] { return Parse("cpu:\n  color: #fff\n"); }, ThrowsWith<ConfigError>("style.conf:1: cpu: has no value: a property is cpu: value, and a block opens with cpu {"));
 }
 
 TEST(Style, AnythingOutsideTheFormatIsAnErrorNamingTheLine) {
-    EXPECT_THAT([] { return Parse("cpu {\n  color #fff\n}\n"); }, ConfigErrorWith("style.conf:2: color: is followed by '#'"));
-    EXPECT_THAT([] { return Parse("cpu {\n  ; color: #fff\n}\n"); }, ConfigErrorWith("style.conf:2: ';' cannot start a key"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff\n  color: #000\n}\n"); }, ConfigErrorWith("style.conf:3: color: is already set on line 2 of the same block"));
-    EXPECT_THAT([] { return Parse("cpu {\n}\n"); }, ConfigErrorWith("style.conf:1: cpu: is an empty block"));
-    EXPECT_THAT([] { return Parse("cpu: #fff\n"); }, ConfigErrorWith("cpu: the top level holds blocks"));
-    EXPECT_THAT([] { return Parse("cpu {\n  icon: #fff\n}\n"); }, ConfigErrorWith("cpu: icon is a block"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color {\n    background: #fff\n  }\n}\n"); }, ConfigErrorWith("cpu: color is a property"));
-    EXPECT_THAT([] { return Parse("section {\n  size: 12\n}\n"); }, ConfigErrorWith("section: size is not a property section takes"));
-    EXPECT_THAT([] { return Parse("module {\n  padding: 1 2 3\n}\n"); }, ConfigErrorWith("takes one number for every side, or two"));
-    EXPECT_THAT([] { return Parse("module {\n  item {\n    weight: 450\n  }\n}\n"); }, ConfigErrorWith("in steps of 100"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:2: color: is followed by '#'"));
+    EXPECT_THAT([] { return Parse("cpu {\n  ; color: #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:2: ';' cannot start a key"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color: #fff\n  color: #000\n}\n"); }, ThrowsWith<ConfigError>("style.conf:3: color: is already set on line 2 of the same block"));
+    EXPECT_THAT([] { return Parse("cpu {\n}\n"); }, ThrowsWith<ConfigError>("style.conf:1: cpu: is an empty block"));
+    EXPECT_THAT([] { return Parse("cpu: #fff\n"); }, ThrowsWith<ConfigError>("cpu: the top level holds blocks"));
+    EXPECT_THAT([] { return Parse("cpu {\n  icon: #fff\n}\n"); }, ThrowsWith<ConfigError>("cpu: icon is a block"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color {\n    background: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("cpu: color is a property"));
+    EXPECT_THAT([] { return Parse("section {\n  size: 12\n}\n"); }, ThrowsWith<ConfigError>("section: size is not a property section takes"));
+    EXPECT_THAT([] { return Parse("module {\n  padding: 1 2 3\n}\n"); }, ThrowsWith<ConfigError>("takes one number for every side, or two"));
+    EXPECT_THAT([] { return Parse("module {\n  item {\n    weight: 450\n  }\n}\n"); }, ThrowsWith<ConfigError>("in steps of 100"));
 }
 
 TEST(Style, AnErrorQuotesAWholeCharacterSoItStaysUtf8) {
-    EXPECT_THAT([] { return Parse("cpu {\n  \xC3\xBC: #fff\n}\n"); }, ConfigErrorWith("style.conf:2: '\xC3\xBC' cannot start a key"));
-    EXPECT_THAT([] { return Parse("cpu {\n  color\xC3\xBC: #fff\n}\n"); }, ConfigErrorWith("style.conf:2: color: is followed by '\xC3\xBC'"));
+    EXPECT_THAT([] { return Parse("cpu {\n  \xC3\xBC: #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:2: '\xC3\xBC' cannot start a key"));
+    EXPECT_THAT([] { return Parse("cpu {\n  color\xC3\xBC: #fff\n}\n"); }, ThrowsWith<ConfigError>("style.conf:2: color: is followed by '\xC3\xBC'"));
 }
 
 TEST(Style, AKeyIsCheckedAgainstItsOwnBlockOnceANestedBlockCloses) {
     EXPECT_THAT([] { return Parse("cpu {\n  icon {\n    color: #fff\n  }\n  color: #fff\n  icon {\n    color: #000\n  }\n}\n"); },
-                ConfigErrorWith("style.conf:6: icon: is already set on line 2 of the same block"));
+                ThrowsWith<ConfigError>("style.conf:6: icon: is already set on line 2 of the same block"));
     EXPECT_NO_THROW(Parse("cpu {\n  icon {\n    color: #fff\n  }\n  color: #fff\n}\nmemory {\n  icon {\n    color: #000\n  }\n}\n"));
 }
 
@@ -608,21 +606,21 @@ TEST(Style, NestingPastEightLevelsIsAnError) {
         nested += "block {\n";
     }
     nested += "color: #fff\n" + std::string(9, '}');
-    EXPECT_THAT([&nested] { return Parse(nested); }, ConfigErrorWith("style.conf:9: block: is nested 9 levels deep, and a style nests at most 8"));
+    EXPECT_THAT([&nested] { return Parse(nested); }, ThrowsWith<ConfigError>("style.conf:9: block: is nested 9 levels deep, and a style nests at most 8"));
 }
 
 TEST(Style, AValueLongerThan1024CharactersOnceItsVarsAreFilledInIsAnError) {
     const std::string vars = "vars {\n  long: " + std::string(600, 'x') + "\n}\n";
     EXPECT_THAT([&vars] { return Parse(vars + "cpu {\n  color: $long$long\n}\n"); },
-                ConfigErrorWith("style.conf:5: color: is longer than 1024 characters once its vars are filled in"));
-    EXPECT_THAT([&vars] { return Parse(vars + "cpu {\n  color: $long\n}\n"); }, ConfigErrorWith("color must be a color"));
+                ThrowsWith<ConfigError>("style.conf:5: color: is longer than 1024 characters once its vars are filled in"));
+    EXPECT_THAT([&vars] { return Parse(vars + "cpu {\n  color: $long\n}\n"); }, ThrowsWith<ConfigError>("color must be a color"));
 }
 
 TEST(Style, ATopLevelBlockMustNameAModuleTheConfigDefines) {
     EXPECT_NO_THROW(RequireKnownModules(WithBar("cpu {\n  color: #fff\n}\nmodule {\n  color: #fff\n}\n"), {"cpu"}));
-    EXPECT_THAT(
-        [] { RequireKnownModules(WithBar("cpu {\n  color: #fff\n}\n"), {"clock", "memory"}); },
-        ConfigErrorWith("style.conf:6: cpu: names no module, and the top level holds vars, bar, section, module, tooltip, menu and the modules the config defines: clock, memory"));
+    EXPECT_THAT([] { RequireKnownModules(WithBar("cpu {\n  color: #fff\n}\n"), {"clock", "memory"}); },
+                ThrowsWith<ConfigError>(
+                    "style.conf:6: cpu: names no module, and the top level holds vars, bar, section, module, tooltip, menu and the modules the config defines: clock, memory"));
     EXPECT_TRUE(IsReservedModuleName("menu"));
     EXPECT_TRUE(IsReservedModuleName("vars"));
     EXPECT_FALSE(IsReservedModuleName("item"));
@@ -631,19 +629,17 @@ TEST(Style, ATopLevelBlockMustNameAModuleTheConfigDefines) {
 TEST(Style, ClassBlocksMustBeOnesACustomModuleDeclares) {
     // A class block under module parses, as a custom module may declare it, and fails once no module does.
     EXPECT_THAT([] { RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {}); },
-                ConfigErrorWith("style.conf:2: module: active is not a block module holds (icon, item, hover, alert), nor a class a custom module lists"));
+                ThrowsWith<ConfigError>("style.conf:2: module: active is not a block module holds (icon, item, hover, alert), nor a class a custom module lists"));
     EXPECT_NO_THROW(RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {"active"}));
     const StyleSheet  sheet   = WithBar("weather {\n  icon {\n    color: #00ff00\n  }\n  sunny {\n    color: #ff0000\n  }\n}\n");
     const ModuleStyle weather = ResolveModuleStyle(sheet, ResolveBarStyle(sheet), ModuleKind::Custom, "weather", {"sunny", "rainy"});
-    if (weather.classes.size() != 2) {
-        FAIL() << "weather has " << weather.classes.size() << " classes, not 2";
-    }
+    ASSERT_EQ(weather.classes.size(), 2u);
     EXPECT_EQ(weather.classes[0].name, "sunny");
     EXPECT_EQ(Rgba(weather.classes[0].colors.text), kRed);
     EXPECT_EQ(Rgba(weather.classes[0].colors.icon), kGreen);
     EXPECT_EQ(Rgba(weather.classes[1].colors.text), kBarColor);
     EXPECT_THAT([&sheet] { return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), ModuleKind::Custom, "weather", {"rainy"}); },
-                ConfigErrorWith("weather: sunny is not a block a module holds"));
+                ThrowsWith<ConfigError>("weather: sunny is not a block a module holds"));
     EXPECT_TRUE(IsStyledClass("hover"));
     EXPECT_FALSE(IsStyledClass("sunny"));
 }

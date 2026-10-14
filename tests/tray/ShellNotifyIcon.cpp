@@ -2,8 +2,9 @@
 
 #include "platform/AppBar.hpp"
 #include "platform/Win32Cast.hpp"
+#include "support/ChangeTarget.hpp"
 #include "support/Eventually.hpp"
-#include "support/MessageWindow.hpp"
+#include "support/Rect.hpp"
 #include "support/TrayPayload.hpp"
 #include "tray/NotifyIconProtocol.hpp"
 
@@ -51,12 +52,11 @@ namespace {
 
     class ShellNotifyIconTray : public testing::Test {
       public:
-        ShellNotifyIconTray() : _changes(_target.Get(), kChanged), _tray(_changes, kTestClass, _target.Get(), kFailed) {}
+        ShellNotifyIconTray() : _target(kChanged), _tray(_target.signal, kTestClass, _target.window.Get(), kFailed) {}
 
       protected:
-        MessageWindow   _target;
+        ChangeTarget    _target;
         MessageWindow   _owner;
-        ChangeSignal    _changes;
         ShellNotifyIcon _tray;
         HWND            _window = FindWindowW(kTestClass, nullptr);
     };
@@ -80,12 +80,7 @@ namespace {
     }
 
     // A monitor above the primary has negative coordinates.
-    constexpr RECT kAbovePrimary{
-        .left   = 100,
-        .top    = -2100,
-        .right  = 130,
-        .bottom = -2070,
-    };
+    constexpr RECT kAbovePrimary{100, -2100, 130, -2070};
 
     // Answers every icon rect query with kAbovePrimary, as the tray answers one.
     LRESULT CALLBACK AnswerAbovePrimary(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -211,10 +206,7 @@ TEST(ShellNotifyIcon, Shell32ReadsAnIconRectAboveThePrimaryMonitor) {
     });
 
     EXPECT_EQ(result, S_OK);
-    EXPECT_EQ(rect.left, kAbovePrimary.left);
-    EXPECT_EQ(rect.top, kAbovePrimary.top);
-    EXPECT_EQ(rect.right, kAbovePrimary.right);
-    EXPECT_EQ(rect.bottom, kAbovePrimary.bottom);
+    EXPECT_EQ(rect, kAbovePrimary);
 }
 
 TEST_F(ShellNotifyIconTray, AnIconHandleThatDoesNotReadLeavesTheIconWithoutPixels) {

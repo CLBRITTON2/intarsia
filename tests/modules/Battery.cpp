@@ -2,6 +2,7 @@
 
 #include "../battery/FakeBattery.hpp"
 #include "TextOnlyRender.hpp"
+#include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -19,14 +20,7 @@ namespace {
             .iconPlugged       = L"P",
             .warningAtPercent  = 40,
             .criticalAtPercent = 15,
-            .actions =
-                {
-                    .click       = std::nullopt,
-                    .rightClick  = std::nullopt,
-                    .middleClick = std::nullopt,
-                    .scrollUp    = std::nullopt,
-                    .scrollDown  = std::nullopt,
-                },
+            .actions           = kNoActions,
         };
     }
 
@@ -102,5 +96,5 @@ TEST(Battery, AFormatNamingAnUnknownValueIsAConfigError) {
     FakeBattery   battery;
     BatteryConfig config  = TestConfig();
     config.formatCharging = "{percent}";
-    EXPECT_THAT([&] { return Battery(config, battery); }, testing::ThrowsMessage<ConfigError>(testing::HasSubstr("battery format_charging '{percent}' is not a valid format")));
+    EXPECT_THAT([&] { return Battery(config, battery); }, ThrowsWith<ConfigError>("battery format_charging '{percent}' is not a valid format"));
 }

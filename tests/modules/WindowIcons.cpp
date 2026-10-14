@@ -1,5 +1,6 @@
 #include "modules/WindowIcons.hpp"
-#include "support/MessageWindow.hpp"
+#include "support/ChangeTarget.hpp"
+#include "support/Eventually.hpp"
 
 #include <gtest/gtest.h>
 
@@ -17,42 +18,26 @@ namespace {
         SendMessageW(window.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
     }
 
-    // Handles this thread's messages for a moment: the reader thread's WM_GETICON waits on this thread. True once the
-    // cache has posted its change message.
-    bool Pump(std::uint32_t changeMessage) {
-        MsgWaitForMultipleObjects(0, nullptr, FALSE, 10, QS_ALLINPUT);
-        bool changed = false;
-        MSG  message{};
-        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-            changed = changed || message.message == changeMessage;
-            DispatchMessageW(&message);
-        }
-        return changed;
-    }
-
-    // Asks until the icon arrives.
+    // Asks until the icon arrives. The reader thread's WM_GETICON waits on this thread.
     std::shared_ptr<const IconPixels> WaitForIcon(WindowIcons& icons, HWND window) {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while (std::chrono::steady_clock::now() < deadline) {
-            std::shared_ptr<const IconPixels> pixels = icons.For(reinterpret_cast<std::intptr_t>(window));
-            if (pixels != nullptr) {
-                return pixels;
-            }
-            Pump(kIconChanged);
-        }
-        return nullptr;
+        std::shared_ptr<const IconPixels> pixels;
+        AnsweringUntil(
+            [&] {
+                pixels = icons.For(reinterpret_cast<std::intptr_t>(window));
+                return pixels != nullptr;
+            },
+            std::chrono::seconds(5));
+        return pixels;
     }
 
     // Waits for a read to end, whether or not it found an icon.
-    bool WaitForReadToEnd(ChangeSignal& changes) {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (Pump(kIconChanged)) {
-                changes.Acknowledge();
-                return true;
-            }
+    bool WaitForReadToEnd(ChangeTarget& target) {
+        MSG message{};
+        if (!AnsweringUntil([&] { return PeekMessageW(&message, target.window.Get(), kIconChanged, kIconChanged, PM_REMOVE) != FALSE; }, std::chrono::seconds(5))) {
+            return false;
         }
-        return false;
+        target.signal.Acknowledge();
+        return true;
     }
 
 } // namespace
@@ -70,9 +55,8 @@ TEST(WindowIcons, AWindowThatIsGoneHasNoIcon) {
 TEST(WindowIcons, KeepsTheIconOfAWindowThatStillExists) {
     const MessageWindow window;
     SetStockIcon(window);
-    const MessageWindow target;
-    ChangeSignal        changes(target.Get(), kIconChanged);
-    WindowIcons         icons(changes, kRetry);
+    ChangeTarget target(kIconChanged);
+    WindowIcons  icons(target.signal, kRetry);
     EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
     const std::shared_ptr<const IconPixels> pixels = WaitForIcon(icons, window.Get());
     ASSERT_NE(pixels, nullptr);
@@ -82,10 +66,9 @@ TEST(WindowIcons, KeepsTheIconOfAWindowThatStillExists) {
 }
 
 TEST(WindowIcons, ForgetsAClosedWindow) {
-    const MessageWindow target;
-    ChangeSignal        changes(target.Get(), kIconChanged);
-    WindowIcons         icons(changes, kRetry);
-    std::intptr_t       handle = 0;
+    ChangeTarget  target(kIconChanged);
+    WindowIcons   icons(target.signal, kRetry);
+    std::intptr_t handle = 0;
     {
         const MessageWindow window;
         SetStockIcon(window);
@@ -100,11 +83,10 @@ TEST(WindowIcons, ForgetsAClosedWindow) {
 // Apps often set their icon after the window appears, so a first read finds none.
 TEST(WindowIcons, ReadsAgainAWindowThatShowedNoIcon) {
     const MessageWindow window;
-    const MessageWindow target;
-    ChangeSignal        changes(target.Get(), kIconChanged);
-    WindowIcons         icons(changes, kRetry);
+    ChangeTarget        target(kIconChanged);
+    WindowIcons         icons(target.signal, kRetry);
     EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
-    ASSERT_TRUE(WaitForReadToEnd(changes));
+    ASSERT_TRUE(WaitForReadToEnd(target));
     EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
 
     SetStockIcon(window);

@@ -1,6 +1,7 @@
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "platform/Process.hpp"
+#include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -55,10 +56,6 @@ namespace {
 
     UniqueHandle NeverSignaled() {
         return ManualResetEvent("test cancel");
-    }
-
-    auto CommandErrorWith(std::string_view text) {
-        return testing::ThrowsMessage<CommandError>(testing::HasSubstr(std::string(text)));
     }
 
     // A process outside any job CaptureOutput makes, killed when this goes.
@@ -141,11 +138,11 @@ TEST(Process, ArgumentsSurviveTheRoundTripUnchanged) {
 
 TEST(Process, ProgramsResolveThroughPath) {
     const std::optional<std::filesystem::path> cmd = ResolveProgram(L"cmd");
-    ASSERT_TRUE(cmd.has_value());
-    if (cmd.has_value()) {
-        EXPECT_TRUE(cmd->is_absolute());
-        EXPECT_EQ(cmd->filename(), L"cmd.exe");
+    if (!cmd.has_value()) {
+        FAIL() << "cmd did not resolve through PATH";
     }
+    EXPECT_TRUE(cmd->is_absolute());
+    EXPECT_EQ(cmd->filename(), L"cmd.exe");
 }
 
 TEST(Process, CaptureOutputReturnsWhatTheCommandPrinted) {
@@ -153,17 +150,17 @@ TEST(Process, CaptureOutputReturnsWhatTheCommandPrinted) {
 }
 
 TEST(Process, CaptureOutputFailsOnANonzeroExit) {
-    EXPECT_THAT([] { return CaptureOutput(Cmd({L"/c", L"exit 3"}), std::chrono::seconds(10), 1024, NeverSignaled().get()); }, CommandErrorWith("exited with code 3"));
+    EXPECT_THAT([] { return CaptureOutput(Cmd({L"/c", L"exit 3"}), std::chrono::seconds(10), 1024, NeverSignaled().get()); }, ThrowsWith<CommandError>("exited with code 3"));
 }
 
 TEST(Process, CaptureOutputKillsACommandPastItsTimeout) {
-    EXPECT_THAT([] { return CaptureOutput(Ping(), std::chrono::milliseconds(200), 1024, NeverSignaled().get()); }, CommandErrorWith("did not finish within 200ms"));
+    EXPECT_THAT([] { return CaptureOutput(Ping(), std::chrono::milliseconds(200), 1024, NeverSignaled().get()); }, ThrowsWith<CommandError>("did not finish within 200ms"));
 }
 
 TEST(Process, CaptureOutputStopsWhenCancelled) {
     const UniqueHandle cancel = NeverSignaled();
     SetEvent(cancel.get());
-    EXPECT_THAT([&cancel] { return CaptureOutput(Ping(), std::chrono::seconds(10), 1024, cancel.get()); }, CommandErrorWith("cancelled"));
+    EXPECT_THAT([&cancel] { return CaptureOutput(Ping(), std::chrono::seconds(10), 1024, cancel.get()); }, ThrowsWith<CommandError>("cancelled"));
 }
 
 // The job cannot kill a process outside it, so the read of a pipe such a process holds open ends with the job.
@@ -189,7 +186,7 @@ TEST(Process, CaptureOutputWaitsForWhatTheCommandStarted) {
 
 TEST(Process, CaptureOutputFailsPastTheOutputCap) {
     EXPECT_THAT([] { return CaptureOutput(Cmd({L"/c", L"for /l %i in (1,1,200) do @echo 0123456789"}), std::chrono::seconds(10), 100, NeverSignaled().get()); },
-                CommandErrorWith("printed more than 100 bytes"));
+                ThrowsWith<CommandError>("printed more than 100 bytes"));
 }
 
 TEST(Process, StreamLinesDeliversEachLineAndReturnsTheExitCode) {
@@ -208,7 +205,7 @@ TEST(Process, StreamLinesDeliversALastLineWithNoLineEnding) {
 
 TEST(Process, StreamLinesFailsPastTheLineCap) {
     EXPECT_THAT([] { return StreamLines(Cmd({L"/c", L"echo 0123456789abcdef"}), 8, NeverSignaled().get(), [](std::string_view) {}); },
-                CommandErrorWith("printed a line longer than 8 bytes"));
+                ThrowsWith<CommandError>("printed a line longer than 8 bytes"));
 }
 
 TEST(Process, RunOrFailureReturnsWhatTheRunReturns) {
@@ -248,7 +245,7 @@ TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {
     const UniqueHandle cancel  = NeverSignaled();
     const auto         started = std::chrono::steady_clock::now();
     EXPECT_THAT([&cancel] { return StreamLines(Cmd({L"/c", L"echo up& ping -n 60 127.0.0.1"}), 1024, cancel.get(), [&cancel](std::string_view) { SetEvent(cancel.get()); }); },
-                CommandErrorWith("cancelled"));
+                ThrowsWith<CommandError>("cancelled"));
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(30));
 }
 
@@ -260,9 +257,8 @@ TEST(Process, MissingProgramsDoNotResolve) {
 // SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
 // when the file exists there.
 TEST(Process, RelativePathsWithDirectoriesDoNotResolve) {
-    const std::filesystem::path cmd = SystemProgram(L"cmd");
-    EXPECT_TRUE(std::filesystem::exists(cmd));
-    const std::wstring relative = std::filesystem::relative(cmd, std::filesystem::current_path()).wstring();
+    const std::filesystem::path cmd      = SystemProgram(L"cmd");
+    const std::wstring          relative = std::filesystem::relative(cmd, std::filesystem::current_path()).wstring();
     EXPECT_FALSE(ResolveProgram(relative).has_value());
     EXPECT_FALSE(ResolveProgram(L".\\cmd.exe").has_value());
     EXPECT_FALSE(ResolveProgram(L"System32\\cmd.exe").has_value());

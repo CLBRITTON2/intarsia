@@ -1,5 +1,7 @@
 #include "config/Config.hpp"
 
+#include "support/ThrowsWith.hpp"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -90,6 +92,11 @@ bar {
         return Replace(kValidConfig, "layouts = {},", "layouts = " + std::string(layouts) + ",");
     }
 
+    // kValidConfig's clock module with more keys.
+    std::string WithClockKeys(std::string_view config, std::string_view keys) {
+        return Replace(config, "interval = 60 }", "interval = 60, " + std::string(keys) + " }");
+    }
+
     Config LoadStyled(std::string_view config, std::string_view style) {
         const TempConfig files(config, style);
         return LoadConfig(files.Path());
@@ -97,10 +104,6 @@ bar {
 
     Config LoadText(std::string_view config) {
         return LoadStyled(config, kValidStyle);
-    }
-
-    auto ConfigErrorWith(std::string_view text) {
-        return testing::ThrowsMessage<ConfigError>(testing::HasSubstr(std::string(text)));
     }
 
     std::vector<ModuleKind> Kinds(const std::vector<ModuleInstance>& instances) {
@@ -147,13 +150,13 @@ TEST(Config, MonitorsReadsEachEntryKind) {
 
 TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
     const auto withMonitors = [](std::string_view list) { return Replace(kValidConfig, R"(monitors = { "*" })", "monitors = " + std::string(list)); };
-    EXPECT_THAT([&] { return LoadText(Replace(kValidConfig, R"(, monitors = { "*" })", "")); }, ConfigErrorWith("bar.monitors is missing"));
-    EXPECT_THAT([&] { return LoadText(withMonitors("{}")); }, ConfigErrorWith("bar.monitors is empty"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ConfigErrorWith("lists 'primary' twice"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "internal", "BOE0B4D", "internal" })")); }, ConfigErrorWith("bar.monitors lists 'internal' twice"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ConfigErrorWith("lists '*' beside other entries"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ConfigErrorWith("lists 'Primary', which is not"));
-    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ConfigErrorWith("intarsia-cli monitors lists each monitor's id"));
+    EXPECT_THAT([&] { return LoadText(Replace(kValidConfig, R"(, monitors = { "*" })", "")); }, ThrowsWith<ConfigError>("bar.monitors is missing"));
+    EXPECT_THAT([&] { return LoadText(withMonitors("{}")); }, ThrowsWith<ConfigError>("bar.monitors is empty"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "primary" })")); }, ThrowsWith<ConfigError>("lists 'primary' twice"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "primary", "internal", "BOE0B4D", "internal" })")); }, ThrowsWith<ConfigError>("bar.monitors lists 'internal' twice"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "*", "primary" })")); }, ThrowsWith<ConfigError>("lists '*' beside other entries"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "Primary" })")); }, ThrowsWith<ConfigError>("lists 'Primary', which is not"));
+    EXPECT_THAT([&] { return LoadText(withMonitors(R"({ "del41a8" })")); }, ThrowsWith<ConfigError>("intarsia-cli monitors lists each monitor's id"));
 }
 
 TEST(Config, ShowsBarOnMatchesAnyEntry) {
@@ -188,14 +191,14 @@ TEST(Config, ShowsBarOnMatchesAnyEntry) {
 }
 
 TEST(Config, MissingFileIsAnError) {
-    EXPECT_THAT([] { return LoadConfig(std::filesystem::temp_directory_path() / "intarsia-test-missing.lua"); }, ConfigErrorWith("cannot open config file"));
+    EXPECT_THAT([] { return LoadConfig(std::filesystem::temp_directory_path() / "intarsia-test-missing.lua"); }, ThrowsWith<ConfigError>("cannot open config file"));
 }
 
 TEST(Config, MissingStyleIsAnError) {
     const std::filesystem::path directory = std::filesystem::temp_directory_path() / "intarsia-test-no-style";
     std::filesystem::create_directories(directory);
     std::ofstream(directory / "config.lua", std::ios::binary) << kValidConfig;
-    EXPECT_THAT([&directory] { return LoadConfig(directory / "config.lua"); }, ConfigErrorWith("cannot open style file"));
+    EXPECT_THAT([&directory] { return LoadConfig(directory / "config.lua"); }, ThrowsWith<ConfigError>("cannot open style file"));
     std::filesystem::remove_all(directory);
 }
 
@@ -209,53 +212,54 @@ TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
 }
 
 TEST(Config, StyleIdsMustNameADefinedModule) {
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie {\n  color: #ff0000\n}\n"); }, ConfigErrorWith("style.conf:7: tmie: names no module"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie {\n  color: #ff0000\n}\n"); },
+                ThrowsWith<ConfigError>("style.conf:7: tmie: names no module"));
 }
 
 TEST(Config, StyleErrorsNameTheStyleFileAndLine) {
     EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "\nmodule {\n  colour: #ff0000\n}\n"); },
-                ConfigErrorWith("style.conf:9: module: colour is not a property"));
+                ThrowsWith<ConfigError>("style.conf:9: module: colour is not a property"));
 }
 
 TEST(Config, AModuleMayNotTakeTheNameOfAStyleBlock) {
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "menu" })", R"(        menu = { type = "cpu" },)")); }, ConfigErrorWith("names a block of style.conf's own"));
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "menu" })", R"(        menu = { type = "cpu" },)")); }, ThrowsWith<ConfigError>("names a block of style.conf's own"));
 }
 
 TEST(Config, TrayTakesItsToggleIcon) {
     const Config config = LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray", icon = ">" },)"));
     EXPECT_EQ(Kinds(config.modules.right), std::vector<ModuleKind>{ModuleKind::Tray});
     EXPECT_EQ(SettingsOf<TrayConfig>(config.modules.right, 0).icon, L">");
-    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray" },)")); }, ConfigErrorWith("modules.icons.icon is missing"));
+    EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "icons" })", R"(        icons = { type = "tray" },)")); }, ThrowsWith<ConfigError>("modules.icons.icon is missing"));
 }
 
 TEST(Config, LuaSyntaxAndRuntimeErrorsAreReported) {
-    EXPECT_THAT([] { return LoadText("return {"); }, ConfigErrorWith("expected"));
-    EXPECT_THAT([] { return LoadText("error('boom')"); }, ConfigErrorWith("boom"));
+    EXPECT_THAT([] { return LoadText("return {"); }, ThrowsWith<ConfigError>("expected"));
+    EXPECT_THAT([] { return LoadText("error('boom')"); }, ThrowsWith<ConfigError>("boom"));
 }
 
 TEST(Config, ALuaErrorOfBytesThatAreNotUtf8IsReportedAsUtf8) {
     // U+FFFD in place of the bad byte, its literal split from "b" since a hex escape would take the b too.
     EXPECT_THAT([] { return LoadText(R"(error('a\xffb'))"); },
-                ConfigErrorWith("a\xEF\xBF\xBD"
-                                "b"));
+                ThrowsWith<ConfigError>("a\xEF\xBF\xBD"
+                                        "b"));
 }
 
 TEST(Config, ChunkMustReturnATable) {
-    EXPECT_THAT([] { return LoadText("return 42"); }, ConfigErrorWith("must return a table, got number"));
+    EXPECT_THAT([] { return LoadText("return 42"); }, ThrowsWith<ConfigError>("must return a table, got number"));
 }
 
 TEST(Config, MissingKeyNamesItsPath) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(edge = "top", )", "")); }, ConfigErrorWith("bar.edge is missing"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(edge = "top", )", "")); }, ThrowsWith<ConfigError>("bar.edge is missing"));
 }
 
 TEST(Config, WrongTypeNamesPathAndBothTypes) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", R"(thickness = "54")")); }, ConfigErrorWith("bar.thickness must be a number, got string"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", R"(thickness = "54")")); }, ThrowsWith<ConfigError>("bar.thickness must be a number, got string"));
 }
 
 TEST(Config, UnknownKeysAreRejectedAtRootAndInsideTables) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "modules_right = {},", "modules_right = {}, extra = 1,")); }, ConfigErrorWith("extra is not a known key"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 54, padding = 2")); }, ConfigErrorWith("bar.padding is not a known key"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 80, width = 3")); }, ConfigErrorWith("modules.title.width is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "modules_right = {},", "modules_right = {}, extra = 1,")); }, ThrowsWith<ConfigError>("extra is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 54, padding = 2")); }, ThrowsWith<ConfigError>("bar.padding is not a known key"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "max_length = 80", "max_length = 80, width = 3")); }, ThrowsWith<ConfigError>("modules.title.width is not a known key"));
 }
 
 TEST(Config, ChoicesNameEveryWordTheyTake) {
@@ -277,59 +281,59 @@ TEST(Config, ChoicesNameEveryWordTheyTake) {
          .error = "modules.c.combine must be one of sum, max, average, got 'median'"},
     };
     for (const Choice& choice : choices) {
-        EXPECT_THAT([&choice] { return LoadText(choice.config); }, ConfigErrorWith(choice.error));
+        EXPECT_THAT([&choice] { return LoadText(choice.config); }, ThrowsWith<ConfigError>(choice.error));
     }
 }
 
 TEST(Config, SizesAndIntervalsMustBePositiveAndBounded) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ConfigErrorWith("bar.thickness must be greater than 0"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 10001")); }, ConfigErrorWith("bar.thickness must be at most 10000"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ConfigErrorWith("modules.time.interval must be a whole number"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 86401")); }, ConfigErrorWith("modules.time.interval must be at most 86400 seconds"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 0")); }, ThrowsWith<ConfigError>("bar.thickness must be greater than 0"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "thickness = 54", "thickness = 10001")); }, ThrowsWith<ConfigError>("bar.thickness must be at most 10000"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 1.5")); }, ThrowsWith<ConfigError>("modules.time.interval must be a whole number"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60", "interval = 86401")); },
+                ThrowsWith<ConfigError>("modules.time.interval must be at most 86400 seconds"));
     EXPECT_NO_THROW(LoadText(Replace(kValidConfig, "interval = 60", "interval = 86400")));
 }
 
 TEST(Config, ModuleTableKeysMustBeStrings) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "    modules = {\n", "    modules = {\n        [1] = { type = \"clock\" },\n")); },
-                ConfigErrorWith("modules has a key that is not a string"));
+                ThrowsWith<ConfigError>("modules has a key that is not a string"));
 }
 
 TEST(Config, ConfigFilesMustBeUtf8) {
     EXPECT_THAT([] { return LoadText("return {} -- \xFF\xFE"); },
                 testing::ThrowsMessage<ConfigError>(testing::AllOf(testing::HasSubstr("config file"), testing::HasSubstr("is not valid UTF-8"))));
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, "// \xC0\xAF"); }, ConfigErrorWith("style file"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, "// \xC0\xAF"); }, ThrowsWith<ConfigError>("style file"));
 }
 
 TEST(Config, FilesPastTheirSizeCapAreAnError) {
-    EXPECT_THAT([] { return LoadText(std::string(kValidConfig) + "-- " + std::string(size_t{1} << 20, 'x')); }, ConfigErrorWith("is larger than 1024 KiB"));
-    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "// " + std::string(size_t{64} << 10, 'x')); }, ConfigErrorWith("is larger than 64 KiB"));
+    EXPECT_THAT([] { return LoadText(std::string(kValidConfig) + "-- " + std::string(size_t{1} << 20, 'x')); }, ThrowsWith<ConfigError>("is larger than 1024 KiB"));
+    EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "// " + std::string(size_t{64} << 10, 'x')); }, ThrowsWith<ConfigError>("is larger than 64 KiB"));
     const std::string atTheCap = std::string(kValidStyle) + "// " + std::string((size_t{64} << 10) - kValidStyle.size() - 3, 'x');
     EXPECT_NO_THROW(LoadStyled(kValidConfig, atTheCap));
 }
 
 // Lua escapes in valid UTF-8 source still build any bytes.
 TEST(Config, ConfigStringsMustBeUtf8) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(icon = "x")", R"(icon = "\xff")")); }, ConfigErrorWith("modules.time.icon is not valid UTF-8"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "title" })", R"({ "\u{D800}" })")); }, ConfigErrorWith("modules_left[1] is not valid UTF-8"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(icon = "x")", R"(icon = "\xff")")); }, ThrowsWith<ConfigError>("modules.time.icon is not valid UTF-8"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "title" })", R"({ "\u{D800}" })")); }, ThrowsWith<ConfigError>("modules_left[1] is not valid UTF-8"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "    modules = {\n", "    modules = {\n        [\"\\xc0\"] = { type = \"clock\" },\n")); },
-                ConfigErrorWith("a key of modules is not valid UTF-8"));
+                ThrowsWith<ConfigError>("a key of modules is not valid UTF-8"));
 }
 
 // A relative path with a directory part would resolve against the bar's current directory.
 TEST(Config, ActionsRefuseRelativePathsWithDirectories) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { ".\\cmd.exe" } })")); },
-                ConfigErrorWith("not an existing file or a program on PATH"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "System32\\cmd.exe" } })")); },
-                ConfigErrorWith("not an existing file or a program on PATH"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { ".\\cmd.exe" })")); }, ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { "System32\\cmd.exe" })")); },
+                ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
 }
 
 TEST(Config, ListsMayOnlyShowDefinedModules) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", R"({ "time", "clock" })")); },
-                ConfigErrorWith("modules_center shows 'clock', which is not defined in modules"));
+                ThrowsWith<ConfigError>("modules_center shows 'clock', which is not defined in modules"));
 }
 
 TEST(Config, EveryDefinedModuleMustBeShown) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ConfigErrorWith("modules.time is defined but no _modules list or group shows it"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "time" })", "{}")); }, ThrowsWith<ConfigError>("modules.time is defined but no _modules list or group shows it"));
 }
 
 namespace {
@@ -361,41 +365,42 @@ TEST(Config, AGroupsMembersAreStyledByTheirOwnNames) {
 
 TEST(Config, AGroupTakesOnlyItsTypeIconAndModules) {
     EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"("memory" } },)", R"("memory" }, on_click = { "cmd" } },)"))); },
-                ConfigErrorWith("modules.layout.on_click is not a known key"));
-    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(icon = "+", )", ""))); }, ConfigErrorWith("modules.layout.icon is missing"));
-    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(icon = "+")", R"(icon = "")"))); }, ConfigErrorWith("modules.layout.icon must be a glyph to click"));
-    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", "{}"))); }, ConfigErrorWith("modules.layout.modules must name at least one module"));
+                ThrowsWith<ConfigError>("modules.layout.on_click is not a known key"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(icon = "+", )", ""))); }, ThrowsWith<ConfigError>("modules.layout.icon is missing"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"(icon = "+")", R"(icon = "")"))); }, ThrowsWith<ConfigError>("modules.layout.icon must be a glyph to click"));
+    EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", "{}"))); },
+                ThrowsWith<ConfigError>("modules.layout.modules must name at least one module"));
 }
 
 TEST(Config, AGroupsMembersMustBeDefinedListedOnceAndNotGroups) {
     EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "disk" })"))); },
-                ConfigErrorWith("modules.layout.modules shows 'disk', which is not defined in modules"));
+                ThrowsWith<ConfigError>("modules.layout.modules shows 'disk', which is not defined in modules"));
     EXPECT_THAT([] { return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "cpu" })"))); },
-                ConfigErrorWith("modules.layout.modules lists 'cpu' twice"));
+                ThrowsWith<ConfigError>("modules.layout.modules lists 'cpu' twice"));
     EXPECT_THAT(
         [] {
             return LoadText(WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "inner" })") +
                                       R"(
         inner = { type = "group", icon = "-", modules = { "memory" } },)"));
         },
-        ConfigErrorWith("modules.layout.modules lists 'inner', which is a group: groups do not nest"));
+        ThrowsWith<ConfigError>("modules.layout.modules lists 'inner', which is a group: groups do not nest"));
 }
 
 TEST(Config, AMemberShowsOnlyThroughItsOneGroup) {
     EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "layout", "cpu" })", kGroup)); },
-                ConfigErrorWith("modules.cpu is a member of group 'layout', so no _modules list may show it as well"));
+                ThrowsWith<ConfigError>("modules.cpu is a member of group 'layout', so no _modules list may show it as well"));
     EXPECT_THAT(
         [] {
             return LoadText(
                 Replace(WithGroup(kGroup), "layouts = {},", R"(layouts = { { min_length = 1921, modules_left = { "memory" }, modules_center = {}, modules_right = {} } },)"));
         },
-        ConfigErrorWith("modules.memory is a member of group 'layout', so no _modules list may show it as well"));
+        ThrowsWith<ConfigError>("modules.memory is a member of group 'layout', so no _modules list may show it as well"));
     EXPECT_THAT(
         [] {
             return LoadText(WithRightModules(R"({ "layout", "other" })", std::string(kGroup) + R"(
         other = { type = "group", icon = "-", modules = { "cpu" } },)"));
         },
-        ConfigErrorWith("modules.cpu is a member of both group 'layout' and group 'other'"));
+        ThrowsWith<ConfigError>("modules.cpu is a member of both group 'layout' and group 'other'"));
     // One group any number of lists show is still one group.
     EXPECT_NO_THROW(
         LoadText(Replace(WithGroup(kGroup), "layouts = {},", R"(layouts = { { min_length = 1921, modules_left = { "layout" }, modules_center = {}, modules_right = {} } },)")));
@@ -436,13 +441,13 @@ TEST(Config, AModuleOnlyALayoutShowsCountsAsShown) {
 }
 
 TEST(Config, LayoutsAreRequiredAndNamedByTheirPlaceInErrors) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "layouts = {},", "")); }, ConfigErrorWith("layouts is missing"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "layouts = {},", "")); }, ThrowsWith<ConfigError>("layouts is missing"));
     EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {} } })")); },
-                ConfigErrorWith("layouts[1].modules_right is missing"));
+                ThrowsWith<ConfigError>("layouts[1].modules_right is missing"));
     EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {}, edge = "top" } })")); },
-                ConfigErrorWith("layouts[1].edge is not a known key"));
+                ThrowsWith<ConfigError>("layouts[1].edge is not a known key"));
     EXPECT_THAT([] { return LoadText(WithLayouts(R"({ { min_length = 1921, modules_left = { "clock" }, modules_center = {}, modules_right = {} } })")); },
-                ConfigErrorWith("layouts[1].modules_left shows 'clock', which is not defined in modules"));
+                ThrowsWith<ConfigError>("layouts[1].modules_left shows 'clock', which is not defined in modules"));
 }
 
 TEST(Config, EachLayoutMustStartPastTheOneBefore) {
@@ -453,7 +458,7 @@ TEST(Config, EachLayoutMustStartPastTheOneBefore) {
             { min_length = 1921, modules_left = {}, modules_center = {}, modules_right = {} },
         })"));
         },
-        ConfigErrorWith("layouts[2].min_length is 1921, it must be greater than the layout before it (2560)"));
+        ThrowsWith<ConfigError>("layouts[2].min_length is 1921, it must be greater than the layout before it (2560)"));
 }
 
 TEST(Config, TilingModulesNeedATilingWindowManager) {
@@ -468,7 +473,7 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
              {.type = "tiling_direction", .definition = R"(        tiled = { type = "tiling_direction", horizontal = "H", vertical = "V" },)"},
          }) {
         const std::string config = WithRightModules(R"({ "tiled" })", tiled.definition);
-        EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith(std::string(tiled.type) + " needs a tiling window manager, window_manager 'windows' is none"));
+        EXPECT_THAT([&config] { return LoadText(config); }, ThrowsWith<ConfigError>(std::string(tiled.type) + " needs a tiling window manager, window_manager 'windows' is none"));
     }
     // Through a layout's lists too, not only the top-level ones.
     EXPECT_THAT(
@@ -476,7 +481,7 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
             return LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = { "spaces" }, modules_center = {}, modules_right = {} } })"), "    modules = {\n",
                                     "    modules = {\n        spaces = { type = \"workspaces\" },\n"));
         },
-        ConfigErrorWith("workspaces needs a tiling window manager"));
+        ThrowsWith<ConfigError>("workspaces needs a tiling window manager"));
 
     const std::string onGlazeWm = Replace(WithRightModules(R"({ "desktops", "apps", "mode", "tiling" })", R"(        desktops = { type = "workspaces" },
         apps = { type = "windows" },
@@ -487,19 +492,19 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
     EXPECT_EQ(config.windowManager, WindowManagerKind::GlazeWm);
     EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Workspaces, ModuleKind::Windows, ModuleKind::BindingMode, ModuleKind::TilingDirection}));
     EXPECT_EQ(SettingsOf<TilingDirectionConfig>(config.modules.right, 3).vertical, L"V");
-    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(horizontal = "H", )", "")); }, ConfigErrorWith("modules.tiling.horizontal is missing"));
+    EXPECT_THAT([&onGlazeWm] { return LoadText(Replace(onGlazeWm, R"(horizontal = "H", )", "")); }, ThrowsWith<ConfigError>("modules.tiling.horizontal is missing"));
 }
 
 TEST(Config, ModuleNamesUseASafeAlphabet) {
     EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "two words" })", R"(        ["two words"] = { type = "cpu", format = "{usage}", icon = "", interval = 1 },)")); },
-                ConfigErrorWith("is not a valid module name"));
+                ThrowsWith<ConfigError>("is not a valid module name"));
 }
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
-                                "network, battery, tray, custom, counter, group, got 'teapot'"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
+                ThrowsWith<ConfigError>("modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
+                                        "network, battery, tray, custom, counter, group, got 'teapot'"));
+    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ThrowsWith<ConfigError>("modules.time.type is missing"));
 }
 
 TEST(Config, OneTypeCanBeShownUnderSeveralNames) {
@@ -522,9 +527,9 @@ TEST(Config, AudioParsesItsFormatsIconsAndStep) {
     EXPECT_EQ(settings.stepPercent, 5);
     EXPECT_EQ(settings.tooltip, "{device}");
     EXPECT_THAT([&audio] { return LoadText(WithRightModules(R"({ "volume" })", Replace(audio, "step = 5", "step = 101"))); },
-                ConfigErrorWith("modules.volume.step is a percent of full volume, from 1 to 100, got 101"));
+                ThrowsWith<ConfigError>("modules.volume.step is a percent of full volume, from 1 to 100, got 101"));
     EXPECT_THAT([&audio] { return LoadText(WithRightModules(R"({ "volume" })", Replace(audio, R"(icon_muted = "m", )", ""))); },
-                ConfigErrorWith("modules.volume.icon_muted is missing"));
+                ThrowsWith<ConfigError>("modules.volume.icon_muted is missing"));
 }
 
 TEST(Config, BatteryParsesItsFormatsIconsAndThresholds) {
@@ -538,16 +543,15 @@ TEST(Config, BatteryParsesItsFormatsIconsAndThresholds) {
     EXPECT_EQ(settings.warningAtPercent, 40);
     EXPECT_EQ(settings.criticalAtPercent, 15);
     EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "warning_at = 40", "warning_at = 101"))); },
-                ConfigErrorWith("modules.power.warning_at is a percent of full charge, from 1 to 100, got 101"));
+                ThrowsWith<ConfigError>("modules.power.warning_at is a percent of full charge, from 1 to 100, got 101"));
     EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, "critical_at = 15", "critical_at = 40"))); },
-                ConfigErrorWith("modules.power.critical_at (40) must be under modules.power.warning_at (40)"));
+                ThrowsWith<ConfigError>("modules.power.critical_at (40) must be under modules.power.warning_at (40)"));
     EXPECT_THAT([&battery] { return LoadText(WithRightModules(R"({ "power" })", Replace(battery, R"({ "e", "f" })", "{}"))); },
-                ConfigErrorWith("modules.power.icons must hold at least one icon, emptiest first"));
+                ThrowsWith<ConfigError>("modules.power.icons must hold at least one icon, emptiest first"));
 }
 
 TEST(Config, ActionsResolveToAbsoluteExecutables) {
-    const Config config =
-        LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" }, on_middle_click = { "cmd" } })"));
+    const Config         config  = LoadText(WithClockKeys(kValidConfig, R"(on_click = { "cmd", "/c", "exit 0" }, on_scroll_up = { "cmd" }, on_middle_click = { "cmd" })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.click.has_value());
     const Command& click = std::get<Command>(*actions.click);
@@ -561,22 +565,21 @@ TEST(Config, ActionsResolveToAbsoluteExecutables) {
 
 TEST(Config, WindowManagerActionsSendTheirTextAsWritten) {
     const std::string    glazeWm = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
-    const Config         config  = LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_scroll_up = { window_manager = "focus --next-workspace" } })"));
+    const Config         config  = LoadText(WithClockKeys(glazeWm, R"(on_scroll_up = { window_manager = "focus --next-workspace" })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.scrollUp.has_value());
     EXPECT_EQ(std::get<WindowManagerCommand>(*actions.scrollUp).text, "focus --next-workspace");
 
-    EXPECT_THAT([&glazeWm] { return LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "focus\n--workspace 2" } })")); },
-                ConfigErrorWith("modules.time.on_click.window_manager must be a command on one line"));
-    EXPECT_THAT([&glazeWm] { return LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "" } })")); },
-                ConfigErrorWith("must be a command on one line"));
-    EXPECT_THAT([&glazeWm] { return LoadText(Replace(glazeWm, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "x", extra = 1 } })")); },
-                ConfigErrorWith("modules.time.on_click.extra is not a known key"));
+    EXPECT_THAT([&glazeWm] { return LoadText(WithClockKeys(glazeWm, R"(on_click = { window_manager = "focus\n--workspace 2" })")); },
+                ThrowsWith<ConfigError>("modules.time.on_click.window_manager must be a command on one line"));
+    EXPECT_THAT([&glazeWm] { return LoadText(WithClockKeys(glazeWm, R"(on_click = { window_manager = "" })")); }, ThrowsWith<ConfigError>("must be a command on one line"));
+    EXPECT_THAT([&glazeWm] { return LoadText(WithClockKeys(glazeWm, R"(on_click = { window_manager = "x", extra = 1 })")); },
+                ThrowsWith<ConfigError>("modules.time.on_click.extra is not a known key"));
 }
 
 TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
-    const Config         config  = LoadText(Replace(kValidConfig, "interval = 60 }",
-                                                    R"(interval = 60, on_click = { menu = { command = { "cmd", "/c", "list" }, timeout = 5, on_select = { "explorer", "/select" } } } })"));
+    const Config config =
+        LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd", "/c", "list" }, timeout = 5, on_select = { "explorer", "/select" } } })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.click.has_value());
     const MenuAction& menu = std::get<MenuAction>(*actions.click);
@@ -585,50 +588,33 @@ TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
     EXPECT_EQ(menu.timeout, std::chrono::seconds(5));
     EXPECT_EQ(menu.onSelect.arguments, (std::vector<std::wstring>{L"/select"}));
 
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5 } } })")); },
-                ConfigErrorWith("on_select"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, on_select = { "cmd" } } } })")); },
-                ConfigErrorWith("timeout"));
-    EXPECT_THAT(
-        [] {
-            return LoadText(
-                Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd" }, items = 1 } } })"));
-        },
-        ConfigErrorWith("modules.time.on_click.menu.items is not a known key"));
-    EXPECT_THAT(
-        [] {
-            return LoadText(
-                Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd" } }, extra = 1 } })"));
-        },
-        ConfigErrorWith("modules.time.on_click.extra is not a known key"));
-    EXPECT_THAT(
-        [] {
-            return LoadText(
-                Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd", "/c", "pick" } } } })"));
-        },
-        ConfigErrorWith("modules.time.on_click.menu.on_select may not run cmd.exe"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd" }, timeout = 5 } })")); }, ThrowsWith<ConfigError>("on_select"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd" }, on_select = { "cmd" } } })")); },
+                ThrowsWith<ConfigError>("timeout"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd" }, items = 1 } })")); },
+                ThrowsWith<ConfigError>("modules.time.on_click.menu.items is not a known key"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd" } }, extra = 1 })")); },
+                ThrowsWith<ConfigError>("modules.time.on_click.extra is not a known key"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { menu = { command = { "cmd" }, timeout = 5, on_select = { "cmd", "/c", "pick" } } })")); },
+                ThrowsWith<ConfigError>("modules.time.on_click.menu.on_select may not run cmd.exe"));
 }
 
 TEST(Config, WindowManagerActionsNeedAWindowManagerThatTakesCommands) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { window_manager = "focus --next-workspace" } })")); },
-                ConfigErrorWith("window_manager 'windows' takes none"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { window_manager = "focus --next-workspace" })")); },
+                ThrowsWith<ConfigError>("window_manager 'windows' takes none"));
 }
 
 TEST(Config, ActionsMustNameAnExistingExecutable) {
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", "interval = 60, on_click = {} }")); }, ConfigErrorWith("modules.time.on_click must name a program"));
-    EXPECT_THAT([] { return LoadText(Replace(kValidConfig, "interval = 60 }", R"(interval = 60, on_click = { "intarsia-no-such-program" } })")); },
-                ConfigErrorWith("not an existing file or a program on PATH"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, "on_click = {}")); }, ThrowsWith<ConfigError>("modules.time.on_click must name a program"));
+    EXPECT_THAT([] { return LoadText(WithClockKeys(kValidConfig, R"(on_click = { "intarsia-no-such-program" })")); },
+                ThrowsWith<ConfigError>("not an existing file or a program on PATH"));
 }
 
 TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
     const std::filesystem::path script = std::filesystem::temp_directory_path() / "intarsia-test-action.bat";
     std::ofstream(script) << "@echo off\n";
-    std::string escaped = script.string();
-    for (size_t position = escaped.find('\\'); position != std::string::npos; position = escaped.find('\\', position + 2)) {
-        escaped.insert(position, "\\");
-    }
-    const std::string config = Replace(kValidConfig, "interval = 60 }", "interval = 60, on_click = { \"" + escaped + "\" } }");
-    EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith("which is not an .exe"));
+    const std::string config = WithClockKeys(kValidConfig, "on_click = { [[" + script.string() + "]] }");
+    EXPECT_THAT([&config] { return LoadText(config); }, ThrowsWith<ConfigError>("which is not an .exe"));
     std::filesystem::remove(script);
 }
 
@@ -639,11 +625,7 @@ TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
     const CustomConfig& custom = SettingsOf<CustomConfig>(config.modules.right, 0);
     EXPECT_EQ(custom.command.program.filename(), L"cmd.exe");
     EXPECT_EQ(custom.command.arguments, (std::vector<std::wstring>{L"/c", L"echo hi"}));
-    const auto* run = std::get_if<IntervalRun>(&custom.run);
-    if (run == nullptr) {
-        FAIL() << "run = \"interval\" did not read as an interval run";
-    }
-    EXPECT_EQ(run->timeout, std::chrono::seconds(5));
+    EXPECT_EQ(std::get<IntervalRun>(custom.run).timeout, std::chrono::seconds(5));
     EXPECT_EQ(custom.output, CustomOutput::Json);
     EXPECT_EQ(custom.classes, (std::vector<std::string>{"sunny", "rain"}));
     EXPECT_EQ(custom.text.interval, std::chrono::seconds(30));
@@ -663,13 +645,13 @@ namespace {
 TEST(Config, ContinuousCustomModulesTakeNoTimeout) {
     const Config config = LoadText(WithCustomRun(R"(run = "continuous",)"));
     EXPECT_TRUE(std::holds_alternative<ContinuousRun>(SettingsOf<CustomConfig>(config.modules.right, 0).run));
-    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "continuous", timeout = 5,)")); }, ConfigErrorWith("applies only to run = \"interval\""));
+    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "continuous", timeout = 5,)")); }, ThrowsWith<ConfigError>("applies only to run = \"interval\""));
 }
 
 TEST(Config, CustomModulesNeedARun) {
-    EXPECT_THAT([] { return LoadText(WithCustomRun("timeout = 5,")); }, ConfigErrorWith("run"));
-    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "forever", timeout = 5,)")); }, ConfigErrorWith("run"));
-    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "interval",)")); }, ConfigErrorWith("timeout"));
+    EXPECT_THAT([] { return LoadText(WithCustomRun("timeout = 5,")); }, ThrowsWith<ConfigError>("run"));
+    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "forever", timeout = 5,)")); }, ThrowsWith<ConfigError>("run"));
+    EXPECT_THAT([] { return LoadText(WithCustomRun(R"(run = "interval",)")); }, ThrowsWith<ConfigError>("timeout"));
 }
 
 namespace {
@@ -700,21 +682,21 @@ TEST(Config, DeclaredClassesColorTheirCustomModule) {
 
 TEST(Config, AClassNoCustomModuleDeclaresIsAnError) {
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather {\n  snowy {\n    color: #ff0000\n  }\n}\n"); },
-                ConfigErrorWith("weather: snowy is not a block a module holds"));
+                ThrowsWith<ConfigError>("weather: snowy is not a block a module holds"));
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "module {\n  snowy {\n    color: #ff0000\n  }\n}\n"); },
-                ConfigErrorWith("module: snowy is not a block module holds"));
+                ThrowsWith<ConfigError>("module: snowy is not a block module holds"));
     // Declared by the weather module, but the block names a clock.
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "time {\n  sunny {\n    color: #ff0000\n  }\n}\n"); },
-                ConfigErrorWith("time: sunny is not a block a module holds"));
+                ThrowsWith<ConfigError>("time: sunny is not a block a module holds"));
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather {\n  sunny {\n    item {\n      color: #ff0000\n    }\n  }\n}\n"); },
-                ConfigErrorWith("weather > sunny: item is not a block weather > sunny holds, which are: icon"));
+                ThrowsWith<ConfigError>("weather > sunny: item is not a block weather > sunny holds, which are: icon"));
 }
 
 TEST(Config, DeclaredClassesAreClassNamesOfTheirOwn) {
-    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "two words" })")); }, ConfigErrorWith("modules.weather.classes lists 'two words', which is not a class name"));
-    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "alert" })")); }, ConfigErrorWith("modules.weather.classes lists 'alert', a class intarsia styles itself"));
-    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "sunny", "sunny" })")); }, ConfigErrorWith("modules.weather.classes lists 'sunny' twice"));
-    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "rain", "sunny", "snow", "sunny" })")); }, ConfigErrorWith("modules.weather.classes lists 'sunny' twice"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "two words" })")); }, ThrowsWith<ConfigError>("modules.weather.classes lists 'two words', which is not a class name"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "alert" })")); }, ThrowsWith<ConfigError>("modules.weather.classes lists 'alert', a class intarsia styles itself"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "sunny", "sunny" })")); }, ThrowsWith<ConfigError>("modules.weather.classes lists 'sunny' twice"));
+    EXPECT_THAT([] { return LoadText(WithWeather(R"({ "rain", "sunny", "snow", "sunny" })")); }, ThrowsWith<ConfigError>("modules.weather.classes lists 'sunny' twice"));
 }
 
 TEST(Config, CounterModulesReadTheirPathAndCombine) {
@@ -731,10 +713,10 @@ TEST(Config, CounterPathsMustNameALocalCounterThisSystemHas) {
         return LoadText(WithRightModules(
             R"({ "c" })", std::format(R"(        c = {{ type = "counter", counter = "{}", combine = "sum", format = "{{value}}", icon = "", interval = 1 }},)", path)));
     };
-    EXPECT_THAT([&load] { return load(R"(\\No Such Object\\Nothing)"); }, ConfigErrorWith("modules.c.counter names no counter this system has: PdhAddEnglishCounterW"));
-    EXPECT_THAT([&load] { return load(R"(\\Processor(_Total)\\No Such Counter)"); }, ConfigErrorWith("modules.c.counter names no counter this system has"));
-    EXPECT_THAT([&load] { return load(R"(Processor(_Total)\\% Processor Time)"); }, ConfigErrorWith("modules.c.counter must be a local counter path"));
-    EXPECT_THAT([&load] { return load(R"(\\\\otherhost\\Processor(_Total)\\% Processor Time)"); }, ConfigErrorWith("modules.c.counter must be a local counter path"));
+    EXPECT_THAT([&load] { return load(R"(\\No Such Object\\Nothing)"); }, ThrowsWith<ConfigError>("modules.c.counter names no counter this system has: PdhAddEnglishCounterW"));
+    EXPECT_THAT([&load] { return load(R"(\\Processor(_Total)\\No Such Counter)"); }, ThrowsWith<ConfigError>("modules.c.counter names no counter this system has"));
+    EXPECT_THAT([&load] { return load(R"(Processor(_Total)\\% Processor Time)"); }, ThrowsWith<ConfigError>("modules.c.counter must be a local counter path"));
+    EXPECT_THAT([&load] { return load(R"(\\\\otherhost\\Processor(_Total)\\% Processor Time)"); }, ThrowsWith<ConfigError>("modules.c.counter must be a local counter path"));
 }
 
 // The config cannot read files, load chunks (load takes bytecode, which Lua does not verify), reach outside the
@@ -759,17 +741,17 @@ TEST(Config, TheConfigHasNoGlobalThatReachesOutOrEscapesItsLimits) {
              {.config = "return string.gmatch('a', 'a')", .error = "attempt to call a nil value (field 'gmatch')"},
              {.config = "return string.gsub('a', 'a', 'b')", .error = "attempt to call a nil value (field 'gsub')"},
          }) {
-        EXPECT_THAT([&removed] { return LoadText(removed.config); }, ConfigErrorWith(removed.error));
+        EXPECT_THAT([&removed] { return LoadText(removed.config); }, ThrowsWith<ConfigError>(removed.error));
     }
     for (const std::string_view library : {"os", "io", "package", "debug", "coroutine", "utf8"}) {
         const std::string config = std::string("return ") + std::string(library) + ".x";
-        EXPECT_THAT([&config] { return LoadText(config); }, ConfigErrorWith(std::string("attempt to index a nil value (global '") + std::string(library) + "')"));
+        EXPECT_THAT([&config] { return LoadText(config); }, ThrowsWith<ConfigError>(std::string("attempt to index a nil value (global '") + std::string(library) + "')"));
     }
 }
 
 // One C call can allocate any amount while running no instructions the count hook sees.
 TEST(Config, AConfigThatAllocatesTooMuchIsStoppedWithAnError) {
-    EXPECT_THAT([] { return LoadText("return { x = ('x'):rep(2^25) }"); }, ConfigErrorWith("the config used more than 16 MiB of memory"));
+    EXPECT_THAT([] { return LoadText("return { x = ('x'):rep(2^25) }"); }, ThrowsWith<ConfigError>("the config used more than 16 MiB of memory"));
 }
 
 // Each module's table stays on the Lua stack while the config is read, far past the slots Lua guarantees.
@@ -786,10 +768,10 @@ TEST(Config, ManyModulesFitOnTheLuaStack) {
 
 TEST(Config, TooltipIsOptional) {
     EXPECT_FALSE(SettingsOf<TextModuleConfig>(LoadText(kValidConfig).modules.center, 0).tooltip.has_value());
-    const Config config = LoadText(Replace(kValidConfig, R"(interval = 60 },)", R"(interval = 60, tooltip = "{time:%A %d %B %Y}" },)"));
+    const Config config = LoadText(WithClockKeys(kValidConfig, R"(tooltip = "{time:%A %d %B %Y}")"));
     EXPECT_EQ(SettingsOf<TextModuleConfig>(config.modules.center, 0).tooltip, "{time:%A %d %B %Y}");
 }
 
 TEST(Config, AnEndlessConfigIsStoppedWithAnError) {
-    EXPECT_THAT([] { return LoadText("while true do end"); }, ConfigErrorWith("without finishing, is there an endless loop?"));
+    EXPECT_THAT([] { return LoadText("while true do end"); }, ThrowsWith<ConfigError>("without finishing, is there an endless loop?"));
 }

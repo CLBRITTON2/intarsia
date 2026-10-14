@@ -1,5 +1,7 @@
 #include "modules/Clock.hpp"
 
+#include "TestStyle.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -12,16 +14,6 @@ namespace {
         return std::chrono::system_clock::time_point(std::chrono::milliseconds(milliseconds));
     }
 
-    TextModuleConfig ClockWithFormat(std::string format) {
-        return TextModuleConfig{
-            .format   = std::move(format),
-            .tooltip  = std::nullopt,
-            .icon     = L"",
-            .interval = std::chrono::seconds(60),
-            .actions  = {},
-        };
-    }
-
 } // namespace
 
 TEST(Clock, FormatRendersLiteralTextAroundTheSpec) {
@@ -31,7 +23,7 @@ TEST(Clock, FormatRendersLiteralTextAroundTheSpec) {
 }
 
 TEST(Clock, AnInvalidSpecFailsWhenTheModuleIsBuilt) {
-    EXPECT_THROW(Clock(ClockWithFormat("{time:%Q}")), ConfigError);
-    EXPECT_THROW(Clock(ClockWithFormat("{:%H:%M}")), ConfigError);
-    EXPECT_NO_THROW(Clock(ClockWithFormat("{time:%H:%M}")));
+    EXPECT_THROW(Clock(TextConfigWithFormat("{time:%Q}")), ConfigError);
+    EXPECT_THROW(Clock(TextConfigWithFormat("{:%H:%M}")), ConfigError);
+    EXPECT_NO_THROW(Clock(TextConfigWithFormat("{time:%H:%M}")));
 }

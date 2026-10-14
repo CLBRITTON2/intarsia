@@ -1,6 +1,11 @@
 #pragma once
 
 #include "config/Config.hpp"
+#include "modules/IModule.hpp"
+
+#include <chrono>
+#include <string>
+#include <utility>
 
 // An item in a test style: padded 4 across and 2 down, 5 of margin across on each side, so two items are 10 apart.
 inline ItemStyle TestItemStyle(std::uint32_t color, std::uint32_t background) {
@@ -55,5 +60,16 @@ inline ModuleStyle TestModuleStyle() {
         .toggle                      = TestItemStyle(0x000005, 0x000055),
         .transition                  = {.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease},
         .expandedIconRotationDegrees = 180.0f,
+    };
+}
+
+// A text module config showing format every second, with no tooltip, icon or actions.
+inline TextModuleConfig TextConfigWithFormat(std::string format) {
+    return TextModuleConfig{
+        .format   = std::move(format),
+        .tooltip  = std::nullopt,
+        .icon     = L"",
+        .interval = std::chrono::seconds(1),
+        .actions  = kNoActions,
     };
 }

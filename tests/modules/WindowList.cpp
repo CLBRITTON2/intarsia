@@ -2,11 +2,13 @@
 
 #include "../wm/FakeWindowManager.hpp"
 #include "TestStyle.hpp"
+#include "TextOnlyRender.hpp"
 #include "bar/Box.hpp"
 #include "render/BrushCache.hpp"
 #include "render/CompositionThread.hpp"
 #include "render/Graphics.hpp"
-#include "support/MessageWindow.hpp"
+#include "support/ChangeTarget.hpp"
+#include "support/Eventually.hpp"
 
 #include <gtest/gtest.h>
 
@@ -38,36 +40,13 @@ namespace {
         },
     };
 
-    RenderContext NoDrawing() {
-        return RenderContext{
-            .context      = nullptr,
-            .dwrite       = nullptr,
-            .textFormat   = nullptr,
-            .iconFont     = nullptr,
-            .iconSizeDips = 20.0f,
-            .iconGapDips  = 0.0f,
-            .foreground   = nullptr,
-            .accent       = nullptr,
-            .alert        = nullptr,
-            .warning      = {.text = nullptr, .icon = nullptr},
-            .critical     = {.text = nullptr, .icon = nullptr},
-            .muted        = {.text = nullptr, .icon = nullptr},
-            .classes      = {},
-            .brushes      = nullptr,
-            .boxes        = nullptr,
-            .axis         = Axis::Horizontal,
-            .boxCrossDips = 24.0f,
-            .frameTime    = std::chrono::steady_clock::now(),
-        };
-    }
-
     class WindowListModule : public testing::Test {
       public:
-        WindowListModule() : _changes(_target.Get(), WM_APP + 1), _icons(_changes, std::chrono::milliseconds(10000)) {}
+        WindowListModule() : _target(WM_APP + 1), _icons(_target.signal, std::chrono::milliseconds(10000)) {}
 
       protected:
-        MessageWindow     _target;
-        ChangeSignal      _changes;
+        TextOnlyRender    _render;
+        ChangeTarget      _target;
         WindowIcons       _icons;
         FakeWindowManager _windowManager;
     };
@@ -77,29 +56,29 @@ namespace {
 TEST_F(WindowListModule, LayoutReportsAChangeOnlyWhenTheWindowsChange) {
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     _windowManager.windows = kWindows;
-    EXPECT_TRUE(module.Layout(NoDrawing()));
-    EXPECT_FALSE(module.Layout(NoDrawing()));
+    EXPECT_TRUE(module.Layout(_render.Context()));
+    EXPECT_FALSE(module.Layout(_render.Context()));
 
     _windowManager.windows[0].focused = true;
-    EXPECT_TRUE(module.Layout(NoDrawing()));
+    EXPECT_TRUE(module.Layout(_render.Context()));
     // A window on another monitor is not this bar's to show.
     _windowManager.windows[2].focused = true;
-    EXPECT_FALSE(module.Layout(NoDrawing()));
+    EXPECT_FALSE(module.Layout(_render.Context()));
     _windowManager.windows.pop_back();
     _windowManager.windows.pop_back();
-    EXPECT_TRUE(module.Layout(NoDrawing()));
+    EXPECT_TRUE(module.Layout(_render.Context()));
 }
 
 TEST_F(WindowListModule, SizeCoversEveryPaddedIconAndTheGapsBetween) {
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     _windowManager.windows = kWindows;
-    module.Layout(NoDrawing());
+    module.Layout(_render.Context());
     // Two items of a 20 icon padded 4 across and 2 down, with 5 of margin on either side of each.
     EXPECT_FLOAT_EQ(module.Size().width, 76.0f);
     EXPECT_FLOAT_EQ(module.Size().height, 24.0f);
 
     _windowManager.windows.clear();
-    module.Layout(NoDrawing());
+    module.Layout(_render.Context());
     EXPECT_FLOAT_EQ(module.Size().width, 0.0f);
 }
 
@@ -125,25 +104,15 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     context->SetTarget(target.Get());
     BrushCache    brushes(context.Get());
     BoxCache      boxes(context.Get());
-    RenderContext render = NoDrawing();
+    RenderContext render = _render.Context();
     render.context       = context.Get();
     render.brushes       = &brushes;
     render.boxes         = &boxes;
 
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     EXPECT_TRUE(module.Layout(render));
-    // The icon is read on the reader thread, whose WM_GETICON this thread answers while it pumps.
-    bool       arrived  = false;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!arrived && std::chrono::steady_clock::now() < deadline) {
-        MsgWaitForMultipleObjects(0, nullptr, FALSE, 10, QS_ALLINPUT);
-        MSG message{};
-        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
-            DispatchMessageW(&message);
-        }
-        arrived = module.Layout(render);
-    }
-    EXPECT_TRUE(arrived);
+    // The icon is read on the reader thread, whose WM_GETICON this thread answers while it waits.
+    EXPECT_TRUE(AnsweringUntil([&] { return module.Layout(render); }, std::chrono::seconds(5)));
 
     context->BeginDraw();
     module.Draw(render, D2D1::Point2F(0.0f, 0.0f));

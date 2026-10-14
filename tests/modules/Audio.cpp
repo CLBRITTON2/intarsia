@@ -2,6 +2,7 @@
 
 #include "../audio/FakeAudio.hpp"
 #include "TextOnlyRender.hpp"
+#include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -20,14 +21,7 @@ namespace {
             .icon        = L"V",
             .iconMuted   = L"M",
             .stepPercent = 5,
-            .actions =
-                {
-                    .click       = std::nullopt,
-                    .rightClick  = std::nullopt,
-                    .middleClick = std::nullopt,
-                    .scrollUp    = std::nullopt,
-                    .scrollDown  = std::nullopt,
-                },
+            .actions     = kNoActions,
         };
     }
 
@@ -121,6 +115,5 @@ TEST(Audio, ABadFormatIsAConfigError) {
     AudioConfig config = TestConfig();
     config.formatMuted = "{level}";
     EXPECT_THAT([&] { return Audio(config, audio); },
-                testing::ThrowsMessage<ConfigError>(
-                    testing::HasSubstr("audio format_muted '{level}' is not a valid format: {level} is not a value this format has. It can use {volume}, {device}")));
+                ThrowsWith<ConfigError>("audio format_muted '{level}' is not a valid format: {level} is not a value this format has. It can use {volume}, {device}"));
 }

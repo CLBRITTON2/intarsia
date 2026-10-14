@@ -14,7 +14,6 @@
 #include <thread>
 
 using namespace std::chrono_literals;
-using loopback::AnswerUpgrade;
 
 TEST(WebSocket, UpgradeFailsSoonWhenThePeerNeverAnswers) {
     const loopback::Winsock winsock;
@@ -37,7 +36,7 @@ TEST(WebSocket, AnIdleReceiveOutlastsTheHandshakeTimeout) {
     std::promise<void>      sendNow;
     const std::jthread      server([&listener, go = sendNow.get_future()] {
         const loopback::Socket peer = loopback::Accept(listener);
-        AnswerUpgrade(peer);
+        loopback::AnswerUpgrade(peer);
         go.wait();
         loopback::SendText(peer, "hi");
         loopback::DrainUntilClosed(peer);
@@ -101,7 +100,7 @@ TEST(WebSocket, LocalPortNamesTheConnectionForThePeerCheck) {
     const loopback::Socket  listener = loopback::Listen();
     const std::jthread      server([&listener] {
         const loopback::Socket peer = loopback::Accept(listener);
-        AnswerUpgrade(peer);
+        loopback::AnswerUpgrade(peer);
         loopback::DrainUntilClosed(peer);
     });
 

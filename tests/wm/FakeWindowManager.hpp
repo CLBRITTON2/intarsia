@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-// A backend whose state a test sets directly, recording the commands modules send it.
+// A backend whose state a test sets directly, recording the workspace modules focus.
 class FakeWindowManager final : public IWindowManager {
   public:
     std::optional<FocusedWindow>   focused;
@@ -15,7 +15,6 @@ class FakeWindowManager final : public IWindowManager {
     std::vector<std::wstring>      bindingModes;
     std::optional<TilingDirection> direction;
     std::string                    focusedWorkspace;
-    std::vector<std::string>       commands;
 
     std::optional<FocusedWindow>   Focused() const override {
         return focused;
@@ -44,7 +43,5 @@ class FakeWindowManager final : public IWindowManager {
     }
     void FocusWindow(const std::string&) override {}
     void ToggleTilingDirection() override {}
-    void RunCommand(const std::string& command) override {
-        commands.push_back(command);
-    }
+    void RunCommand(const std::string&) override {}
 };

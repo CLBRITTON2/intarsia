@@ -3,6 +3,7 @@
 #include "Loopback.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
+#include "support/ThrowsWith.hpp"
 
 #include <sddl.h>
 
@@ -90,6 +91,6 @@ TEST(PeerProcess, RejectsALowIntegrityProcessOfThisUser) {
     const UniqueHandle process(child.hProcess);
     const UniqueHandle thread(child.hThread);
 
-    EXPECT_THAT([&child] { RequireSameUserProcess(child.dwProcessId, kTestImage); }, testing::ThrowsMessage<PeerVerificationError>(testing::HasSubstr("integrity level")));
+    EXPECT_THAT([&child] { RequireSameUserProcess(child.dwProcessId, kTestImage); }, ThrowsWith<PeerVerificationError>("integrity level"));
     TerminateProcess(process.get(), 0);
 }

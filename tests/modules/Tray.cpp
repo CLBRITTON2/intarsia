@@ -43,6 +43,15 @@ namespace {
         });
     }
 
+    // A bar window 2000 pixels wide at 1000, 20 on screen, with the module's content at 100, 4 DIPs in it.
+    ModulePlacement Placement(std::uint32_t dpi) {
+        return ModulePlacement{
+            .windowRect    = RECT{1000, 20, 3000, 80},
+            .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
+            .dpi           = dpi,
+        };
+    }
+
     // Bitmaps need a device, and the toggle's text needs DirectWrite.
     class TrayModule : public testing::Test {
       public:
@@ -68,6 +77,19 @@ namespace {
         // The middle of the module, across and along.
         D2D1_POINT_2F At(const Tray& module, float x) const {
             return D2D1::Point2F(x, module.Size().height / 2.0f);
+        }
+
+        // Lays the module out folded, clicks its toggle and lays it out unfolded.
+        void Unfold(Tray& module) const {
+            module.Layout(RenderNow(Axis::Horizontal));
+            module.Click(At(module, module.Size().width / 2.0f));
+            module.Layout(RenderNow(Axis::Horizontal));
+        }
+
+        void ExpectDraws(const Tray& module, Axis axis) const {
+            _context->BeginDraw();
+            module.Draw(RenderNow(axis), D2D1::Point2F(0.0f, 0.0f));
+            EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
         }
 
         // A frame drawn now, as a bar outside any animation draws one.
@@ -115,9 +137,7 @@ TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
     // Icons 1 and 4, each a 20 icon padded 4 across with 5 of margin on either side.
     EXPECT_NEAR(padded.Size().width, folded + (2.0f * 38.0f), 1.0f);
     EXPECT_TRUE(_tray.presses.empty());
-    _context->BeginDraw();
-    padded.Draw(RenderNow(Axis::Horizontal), D2D1::Point2F(0.0f, 0.0f));
-    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+    ExpectDraws(padded, Axis::Horizontal);
 
     // The toggle is last, and its own margin is where the icons end, so a click just inside its box folds the tray.
     padded.Click(At(padded, padded.Size().width - 2.0f));
@@ -141,9 +161,7 @@ TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
     const float midway = module.Size().width;
     EXPECT_GT(midway, folded);
     EXPECT_LT(midway, folded + (2.0f * 38.0f));
-    _context->BeginDraw();
-    module.Draw(RenderNow(Axis::Horizontal), D2D1::Point2F(0.0f, 0.0f));
-    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+    ExpectDraws(module, Axis::Horizontal);
 
     // The toggle moved right with the box's edge, and a click on it there folds the tray back from where it is.
     module.Click(At(module, midway - 6.0f));
@@ -181,9 +199,7 @@ TEST_F(TrayModule, TheFoldMovesByTheFrameTimeNotTheClock) {
 
 TEST_F(TrayModule, ClicksReachTheIconsApp) {
     Tray module(kConfig, _tray, TestModuleStyle());
-    module.Layout(RenderNow(Axis::Horizontal));
-    module.Click(At(module, module.Size().width / 2.0f));
-    module.Layout(RenderNow(Axis::Horizontal));
+    Unfold(module);
 
     // Icons at 5 to 33 and 43 to 71.
     module.Click(At(module, 19.0f));
@@ -217,9 +233,7 @@ TEST_F(TrayModule, DownAVerticalBarTheIconsUnfoldDownwardAndAreClickedWhereTheyS
     module.Click(D2D1::Point2F(module.Size().width / 2.0f, 36.0f));
     ASSERT_EQ(_tray.presses.size(), 1u);
     EXPECT_EQ(_tray.presses[0].id, 4u);
-    _context->BeginDraw();
-    module.Draw(RenderNow(Axis::Vertical), D2D1::Point2F(0.0f, 0.0f));
-    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+    ExpectDraws(module, Axis::Vertical);
 
     // The toggle is last, below the icons.
     module.Click(D2D1::Point2F(module.Size().width / 2.0f, module.Size().height - 2.0f));
@@ -229,9 +243,7 @@ TEST_F(TrayModule, DownAVerticalBarTheIconsUnfoldDownwardAndAreClickedWhereTheyS
 
 TEST_F(TrayModule, MovesOverAnIconReachItsAppAndMovesElsewhereDoNot) {
     Tray module(kConfig, _tray, TestModuleStyle());
-    module.Layout(RenderNow(Axis::Horizontal));
-    module.Click(At(module, module.Size().width / 2.0f));
-    module.Layout(RenderNow(Axis::Horizontal));
+    Unfold(module);
 
     module.Hover(At(module, 19.0f));
     module.Hover(At(module, 57.0f));
@@ -265,9 +277,7 @@ TEST_F(TrayModule, TheIconUnderTheCursorGivesTheTooltip) {
 TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeaving) {
     _tray.icons[0].version = 4;
     Tray module(kConfig, _tray, TestModuleStyle());
-    module.Layout(RenderNow(Axis::Horizontal));
-    module.Click(At(module, module.Size().width / 2.0f));
-    module.Layout(RenderNow(Axis::Horizontal));
+    Unfold(module);
 
     module.Hover(At(module, 19.0f));
     EXPECT_EQ(module.TooltipText(), std::nullopt);
@@ -290,17 +300,7 @@ TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeavi
 }
 
 TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
-    const ModulePlacement placement{
-        .windowRect =
-            RECT{
-                .left   = 1000,
-                .top    = 20,
-                .right  = 3000,
-                .bottom = 80,
-            },
-        .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
-        .dpi           = 192,
-    };
+    const ModulePlacement placement = Placement(192);
     {
         Tray module(kConfig, _tray, TestModuleStyle());
         module.Layout(RenderNow(Axis::Horizontal));
@@ -322,21 +322,9 @@ TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
 }
 
 TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
-    const ModulePlacement placement{
-        .windowRect =
-            RECT{
-                .left   = 1000,
-                .top    = 20,
-                .right  = 3000,
-                .bottom = 80,
-            },
-        .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
-        .dpi           = 96,
-    };
-    Tray module(kConfig, _tray, TestModuleStyle());
-    module.Layout(RenderNow(Axis::Horizontal));
-    module.Click(At(module, module.Size().width / 2.0f));
-    module.Layout(RenderNow(Axis::Horizontal));
+    const ModulePlacement placement = Placement(96);
+    Tray                  module(kConfig, _tray, TestModuleStyle());
+    Unfold(module);
     module.Place(placement);
     ASSERT_FALSE(_tray.rects.empty());
     const size_t calls = _tray.showCalls;
@@ -365,13 +353,7 @@ TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     EXPECT_FALSE(module.Layout(RenderNow(Axis::Horizontal)));
     EXPECT_FLOAT_EQ(module.Size().width, folded);
     module.Place(ModulePlacement{
-        .windowRect =
-            RECT{
-                .left   = 0,
-                .top    = 0,
-                .right  = 2000,
-                .bottom = 60,
-            },
+        .windowRect    = RECT{0, 0, 2000, 60},
         .contentOrigin = D2D1::Point2F(0.0f, 0.0f),
         .dpi           = 96,
     });
@@ -380,16 +362,12 @@ TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     module.Click(At(module, folded / 2.0f));
     EXPECT_TRUE(module.Layout(RenderNow(Axis::Horizontal)));
     EXPECT_NEAR(module.Size().width, folded + (3.0f * 38.0f), 1.0f);
-    _context->BeginDraw();
-    module.Draw(RenderNow(Axis::Horizontal), D2D1::Point2F(0.0f, 0.0f));
-    EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
+    ExpectDraws(module, Axis::Horizontal);
 }
 
 TEST_F(TrayModule, NewIconsAndNewPixelsAreChangesButATooltipIsNot) {
     Tray module(kConfig, _tray, TestModuleStyle());
-    module.Layout(RenderNow(Axis::Horizontal));
-    module.Click(At(module, module.Size().width / 2.0f));
-    module.Layout(RenderNow(Axis::Horizontal));
+    Unfold(module);
 
     _tray.icons[0].tooltip = L"changed";
     EXPECT_FALSE(module.Layout(RenderNow(Axis::Horizontal)));

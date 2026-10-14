@@ -1,24 +1,12 @@
 #include "modules/Memory.hpp"
 
+#include "TestStyle.hpp"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <cstdint>
 #include <string>
-
-namespace {
-
-    TextModuleConfig MemoryWithFormat(std::string format) {
-        return TextModuleConfig{
-            .format   = std::move(format),
-            .tooltip  = std::nullopt,
-            .icon     = L"",
-            .interval = std::chrono::seconds(1),
-            .actions  = {},
-        };
-    }
-
-} // namespace
 
 TEST(Memory, TheTooltipValuesAreGibibytesAndAPercent) {
     constexpr std::uint64_t kGibibyte = std::uint64_t{1024} * 1024 * 1024;
@@ -35,6 +23,6 @@ TEST(Memory, TheTooltipValuesAreGibibytesAndAPercent) {
 }
 
 TEST(Memory, FormatMustRenderADouble) {
-    EXPECT_THROW(Memory(MemoryWithFormat("{used:d} GB")), ConfigError);
-    EXPECT_NO_THROW(Memory(MemoryWithFormat("{used:.1f} GB")));
+    EXPECT_THROW(Memory(TextConfigWithFormat("{used:d} GB")), ConfigError);
+    EXPECT_NO_THROW(Memory(TextConfigWithFormat("{used:.1f} GB")));
 }

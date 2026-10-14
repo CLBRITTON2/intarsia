@@ -15,8 +15,11 @@ std::string JoinNames(const Names& names) {
     return joined;
 }
 
-std::string  ToUtf8(std::wstring_view text);
-std::wstring ToWide(std::string_view text);
+// U+FFFD, what text that cannot be read or shown safely becomes.
+constexpr wchar_t kReplacementCharacter = 0xFFFD;
+
+std::string       ToUtf8(std::wstring_view text);
+std::wstring      ToWide(std::string_view text);
 
 // Case-insensitive, as NTFS file names are.
 bool SameFileName(std::wstring_view left, std::wstring_view right);

@@ -23,7 +23,7 @@ namespace {
     };
 
     constexpr std::uint32_t            kCanvasWidth = 100;
-    constexpr std::uint32_t            kDrawnWidth  = 60;
+    constexpr float                    kDrawnWidth  = 60.0f;
     constexpr std::uint32_t            kDrawnHeight = 30;
 
     Microsoft::WRL::ComPtr<IWICBitmap> CreateCanvasBitmap(IWICImagingFactory* imaging) {
@@ -75,7 +75,7 @@ namespace {
 
     std::vector<std::uint8_t> DrawnPixels(const BoxStyle& style) {
         Canvas canvas;
-        return canvas.Draw(style, static_cast<float>(kDrawnWidth));
+        return canvas.Draw(style, kDrawnWidth);
     }
 
     std::uint8_t Red(const std::vector<std::uint8_t>& pixels, size_t x, size_t y) {
@@ -88,6 +88,15 @@ namespace {
 
     BorderSide Side(float widthDips) {
         return BorderSide{.widthDips = widthDips, .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f)};
+    }
+
+    Border Uniform(float widthDips) {
+        return Border{
+            .top    = Side(widthDips),
+            .right  = Side(widthDips),
+            .bottom = Side(widthDips),
+            .left   = Side(widthDips),
+        };
     }
 
     BoxStyle Lined(const Border& border, const std::vector<InsetShadow>& shadows) {
@@ -103,20 +112,14 @@ namespace {
     // An unblurred shadow whose hole is the box moved down 2 and shrunk 3: rows 5 to height - 2, columns 3 to
     // width - 4.
     BoxStyle HardShadowed(const D2D1_COLOR_F& color) {
-        return Lined(
-            Border{
-                .top    = Side(0.0f),
-                .right  = Side(0.0f),
-                .bottom = Side(0.0f),
-                .left   = Side(0.0f),
-            },
-            {InsetShadow{
-                .xDips      = 0.0f,
-                .yDips      = 2.0f,
-                .blurDips   = 0.0f,
-                .spreadDips = 3.0f,
-                .color      = color,
-            }});
+        return Lined(Uniform(0.0f),
+                     {InsetShadow{
+                         .xDips      = 0.0f,
+                         .yDips      = 2.0f,
+                         .blurDips   = 0.0f,
+                         .spreadDips = 3.0f,
+                         .color      = color,
+                     }});
     }
 
 } // namespace
@@ -162,27 +165,12 @@ TEST(Box, SnapLinesKeepsAWidthOfWholePixels) {
         .offsetX      = 0.0f,
         .offsetY      = 0.0f,
     };
-    const BoxStyle snapped = SnapLines(doubled,
-                                       Lined(
-                                           Border{
-                                               .top    = Side(1.0f),
-                                               .right  = Side(1.0f),
-                                               .bottom = Side(1.0f),
-                                               .left   = Side(1.0f),
-                                           },
-                                           {}));
+    const BoxStyle snapped = SnapLines(doubled, Lined(Uniform(1.0f), {}));
     EXPECT_FLOAT_EQ(snapped.border.top.widthDips, 1.0f);
 }
 
 TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSide) {
-    BoxStyle style = Lined(
-        Border{
-            .top    = Side(0.0f),
-            .right  = Side(0.0f),
-            .bottom = Side(0.0f),
-            .left   = Side(0.0f),
-        },
-        {});
+    BoxStyle style   = Lined(Uniform(0.0f), {});
     style.radiusDips = 12.0f;
     const std::vector<D2D1_RECT_F>       boxes{D2D1::RectF(10.3f, 0.0f, 60.0f, 16.0f), D2D1::RectF(70.0f, 0.0f, 200.0f, 40.0f)};
     const std::vector<D2D1_ROUNDED_RECT> outlines = BackdropOutlines(
@@ -235,15 +223,7 @@ TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
         .spreadDips = -6.0f,
         .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.1f),
     };
-    const BoxStyle snapped = SnapLines(kFractionalScale,
-                                       Lined(
-                                           Border{
-                                               .top    = Side(0.0f),
-                                               .right  = Side(0.0f),
-                                               .bottom = Side(0.0f),
-                                               .left   = Side(0.0f),
-                                           },
-                                           {shadow}));
+    const BoxStyle snapped = SnapLines(kFractionalScale, Lined(Uniform(0.0f), {shadow}));
     ASSERT_EQ(snapped.shadows.size(), 1u);
     EXPECT_FLOAT_EQ(snapped.shadows[0].yDips, 0.8f);
     EXPECT_FLOAT_EQ(snapped.shadows[0].spreadDips, -6.4f);
@@ -267,8 +247,8 @@ TEST(Box, AShadowLongerThanItsReachDrawsEachEdgeInPlace) {
 // A cache key that ignored the shadow's color would draw the first shadow again: a fade frozen on its first frame.
 TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
     Canvas                          canvas;
-    const std::vector<std::uint8_t> red  = canvas.Draw(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)), static_cast<float>(kDrawnWidth));
-    const std::vector<std::uint8_t> blue = canvas.Draw(HardShadowed(D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)), static_cast<float>(kDrawnWidth));
+    const std::vector<std::uint8_t> red  = canvas.Draw(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)), kDrawnWidth);
+    const std::vector<std::uint8_t> blue = canvas.Draw(HardShadowed(D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)), kDrawnWidth);
     EXPECT_GT(Red(red, 30, 4), 200);
     EXPECT_GT(Blue(blue, 30, 4), 200);
     EXPECT_LT(Red(blue, 30, 4), 50);

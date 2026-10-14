@@ -1,5 +1,5 @@
 #include "battery/PowerStatus.hpp"
-#include "support/MessageWindow.hpp"
+#include "support/ChangeTarget.hpp"
 
 #include <gtest/gtest.h>
 
@@ -70,10 +70,9 @@ TEST(PowerStatus, HealthSumsEveryBatteryAndCanPassFull) {
 
 // Samples the machine's real battery. It asserts only what holds with or without one.
 TEST(PowerStatus, SamplesTheBatteryAndStopsPromptly) {
-    const MessageWindow target;
-    ChangeSignal        changes(target.Get(), kChanged);
+    ChangeTarget target(kChanged);
     {
-        const PowerStatus battery(changes);
+        const PowerStatus battery(target.signal);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         const std::optional<BatteryState> state = battery.State();
         if (state.has_value()) {
@@ -86,7 +85,7 @@ TEST(PowerStatus, SamplesTheBatteryAndStopsPromptly) {
     }
     const auto started = std::chrono::steady_clock::now();
     for (std::int32_t round = 0; round < 10; ++round) {
-        const PowerStatus battery(changes);
+        const PowerStatus battery(target.signal);
     }
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(5));
 }

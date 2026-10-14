@@ -1,25 +1,13 @@
 #include "modules/Cpu.hpp"
 
+#include "TestStyle.hpp"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <string>
 #include <utility>
 #include <vector>
-
-namespace {
-
-    TextModuleConfig CpuWithFormat(std::string format) {
-        return TextModuleConfig{
-            .format   = std::move(format),
-            .tooltip  = std::nullopt,
-            .icon     = L"",
-            .interval = std::chrono::seconds(1),
-            .actions  = {},
-        };
-    }
-
-} // namespace
 
 TEST(Cpu, UsageIsTheBusyShareOfKernelPlusUserTime) {
     // 400 ticks elapsed (kernel 300 of which idle 100, user 100): 300 busy of 400 is 75%.
@@ -68,9 +56,9 @@ TEST(Cpu, CoreUsageListsEveryCoreInOrderFourToALine) {
 }
 
 TEST(Cpu, FormatMustRenderAnInteger) {
-    EXPECT_THROW(Cpu(CpuWithFormat("{usage:.1f}%")), ConfigError);
-    EXPECT_NO_THROW(Cpu(CpuWithFormat("{usage}%")));
-    TextModuleConfig config = CpuWithFormat("{usage}%");
+    EXPECT_THROW(Cpu(TextConfigWithFormat("{usage:.1f}%")), ConfigError);
+    EXPECT_NO_THROW(Cpu(TextConfigWithFormat("{usage}%")));
+    TextModuleConfig config = TextConfigWithFormat("{usage}%");
     config.tooltip          = "{usage:.1f}";
     EXPECT_THROW(Cpu(std::move(config)), ConfigError);
 }

@@ -1,6 +1,8 @@
 #include "modules/CounterSampler.hpp"
+
+#include "TestStyle.hpp"
+#include "support/ChangeTarget.hpp"
 #include "support/Eventually.hpp"
-#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
@@ -15,24 +17,13 @@ namespace {
         return CounterConfig{
                       .path    = std::move(path),
                       .combine = CounterCombine::Sum,
-                      .text =
-                TextModuleConfig{
-                              .format   = "{value}",
-                              .tooltip  = std::nullopt,
-                              .icon     = {},
-                              .interval = std::chrono::seconds(1),
-                              .actions  = {},
-                },
+                      .text    = TextConfigWithFormat("{value}"),
         };
     }
 
     class Sampler : public testing::Test {
-      public:
-        Sampler() : _changes(_target.Get(), kChanged) {}
-
       protected:
-        MessageWindow _target;
-        ChangeSignal  _changes;
+        ChangeTarget _target{kChanged};
     };
 
 } // namespace
@@ -85,23 +76,23 @@ TEST(CounterSampler, OnlyANewOutcomeOrFailureChangesOutcome) {
 }
 
 TEST_F(Sampler, AStartedSamplerReadsTheCounterAfterOneInterval) {
-    const CounterSampler sampler("cpu", SumOf(L"\\Processor(_Total)\\% Processor Time"), _changes);
+    const CounterSampler sampler("cpu", SumOf(L"\\Processor(_Total)\\% Processor Time"), _target.signal);
     EXPECT_EQ(sampler.Reading().outcome, CounterOutcome::Pending);
     EXPECT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Sampled; }, std::chrono::seconds(3)));
     EXPECT_GE(sampler.Reading().value, 0.0);
     MSG message{};
-    EXPECT_TRUE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
+    EXPECT_TRUE(PeekMessageW(&message, _target.window.Get(), kChanged, kChanged, PM_REMOVE));
 }
 
 // Only the module's own tick shows a new value, so the sampler stores it without a notify.
 TEST_F(Sampler, ANewValueOfTheSameOutcomeIsReadWithoutANotify) {
-    const CounterSampler sampler("uptime", SumOf(L"\\System\\System Up Time"), _changes);
+    const CounterSampler sampler("uptime", SumOf(L"\\System\\System Up Time"), _target.signal);
     ASSERT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Sampled; }, std::chrono::seconds(3)));
     const double first = sampler.Reading().value;
     MSG          message{};
-    ASSERT_TRUE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
+    ASSERT_TRUE(PeekMessageW(&message, _target.window.Get(), kChanged, kChanged, PM_REMOVE));
 
     EXPECT_TRUE(Eventually([&sampler, first] { return sampler.Reading().value > first; }, std::chrono::seconds(3))) << "the value stayed at " << first;
     EXPECT_EQ(sampler.Reading().outcome, CounterOutcome::Sampled);
-    EXPECT_FALSE(PeekMessageW(&message, _target.Get(), kChanged, kChanged, PM_REMOVE));
+    EXPECT_FALSE(PeekMessageW(&message, _target.window.Get(), kChanged, kChanged, PM_REMOVE));
 }

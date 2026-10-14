@@ -1,5 +1,7 @@
 #include "wm/GlazeWmProtocol.hpp"
 
+#include "platform/Text.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -97,7 +99,7 @@ TEST(GlazeWmProtocol, LabelsReplaceBidiControlsAndNewlines) {
     const glazewm::ServerMessage message =
         glazewm::ParseServerMessage(R"({"messageType":"client_response","clientMessage":"query binding-modes","success":true,"error":null,"data":{"bindingModes":[)"
                                     "{\"name\":\"x\",\"displayName\":\"a\\u202eb\\nc\",\"keybindings\":[]}]}}");
-    EXPECT_EQ(glazewm::BindingModesFromResponse(message.data), (std::vector<std::wstring>{{L'a', static_cast<wchar_t>(0xFFFD), L'b', static_cast<wchar_t>(0xFFFD), L'c'}}));
+    EXPECT_EQ(glazewm::BindingModesFromResponse(message.data), (std::vector<std::wstring>{{L'a', kReplacementCharacter, L'b', kReplacementCharacter, L'c'}}));
 }
 
 TEST(GlazeWmProtocol, TilingDirectionIsHorizontalOrVertical) {
@@ -122,7 +124,8 @@ TEST(GlazeWmProtocol, WindowsComeFromDisplayedWorkspacesInTreeOrderThroughSplits
 }
 
 TEST(GlazeWmProtocol, AWorkspaceHoldingAnUnknownContainerIsAProtocolError) {
-    const std::string response = std::string(kWindowsResponse).replace(std::string(kWindowsResponse).find("\"split\""), 7, "\"mystery\"");
+    std::string response(kWindowsResponse);
+    response.replace(response.find("\"split\""), 7, "\"mystery\"");
     EXPECT_THROW(glazewm::WindowsFromMonitors(glazewm::ParseServerMessage(response).data), glazewm::ProtocolError);
 }
 
@@ -157,7 +160,7 @@ TEST(GlazeWmProtocol, FocusWindowCommandAddressesTheContainerById) {
 
 TEST(GlazeWmProtocol, FocusWindowCommandRefusesIdsThatAreNotUuids) {
     EXPECT_THROW(glazewm::FocusWindowCommand(""), glazewm::ProtocolError);
-    EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a --workspace 2"), glazewm::ProtocolError);
+    EXPECT_THROW(glazewm::FocusWindowCommand(std::string(kFirstWindowId) + " --workspace 2"), glazewm::ProtocolError);
     EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e 5f0e-4c1a-9d3b-2a1f0e9c8b7a"), glazewm::ProtocolError);
     EXPECT_THROW(glazewm::FocusWindowCommand("0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7g"), glazewm::ProtocolError);
 }

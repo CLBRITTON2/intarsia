@@ -10,8 +10,6 @@
 
 namespace {
 
-    constexpr wchar_t kReplacementCharacter = 0xFFFD;
-
     // Bytes of the valid UTF-8 sequence that starts at text[at], or 0 when none does.
     size_t Utf8SequenceBytes(std::string_view text, size_t at) {
         const auto   lead  = static_cast<std::uint8_t>(text[at]);

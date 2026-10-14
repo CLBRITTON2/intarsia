@@ -1,5 +1,5 @@
 #include "network/IpHelper.hpp"
-#include "support/MessageWindow.hpp"
+#include "support/ChangeTarget.hpp"
 
 #include <gtest/gtest.h>
 
@@ -44,10 +44,9 @@ TEST(IpHelper, RatesAreBytesPerSecondAndZeroWhenACounterResets) {
 
 // Samples the machine's real network. It asserts only what holds whatever the machine is connected to.
 TEST(IpHelper, SamplesTheDefaultRouteInterfaceAndStopsPromptly) {
-    const MessageWindow target;
-    ChangeSignal        changes(target.Get(), kChanged);
+    ChangeTarget target(kChanged);
     {
-        const IpHelper network(changes, true);
+        const IpHelper network(target.signal, true);
         // The first sample runs as the thread starts, and a second gives the rates.
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         const NetworkState state = network.State();
@@ -63,7 +62,7 @@ TEST(IpHelper, SamplesTheDefaultRouteInterfaceAndStopsPromptly) {
     const auto started = std::chrono::steady_clock::now();
     // Without rates the thread waits on no clock at all, so the stop event alone ends it.
     for (std::int32_t round = 0; round < 10; ++round) {
-        const IpHelper network(changes, round % 2 == 0);
+        const IpHelper network(target.signal, round % 2 == 0);
     }
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(5));
 }

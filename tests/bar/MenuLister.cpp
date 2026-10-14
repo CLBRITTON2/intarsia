@@ -1,6 +1,7 @@
 #include "bar/MenuLister.hpp"
 
 #include "modules/CommandPoller.hpp"
+#include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -11,13 +12,7 @@
 #include <string_view>
 #include <vector>
 
-namespace {
-
-    auto OutputErrorWith(std::string_view text) {
-        return testing::ThrowsMessage<OutputError>(testing::HasSubstr(std::string(text)));
-    }
-
-} // namespace
+namespace {} // namespace
 
 TEST(MenuLister, ParsesEntriesWithActiveOptional) {
     const std::vector<MenuItem> items = ParseMenuOutput(R"({"items":[{"id":"work","text":"Work","active":true},{"id":"home","text":"Home"}]})");
@@ -49,7 +44,7 @@ TEST(MenuLister, ParsesATooltipThatMayBreakLines) {
 }
 
 TEST(MenuLister, RefusesATooltipThatIsNotDrawableText) {
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","tooltip":1}]})"); }, OutputErrorWith("tooltip that is not a string"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","tooltip":1}]})"); }, ThrowsWith<OutputError>("tooltip that is not a string"));
     EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","tooltip":"tab\there"}]})"); }, testing::Throws<OutputError>());
     EXPECT_THAT([] { return ParseMenuOutput("{\"items\":[{\"id\":\"a\",\"text\":\"A\",\"tooltip\":\"\\u202e\"}]}"); }, testing::Throws<OutputError>());
 }
@@ -76,24 +71,24 @@ TEST(MenuLister, ParsesSeparatorsBetweenEntries) {
 }
 
 TEST(MenuLister, RefusesASeparatorWithAnythingElse) {
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"separator":false}]})"); }, OutputErrorWith(R"(other than {"separator":true})"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"separator":1}]})"); }, OutputErrorWith(R"(other than {"separator":true})"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"separator":true,"id":"a","text":"A"}]})"); }, OutputErrorWith(R"(other than {"separator":true})"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"separator":false}]})"); }, ThrowsWith<OutputError>(R"(other than {"separator":true})"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"separator":1}]})"); }, ThrowsWith<OutputError>(R"(other than {"separator":true})"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"separator":true,"id":"a","text":"A"}]})"); }, ThrowsWith<OutputError>(R"(other than {"separator":true})"));
 }
 
 TEST(MenuLister, RefusesOutputThatIsNotOneItemsList) {
-    EXPECT_THAT([] { return ParseMenuOutput("work\nhome"); }, OutputErrorWith("printed invalid JSON"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[],"title":"x"})"); }, OutputErrorWith("only an items list"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":{}})"); }, OutputErrorWith("not a list"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","icon":"x"}]})"); }, OutputErrorWith("other than id, text, active and tooltip"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a"}]})"); }, OutputErrorWith("without an id string and a text string"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","active":1}]})"); }, OutputErrorWith("not true or false"));
+    EXPECT_THAT([] { return ParseMenuOutput("work\nhome"); }, ThrowsWith<OutputError>("printed invalid JSON"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[],"title":"x"})"); }, ThrowsWith<OutputError>("only an items list"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":{}})"); }, ThrowsWith<OutputError>("not a list"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","icon":"x"}]})"); }, ThrowsWith<OutputError>("other than id, text, active and tooltip"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a"}]})"); }, ThrowsWith<OutputError>("without an id string and a text string"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"a","text":"A","active":1}]})"); }, ThrowsWith<OutputError>("not true or false"));
 }
 
 TEST(MenuLister, RefusesIdsAProgramCouldReadAsAnOption) {
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"--delete","text":"A"}]})"); }, OutputErrorWith("starts with - or /"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"/s","text":"A"}]})"); }, OutputErrorWith("starts with - or /"));
-    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"","text":"A"}]})"); }, OutputErrorWith("empty"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"--delete","text":"A"}]})"); }, ThrowsWith<OutputError>("starts with - or /"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"/s","text":"A"}]})"); }, ThrowsWith<OutputError>("starts with - or /"));
+    EXPECT_THAT([] { return ParseMenuOutput(R"({"items":[{"id":"","text":"A"}]})"); }, ThrowsWith<OutputError>("empty"));
 }
 
 TEST(MenuLister, RefusesUndrawableTextAndTooManyItems) {
@@ -103,5 +98,5 @@ TEST(MenuLister, RefusesUndrawableTextAndTooManyItems) {
     for (size_t index = 0; index <= kMaxMenuEntries; ++index) {
         items += std::format(R"({}{{"id":"e{}","text":"E"}})", index == 0 ? "" : ",", index);
     }
-    EXPECT_THAT([&items] { return ParseMenuOutput("{\"items\":[" + items + "]}"); }, OutputErrorWith("more than 50 items"));
+    EXPECT_THAT([&items] { return ParseMenuOutput("{\"items\":[" + items + "]}"); }, ThrowsWith<OutputError>("more than 50 items"));
 }
