@@ -19,7 +19,6 @@
 #include <chrono>
 #include <exception>
 #include <format>
-#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -70,8 +69,8 @@ namespace {
 
     // A source kept while the config shows a module of its kind, so its state survives reloads that keep it, and
     // dropped otherwise, since it samples the system for as long as it exists.
-    template <typename Source>
-    std::unique_ptr<Source> MatchedToConfig(std::unique_ptr<Source> source, bool shown, const std::function<std::unique_ptr<Source>()>& create) {
+    template <typename Source, typename Create>
+    std::unique_ptr<Source> MatchedToConfig(std::unique_ptr<Source> source, bool shown, const Create& create) {
         if (!shown) {
             return nullptr;
         }
@@ -155,20 +154,6 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     Tooltip::RegisterWindowClass(_instance);
     Menu::RegisterWindowClass(_instance);
     CreateBars();
-}
-
-App::~App() {
-    _bars.clear();
-    _tray.reset();
-    _battery.reset();
-    _network.reset();
-    _audioInput.reset();
-    _audioOutput.reset();
-    _windowIcons.reset();
-    _counterSamplers.reset();
-    _commandPollers.reset();
-    _windowManager.reset();
-    _watcher.reset();
 }
 
 std::int32_t App::Run() {
@@ -308,20 +293,17 @@ void App::ReloadConfig() {
 }
 
 void App::MatchSourcesToConfig() {
-    _windowIcons = MatchedToConfig<WindowIcons>(std::move(_windowIcons), ShowsKind(*_config, ModuleKind::Windows),
-                                                [this] { return std::make_unique<WindowIcons>(_changes, kWindowIconRetry); });
+    _windowIcons = MatchedToConfig(std::move(_windowIcons), ShowsKind(*_config, ModuleKind::Windows), [this] { return std::make_unique<WindowIcons>(_changes, kWindowIconRetry); });
     _audioOutput =
-        MatchedToConfig<IAudio>(std::move(_audioOutput), ShowsAudioFlow(*_config, AudioFlow::Output), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Output); });
-    _audioInput =
-        MatchedToConfig<IAudio>(std::move(_audioInput), ShowsAudioFlow(*_config, AudioFlow::Input), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Input); });
+        MatchedToConfig(std::move(_audioOutput), ShowsAudioFlow(*_config, AudioFlow::Output), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Output); });
+    _audioInput = MatchedToConfig(std::move(_audioInput), ShowsAudioFlow(*_config, AudioFlow::Input), [this] { return std::make_unique<CoreAudio>(_changes, AudioFlow::Input); });
     const bool samplesRates = ReadsNetworkRates(*_config);
     if (_network != nullptr && _network->SamplesRates() != samplesRates) {
         _network.reset();
     }
-    _network = MatchedToConfig<IpHelper>(std::move(_network), ShowsKind(*_config, ModuleKind::Network),
-                                         [this, samplesRates] { return std::make_unique<IpHelper>(_changes, samplesRates); });
-    _battery = MatchedToConfig<IBattery>(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
-    _tray    = MatchedToConfig<ShellNotifyIcon>(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
+    _network = MatchedToConfig(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this, samplesRates] { return std::make_unique<IpHelper>(_changes, samplesRates); });
+    _battery = MatchedToConfig(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
+    _tray    = MatchedToConfig(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
         auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control.get(), kTrayFailed);
         // Apps add their icons again for the taskbar's class only, so a tray of another class has no one to tell.
         if (_trayClass == kTaskbarClass) {

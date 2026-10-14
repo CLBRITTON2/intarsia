@@ -249,29 +249,8 @@ enum class ModuleKind : std::uint8_t {
     Group
 };
 
-// A module type as the config's type key writes it.
-struct ModuleTypeName {
-    std::string_view name;
-    ModuleKind       kind;
-};
-
-inline constexpr std::array<ModuleTypeName, 15> kModuleTypes{{
-    {.name = "clock", .kind = ModuleKind::Clock},
-    {.name = "window", .kind = ModuleKind::Window},
-    {.name = "workspaces", .kind = ModuleKind::Workspaces},
-    {.name = "windows", .kind = ModuleKind::Windows},
-    {.name = "binding_mode", .kind = ModuleKind::BindingMode},
-    {.name = "tiling_direction", .kind = ModuleKind::TilingDirection},
-    {.name = "cpu", .kind = ModuleKind::Cpu},
-    {.name = "memory", .kind = ModuleKind::Memory},
-    {.name = "audio", .kind = ModuleKind::Audio},
-    {.name = "network", .kind = ModuleKind::Network},
-    {.name = "battery", .kind = ModuleKind::Battery},
-    {.name = "tray", .kind = ModuleKind::Tray},
-    {.name = "custom", .kind = ModuleKind::Custom},
-    {.name = "counter", .kind = ModuleKind::Counter},
-    {.name = "group", .kind = ModuleKind::Group},
-}};
+// The module type as the config's type key writes it.
+std::string_view TypeName(ModuleKind kind);
 
 enum class WindowManagerKind : std::uint8_t {
     Windows, // no window manager: the native backend reads windows and focus from Win32 events
@@ -281,8 +260,6 @@ enum class WindowManagerKind : std::uint8_t {
 // A command sent to the window manager as it is written, such as "focus --next-workspace" for GlazeWM.
 struct WindowManagerCommand {
     std::string text;
-
-    bool        operator==(const WindowManagerCommand&) const = default;
 };
 
 // A popup menu of what command prints, killed after timeout like an interval custom command. Picking an entry starts
@@ -291,8 +268,6 @@ struct MenuAction {
     Command              command;
     std::chrono::seconds timeout;
     Command              onSelect;
-
-    bool                 operator==(const MenuAction&) const = default;
 };
 
 // What an input does: start a program, send the window manager a command, or open a menu.

@@ -34,7 +34,6 @@
 class App {
   public:
     App(HINSTANCE instance, LaunchOptions options);
-    ~App();
     App(const App&)            = delete;
     App& operator=(const App&) = delete;
 

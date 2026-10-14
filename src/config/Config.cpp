@@ -25,7 +25,6 @@
 #include <initializer_list>
 #include <limits>
 #include <map>
-#include <memory>
 #include <ranges>
 #include <set>
 #include <string_view>
@@ -310,26 +309,33 @@ namespace {
     constexpr std::array<Keyword<CustomRun>, 2>      kCustomRuns{{{.name = "interval", .value = CustomRun::Interval}, {.name = "continuous", .value = CustomRun::Continuous}}};
     constexpr std::array<Keyword<CounterCombine>, 3> kCounterCombines{
         {{.name = "sum", .value = CounterCombine::Sum}, {.name = "max", .value = CounterCombine::Max}, {.name = "average", .value = CounterCombine::Average}}};
-    constexpr std::array<Keyword<AudioFlow>, 2> kAudioFlows{{{.name = "output", .value = AudioFlow::Output}, {.name = "input", .value = AudioFlow::Input}}};
+    constexpr std::array<Keyword<AudioFlow>, 2>   kAudioFlows{{{.name = "output", .value = AudioFlow::Output}, {.name = "input", .value = AudioFlow::Input}}};
+    constexpr std::array<Keyword<ModuleKind>, 15> kModuleTypes{{
+        {.name = "clock", .value = ModuleKind::Clock},
+        {.name = "window", .value = ModuleKind::Window},
+        {.name = "workspaces", .value = ModuleKind::Workspaces},
+        {.name = "windows", .value = ModuleKind::Windows},
+        {.name = "binding_mode", .value = ModuleKind::BindingMode},
+        {.name = "tiling_direction", .value = ModuleKind::TilingDirection},
+        {.name = "cpu", .value = ModuleKind::Cpu},
+        {.name = "memory", .value = ModuleKind::Memory},
+        {.name = "audio", .value = ModuleKind::Audio},
+        {.name = "network", .value = ModuleKind::Network},
+        {.name = "battery", .value = ModuleKind::Battery},
+        {.name = "tray", .value = ModuleKind::Tray},
+        {.name = "custom", .value = ModuleKind::Custom},
+        {.name = "counter", .value = ModuleKind::Counter},
+        {.name = "group", .value = ModuleKind::Group},
+    }};
 
-    ModuleKind                                  ParseModuleType(const TableReader& module) {
-        const std::string type  = module.String("type");
-        const auto        entry = std::ranges::find(kModuleTypes, type, &ModuleTypeName::name);
-        if (entry == kModuleTypes.end()) {
-            throw module.Error(
-                std::format("{} is '{}', known types are: {}", module.KeyPath("type"), type, JoinNames(kModuleTypes | std::views::transform(&ModuleTypeName::name))));
-        }
-        return entry->kind;
-    }
-
-    TextModuleConfig ReadTextModuleConfig(const TableReader& module);
-    WindowConfig     ReadWindowConfig(const TableReader& window);
-    CustomConfig     ReadCustomConfig(const TableReader& module);
-    CounterConfig    ReadCounterConfig(const TableReader& module);
-    AudioConfig      ReadAudioConfig(const TableReader& module);
-    NetworkConfig    ReadNetworkConfig(const TableReader& module);
-    BatteryConfig    ReadBatteryConfig(const TableReader& module);
-    GroupConfig      ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style);
+    TextModuleConfig                              ReadTextModuleConfig(const TableReader& module);
+    WindowConfig                                  ReadWindowConfig(const TableReader& window);
+    CustomConfig                                  ReadCustomConfig(const TableReader& module);
+    CounterConfig                                 ReadCounterConfig(const TableReader& module);
+    AudioConfig                                   ReadAudioConfig(const TableReader& module);
+    NetworkConfig                                 ReadNetworkConfig(const TableReader& module);
+    BatteryConfig                                 ReadBatteryConfig(const TableReader& module);
+    GroupConfig                                   ReadGroupConfig(const TableReader& group, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style);
 
     // definitions, sheet and style are for a group, whose members are modules of their own.
     ModuleSettings ReadModuleSettings(const TableReader& module, ModuleKind kind, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
@@ -381,7 +387,7 @@ namespace {
         std::vector<ModuleInstance> instances;
         for (const std::string& name : lists.StringList(listKey)) {
             const TableReader module = DefinedModule(lists, listKey, definitions, name);
-            instances.push_back(ReadModuleInstance(definitions, name, module, ParseModuleType(module), sheet, style));
+            instances.push_back(ReadModuleInstance(definitions, name, module, ParseKeyword(module, "type", kModuleTypes), sheet, style));
         }
         return instances;
     }
@@ -402,7 +408,7 @@ namespace {
         members.reserve(names.size());
         for (const std::string& name : names) {
             const TableReader module = DefinedModule(group, "modules", definitions, name);
-            const ModuleKind  kind   = ParseModuleType(module);
+            const ModuleKind  kind   = ParseKeyword(module, "type", kModuleTypes);
             if (kind == ModuleKind::Group) {
                 throw group.Error(std::format("{} lists '{}', which is a group: groups do not nest", group.KeyPath("modules"), name));
             }
@@ -873,6 +879,14 @@ namespace {
 
 } // namespace
 
+std::string_view TypeName(ModuleKind kind) {
+    const auto entry = std::ranges::find(kModuleTypes, kind, &Keyword<ModuleKind>::value);
+    if (entry == kModuleTypes.end()) {
+        throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
+    }
+    return entry->name;
+}
+
 std::filesystem::path DefaultConfigPath() {
     return KnownFolderPath(FOLDERID_Profile, "FOLDERID_Profile") / L".config" / L"intarsia" / L"config.lua";
 }
@@ -976,10 +990,9 @@ Config LoadConfig(const std::filesystem::path& path) {
     RequireDeclaredClasses(sheet, declared);
 
     if (config.windowManager == WindowManagerKind::Windows) {
-        for (const auto [kind, name] : {std::pair{ModuleKind::Workspaces, "workspaces"}, std::pair{ModuleKind::Windows, "windows"},
-                                        std::pair{ModuleKind::BindingMode, "binding_mode"}, std::pair{ModuleKind::TilingDirection, "tiling_direction"}}) {
+        for (const ModuleKind kind : {ModuleKind::Workspaces, ModuleKind::Windows, ModuleKind::BindingMode, ModuleKind::TilingDirection}) {
             if (ShowsKind(config, kind)) {
-                throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", name));
+                throw root.Error(std::format("{} needs a tiling window manager, window_manager 'windows' is none", TypeName(kind)));
             }
         }
         const bool sendsCommands = AnyModuleInConfig(config, [](const ModuleInstance& instance) {

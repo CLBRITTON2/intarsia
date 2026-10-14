@@ -4,8 +4,6 @@
 #include "platform/ChangeSignal.hpp"
 #include "wm/IWindowManager.hpp"
 
-#include <windows.h>
-
 #include <cstdint>
 #include <memory>
 

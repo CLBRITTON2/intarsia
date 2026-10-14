@@ -497,8 +497,8 @@ TEST(Config, ModuleNamesUseASafeAlphabet) {
 
 TEST(Config, TypeMustBeAKnownModuleType) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")")); },
-                ConfigErrorWith("modules.time.type is 'teapot', known types are: clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
-                                "network, battery, tray, custom, counter, group"));
+                ConfigErrorWith("modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, "
+                                "network, battery, tray, custom, counter, group, got 'teapot'"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(type = "clock", )", "")); }, ConfigErrorWith("modules.time.type is missing"));
 }
 

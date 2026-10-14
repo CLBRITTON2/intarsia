@@ -797,10 +797,6 @@ namespace {
         }
     };
 
-    std::vector<StyleNode> ParseTree(std::string_view text, std::string_view source) {
-        return TreeParser(text, source).Parse();
-    }
-
     using Variables = std::map<std::string, std::string, std::less<>>;
 
     Variables ResolveVariables(const std::vector<StyleNode>& roots, std::string_view source) {
@@ -1013,14 +1009,6 @@ namespace {
         return StateColors{.text = text, .icon = ResolveColor(Concat(Children(states, "icon"), Children(module, "icon")), "color", text)};
     }
 
-    std::string_view TypeName(ModuleKind kind) {
-        const auto entry = std::ranges::find(kModuleTypes, kind, &ModuleTypeName::kind);
-        if (entry == kModuleTypes.end()) {
-            throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
-        }
-        return entry->name;
-    }
-
     // A state that colors a module's icon as well as its text, and the one module type that draws it.
     struct OwnedState {
         std::string_view name;
@@ -1053,8 +1041,7 @@ namespace {
             }
         }
         for (const StyleNode& child : own.children) {
-            const bool known = std::ranges::find(kModuleBlocks, child.key, &ChildBlock::key) != kModuleBlocks.end();
-            if (IsBlock(child) && !known && std::ranges::find(classes, child.key) == classes.end()) {
+            if (IsBlock(child) && !IsStyledClass(child.key) && std::ranges::find(classes, child.key) == classes.end()) {
                 throw StyleError(source, child.line,
                                  std::format("{}: {} is not a block a module holds ({}), nor a class {} lists in its classes", own.key, child.key, KeysOf(kModuleBlocks), own.key));
             }
@@ -1072,7 +1059,7 @@ namespace {
 } // namespace
 
 StyleSheet ParseStyleSheet(std::string_view text, std::string source) {
-    const std::vector<StyleNode> tree      = ParseTree(text, source);
+    const std::vector<StyleNode> tree      = TreeParser(text, source).Parse();
     const Variables              variables = ResolveVariables(tree, source);
     StyleSheet                   sheet{.source = std::move(source), .blocks = {}};
     for (StyleNode& block : SubstituteAll(tree, variables, sheet.source)) {
