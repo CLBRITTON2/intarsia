@@ -19,7 +19,6 @@ class WebSocket {
   public:
     // Connects and completes the upgrade, throwing Win32Error with the failing WinHTTP call.
     WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_view path);
-    ~WebSocket();
     WebSocket(const WebSocket&)            = delete;
     WebSocket& operator=(const WebSocket&) = delete;
 

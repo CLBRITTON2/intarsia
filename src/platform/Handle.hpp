@@ -24,3 +24,7 @@ using UniqueHandle = UniqueReleased<HANDLE, &CloseHandle>;
 // Takes ownership of a handle a Win32 call returned, throwing with that call's last error when it is null or
 // INVALID_HANDLE_VALUE (CreateFileW fails with the latter, most other creators with null).
 UniqueHandle OwnHandle(HANDLE handle, std::string_view call);
+
+// Unsignaled events, named in the CreateEventW error they throw. An auto-reset one wakes one wait per SetEvent.
+UniqueHandle AutoResetEvent(std::string_view name);
+UniqueHandle ManualResetEvent(std::string_view name);

@@ -9,8 +9,8 @@
 #include <utility>
 
 FrameClock::FrameClock(HWND target, std::uint32_t frameMessage, std::uint32_t failedMessage, Microsoft::WRL::ComPtr<IDXGIOutput> output) :
-    _target(target), _frameMessage(frameMessage), _output(std::move(output)), _runningEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(frame running)")),
-    _failure(target, failedMessage, "frame_clock"), _thread("frame", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
+    _target(target), _frameMessage(frameMessage), _output(std::move(output)), _runningEvent(ManualResetEvent("frame running")), _failure(target, failedMessage, "frame_clock"),
+    _thread("frame", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 void FrameClock::Start() {
     if (!SetEvent(_runningEvent.get())) {

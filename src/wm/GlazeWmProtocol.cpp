@@ -20,37 +20,31 @@ namespace glazewm {
             return *found;
         }
 
-        std::string StringField(const nlohmann::json& object, std::string_view key, std::string_view context) {
+        // expected names the type isType checks for, as "a string".
+        const nlohmann::json& TypedField(const nlohmann::json& object, std::string_view key, std::string_view context, bool (nlohmann::json::*isType)() const noexcept,
+                                         std::string_view expected) {
             const nlohmann::json& value = Field(object, key, context);
-            if (!value.is_string()) {
-                throw ProtocolError(std::format("GlazeWM {} field '{}' is a {}, expected a string", context, key, value.type_name()));
-            }
-            return value.get<std::string>();
-        }
-
-        bool BoolField(const nlohmann::json& object, std::string_view key, std::string_view context) {
-            const nlohmann::json& value = Field(object, key, context);
-            if (!value.is_boolean()) {
-                throw ProtocolError(std::format("GlazeWM {} field '{}' is a {}, expected a boolean", context, key, value.type_name()));
-            }
-            return value.get<bool>();
-        }
-
-        const nlohmann::json& ArrayField(const nlohmann::json& object, std::string_view key, std::string_view context) {
-            const nlohmann::json& value = Field(object, key, context);
-            if (!value.is_array()) {
-                throw ProtocolError(std::format("GlazeWM {} field '{}' is a {}, expected an array", context, key, value.type_name()));
+            if (!(value.*isType)()) {
+                throw ProtocolError(std::format("GlazeWM {} field '{}' is a {}, expected {}", context, key, value.type_name(), expected));
             }
             return value;
         }
 
+        std::string StringField(const nlohmann::json& object, std::string_view key, std::string_view context) {
+            return TypedField(object, key, context, &nlohmann::json::is_string, "a string").get<std::string>();
+        }
+
+        bool BoolField(const nlohmann::json& object, std::string_view key, std::string_view context) {
+            return TypedField(object, key, context, &nlohmann::json::is_boolean, "a boolean").get<bool>();
+        }
+
+        const nlohmann::json& ArrayField(const nlohmann::json& object, std::string_view key, std::string_view context) {
+            return TypedField(object, key, context, &nlohmann::json::is_array, "an array");
+        }
+
         // A monitor's HMONITOR or a window's HWND.
         std::intptr_t HandleField(const nlohmann::json& object, std::string_view key, std::string_view context) {
-            const nlohmann::json& value = Field(object, key, context);
-            if (!value.is_number_integer()) {
-                throw ProtocolError(std::format("GlazeWM {} field '{}' is a {}, expected an integer", context, key, value.type_name()));
-            }
-            return value.get<std::intptr_t>();
+            return TypedField(object, key, context, &nlohmann::json::is_number_integer, "an integer").get<std::intptr_t>();
         }
 
         // Last child on top, so the walk pops them in tree order.

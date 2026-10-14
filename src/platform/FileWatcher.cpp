@@ -41,7 +41,7 @@ void FileWatcher::Watch(HANDLE stopEvent) {
 }
 
 void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
-    const UniqueHandle          readDone = OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(read)");
+    const UniqueHandle          readDone = ManualResetEvent("read");
     std::vector<DWORD>          buffer(kBufferDwords);
     const DWORD                 bufferBytes = static_cast<DWORD>(buffer.size() * sizeof(DWORD));
     OVERLAPPED                  overlapped{};

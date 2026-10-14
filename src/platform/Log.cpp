@@ -1,12 +1,9 @@
 #include "platform/Log.hpp"
 
-#include "platform/Errors.hpp"
 #include "platform/KnownFolder.hpp"
 #include "platform/Text.hpp"
 
 #include <windows.h>
-
-#include <shlobj.h>
 
 #include <algorithm>
 #include <chrono>
@@ -15,7 +12,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <format>
-#include <memory>
 #include <mutex>
 #include <share.h>
 #include <stdexcept>
@@ -100,13 +96,7 @@ namespace {
         }
         try {
             StartFile(sink);
-        } catch (const std::exception& error) {
-            if (sink.file != nullptr) {
-                std::fclose(sink.file);
-                sink.file = nullptr;
-            }
-            std::fputs(FormatLine(LogLevel::Error, "log", "file_stopped", {{.key = "reason", .value = error.what()}}).c_str(), stderr);
-        }
+        } catch (const std::exception& error) { std::fputs(FormatLine(LogLevel::Error, "log", "file_stopped", {{.key = "reason", .value = error.what()}}).c_str(), stderr); }
     }
 
     // A crash can come while its own thread holds the mutex, so the crash path never waits for it.
@@ -133,7 +123,7 @@ namespace {
 
     // MSVC keeps a terminate handler per thread, so a worker thread's std::terminate reaches only this: abort raises
     // SIGABRT for the whole process, on the thread that aborts, while the exception that ended it is still current.
-    void LogAbort(std::int32_t /*signal*/) {
+    void LogAbort() {
         LogCrash(FormatLine(LogLevel::Error, "app", "fatal", {{.key = "reason", .value = CurrentExceptionReason("abort with no exception")}}));
     }
 
@@ -182,7 +172,7 @@ void LogToFile(const std::filesystem::path& path) {
 
 void LogCrashes() {
     std::set_terminate(LogTerminate);
-    std::signal(SIGABRT, [](int signal) { LogAbort(signal); });
+    std::signal(SIGABRT, [](int /*signal*/) { LogAbort(); });
     SetUnhandledExceptionFilter(LogUnhandledException);
 }
 

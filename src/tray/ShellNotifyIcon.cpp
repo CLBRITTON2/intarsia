@@ -22,7 +22,6 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -36,8 +35,17 @@ namespace {
     // The sender waits on the forward, so a hung Explorer must not hold it for long.
     constexpr std::uint32_t kForwardTimeoutMs = 2000;
 
-    HWND                    ToWindow(std::intptr_t handle) {
-        return IntToPointer<std::remove_pointer_t<HWND>>(handle);
+    // Null while the cursor cannot be read, which is so on another desktop (the lock screen, a UAC prompt): the bar
+    // still redraws and hovers there, and an app told of input it cannot see would be wrong anyway. Logged once per
+    // outage.
+    std::optional<POINT> CursorPosition(FailureLog& log) {
+        POINT cursor{};
+        if (!GetCursorPos(&cursor)) {
+            log.Failed("cursor_unavailable", Win32Error("GetCursorPos", HRESULT_FROM_WIN32(GetLastError())));
+            return std::nullopt;
+        }
+        log.Succeeded();
+        return cursor;
     }
 
     HWND CreateTrayWindow(const std::wstring& windowClass, WNDPROC procedure, void* owner) {
@@ -84,8 +92,7 @@ namespace {
 } // namespace
 
 ShellNotifyIcon::ShellNotifyIcon(ChangeSignal& changes, std::wstring windowClass, HWND target, std::uint32_t failedMessage) :
-    _changes(changes), _windowClass(std::move(windowClass)), _failure(target, failedMessage, "tray"),
-    _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(tray stop)")) {
+    _changes(changes), _windowClass(std::move(windowClass)), _failure(target, failedMessage, "tray"), _stopEvent(ManualResetEvent("tray stop")) {
     std::promise<void> ready;
     std::future<void>  created = ready.get_future();
     _thread                    = std::thread([this, &ready] { Run(ready); });
@@ -108,7 +115,7 @@ std::vector<TrayIcon> ShellNotifyIcon::Icons() const {
 }
 
 void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
-    const std::optional<POINT> position = CursorPosition();
+    const std::optional<POINT> position = CursorPosition(_cursorLog);
     if (!position.has_value()) {
         return;
     }
@@ -146,7 +153,7 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
 }
 
 void ShellNotifyIcon::Move(const TrayIcon& icon) {
-    const std::optional<POINT> cursor = CursorPosition();
+    const std::optional<POINT> cursor = CursorPosition(_cursorLog);
     if (!cursor.has_value() || (_lastMove.has_value() && _lastMove->x == cursor->x && _lastMove->y == cursor->y)) {
         return;
     }
@@ -155,14 +162,14 @@ void ShellNotifyIcon::Move(const TrayIcon& icon) {
 }
 
 void ShellNotifyIcon::OpenPopup(const TrayIcon& icon) {
-    const std::optional<POINT> cursor = CursorPosition();
+    const std::optional<POINT> cursor = CursorPosition(_cursorLog);
     if (cursor.has_value()) {
         PostHover(icon, NIN_POPUPOPEN, *cursor);
     }
 }
 
 void ShellNotifyIcon::ClosePopup(const TrayIcon& icon) {
-    const std::optional<POINT> cursor = CursorPosition();
+    const std::optional<POINT> cursor = CursorPosition(_cursorLog);
     if (cursor.has_value()) {
         PostHover(icon, NIN_POPUPCLOSE, *cursor);
     }
@@ -184,18 +191,6 @@ void ShellNotifyIcon::PostHover(const TrayIcon& icon, std::uint32_t event, POINT
     } else {
         _hoverLog.Succeeded();
     }
-}
-
-// Null while the cursor cannot be read, which is so on another desktop (the lock screen, a UAC prompt): the bar still
-// redraws and hovers there, and an app told of input it cannot see would be wrong anyway.
-std::optional<POINT> ShellNotifyIcon::CursorPosition() {
-    POINT cursor{};
-    if (!GetCursorPos(&cursor)) {
-        _cursorLog.Failed("cursor_unavailable", Win32Error("GetCursorPos", HRESULT_FROM_WIN32(GetLastError())));
-        return std::nullopt;
-    }
-    _cursorLog.Succeeded();
-    return cursor;
 }
 
 DWORD ShellNotifyIcon::PostInput(const TrayIcon& icon, const std::vector<TrayInputMessage>& messages) {
@@ -285,7 +280,7 @@ bool ShellNotifyIcon::ApplyMessage(const COPYDATASTRUCT& data) {
     std::shared_ptr<const IconPixels> pixels;
     if ((message.flags & NIF_ICON) != 0 && message.icon != 0) {
         try {
-            pixels = std::make_shared<const IconPixels>(IconToPixels(*_imaging.Get(), IntToPointer<std::remove_pointer_t<HICON>>(message.icon)));
+            pixels = std::make_shared<const IconPixels>(IconToPixels(*_imaging.Get(), ToIcon(message.icon)));
             _iconLog.Succeeded();
         } catch (const Win32Error& error) {
             // The icon stays without pixels, and so hidden, until the app sets one that reads.
@@ -309,18 +304,16 @@ LRESULT ShellNotifyIcon::AnswerIconRect(const COPYDATASTRUCT& data) {
         _messageLog.Failed("malformed_message", error);
         return 0;
     }
-    POINT cursor{};
-    if (!GetCursorPos(&cursor)) {
-        _rectLog.Failed("cursor_unavailable", Win32Error("GetCursorPos(tray icon rect)", HRESULT_FROM_WIN32(GetLastError())));
+    const std::optional<POINT> cursor = CursorPosition(_rectLog);
+    if (!cursor.has_value()) {
         return 0;
     }
-    _rectLog.Succeeded();
     std::vector<TrayIconRect> rects;
     const std::scoped_lock    lock(_mutex);
     for (const ViewRects& reported : _views) {
         rects.insert(rects.end(), reported.rects.begin(), reported.rects.end());
     }
-    const std::optional<RECT> rect = QueriedIconRect(query, _icons, rects, cursor);
+    const std::optional<RECT> rect = QueriedIconRect(query, _icons, rects, *cursor);
     return rect.has_value() ? IconRectAnswer(query.part, *rect) : 0;
 }
 
@@ -376,32 +369,27 @@ void ShellNotifyIcon::Publish(std::vector<TrayIcon> icons) {
 void ShellNotifyIcon::Run(std::promise<void>& ready) {
     // WIC reads the icons on this thread.
     std::optional<ComScope> com;
+    bool                    started = false;
     try {
         com.emplace(ComThreading::Multi, "tray");
         _imaging = CreateImagingFactory();
         _window  = CreateTrayWindow(_windowClass, WindowProc, this);
-    } catch (...) {
-        _imaging.Reset();
-        ready.set_exception(std::current_exception());
-        return;
-    }
-    try {
         KeepFirst();
         StartTimer(_window, kFirstTimer, kFirstEveryMs, "tray first");
         StartTimer(_window, kSweepTimer, kSweepEveryMs, "tray sweep");
         ready.set_value();
-    } catch (...) {
+        started = true;
+    } catch (...) { ready.set_exception(std::current_exception()); }
+    if (started) {
+        try {
+            RunLoop();
+        } catch (...) { Fail(std::current_exception()); }
+    }
+    // CreateTrayWindow unregisters its class when it throws, leaving the window null.
+    if (_window != nullptr) {
         DestroyWindow(_window);
         UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
-        _imaging.Reset();
-        ready.set_exception(std::current_exception());
-        return;
     }
-    try {
-        RunLoop();
-    } catch (...) { Fail(std::current_exception()); }
-    DestroyWindow(_window);
-    UnregisterClassW(_windowClass.c_str(), GetModuleHandleW(nullptr));
     _imaging.Reset();
 }
 

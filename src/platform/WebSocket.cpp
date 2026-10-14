@@ -31,19 +31,12 @@ namespace {
         return handle;
     }
 
-    void CheckedError(std::uint32_t error, std::string_view call) {
-        if (error != NO_ERROR) {
-            throw Win32Error(call, HRESULT_FROM_WIN32(error));
-        }
-    }
-
-    HINTERNET OpenSession() {
-        HINTERNET session = Checked(WinHttpOpen(L"intarsia", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen");
+    UniqueReleased<HINTERNET, &WinHttpCloseHandle> OpenSession() {
+        UniqueReleased<HINTERNET, &WinHttpCloseHandle> session(
+            Checked(WinHttpOpen(L"intarsia", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen"));
         // Set on the session so the request and the WebSocket made from it inherit them.
-        if (!WinHttpSetTimeouts(session, 0, kConnectTimeoutMs, kSendTimeoutMs, kHandshakeTimeoutMs)) {
-            const DWORD error = GetLastError();
-            WinHttpCloseHandle(session);
-            throw Win32Error("WinHttpSetTimeouts", HRESULT_FROM_WIN32(error));
+        if (!WinHttpSetTimeouts(session.get(), 0, kConnectTimeoutMs, kSendTimeoutMs, kHandshakeTimeoutMs)) {
+            ThrowLastError("WinHttpSetTimeouts");
         }
         return session;
     }
@@ -60,8 +53,7 @@ namespace {
         }
         sockaddr_in local{};
         std::memcpy(&local, &info.LocalAddress, sizeof(local));
-        // sin_port is in network byte order.
-        return static_cast<std::uint16_t>(((local.sin_port & 0xFFu) << 8) | ((local.sin_port >> 8) & 0xFFu));
+        return ntohs(local.sin_port);
     }
 
 } // namespace
@@ -116,11 +108,9 @@ std::uint16_t WebSocket::LocalPort() const {
     return _localPort;
 }
 
-WebSocket::~WebSocket() = default;
-
 void WebSocket::Send(std::string_view text) {
     std::string buffer(text);
-    CheckedError(WinHttpWebSocketSend(_socket.get(), WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, buffer.data(), static_cast<DWORD>(buffer.size())), "WinHttpWebSocketSend");
+    ThrowIfWin32Failed(WinHttpWebSocketSend(_socket.get(), WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, buffer.data(), static_cast<DWORD>(buffer.size())), "WinHttpWebSocketSend");
 }
 
 std::string WebSocket::Receive() {
@@ -129,7 +119,7 @@ std::string WebSocket::Receive() {
     while (true) {
         DWORD                          read = 0;
         WINHTTP_WEB_SOCKET_BUFFER_TYPE type = WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE;
-        CheckedError(WinHttpWebSocketReceive(_socket.get(), chunk.data(), static_cast<DWORD>(chunk.size()), &read, &type), "WinHttpWebSocketReceive");
+        ThrowIfWin32Failed(WinHttpWebSocketReceive(_socket.get(), chunk.data(), static_cast<DWORD>(chunk.size()), &read, &type), "WinHttpWebSocketReceive");
         if (type == WINHTTP_WEB_SOCKET_CLOSE_BUFFER_TYPE) {
             throw std::runtime_error("the server closed the WebSocket");
         }
@@ -144,5 +134,5 @@ std::string WebSocket::Receive() {
 }
 
 void WebSocket::Close() {
-    CheckedError(WinHttpWebSocketClose(_socket.get(), WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0), "WinHttpWebSocketClose");
+    ThrowIfWin32Failed(WinHttpWebSocketClose(_socket.get(), WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0), "WinHttpWebSocketClose");
 }

@@ -22,7 +22,7 @@ class WorkQueue {
     // there, so it can own what has to live on that thread (a COM apartment). Neither may throw: nothing there could
     // catch it.
     WorkQueue(size_t capacity, std::function<Process()> makeProcess) :
-        _capacity(capacity), _makeProcess(std::move(makeProcess)), _queuedEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(work queue queued)")),
+        _capacity(capacity), _makeProcess(std::move(makeProcess)), _queuedEvent(AutoResetEvent("work queue queued")),
         _thread("work queue", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
     WorkQueue(const WorkQueue&)            = delete;

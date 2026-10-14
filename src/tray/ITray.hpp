@@ -5,6 +5,8 @@
 #include <guiddef.h>
 #include <windows.h>
 
+#include <shellapi.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -38,8 +40,7 @@ struct TrayIcon {
 // Whether the icon's app shows its own popup on hover in place of the tooltip: from version 4, unless it asked for the
 // standard tooltip.
 inline bool DrawsOwnPopup(const TrayIcon& icon) {
-    constexpr std::uint32_t kVersion4 = 4; // NOTIFYICON_VERSION_4
-    return icon.version >= kVersion4 && !icon.standardTooltip;
+    return icon.version >= NOTIFYICON_VERSION_4 && !icon.standardTooltip;
 }
 
 // Where one bar shows an icon, fully uncovered.

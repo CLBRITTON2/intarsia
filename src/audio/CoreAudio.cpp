@@ -173,8 +173,8 @@ namespace {
 } // namespace
 
 CoreAudio::CoreAudio(ChangeSignal& changes, AudioFlow flow) :
-    _changes(changes), _flow(flow), _deviceEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio device)")),
-    _requestEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(audio request)")), _thread("audio", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
+    _changes(changes), _flow(flow), _deviceEvent(AutoResetEvent("audio device")), _requestEvent(AutoResetEvent("audio request")),
+    _thread("audio", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 std::optional<AudioDevice> CoreAudio::Device() const {
     const std::scoped_lock lock(_mutex);

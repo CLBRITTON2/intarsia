@@ -40,8 +40,7 @@ GlazeWm::Snapshot GlazeWm::Snapshot::Empty(Connection connection, std::string de
 }
 
 GlazeWm::GlazeWm(ChangeSignal& changes, std::uint16_t port, std::unique_ptr<Native> focus) :
-    _focus(std::move(focus)), _port(port), _changes(changes), _stopEvent(OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(stop)")),
-    _snapshot(Snapshot::Empty(Connection::Disconnected, "not connected yet")),
+    _focus(std::move(focus)), _port(port), _changes(changes), _stopEvent(ManualResetEvent("stop")), _snapshot(Snapshot::Empty(Connection::Disconnected, "not connected yet")),
     _sender(std::make_unique<WorkQueue<std::string>>(kMaxQueuedCommands,
                                                      [this] { return WorkQueue<std::string>::Process([this](const std::string& command) { SendCommand(command); }); })),
     _receiver([this] { Receive(); }) {}

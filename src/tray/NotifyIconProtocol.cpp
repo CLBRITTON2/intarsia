@@ -160,6 +160,9 @@ std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>
     if (found && (message.flags & NIF_GUID) != 0 && !SameFileName(icon->ownerImage, ownerImage)) {
         return std::nullopt;
     }
+    if (!found && message.command != NIM_ADD) {
+        return std::nullopt;
+    }
     switch (message.command) {
         case NIM_ADD:
             if (found) {
@@ -184,29 +187,10 @@ std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>
                 },
                 message, ownerImage, std::move(pixels)));
             return updated;
-        case NIM_MODIFY:
-            if (!found) {
-                return std::nullopt;
-            }
-            *icon = Updated(*icon, message, ownerImage, std::move(pixels));
-            return updated;
-        case NIM_DELETE:
-            if (!found) {
-                return std::nullopt;
-            }
-            updated.erase(icon);
-            return updated;
-        case NIM_SETVERSION:
-            if (!found) {
-                return std::nullopt;
-            }
-            icon->version = message.version;
-            return updated;
-        case NIM_SETFOCUS:
-            if (!found) {
-                return std::nullopt;
-            }
-            return updated;
+        case NIM_MODIFY: *icon = Updated(*icon, message, ownerImage, std::move(pixels)); return updated;
+        case NIM_DELETE: updated.erase(icon); return updated;
+        case NIM_SETVERSION: icon->version = message.version; return updated;
+        case NIM_SETFOCUS: return updated;
         default: return std::nullopt;
     }
 }

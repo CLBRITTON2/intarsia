@@ -54,7 +54,7 @@ namespace {
     }
 
     UniqueHandle NeverSignaled() {
-        return OwnHandle(CreateEventW(nullptr, TRUE, FALSE, nullptr), "CreateEventW(test cancel)");
+        return ManualResetEvent("test cancel");
     }
 
     auto CommandErrorWith(std::string_view text) {

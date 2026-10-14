@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/Handle.hpp"
+
 #include <windows.h>
 
 #include <pdh.h>
@@ -29,9 +31,6 @@ class PerformanceCounter {
   public:
     // Throws PdhError when the path is malformed or names an object or counter this system does not have.
     explicit PerformanceCounter(const std::wstring& path);
-    ~PerformanceCounter();
-    PerformanceCounter(const PerformanceCounter&)            = delete;
-    PerformanceCounter& operator=(const PerformanceCounter&) = delete;
 
     // Takes a sample. A rate or percent of time is the change between two samples, so it has values only from the
     // second on.
@@ -46,6 +45,6 @@ class PerformanceCounter {
     std::optional<std::vector<CounterInstance>> Instances() const;
 
   private:
-    PDH_HQUERY   _query   = nullptr;
-    PDH_HCOUNTER _counter = nullptr;
+    UniqueReleased<PDH_HQUERY, &PdhCloseQuery> _query;
+    PDH_HCOUNTER                               _counter = nullptr;
 };

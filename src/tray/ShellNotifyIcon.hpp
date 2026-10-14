@@ -26,8 +26,9 @@ inline constexpr wchar_t kTaskbarClass[] = L"Shell_TrayWnd";
 // The notification area, taken over from the taskbar. Shell_NotifyIcon and SHAppBarMessage send WM_COPYDATA to the
 // first kTaskbarClass window in z-order, so a hidden topmost window of that class, kept first, receives every app's
 // icons. Everything it receives but icon rect queries also goes on to Explorer's taskbar window, which runs the appbars
-// and keeps its own icons, so the taskbar has them all back when the bar exits. The window has its own thread, so a slow frame never
-// holds up an app's call, and it reads each icon's pixels as the message arrives, while the app's handle is valid.
+// and keeps its own icons, so the taskbar has them all back when the bar exits. The window has its own thread, so a
+// slow frame never holds up an app's call, and it reads each icon's pixels as the message arrives, while the app's
+// handle is valid.
 class ShellNotifyIcon final : public ITray {
   public:
     // windowClass is the class the window registers: kTaskbarClass takes the tray over, and any other makes a tray
@@ -50,8 +51,6 @@ class ShellNotifyIcon final : public ITray {
     void RethrowFailure();
 
   private:
-    // Null while the cursor cannot be read (another desktop has the input), logged once per outage.
-    std::optional<POINT> CursorPosition();
     // ERROR_SUCCESS, or the error of the first message the owner refused.
     static DWORD            PostInput(const TrayIcon& icon, const std::vector<TrayInputMessage>& messages);
     void                    PostHover(const TrayIcon& icon, std::uint32_t event, POINT cursor);

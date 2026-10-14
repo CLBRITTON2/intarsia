@@ -19,7 +19,6 @@
 #include <optional>
 #include <span>
 #include <thread>
-#include <type_traits>
 #include <vector>
 
 namespace {
@@ -219,7 +218,7 @@ TEST(ShellNotifyIcon, Shell32ReadsAnIconRectAboveThePrimaryMonitor) {
 }
 
 TEST_F(ShellNotifyIconTray, AnIconHandleThatDoesNotReadLeavesTheIconWithoutPixels) {
-    std::vector<std::byte> add = AddPayload(_owner.Get(), 1, IntToPointer<std::remove_pointer_t<HICON>>(0x7FFF1234));
+    std::vector<std::byte> add = AddPayload(_owner.Get(), 1, ToIcon(0x7FFF1234));
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, add), TRUE);
     ASSERT_EQ(_tray.Icons().size(), 1u);
     EXPECT_EQ(_tray.Icons()[0].pixels, nullptr);

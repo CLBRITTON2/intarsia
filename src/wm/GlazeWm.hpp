@@ -34,13 +34,12 @@ class GlazeWm final : public IWindowManager {
     std::vector<std::wstring>      BindingModes() const override;
     std::optional<TilingDirection> Direction() const override;
     WindowManagerStatus            Status() const override;
-    // Queues the command for the sender. A name GlazeWM's parser cannot take safely is logged and dropped.
+    // A name GlazeWM's parser cannot take safely is logged and dropped.
     void FocusWorkspace(const std::string& name) override;
-    // Queues the command for the sender. An id that is not a UUID is logged and dropped.
+    // An id that is not a UUID is logged and dropped.
     void FocusWindow(const std::string& id) override;
-    // Queues the command for the sender.
     void ToggleTilingDirection() override;
-    // Queues "command <command>" for the sender. A command holding a control character is logged and dropped.
+    // Sends "command <command>". A command holding a control character is logged and dropped.
     void RunCommand(const std::string& command) override;
 
   private:

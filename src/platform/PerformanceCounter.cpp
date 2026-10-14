@@ -46,24 +46,21 @@ PdhError::PdhError(std::string_view call, PDH_STATUS status) :
     std::runtime_error(std::format("{} failed with 0x{:08X}: {}", call, static_cast<std::uint32_t>(status), PdhMessage(status))) {}
 
 PerformanceCounter::PerformanceCounter(const std::wstring& path) {
-    const PDH_STATUS opened = PdhOpenQueryW(nullptr, 0, &_query);
+    PDH_HQUERY       query  = nullptr;
+    const PDH_STATUS opened = PdhOpenQueryW(nullptr, 0, &query);
     if (opened != ERROR_SUCCESS) {
         throw PdhError("PdhOpenQueryW", opened);
     }
-    const PDH_STATUS added = PdhAddEnglishCounterW(_query, path.c_str(), 0, &_counter);
+    _query.reset(query);
+    const PDH_STATUS added = PdhAddEnglishCounterW(_query.get(), path.c_str(), 0, &_counter);
     if (added != ERROR_SUCCESS) {
-        PdhCloseQuery(_query);
         throw PdhError(std::format("PdhAddEnglishCounterW({})", ToUtf8(path)), added);
     }
 }
 
-PerformanceCounter::~PerformanceCounter() {
-    PdhCloseQuery(_query);
-}
-
 // PDH_NO_DATA is a wildcard that matches no instance right now, which a later sample can.
 void PerformanceCounter::Collect() {
-    const PDH_STATUS collected = PdhCollectQueryData(_query);
+    const PDH_STATUS collected = PdhCollectQueryData(_query.get());
     if (collected != ERROR_SUCCESS && !IsStatus(collected, PDH_NO_DATA)) {
         throw PdhError("PdhCollectQueryData", collected);
     }

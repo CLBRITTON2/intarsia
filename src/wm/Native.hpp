@@ -65,6 +65,6 @@ class Native final : public IWindowManager {
     UniqueHook           _titleHook;
 };
 
-// The text of a window's title bar, empty when it has none. Lone surrogates, which any process can put in its own
-// title, become U+FFFD.
+// The text of a window's title bar, empty when it has none, made safe to draw (DrawableText), since any process can put
+// anything in its own title.
 std::wstring WindowTitle(HWND window);

@@ -22,8 +22,6 @@ struct NetworkState {
     double                      receivedBytesPerSecond;
     double                      sentBytesPerSecond;
 
-    bool                        operator==(const NetworkState&) const = default;
-
     // No link, as before the first sample or after a failed one.
     static NetworkState None() {
         return {

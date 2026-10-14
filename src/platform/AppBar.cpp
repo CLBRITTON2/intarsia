@@ -4,7 +4,6 @@
 #include "platform/Log.hpp"
 #include "platform/Monitors.hpp"
 
-#include <shellapi.h>
 #include <shlwapi.h>
 
 #include <cstdint>

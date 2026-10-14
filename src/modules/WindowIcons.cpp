@@ -11,7 +11,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <type_traits>
 
 namespace {
 
@@ -50,13 +49,13 @@ HICON WindowIcon(HWND window, std::uint32_t timeoutMs) {
     for (const WPARAM size : {static_cast<WPARAM>(ICON_BIG), static_cast<WPARAM>(ICON_SMALL2), static_cast<WPARAM>(ICON_SMALL)}) {
         DWORD_PTR icon = 0;
         if (SendMessageTimeoutW(window, WM_GETICON, size, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, timeoutMs, &icon) != 0 && icon != 0) {
-            return IntToPointer<std::remove_pointer_t<HICON>>(static_cast<LONG_PTR>(icon));
+            return ToIcon(static_cast<LONG_PTR>(icon));
         }
     }
     for (const std::int32_t index : {GCLP_HICON, GCLP_HICONSM}) {
         const ULONG_PTR icon = GetClassLongPtrW(window, index);
         if (icon != 0) {
-            return IntToPointer<std::remove_pointer_t<HICON>>(static_cast<LONG_PTR>(icon));
+            return ToIcon(static_cast<LONG_PTR>(icon));
         }
     }
     return nullptr;
@@ -89,14 +88,14 @@ std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
 
 void WindowIcons::ForgetClosed() {
     const std::scoped_lock lock(_mutex);
-    std::erase_if(_icons, [](const auto& icon) { return IsWindow(IntToPointer<std::remove_pointer_t<HWND>>(icon.first)) == FALSE; });
+    std::erase_if(_icons, [](const auto& icon) { return IsWindow(ToWindow(icon.first)) == FALSE; });
 }
 
 // Runs on the reader thread, so failures are logged: the window then shows no icon until a retry finds one.
 void WindowIcons::Read(IWICImagingFactory* imaging, std::intptr_t window) {
     std::shared_ptr<const IconPixels> pixels;
     try {
-        HICON icon = imaging != nullptr ? WindowIcon(IntToPointer<std::remove_pointer_t<HWND>>(window), kIconTimeoutMs) : nullptr;
+        HICON icon = imaging != nullptr ? WindowIcon(ToWindow(window), kIconTimeoutMs) : nullptr;
         if (icon != nullptr) {
             pixels = std::make_shared<const IconPixels>(IconToPixels(*imaging, icon));
         }

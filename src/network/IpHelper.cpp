@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace {
@@ -99,8 +100,12 @@ namespace {
         }
     }
 
-    UniqueMibNotification OwnNotification(DWORD result, HANDLE notification, std::string_view call) {
-        ThrowIfWin32Failed(result, call);
+    // The Notify*Change registrations differ only in their callback's type.
+    template <typename Callback>
+    UniqueMibNotification RegisterMib(DWORD(WINAPI* notify)(ADDRESS_FAMILY, Callback, PVOID, BOOLEAN, HANDLE*), ADDRESS_FAMILY family, std::type_identity_t<Callback> callback,
+                                      HANDLE linkEvent, std::string_view call) {
+        HANDLE notification = nullptr;
+        ThrowIfWin32Failed(notify(family, callback, linkEvent, FALSE, &notification), call);
         return UniqueMibNotification(notification);
     }
 
@@ -154,19 +159,10 @@ void CancelMibNotification::operator()(HANDLE notification) const {
 }
 
 IpHelper::IpHelper(ChangeSignal& changes, bool samplesRates) :
-    _changes(changes), _samplesRates(samplesRates), _linkEvent(OwnHandle(CreateEventW(nullptr, FALSE, FALSE, nullptr), "CreateEventW(network link)")), _state(NetworkState::None()),
-    _interfaceNotification([this] {
-        HANDLE notification = nullptr;
-        return OwnNotification(NotifyIpInterfaceChange(AF_UNSPEC, WakeOnInterfaceChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyIpInterfaceChange");
-    }()),
-    _addressNotification([this] {
-        HANDLE notification = nullptr;
-        return OwnNotification(NotifyUnicastIpAddressChange(AF_INET, WakeOnAddressChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyUnicastIpAddressChange");
-    }()),
-    _routeNotification([this] {
-        HANDLE notification = nullptr;
-        return OwnNotification(NotifyRouteChange2(AF_UNSPEC, WakeOnRouteChange, _linkEvent.get(), FALSE, &notification), notification, "NotifyRouteChange2");
-    }()),
+    _changes(changes), _samplesRates(samplesRates), _linkEvent(AutoResetEvent("network link")), _state(NetworkState::None()),
+    _interfaceNotification(RegisterMib(NotifyIpInterfaceChange, AF_UNSPEC, WakeOnInterfaceChange, _linkEvent.get(), "NotifyIpInterfaceChange")),
+    _addressNotification(RegisterMib(NotifyUnicastIpAddressChange, AF_INET, WakeOnAddressChange, _linkEvent.get(), "NotifyUnicastIpAddressChange")),
+    _routeNotification(RegisterMib(NotifyRouteChange2, AF_UNSPEC, WakeOnRouteChange, _linkEvent.get(), "NotifyRouteChange2")),
     _thread("network", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
 NetworkState IpHelper::State() const {

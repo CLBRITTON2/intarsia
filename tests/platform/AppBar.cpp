@@ -7,7 +7,6 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
-#include <type_traits>
 
 namespace {
 
@@ -74,7 +73,7 @@ TEST(AppBar, AppBarRequestIsWhatShell32Sends) {
     constexpr std::array<std::uint32_t, 16> kSent{0x28, 0x002b0848, 0, ABE_TOP, 0, 0, 3440, 54, 0, 0, ABM_SETPOS, 0, 0x669b7a70, 0x19f, 0x8dbc, 0};
     APPBARDATA                              data{};
     data.cbSize = sizeof(data);
-    data.hWnd   = IntToPointer<std::remove_pointer_t<HWND>>(0x002b0848);
+    data.hWnd   = ToWindow(0x002b0848);
     data.uEdge  = ABE_TOP;
     data.rc     = RECT{
             .left   = 0,

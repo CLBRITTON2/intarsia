@@ -33,6 +33,25 @@ namespace {
         return code;
     }
 
+    // The code points IsUnsafeCharacter describes.
+    bool IsUnsafeCodePoint(char32_t code) {
+        return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x061C || code == 0x200E || code == 0x200F || code == 0x2028 || code == 0x2029 ||
+            (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
+    }
+
+    std::wstring Widen(std::string_view text, std::uint32_t flags, std::string_view call) {
+        if (text.empty()) {
+            return {};
+        }
+        const std::int32_t length = MultiByteToWideChar(CP_UTF8, flags, text.data(), static_cast<std::int32_t>(text.size()), nullptr, 0);
+        if (length == 0) {
+            ThrowLastError(call);
+        }
+        std::wstring wide(static_cast<size_t>(length), L'\0');
+        MultiByteToWideChar(CP_UTF8, flags, text.data(), static_cast<std::int32_t>(text.size()), wide.data(), length);
+        return wide;
+    }
+
 } // namespace
 
 std::string ToUtf8(std::wstring_view text) {
@@ -49,16 +68,7 @@ std::string ToUtf8(std::wstring_view text) {
 }
 
 std::wstring ToWide(std::string_view text) {
-    if (text.empty()) {
-        return {};
-    }
-    const std::int32_t length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<std::int32_t>(text.size()), nullptr, 0);
-    if (length == 0) {
-        ThrowLastError("MultiByteToWideChar");
-    }
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<std::int32_t>(text.size()), wide.data(), length);
-    return wide;
+    return Widen(text, MB_ERR_INVALID_CHARS, "MultiByteToWideChar");
 }
 
 bool SameFileName(std::wstring_view left, std::wstring_view right) {
@@ -75,11 +85,6 @@ std::wstring ReplaceLoneSurrogates(std::wstring_view text) {
         }
     }
     return valid;
-}
-
-bool IsUnsafeCodePoint(char32_t code) {
-    return code < 0x20 || (code >= 0x7F && code <= 0x9F) || code == 0x061C || code == 0x200E || code == 0x200F || code == 0x2028 || code == 0x2029 ||
-        (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069) || code == 0xFEFF;
 }
 
 bool IsControlByte(char character) {
@@ -101,17 +106,8 @@ std::string_view CharacterAt(std::string_view utf8, size_t at) {
 }
 
 std::wstring DrawableText(std::string_view bytes) {
-    if (bytes.empty()) {
-        return {};
-    }
     // Without MB_ERR_INVALID_CHARS each invalid sequence decodes to U+FFFD instead of failing.
-    const std::int32_t length = MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<std::int32_t>(bytes.size()), nullptr, 0);
-    if (length == 0) {
-        ThrowLastError("MultiByteToWideChar(drawable)");
-    }
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<std::int32_t>(bytes.size()), wide.data(), length);
-    return DrawableText(std::wstring_view(wide));
+    return DrawableText(std::wstring_view(Widen(bytes, 0, "MultiByteToWideChar(drawable)")));
 }
 
 std::wstring DrawableText(std::wstring_view text) {

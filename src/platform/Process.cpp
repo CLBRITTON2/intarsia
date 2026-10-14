@@ -498,10 +498,13 @@ std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program) {
         return std::nullopt;
     }
     // An explicit search path keeps SearchPathW from also looking in the current directory.
-    const std::wstring         searchPath = AbsoluteEntries(PathVariable());
+    const std::wstring searchPath = AbsoluteEntries(PathVariable());
+    if (searchPath.empty()) {
+        return std::nullopt;
+    }
     std::array<wchar_t, 32768> found{};
     const DWORD                length = SearchPathW(searchPath.c_str(), std::wstring(program).c_str(), L".exe", static_cast<DWORD>(found.size()), found.data(), nullptr);
-    if (searchPath.empty() || length == 0 || length >= found.size()) {
+    if (length == 0 || length >= found.size()) {
         return std::nullopt;
     }
     return std::filesystem::path(std::wstring(found.data(), length));

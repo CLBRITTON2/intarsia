@@ -15,7 +15,6 @@
 #include <format>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -53,14 +52,6 @@ namespace {
         throw MonitorGoneError(std::format("QueryDisplayConfig kept finding more paths than it sized for, {} times", kQueryAttempts));
     }
 
-    // A path that ends while it is read fails here, the same as a monitor gone.
-    void GetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_HEADER& header, std::string_view what) {
-        const LONG result = DisplayConfigGetDeviceInfo(&header);
-        if (result != ERROR_SUCCESS) {
-            throw MonitorGoneError(std::format("DisplayConfigGetDeviceInfo({}) failed with {}", what, result));
-        }
-    }
-
     std::string ConnectionName(DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY technology) {
         switch (technology) {
             case DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HD15: return "VGA";
@@ -93,7 +84,7 @@ namespace {
         SP_DEVICE_INTERFACE_DATA                                      deviceInterface{};
         deviceInterface.cbSize = sizeof(deviceInterface);
         if (!SetupDiOpenDeviceInterfaceW(devices.get(), devicePath.c_str(), 0, &deviceInterface)) {
-            throw MonitorGoneError(std::format("SetupDiOpenDeviceInterfaceW failed with {} for {}", GetLastError(), ToUtf8(devicePath)));
+            ThrowLastError(std::format("SetupDiOpenDeviceInterfaceW({})", ToUtf8(devicePath)));
         }
         // Opening the interface added its device to the set as its only element.
         SP_DEVINFO_DATA device{};
@@ -139,14 +130,14 @@ namespace {
         source.header.size      = sizeof(source);
         source.header.adapterId = path.sourceInfo.adapterId;
         source.header.id        = path.sourceInfo.id;
-        GetDeviceInfo(source.header, "source name");
+        ThrowIfWin32Failed(static_cast<DWORD>(DisplayConfigGetDeviceInfo(&source.header)), "DisplayConfigGetDeviceInfo(source name)");
 
         DISPLAYCONFIG_TARGET_DEVICE_NAME target{};
         target.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
         target.header.size      = sizeof(target);
         target.header.adapterId = path.targetInfo.adapterId;
         target.header.id        = path.targetInfo.id;
-        GetDeviceInfo(target.header, "target name");
+        ThrowIfWin32Failed(static_cast<DWORD>(DisplayConfigGetDeviceInfo(&target.header)), "DisplayConfigGetDeviceInfo(target name)");
 
         const std::string name       = ToUtf8(target.monitorFriendlyDeviceName);
         std::string       connection = ConnectionName(target.outputTechnology);

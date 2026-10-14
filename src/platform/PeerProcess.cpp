@@ -19,11 +19,11 @@
 
 namespace {
 
-    // MIB_TCPROW_OWNER_PID stores address and port in network byte order.
+    // MIB_TCPROW_OWNER_PID stores address and port in network byte order, the port in the low 16 bits.
     constexpr std::uint32_t kLoopbackAddress = 0x0100007F; // 127.0.0.1
 
     std::uint16_t           RowPort(std::uint32_t networkPort) {
-        return static_cast<std::uint16_t>(((networkPort & 0xFFu) << 8) | ((networkPort >> 8) & 0xFFu));
+        return ntohs(static_cast<u_short>(networkPort));
     }
 
     std::vector<std::byte> ConnectionTable() {
@@ -74,7 +74,7 @@ void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName
     const UniqueHandle          process  = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(listener)");
     const std::filesystem::path image    = ProcessImage(process.get());
     const std::wstring          fileName = image.filename().wstring();
-    if (CompareStringOrdinal(fileName.c_str(), static_cast<std::int32_t>(fileName.size()), imageName.data(), static_cast<std::int32_t>(imageName.size()), TRUE) != CSTR_EQUAL) {
+    if (!SameFileName(fileName, imageName)) {
         throw PeerVerificationError(std::format("the listener is {} (pid {}), not {}", ToUtf8(image.wstring()), processId, ToUtf8(imageName)));
     }
 
