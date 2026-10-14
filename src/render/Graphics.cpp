@@ -2,6 +2,7 @@
 
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
+#include "platform/Monitors.hpp"
 #include "platform/Text.hpp"
 #include "render/Composition.hpp"
 
@@ -23,15 +24,6 @@ namespace {
         DXGI_ADAPTER_DESC description{};
         ThrowIfFailed(adapter->GetDesc(&description), "IDXGIAdapter::GetDesc");
         return description.Description;
-    }
-
-    std::wstring DisplayName(HMONITOR monitor) {
-        MONITORINFOEXW info{};
-        info.cbSize = sizeof(info);
-        if (!GetMonitorInfoW(monitor, &info)) {
-            throw MonitorGoneError("GetMonitorInfoW found no monitor for a display's handle");
-        }
-        return info.szDevice;
     }
 
     std::uint32_t RefreshHz(const std::wstring& display) {
@@ -73,7 +65,7 @@ GraphicsDevice CreateGraphicsDevice() {
 MonitorOutput OutputForMonitor(HMONITOR monitor) {
     ComPtr<IDXGIFactory2> factory;
     ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)), "CreateDXGIFactory2");
-    const std::wstring display = DisplayName(monitor);
+    const std::wstring display = MonitorInfo(monitor).szDevice;
     for (std::uint32_t adapterIndex = 0;; ++adapterIndex) {
         ComPtr<IDXGIAdapter1> adapter;
         const HRESULT         adapterFound = factory->EnumAdapters1(adapterIndex, &adapter);

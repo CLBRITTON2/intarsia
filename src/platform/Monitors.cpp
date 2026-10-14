@@ -173,6 +173,15 @@ std::vector<HMONITOR> ListMonitors() {
     return monitors;
 }
 
+MONITORINFOEXW MonitorInfo(HMONITOR monitor) {
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    if (!GetMonitorInfoW(monitor, &info)) {
+        throw MonitorGoneError("GetMonitorInfoW found no monitor for its handle");
+    }
+    return info;
+}
+
 std::vector<MonitorDescription> DescribeMonitors(const std::vector<HMONITOR>& monitors) {
     std::vector<ActivePath> paths;
     // Every call here can fail when a monitor is unplugged or the session's displays change mid-read, so none may end
@@ -186,15 +195,11 @@ std::vector<MonitorDescription> DescribeMonitors(const std::vector<HMONITOR>& mo
     std::vector<MonitorDescription> descriptions;
     descriptions.reserve(monitors.size());
     for (HMONITOR monitor : monitors) {
-        MONITORINFOEXW info{};
-        info.cbSize = sizeof(info);
-        if (!GetMonitorInfoW(monitor, &info)) {
-            throw MonitorGoneError("GetMonitorInfoW found no monitor for a listed handle");
-        }
-        MonitorDescription description{
-            .monitor = monitor,
-            .primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0,
-            .targets = {},
+        const MONITORINFOEXW info = MonitorInfo(monitor);
+        MonitorDescription   description{
+              .monitor = monitor,
+              .primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0,
+              .targets = {},
         };
         for (const ActivePath& path : paths) {
             if (path.sourceDevice == info.szDevice) {

@@ -82,15 +82,11 @@ namespace {
     }
 
     BarPlacement PlacementForMonitor(HMONITOR monitor) {
-        MONITORINFO info{};
-        info.cbSize = sizeof(info);
-        if (!GetMonitorInfoW(monitor, &info)) {
-            throw MonitorGoneError("GetMonitorInfoW found no monitor for a listed handle");
-        }
+        const MONITORINFOEXW info = MonitorInfo(monitor);
 
-        std::uint32_t dpiX     = 0;
-        std::uint32_t dpiY     = 0;
-        const HRESULT dpiFound = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+        std::uint32_t        dpiX     = 0;
+        std::uint32_t        dpiY     = 0;
+        const HRESULT        dpiFound = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
         if (FAILED(dpiFound)) {
             throw MonitorGoneError(std::format("GetDpiForMonitor failed with 0x{:08X} for a listed handle", static_cast<std::uint32_t>(dpiFound)));
         }

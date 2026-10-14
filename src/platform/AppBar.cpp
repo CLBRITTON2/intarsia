@@ -2,6 +2,7 @@
 
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
+#include "platform/Monitors.hpp"
 
 #include <shellapi.h>
 #include <shlwapi.h>
@@ -79,15 +80,6 @@ namespace {
         data.rc = answer.rect;
     }
 
-    RECT WorkArea(const RECT& monitorRect) {
-        MONITORINFO info{};
-        info.cbSize = sizeof(info);
-        if (!GetMonitorInfoW(MonitorFromRect(&monitorRect, MONITOR_DEFAULTTONEAREST), &info)) {
-            ThrowLastError("GetMonitorInfoW(appbar work area)");
-        }
-        return info.rcWork;
-    }
-
     // QUERYPOS only moves the side facing the edge, so the thickness is reapplied from that side before SETPOS.
     RECT Reserve(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, const std::function<void(std::uint32_t, APPBARDATA&)>& send) {
         APPBARDATA data = AppBarData(window);
@@ -101,7 +93,7 @@ namespace {
             {{.key = "monitor", .value = RectText(monitorRect)},
              {.key = "queried", .value = RectText(queried)},
              {.key = "set", .value = RectText(data.rc)},
-             {.key = "work_area", .value = RectText(WorkArea(monitorRect))}});
+             {.key = "work_area", .value = RectText(MonitorInfo(MonitorFromRect(&monitorRect, MONITOR_DEFAULTTONEAREST)).rcWork)}});
         return data.rc;
     }
 
