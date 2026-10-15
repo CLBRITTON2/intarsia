@@ -24,8 +24,17 @@ The bar reads `config.lua` for what it shows and `style.conf` for how it looks. 
 
 ## From source
 
-See [Build](../README.md#build) in the README. The executable is `build\release\intarsia.exe`, and the starter
-configs are in the repo's `config` folder.
+See [Build](../README.md#build) in the README for what the build needs. The starter configs are in the repo's `config`
+folder. Then:
+
+```powershell
+pwsh -File scripts/install-build.ps1
+```
+
+This builds the release preset, checks your config with the new build, and installs `intarsia.exe` and
+`intarsia-cli.exe` to `%LOCALAPPDATA%\Programs\intarsia`. A bar already running from there closes first, and the new
+one starts. Run it again after pulling to update. If the new build rejects your config, it prints the error and the
+running bar stays.
 
 ## Starting at login
 

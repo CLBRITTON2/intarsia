@@ -106,7 +106,7 @@ its log.
 | `tests/soak/` | the programs the soak tests feed the bar with |
 | `tests/support/` | helpers and programs the tests share, such as the test GlazeWM server |
 | `CHANGELOG.md` | what each release changed |
-| `scripts/` | build, test, soak test, lint, changelog and release |
+| `scripts/` | build, install, test, soak test, lint, changelog and release |
 
 ## License
 
