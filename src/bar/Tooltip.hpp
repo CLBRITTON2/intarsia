@@ -1,8 +1,8 @@
 #pragma once
 
-#include "bar/Canvas.hpp"
 #include "config/Config.hpp"
 #include "platform/Handle.hpp"
+#include "render/Box.hpp"
 #include "render/Graphics.hpp"
 
 #include <windows.h>

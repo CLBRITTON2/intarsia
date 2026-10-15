@@ -1,7 +1,7 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "modules/Fold.hpp"
+#include "modules/AnimatedValue.hpp"
 #include "modules/IModule.hpp"
 #include "modules/IconText.hpp"
 

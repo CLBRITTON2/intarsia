@@ -1,19 +1,21 @@
 #pragma once
 
-#include "platform/CommandLine.hpp"
 #include "platform/Errors.hpp"
 
 #include <windows.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 // Limits DLL loading for the rest of the process to System32, so no DLL beside the executable or in the current
 // directory can be planted into it. Call first thing at startup. The executable's own imports load before any code
@@ -22,6 +24,34 @@ void RestrictDllSearchToSystem32();
 
 // The executable a process opened with PROCESS_QUERY_LIMITED_INFORMATION runs. Throws Win32Error.
 std::filesystem::path ProcessImage(HANDLE process);
+
+// The buffer GetTokenInformation fills for one class of a token opened with TOKEN_QUERY. Throws Win32Error naming name.
+std::vector<std::byte> TokenBuffer(HANDLE token, TOKEN_INFORMATION_CLASS kind, std::string_view name);
+
+// The user's SID inside a TokenUser buffer, valid while that buffer lives.
+PSID UserSid(std::vector<std::byte>& tokenUser);
+
+// The mandatory level's RID, such as SECURITY_MANDATORY_MEDIUM_RID. Throws Win32Error.
+std::uint32_t IntegrityLevel(HANDLE token);
+
+// A program to start with its arguments, never through a shell: the arguments reach the program as they are written.
+struct Command {
+    std::filesystem::path     program; // absolute, resolved when the config loads
+    std::vector<std::wstring> arguments;
+
+    bool                      operator==(const Command&) const = default;
+};
+
+// The absolute path of a program: as given when it is already absolute, else a bare file name's first match in the
+// PATH directories (".exe" added when the name has no extension). Never the current directory, where a planted program
+// would win, so a relative path with a directory part resolves to nothing. Nullopt when there is no such file.
+std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program);
+
+// Arguments joined into one command line that CommandLineToArgvW and the C runtime split back into the same arguments.
+std::wstring JoinArguments(const std::vector<std::wstring>& arguments);
+
+// This process's arguments, without the program name.
+std::vector<std::wstring> CommandLineArguments();
 
 // A command that started but gave no usable output: it timed out, was cancelled, printed too much or exited nonzero.
 // The message is short enough to show on the bar.

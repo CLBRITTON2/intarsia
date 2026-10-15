@@ -1,5 +1,6 @@
 #include "config/Style.hpp"
 
+#include "config/Config.hpp"
 #include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>

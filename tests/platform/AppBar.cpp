@@ -1,6 +1,6 @@
 #include "platform/AppBar.hpp"
 
-#include "platform/Win32Cast.hpp"
+#include "platform/Win32Window.hpp"
 #include "support/Rect.hpp"
 
 #include <gtest/gtest.h>

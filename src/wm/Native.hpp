@@ -1,7 +1,7 @@
 #pragma once
 
-#include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
+#include "platform/Threads.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <windows.h>

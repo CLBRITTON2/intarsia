@@ -11,10 +11,10 @@
 
 #include <functiondiscoverykeys_devpkey.h>
 
-#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Text.hpp"
+#include "platform/Threads.hpp"
 
 #include <endpointvolume.h>
 #include <mmdeviceapi.h>

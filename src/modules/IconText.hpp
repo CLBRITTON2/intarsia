@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render/RenderContext.hpp"
+#include "modules/IModule.hpp"
 
 #include <wrl/client.h>
 

@@ -7,7 +7,7 @@
 //   tray_sender.exe --class <window class the bar's tray registered, from --tray-class>
 
 #include "support/TrayPayload.hpp"
-#include "tray/NotifyIconProtocol.hpp"
+#include "tray/ShellNotifyIcon.hpp"
 
 #include <windows.h>
 

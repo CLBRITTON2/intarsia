@@ -1,14 +1,13 @@
 #pragma once
 
 #include "audio/IAudio.hpp"
-#include "bar/Sections.hpp"
 #include "battery/IBattery.hpp"
 #include "config/Config.hpp"
-#include "modules/CommandPoller.hpp"
-#include "modules/CounterSampler.hpp"
+#include "modules/Counter.hpp"
+#include "modules/Custom.hpp"
 #include "modules/Group.hpp"
 #include "modules/IModule.hpp"
-#include "modules/WindowIcons.hpp"
+#include "modules/WindowList.hpp"
 #include "network/INetwork.hpp"
 #include "tray/ITray.hpp"
 #include "wm/IWindowManager.hpp"

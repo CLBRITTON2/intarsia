@@ -3,8 +3,7 @@
 #include "audio/IAudio.hpp"
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
-#include "modules/IconTextModule.hpp"
-#include "modules/TextLine.hpp"
+#include "modules/TextModule.hpp"
 
 #include <cstdint>
 #include <optional>

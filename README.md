@@ -92,7 +92,7 @@ its log.
 | `src/modules/` | the modules and the factory that builds them from the config |
 | `src/wm/` | window manager backends: GlazeWM over its IPC, and plain Windows |
 | `src/config/` | the Lua config loader and the style sheet parser |
-| `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices |
+| `src/render/` | the shared Direct3D, Direct2D, DirectWrite and DirectComposition devices, box drawing, the frame clock |
 | `src/platform/` | Win32 pieces: appbar docking, processes, file watching, WebSocket, logging |
 | `src/audio/` | the default playback and recording devices and their volume, through Core Audio |
 | `src/battery/` | the batteries' charge and whether it is rising or falling |

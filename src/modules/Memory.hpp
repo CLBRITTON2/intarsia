@@ -3,7 +3,6 @@
 #include "config/Config.hpp"
 #include "modules/Placeholders.hpp"
 #include "modules/TextModule.hpp"
-#include "modules/Ticks.hpp"
 
 #include <cstdint>
 #include <string>

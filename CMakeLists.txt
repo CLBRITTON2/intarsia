@@ -59,28 +59,16 @@ target_compile_options(intarsia_flags INTERFACE /W4 /WX /permissive- /utf-8)
 # Everything but the entry point, so the tests link the same code the bar runs.
 add_library(intarsia_core STATIC
   src/App.cpp
-  src/LaunchOptions.cpp
-  src/MonitorTable.cpp
   src/audio/CoreAudio.cpp
   src/bar/Bar.cpp
-  src/bar/Box.cpp
-  src/bar/Dock.cpp
-  src/bar/FrameStats.cpp
   src/battery/PowerStatus.cpp
   src/bar/Layout.cpp
-  src/cli/CliOptions.cpp
+  src/cli/Cli.cpp
   src/bar/Menu.cpp
-  src/bar/MenuLayout.cpp
-  src/bar/MenuLister.cpp
-  src/bar/PixelGrid.cpp
   src/bar/Tooltip.cpp
   src/config/Config.cpp
   src/config/LuaSandbox.cpp
   src/config/Style.cpp
-  src/config/StyleShapes.cpp
-  src/config/StyleTree.cpp
-  src/config/StyleValues.cpp
-  src/config/TableReader.cpp
   src/modules/AnimatedValue.cpp
   src/modules/Audio.cpp
   src/modules/Battery.cpp
@@ -92,61 +80,41 @@ add_library(intarsia_core STATIC
   src/modules/Network.cpp
   src/modules/Placeholders.cpp
   src/network/IpHelper.cpp
-  src/network/Wlan.cpp
-  src/modules/CommandPoller.cpp
   src/modules/Counter.cpp
-  src/modules/CounterSampler.cpp
   src/modules/Custom.cpp
   src/modules/DirectionToggle.cpp
-  src/modules/Fold.cpp
   src/modules/Group.cpp
   src/modules/ItemRow.cpp
   src/modules/ModuleFactory.cpp
-  src/modules/TextLine.cpp
   src/modules/TextModule.cpp
-  src/modules/Ticks.cpp
   src/modules/Tray.cpp
   src/modules/Window.cpp
-  src/modules/WindowIcons.cpp
   src/modules/WindowList.cpp
   src/modules/Workspaces.cpp
   src/platform/AppBar.cpp
-  src/platform/ChangeSignal.cpp
-  src/platform/ComScope.cpp
-  src/platform/CommandLine.cpp
-  src/platform/Console.cpp
-  src/platform/Edid.cpp
   src/platform/Errors.cpp
   src/platform/FileWatcher.cpp
-  src/platform/FrameClock.cpp
   src/platform/Handle.cpp
   src/platform/KnownFolder.cpp
   src/platform/Launcher.cpp
   src/platform/Log.cpp
   src/platform/Monitors.cpp
-  src/platform/PeerProcess.cpp
   src/platform/PerformanceCounter.cpp
   src/platform/Process.cpp
-  src/platform/ShellLaunch.cpp
-  src/platform/StoppableThread.cpp
   src/platform/Text.cpp
-  src/platform/ThreadFailure.cpp
+  src/platform/Threads.cpp
   src/platform/Win32Window.cpp
-  src/platform/Token.cpp
   src/platform/WebSocket.cpp
   src/render/Axis.cpp
-  src/render/BrushCache.cpp
+  src/render/Box.cpp
   src/render/Composition.cpp
-  src/render/CompositionThread.cpp
+  src/render/FrameClock.cpp
   src/render/Graphics.cpp
   src/render/Icon.cpp
   src/render/Surface.cpp
-  src/tray/NotifyIconProtocol.cpp
   src/tray/ShellNotifyIcon.cpp
   src/wm/GlazeWm.cpp
-  src/wm/GlazeWmProtocol.cpp
   src/wm/Native.cpp
-  src/wm/WindowManagerFactory.cpp
 )
 target_include_directories(intarsia_core PUBLIC src)
 target_link_libraries(intarsia_core PUBLIC intarsia_flags lua nlohmann_json::nlohmann_json d3d11 dxgi d2d1 dwrite dxguid dwmapi windowsapp CoreMessaging shcore winhttp iphlpapi windowscodecs wlanapi ws2_32 powrprof setupapi shlwapi pdh)
@@ -189,16 +157,11 @@ if(BUILD_TESTING)
   enable_testing()
   include(GoogleTest)
   add_executable(intarsia_gtests
-    tests/LaunchOptions.cpp
-    tests/MonitorTable.cpp
-    tests/bar/Box.cpp
-    tests/bar/FrameStats.cpp
+    tests/App.cpp
     tests/bar/Layout.cpp
-    tests/bar/MenuLayout.cpp
-    tests/bar/MenuLister.cpp
-    tests/bar/PixelGrid.cpp
+    tests/bar/Menu.cpp
     tests/bar/Tooltip.cpp
-    tests/cli/CliOptions.cpp
+    tests/cli/Cli.cpp
     tests/config/Config.cpp
     tests/config/Style.cpp
     tests/audio/CoreAudio.cpp
@@ -208,47 +171,41 @@ if(BUILD_TESTING)
     tests/modules/Battery.cpp
     tests/modules/BindingModes.cpp
     tests/modules/Clock.cpp
-    tests/modules/CommandPoller.cpp
     tests/modules/Counter.cpp
-    tests/modules/CounterSampler.cpp
     tests/modules/Cpu.cpp
+    tests/modules/Custom.cpp
     tests/modules/DirectionToggle.cpp
-    tests/modules/Fold.cpp
     tests/modules/IconText.cpp
     tests/modules/ItemRow.cpp
     tests/modules/Memory.cpp
     tests/modules/Network.cpp
     tests/modules/Placeholders.cpp
     tests/network/IpHelper.cpp
-    tests/modules/Ticks.cpp
+    tests/modules/TextModule.cpp
     tests/modules/Tray.cpp
     tests/modules/Window.cpp
-    tests/modules/WindowIcons.cpp
     tests/modules/WindowList.cpp
     tests/modules/Workspaces.cpp
-    tests/wm/GlazeWmProtocol.cpp
+    tests/wm/GlazeWm.cpp
     tests/platform/AppBar.cpp
-    tests/platform/ChangeSignal.cpp
-    tests/platform/ComScope.cpp
-    tests/platform/Edid.cpp
     tests/platform/FileWatcher.cpp
     tests/platform/KnownFolder.cpp
+    tests/platform/Launcher.cpp
     tests/platform/Log.cpp
+    tests/platform/Monitors.cpp
     tests/platform/Process.cpp
-    tests/platform/PeerProcess.cpp
     tests/platform/PerformanceCounter.cpp
-    tests/platform/ShellLaunch.cpp
     tests/platform/Text.cpp
-    tests/platform/ThreadFailure.cpp
+    tests/platform/Threads.cpp
     tests/platform/WebSocket.cpp
-    tests/platform/WindowProc.cpp
-    tests/platform/WorkQueue.cpp
+    tests/platform/Win32Window.cpp
     tests/render/Axis.cpp
+    tests/render/Box.cpp
     tests/render/Composition.cpp
+    tests/render/FrameClock.cpp
     tests/render/Graphics.cpp
     tests/render/Icon.cpp
     tests/render/Surface.cpp
-    tests/tray/NotifyIconProtocol.cpp
     tests/tray/ShellNotifyIcon.cpp
     tests/wm/Native.cpp
   )
@@ -267,10 +224,9 @@ if(BUILD_TESTING)
   # Runs the real bar against the test GlazeWM server below, so ctest runs it apart from the unit tests by its label.
   # The bar's manifest makes it per monitor DPI aware too, so every rect, column and cursor position is in the bar's
   # physical pixels.
-  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/ChildProcess.cpp tests/integration/Capture.cpp tests/integration/Actions.cpp tests/integration/Cli.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
-                                      tests/integration/GlazeWm.cpp tests/integration/Group.cpp tests/integration/Hover.cpp tests/integration/Input.cpp
-                                      tests/integration/Menu.cpp tests/integration/Monitors.cpp tests/integration/Tooltip.cpp tests/integration/Tray.cpp
-                                      tests/integration/TrayApp.cpp)
+  add_executable(intarsia_integration src/intarsia.manifest tests/integration/Harness.cpp tests/integration/ChildProcess.cpp tests/integration/Actions.cpp tests/integration/Cli.cpp tests/integration/Config.cpp tests/integration/Custom.cpp
+                                      tests/integration/GlazeWm.cpp tests/integration/Group.cpp tests/integration/Hover.cpp tests/integration/Menu.cpp
+                                      tests/integration/Tray.cpp)
   target_link_libraries(intarsia_integration PRIVATE intarsia_core GTest::gmock GTest::gtest_main ws2_32 bcrypt crypt32)
   target_include_directories(intarsia_integration PRIVATE tests)
   target_compile_definitions(intarsia_integration PRIVATE INTARSIA_EXE="$<TARGET_FILE:intarsia>" INTARSIA_GLAZEWM_SERVER="$<TARGET_FILE:test_glazewm_server>"

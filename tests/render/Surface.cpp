@@ -1,7 +1,7 @@
 #include "render/Surface.hpp"
 
 #include "platform/Errors.hpp"
-#include "render/CompositionThread.hpp"
+#include "render/Graphics.hpp"
 
 #include <gtest/gtest.h>
 

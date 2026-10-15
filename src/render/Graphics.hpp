@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/Errors.hpp"
+#include "platform/Threads.hpp"
 
 #include <d2d1_1.h>
 #include <d3d11.h>
@@ -10,9 +11,28 @@
 #include <wrl/client.h>
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
+
+namespace ABI::Windows::System {
+    struct IDispatcherQueueController;
+} // namespace ABI::Windows::System
+
+// The COM apartment and dispatcher queue a compositor needs on the thread that creates it, for as long as it lives.
+// The queue runs inside the thread's own message loop.
+class CompositionThread {
+  public:
+    CompositionThread();
+    ~CompositionThread();
+    CompositionThread(const CompositionThread&)            = delete;
+    CompositionThread& operator=(const CompositionThread&) = delete;
+
+  private:
+    ComScope                                                                 _com;
+    Microsoft::WRL::ComPtr<ABI::Windows::System::IDispatcherQueueController> _queue;
+};
 
 // Holds C++/WinRT types, which only render/ sources include (render/Composition.hpp).
 struct CompositionDevice;
@@ -44,6 +64,26 @@ MonitorOutput OutputForMonitor(HMONITOR monitor);
 void                                         ThrowIfDeviceFailed(HRESULT result, std::string_view call);
 
 Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1_COLOR_F& color);
+
+// Solid brushes by color, made on first use for one device context.
+class BrushCache {
+  public:
+    explicit BrushCache(ID2D1DeviceContext* context);
+
+    // A brush to draw with at once: fades ask for a new color each frame, so these start over past a limit, and a
+    // pointer from an earlier call may be gone. Throws DeviceLostError when the device is gone.
+    ID2D1SolidColorBrush* Get(const D2D1_COLOR_F& color);
+    // A brush kept while the cache lives, for a pointer held across frames. Throws DeviceLostError when the device is
+    // gone.
+    ID2D1SolidColorBrush* Keep(const D2D1_COLOR_F& color);
+
+  private:
+    using Brushes = std::map<std::uint32_t, Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>>; // keyed by 0xRRGGBBAA
+
+    ID2D1DeviceContext* _context;
+    Brushes             _passing;
+    Brushes             _kept;
+};
 
 // Rounded to the nearest pixel.
 std::int32_t DipsToPixels(float dips, std::uint32_t dpi);

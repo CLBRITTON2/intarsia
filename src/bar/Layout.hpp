@@ -1,11 +1,10 @@
 #pragma once
 
-#include "bar/Box.hpp"
-#include "bar/Sections.hpp"
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
 #include "render/Axis.hpp"
+#include "render/Box.hpp"
 
 #include <d2d1.h>
 

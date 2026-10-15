@@ -1,5 +1,4 @@
 #include "platform/Process.hpp"
-#include "platform/CommandLine.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
 #include "support/ThrowsWith.hpp"

@@ -1,9 +1,8 @@
 #pragma once
 
 #include "battery/IBattery.hpp"
-#include "platform/ChangeSignal.hpp"
 #include "platform/Handle.hpp"
-#include "platform/StoppableThread.hpp"
+#include "platform/Threads.hpp"
 
 #include <windows.h>
 

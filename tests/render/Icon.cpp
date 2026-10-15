@@ -1,7 +1,7 @@
 #include "render/Icon.hpp"
 
-#include "platform/ComScope.hpp"
 #include "platform/Errors.hpp"
+#include "platform/Threads.hpp"
 
 #include <gtest/gtest.h>
 

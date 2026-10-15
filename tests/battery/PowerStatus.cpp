@@ -1,5 +1,5 @@
 #include "battery/PowerStatus.hpp"
-#include "support/ChangeTarget.hpp"
+#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 

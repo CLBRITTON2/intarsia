@@ -1,7 +1,7 @@
 #include "modules/ItemRow.hpp"
 
-#include "bar/Box.hpp"
 #include "render/Axis.hpp"
+#include "render/Box.hpp"
 
 #include <algorithm>
 #include <chrono>

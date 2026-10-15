@@ -1,7 +1,5 @@
 #include "Harness.hpp"
 
-#include "Capture.hpp"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 

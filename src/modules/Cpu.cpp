@@ -1,6 +1,6 @@
 #include "modules/Cpu.hpp"
 
-#include "modules/Ticks.hpp"
+#include "modules/TextModule.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Text.hpp"
 

@@ -1,12 +1,10 @@
 #include "App.hpp"
-#include "LaunchOptions.hpp"
 #include "config/Config.hpp"
 #include "platform/AppBar.hpp"
+#include "platform/Launcher.hpp"
 #include "platform/Log.hpp"
 #include "platform/Process.hpp"
-#include "platform/ShellLaunch.hpp"
 #include "platform/Text.hpp"
-#include "platform/Token.hpp"
 
 #include <windows.h>
 

@@ -1,7 +1,7 @@
 #include "modules/Network.hpp"
 
-#include "../network/FakeNetwork.hpp"
 #include "TextOnlyRender.hpp"
+#include "network/INetwork.hpp"
 #include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
@@ -11,6 +11,16 @@
 #include <vector>
 
 namespace {
+
+    // A network state a test sets directly.
+    class FakeNetwork final : public INetwork {
+      public:
+        NetworkState state = NetworkState::None();
+
+        NetworkState State() const override {
+            return state;
+        }
+    };
 
     NetworkConfig TestConfig() {
         return NetworkConfig{

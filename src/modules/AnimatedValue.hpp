@@ -67,3 +67,31 @@ class ShadowFade {
 // first and second mixed by share, 0 all first and 1 all second, through premultiplied alpha as CSS mixes them, so a
 // fade from transparent never passes through the transparent color's black.
 D2D1_COLOR_F MixColors(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second, float share);
+
+// How far a fold has opened and its toggle has turned at one moment.
+struct FoldPosition {
+    float revealed;     // 0 folded, 1 unfolded
+    float angleDegrees; // from the icon rotation folded to the expanded icon one unfolded
+
+    bool  operator==(const FoldPosition&) const = default;
+};
+
+// What a toggle folds away and unfolds again, starting folded. It unfolds over the module's width transition and its
+// toggle turns over the icon's. Toggled mid-way it turns back from where it is, as CSS reverses a transition.
+class Fold {
+  public:
+    explicit Fold(const ModuleStyle& style);
+
+    void         Toggle(std::chrono::steady_clock::time_point now);
+    FoldPosition At(std::chrono::steady_clock::time_point now) const;
+    bool         Running(std::chrono::steady_clock::time_point now) const;
+
+  private:
+    Transition    _revealTransition;
+    Transition    _turnTransition;
+    float         _foldedDegrees;
+    float         _unfoldedDegrees;
+    bool          _unfolded = false;
+    AnimatedValue _reveal{0.0f};
+    AnimatedValue _turn{0.0f};
+};

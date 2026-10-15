@@ -1,13 +1,25 @@
 #include "modules/Battery.hpp"
 
-#include "../battery/FakeBattery.hpp"
 #include "TextOnlyRender.hpp"
+#include "battery/IBattery.hpp"
 #include "support/ThrowsWith.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <optional>
+
 namespace {
+
+    // A battery state a test sets directly. No battery until it does.
+    class FakeBattery final : public IBattery {
+      public:
+        std::optional<BatteryState> state;
+
+        std::optional<BatteryState> State() const override {
+            return state;
+        }
+    };
 
     BatteryConfig TestConfig() {
         return BatteryConfig{

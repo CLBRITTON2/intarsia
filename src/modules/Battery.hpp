@@ -2,8 +2,7 @@
 
 #include "battery/IBattery.hpp"
 #include "config/Config.hpp"
-#include "modules/IconTextModule.hpp"
-#include "modules/TextLine.hpp"
+#include "modules/TextModule.hpp"
 
 #include <cstdint>
 #include <optional>

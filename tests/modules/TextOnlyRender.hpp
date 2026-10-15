@@ -1,7 +1,7 @@
 #pragma once
 
+#include "modules/IModule.hpp"
 #include "platform/Errors.hpp"
-#include "render/RenderContext.hpp"
 
 #include <dwrite.h>
 #include <wrl/client.h>

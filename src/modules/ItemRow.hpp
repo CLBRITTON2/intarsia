@@ -2,7 +2,7 @@
 
 #include "config/Config.hpp"
 #include "modules/AnimatedValue.hpp"
-#include "render/RenderContext.hpp"
+#include "modules/IModule.hpp"
 
 #include <d2d1.h>
 

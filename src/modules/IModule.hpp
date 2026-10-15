@@ -1,14 +1,59 @@
 #pragma once
 
 #include "config/Config.hpp"
-#include "render/RenderContext.hpp"
+#include "platform/Threads.hpp"
+#include "render/Axis.hpp"
+#include "render/Graphics.hpp"
 
 #include <d2d1.h>
+#include <d2d1_1.h>
+#include <dwrite.h>
 #include <windows.h>
 
+#include <chrono>
 #include <cstdint>
+#include <format>
+#include <map>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
+#include <vector>
+
+class BoxCache;
+
+// The text and icon colors of one state a module's value can be in, such as a battery's warning.
+struct StateBrushes {
+    ID2D1SolidColorBrush* text;
+    ID2D1SolidColorBrush* icon;
+};
+
+// What a module needs to lay out and draw one frame. Non-owning: the bar owns every object here.
+struct RenderContext {
+    ID2D1DeviceContext* context;
+    IDWriteFactory*     dwrite;
+    IDWriteTextFormat*  textFormat;
+    const wchar_t*      iconFont;
+    float               iconSizeDips;
+    float               iconGapDips; // between an icon and the text after it
+    // The module's own colors: its text and its icon.
+    ID2D1SolidColorBrush*     foreground;
+    ID2D1SolidColorBrush*     accent;
+    ID2D1SolidColorBrush*     alert;
+    StateBrushes              warning;
+    StateBrushes              critical;
+    StateBrushes              muted;
+    std::vector<StateBrushes> classes; // a custom module's declared classes, in their order
+    // Any other color a module draws, such as a workspace state's background.
+    BrushCache* brushes;
+    BoxCache*   boxes;
+    Axis        axis;         // the bar's
+    float       boxCrossDips; // across the bar, of the box a module draws in: the room a vertical bar cuts text to
+    // What animations draw at, never the clock: the refresh the frame is paced to, so each frame of a fold or fade moves
+    // one refresh on however late the bar gets to draw it.
+    std::chrono::steady_clock::time_point frameTime;
+};
 
 enum class ScrollDirection : std::uint8_t {
     Up,
@@ -84,4 +129,30 @@ inline const ModuleActions kNoActions{
     .middleClick = std::nullopt,
     .scrollUp    = std::nullopt,
     .scrollDown  = std::nullopt,
+};
+
+// One Worker per module name of kind Kind, shared by every bar that shows it, so each does its work once however many
+// monitors there are. Worker is made from the module's name, its Settings and the change signal.
+template <typename Worker, typename Settings, ModuleKind Kind>
+class SharedWorkers {
+  public:
+    SharedWorkers(const Config& config, ChangeSignal& changes) {
+        ForEachModuleInConfig(config, [&](const ModuleInstance& instance) {
+            if (instance.kind == Kind && !_workers.contains(instance.name)) {
+                _workers.emplace(instance.name, std::make_unique<Worker>(instance.name, std::get<Settings>(instance.settings), changes));
+            }
+        });
+    }
+
+    // Throws std::logic_error for a name the config defines no module of Kind under.
+    const Worker& For(const std::string& name) const {
+        const auto worker = _workers.find(name);
+        if (worker == _workers.end()) {
+            throw std::logic_error(std::format("no shared worker for module {}, the config defines no module of its kind under that name", name));
+        }
+        return *worker->second;
+    }
+
+  private:
+    std::map<std::string, std::unique_ptr<Worker>> _workers;
 };

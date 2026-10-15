@@ -1,16 +1,18 @@
 #include "bar/Menu.hpp"
 
-#include "bar/Box.hpp"
-#include "bar/PixelGrid.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
+#include "platform/Process.hpp"
 #include "platform/Text.hpp"
 #include "platform/Win32Window.hpp"
-#include "platform/WindowProc.hpp"
 #include "render/Axis.hpp"
+#include "render/Box.hpp"
 #include "render/Graphics.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
+#include <format>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -22,6 +24,116 @@
 using Microsoft::WRL::ComPtr;
 
 namespace {
+
+    // Null when the item has no tooltip. ReadItem checks the field is a string first.
+    std::optional<std::string> TooltipOf(const nlohmann::json& item) {
+        const auto tooltip = item.find("tooltip");
+        if (tooltip == item.end()) {
+            return std::nullopt;
+        }
+        return tooltip->get<std::string>();
+    }
+
+    MenuItem ReadItem(const nlohmann::json& item) {
+        if (!item.is_object()) {
+            throw OutputError("printed a JSON item that is not an object");
+        }
+        if (item.contains("separator")) {
+            if (item.size() != 1 || item.at("separator") != true) {
+                throw OutputError("printed a JSON separator other than {\"separator\":true}");
+            }
+            return MenuSeparator{};
+        }
+        for (const auto& [key, field] : item.items()) {
+            if (key != "id" && key != "text" && key != "active" && key != "tooltip") {
+                throw OutputError("printed a JSON item field other than id, text, active and tooltip");
+            }
+        }
+        const auto id   = item.find("id");
+        const auto text = item.find("text");
+        if (id == item.end() || !id->is_string() || text == item.end() || !text->is_string()) {
+            throw OutputError("printed a JSON item without an id string and a text string");
+        }
+        const auto active = item.find("active");
+        if (active != item.end() && !active->is_boolean()) {
+            throw OutputError("printed a JSON item active that is not true or false");
+        }
+        const auto tooltip = item.find("tooltip");
+        if (tooltip != item.end() && !tooltip->is_string()) {
+            throw OutputError("printed a JSON item tooltip that is not a string");
+        }
+        MenuEntry entry{
+            .id      = id->get<std::string>(),
+            .text    = text->get<std::string>(),
+            .active  = active != item.end() && active->get<bool>(),
+            .tooltip = TooltipOf(item),
+        };
+        RequireDrawable(entry.id, "id", L"");
+        RequireDrawable(entry.text, "text", L"");
+        if (entry.tooltip.has_value()) {
+            RequireDrawable(*entry.tooltip, "tooltip", L"\n");
+        }
+        if (entry.id.empty() || entry.id.front() == '-' || entry.id.front() == '/') {
+            throw OutputError("printed a JSON item id that is empty or starts with - or /");
+        }
+        return entry;
+    }
+
+    // Runs on the lister's thread, so every failure becomes a listing instead of an exception.
+    MenuListing ListEntries(const Command& command, std::chrono::seconds timeout, HANDLE stopEvent) {
+        const auto output = RunOrFailure([&] { return CaptureOutput(command, timeout, kMaxCommandOutputBytes, stopEvent); });
+        if (const auto* failure = std::get_if<RunFailure>(&output)) {
+            return MenuFailure{.reason = failure->reason, .detail = failure->detail};
+        }
+        try {
+            return ParseMenuOutput(std::get<std::string>(output));
+        } catch (const OutputError& error) { return MenuFailure{.reason = error.what(), .detail = error.what()}; }
+    }
+
+    // Short enough for hundreds of entries, long enough to grab.
+    constexpr float kMinThumbDips = 16.0f;
+
+    float           MaxOffset(const MenuScroll& scroll) {
+        return std::max(0.0f, scroll.contentDips - (scroll.viewport.bottom - scroll.viewport.top));
+    }
+
+    float GutterDips(const ScrollbarStyle& scrollbar) {
+        if (scrollbar.widthDips > 0.0f) {
+            return scrollbar.widthDips + (2.0f * scrollbar.margin.xDips);
+        }
+        return 0.0f;
+    }
+
+    // The width the scroll bar's gutter adds to the window: all of it once the rows' height passes maxHeight, else none.
+    float TakenGutterDips(float height, float maxHeight, float gutterDips) {
+        if (height > maxHeight) {
+            return gutterDips;
+        }
+        return 0.0f;
+    }
+
+    // The window's height: the rows' height, cut to maxHeight past which the rows scroll.
+    float ShownHeightDips(float height, float maxHeight) {
+        if (height > maxHeight) {
+            return maxHeight;
+        }
+        return height;
+    }
+
+    // The smaller of a monitor's length and the style's cap, as a command can print text of any length and up to the
+    // entry limit.
+    float CappedDips(std::int32_t monitorPixels, std::uint32_t dpi, std::optional<float> capDips) {
+        return std::min(PixelsToDips(static_cast<float>(monitorPixels), dpi), capDips.value_or(std::numeric_limits<float>::max()));
+    }
+
+    // The bar edge the row stands in for: Top, which puts the tooltip below the row, where the monitor has at least as
+    // much room below it as above.
+    Edge RowBarEdge(const RECT& row, const RECT& monitorRect) {
+        if (monitorRect.bottom - row.bottom >= row.top - monitorRect.top) {
+            return Edge::Top;
+        }
+        return Edge::Bottom;
+    }
 
     constexpr wchar_t kWindowClass[] = L"IntarsiaMenu";
 
@@ -63,6 +175,198 @@ namespace {
     }
 
 } // namespace
+
+std::vector<MenuItem> ParseMenuOutput(std::string_view output) {
+    const nlohmann::json value = nlohmann::json::parse(output.begin(), output.end(), nullptr, false);
+    if (value.is_discarded()) {
+        throw OutputError("printed invalid JSON");
+    }
+    const auto items = value.find("items");
+    if (!value.is_object() || value.size() != 1 || items == value.end()) {
+        throw OutputError("printed JSON that is not an object with only an items list");
+    }
+    if (!items->is_array()) {
+        throw OutputError("printed JSON items that is not a list");
+    }
+    if (items->size() > kMaxMenuEntries) {
+        throw OutputError(std::format("printed more than {} items", kMaxMenuEntries));
+    }
+    std::vector<MenuItem> read;
+    read.reserve(items->size());
+    for (const nlohmann::json& item : *items) {
+        read.push_back(ReadItem(item));
+    }
+    return read;
+}
+
+bool HasEntries(const std::vector<MenuItem>& items) {
+    return std::ranges::any_of(items, [](const MenuItem& item) { return std::holds_alternative<MenuEntry>(item); });
+}
+
+MenuLister::MenuLister(HWND target, std::uint32_t message) : _target(target), _message(message), _command{}, _timeout{} {}
+
+void MenuLister::List(const Command& command, std::chrono::seconds timeout) {
+    // The old thread is joined before the new one starts, so only the new one can fill _ready, or read _command and
+    // _timeout, from here on.
+    _thread.reset();
+    {
+        const std::scoped_lock lock(_mutex);
+        _ready.reset();
+    }
+    _command = command;
+    _timeout = timeout;
+    _thread  = std::make_unique<StoppableThread>("menu lister", [this](HANDLE stopEvent) { Run(stopEvent); });
+}
+
+std::optional<MenuListing> MenuLister::Take() {
+    const std::scoped_lock lock(_mutex);
+    return std::exchange(_ready, std::nullopt);
+}
+
+void MenuLister::Run(HANDLE stopEvent) {
+    MenuListing listing = ListEntries(_command, _timeout, stopEvent);
+    // A listing List or the destructor cut short says nothing about the command.
+    if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) {
+        return;
+    }
+    {
+        const std::scoped_lock lock(_mutex);
+        _ready = std::move(listing);
+    }
+    if (!PostMessageW(_target, _message, 0, 0)) {
+        Log(LogLevel::Warning, "menu", "post_failed", {{.key = "error", .value = std::to_string(GetLastError())}});
+    }
+}
+
+float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& monitorRect, std::uint32_t dpi) {
+    const Insets insets = ContentInsets(style.box);
+    // Leaves room for the scroll bar whether or not the rows overflow, so a cut row never grows once they do.
+    return CappedDips(monitorRect.right - monitorRect.left, dpi, style.maxWidthDips) - GutterDips(style.scrollbar) - insets.left - insets.right -
+        (2.0f * (row.margin.xDips + row.padding.xDips));
+}
+
+MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitorRect, std::uint32_t dpi) {
+    const ScrollbarStyle& scrollbar     = style.scrollbar;
+    const Insets          insets        = ContentInsets(style.box);
+    const float           gutter        = GutterDips(scrollbar);
+    const std::int32_t    monitorWidth  = monitorRect.right - monitorRect.left;
+    const std::int32_t    monitorHeight = monitorRect.bottom - monitorRect.top;
+    const float           maxHeight     = CappedDips(monitorHeight, dpi, style.maxHeightDips);
+
+    float                 inner = 0.0f;
+    for (const MenuRow& row : rows) {
+        inner = std::max(inner, row.box.right + (2.0f * row.style->margin.xDips));
+    }
+    float bottom = insets.top;
+    for (MenuRow& row : rows) {
+        const Spacing& margin  = row.style->margin;
+        const Spacing& padding = row.style->padding;
+        const float    top     = bottom + margin.yDips;
+        row.box                = D2D1::RectF(insets.left + margin.xDips, top, insets.left + inner - margin.xDips, top + row.box.bottom);
+        row.textOrigin         = D2D1::Point2F(row.box.left + padding.xDips, row.box.top + padding.yDips);
+        bottom                 = row.box.bottom + margin.yDips;
+    }
+
+    const float       content = bottom - insets.top;
+    const float       height  = content + insets.top + insets.bottom;
+    const SIZE        size{.cx = std::min(DipsToWholePixels(inner + insets.left + insets.right + TakenGutterDips(height, maxHeight, gutter), dpi), monitorWidth),
+                           .cy = std::min(DipsToWholePixels(ShownHeightDips(height, maxHeight), dpi), monitorHeight)};
+    const D2D1_RECT_F viewport = D2D1::RectF(insets.left, insets.top, insets.left + inner, PixelsToDips(static_cast<float>(size.cy), dpi) - insets.bottom);
+    return MenuLayout{
+        .rows = std::move(rows),
+        .size = size,
+        .scroll =
+            MenuScroll{
+                .viewport    = viewport,
+                .contentDips = content,
+                .offsetDips  = 0.0f,
+            },
+        .gutter = D2D1::RectF(viewport.right, viewport.top, viewport.right + gutter, viewport.bottom),
+        .track  = D2D1::RectF(viewport.right + scrollbar.margin.xDips, viewport.top + scrollbar.margin.yDips, viewport.right + scrollbar.margin.xDips + scrollbar.widthDips,
+                              viewport.bottom - scrollbar.margin.yDips),
+    };
+}
+
+MenuScroll ScrolledTo(const MenuScroll& scroll, float offsetDips) {
+    return MenuScroll{
+        .viewport    = scroll.viewport,
+        .contentDips = scroll.contentDips,
+        .offsetDips  = std::clamp(offsetDips, 0.0f, MaxOffset(scroll)),
+    };
+}
+
+MenuScroll ScrolledToShow(const MenuScroll& scroll, const D2D1_RECT_F& row) {
+    const float above = row.top - scroll.viewport.top;
+    const float below = row.bottom - scroll.viewport.bottom;
+    // A row taller than the viewport shows its top.
+    return ScrolledTo(scroll, std::min(std::max(scroll.offsetDips, below), above));
+}
+
+std::optional<D2D1_RECT_F> ThumbRect(const MenuScroll& scroll, const D2D1_RECT_F& track) {
+    const float maxOffset = MaxOffset(scroll);
+    if (maxOffset <= 0.0f) {
+        return std::nullopt;
+    }
+    const float trackLength = track.bottom - track.top;
+    const float shown       = (scroll.viewport.bottom - scroll.viewport.top) / scroll.contentDips;
+    const float thumbLength = std::min(trackLength, std::max(kMinThumbDips, trackLength * shown));
+    const float top         = track.top + ((trackLength - thumbLength) * scroll.offsetDips / maxOffset);
+    return D2D1::RectF(track.left, top, track.right, top + thumbLength);
+}
+
+MenuScroll ScrolledToThumb(const MenuScroll& scroll, const D2D1_RECT_F& track, float thumbTopDips) {
+    const std::optional<D2D1_RECT_F> thumb = ThumbRect(scroll, track);
+    if (!thumb.has_value()) {
+        return scroll;
+    }
+    const float travel = (track.bottom - track.top) - (thumb->bottom - thumb->top);
+    if (travel <= 0.0f) {
+        return scroll;
+    }
+    return ScrolledTo(scroll, (thumbTopDips - track.top) / travel * MaxOffset(scroll));
+}
+
+std::optional<size_t> EntryAt(const std::vector<MenuRow>& rows, const MenuScroll& scroll, D2D1_POINT_2F point) {
+    if (!Contains(scroll.viewport, point)) {
+        return std::nullopt;
+    }
+    const D2D1_POINT_2F unscrolled = D2D1::Point2F(point.x, point.y + scroll.offsetDips);
+    const auto          row = std::ranges::find_if(rows, [unscrolled](const MenuRow& candidate) { return candidate.entry.has_value() && Contains(candidate.box, unscrolled); });
+    if (row == rows.end()) {
+        return std::nullopt;
+    }
+    return row->entry;
+}
+
+std::optional<size_t> StepHighlight(std::optional<size_t> current, size_t count, MenuStep step) {
+    if (count == 0) {
+        return std::nullopt;
+    }
+    if (!current.has_value()) {
+        if (step == MenuStep::Down) {
+            return 0;
+        }
+        return count - 1;
+    }
+    if (step == MenuStep::Down) {
+        return (*current + 1) % count;
+    }
+    if (*current == 0) {
+        return count - 1;
+    }
+    return *current - 1;
+}
+
+// The tooltip's rect treats the row as a bar on the monitor's top or bottom edge, placing it below or above the row.
+TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitorRect, std::uint32_t dpi) {
+    return TooltipAnchor{
+        .target      = row,
+        .barRect     = row,
+        .monitorRect = monitorRect,
+        .edge        = RowBarEdge(row, monitorRect),
+        .dpi         = dpi,
+    };
+}
 
 void Menu::RegisterWindowClass(HINSTANCE instance) {
     ::RegisterWindowClass(instance, kWindowClass, OwnedWindowProc<Menu>, LoadCursorW(nullptr, IDC_ARROW), "menu");

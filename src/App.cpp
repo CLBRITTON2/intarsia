@@ -1,7 +1,7 @@
 #include "App.hpp"
 
 #include "audio/CoreAudio.hpp"
-#include "bar/Dock.hpp"
+#include "bar/Bar.hpp"
 #include "battery/PowerStatus.hpp"
 #include "modules/Network.hpp"
 #include "network/IpHelper.hpp"
@@ -9,22 +9,28 @@
 #include "platform/Errors.hpp"
 #include "platform/Log.hpp"
 #include "platform/Monitors.hpp"
+#include "platform/Text.hpp"
 #include "platform/Win32Window.hpp"
-#include "platform/WindowProc.hpp"
 #include "tray/ShellNotifyIcon.hpp"
-#include "wm/WindowManagerFactory.hpp"
+#include "wm/GlazeWm.hpp"
+#include "wm/Native.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <exception>
 #include <format>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <variant>
 
 namespace {
+
+    // RegisterClassExW takes a class name of up to 256 characters with its null.
+    constexpr size_t        kMaxClassNameLength = 255;
 
     constexpr wchar_t       kControlClass[] = L"IntarsiaControl";
     constexpr std::uint32_t kConfigChanged  = WM_APP + 2;
@@ -105,7 +111,62 @@ namespace {
         return CreatePopupWindow(instance, kControlClass, L"intarsia control", WS_EX_TOOLWINDOW, owner, "control");
     }
 
+    std::unique_ptr<Native> FocusSourceFor(const Config& config, ChangeSignal& changes) {
+        if (ShowsKind(config, ModuleKind::Window)) {
+            return std::make_unique<Native>(changes);
+        }
+        return nullptr;
+    }
+
+    // The config's window manager backend. glazeWmPort is where the GlazeWM backend connects on 127.0.0.1, unused by the
+    // others.
+    std::unique_ptr<IWindowManager> CreateWindowManager(const Config& config, ChangeSignal& changes, std::uint16_t glazeWmPort) {
+        switch (config.windowManager) {
+            case WindowManagerKind::Windows: return std::make_unique<Native>(changes);
+            case WindowManagerKind::GlazeWm: return std::make_unique<GlazeWm>(changes, glazeWmPort, FocusSourceFor(config, changes));
+        }
+        throw std::invalid_argument(std::format("unknown window manager kind {}", static_cast<std::int32_t>(config.windowManager)));
+    }
+
 } // namespace
+
+LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, const std::filesystem::path& defaultLogPath,
+                                 std::uint16_t defaultGlazeWmPort, const std::wstring& defaultTrayClass) {
+    LaunchOptions options{
+        .configPath  = defaultConfigPath,
+        .logPath     = defaultLogPath,
+        .glazeWmPort = defaultGlazeWmPort,
+        .trayClass   = defaultTrayClass,
+    };
+    for (size_t index = 0; index < arguments.size(); index += 2) {
+        const std::wstring& name = arguments[index];
+        if (index + 1 >= arguments.size()) {
+            throw LaunchOptionsError(std::format("{} needs a value", ToUtf8(name)));
+        }
+        const std::wstring& value = arguments[index + 1];
+        if (name == L"--config") {
+            options.configPath = value;
+        } else if (name == L"--log") {
+            options.logPath = value;
+        } else if (name == L"--glazewm-port") {
+            const std::string portText = ToUtf8(value);
+            std::uint32_t     port     = 0;
+            const auto [end, error]    = std::from_chars(portText.data(), portText.data() + portText.size(), port);
+            if (error != std::errc() || end != portText.data() + portText.size() || port == 0 || port > 65535) {
+                throw LaunchOptionsError(std::format("--glazewm-port must be a port from 1 to 65535, got '{}'", portText));
+            }
+            options.glazeWmPort = static_cast<std::uint16_t>(port);
+        } else if (name == L"--tray-class") {
+            if (value.empty() || value.size() > kMaxClassNameLength) {
+                throw LaunchOptionsError(std::format("--tray-class must be a window class name of 1 to {} characters, got {}", kMaxClassNameLength, value.size()));
+            }
+            options.trayClass = value;
+        } else {
+            throw LaunchOptionsError(std::format("unknown option '{}', intarsia takes --config <path>, --log <path>, --glazewm-port <port> and --tray-class <name>", ToUtf8(name)));
+        }
+    }
+    return options;
+}
 
 App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),

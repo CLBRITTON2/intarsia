@@ -1,7 +1,6 @@
 #include "audio/CoreAudio.hpp"
-#include "platform/ComScope.hpp"
-#include "support/ChangeTarget.hpp"
-#include "support/Eventually.hpp"
+#include "platform/Threads.hpp"
+#include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 

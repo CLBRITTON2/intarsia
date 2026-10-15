@@ -1,24 +1,20 @@
 #pragma once
 
-#include "bar/Canvas.hpp"
-#include "bar/Dock.hpp"
-#include "bar/FrameStats.hpp"
 #include "bar/Layout.hpp"
 #include "bar/Menu.hpp"
-#include "bar/MenuLister.hpp"
-#include "bar/Sections.hpp"
 #include "bar/Tooltip.hpp"
 #include "config/Config.hpp"
 #include "modules/AnimatedValue.hpp"
 #include "modules/IModule.hpp"
 #include "modules/ModuleFactory.hpp"
 #include "platform/AppBar.hpp"
-#include "platform/FrameClock.hpp"
 #include "platform/Launcher.hpp"
-#include "platform/WindowProc.hpp"
+#include "platform/Monitors.hpp"
+#include "platform/Win32Window.hpp"
 #include "render/Axis.hpp"
+#include "render/Box.hpp"
+#include "render/FrameClock.hpp"
 #include "render/Graphics.hpp"
-#include "render/RenderContext.hpp"
 
 #include <windows.h>
 #include <wrl/client.h>
@@ -30,13 +26,31 @@
 #include <unordered_map>
 #include <vector>
 
-enum class ModuleInput : std::uint8_t {
-    LeftClick,
-    RightClick,
-    MiddleClick,
-    ScrollUp,
-    ScrollDown
+// The monitor a bar docks to, where it is on the desktop and its scale.
+struct BarPlacement {
+    HMONITOR      monitor;
+    RECT          monitorRect;
+    std::uint32_t dpi;
+
+    bool          operator==(const BarPlacement& other) const;
 };
+
+// Each monitor's placement, in the order given. Throws MonitorGoneError for a monitor that went while it was read.
+std::vector<BarPlacement> PlacementsFor(const std::vector<HMONITOR>& monitors);
+
+// Whether the monitors now differ from placements and descriptions, as a monitor added, removed, moved, resized,
+// rescaled or swapped for another makes them.
+bool MonitorsDiffer(const std::vector<BarPlacement>& placements, const std::vector<MonitorDescription>& descriptions);
+
+// The whole monitor's length along the bar's edge, which picks the config's layout.
+float EdgeLengthDips(const BarPlacement& placement, Edge edge);
+
+// Where SetWindowPos puts a bar of layer in the z-order.
+HWND LayerZOrder(Layer layer);
+
+// The bar window's rect on monitorRect, thickness pixels across, reserved with the shell through route when bar
+// reserves space.
+RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness, AppBarRoute route);
 
 // One appbar window docked to one edge of one monitor, drawing its own module instances. When the graphics device is
 // lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.

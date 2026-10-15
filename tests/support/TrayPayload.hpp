@@ -1,6 +1,6 @@
 #pragma once
 
-#include "tray/NotifyIconProtocol.hpp"
+#include "tray/ShellNotifyIcon.hpp"
 
 #include <windows.h>
 

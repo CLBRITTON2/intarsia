@@ -2,7 +2,7 @@
 
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
-#include "modules/TextLine.hpp"
+#include "modules/TextModule.hpp"
 #include "wm/IWindowManager.hpp"
 
 #include <optional>

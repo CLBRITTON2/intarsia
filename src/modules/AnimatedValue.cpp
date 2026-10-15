@@ -1,6 +1,6 @@
 #include "modules/AnimatedValue.hpp"
 
-#include "bar/Box.hpp"
+#include "render/Box.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -187,4 +187,22 @@ D2D1_COLOR_F MixColors(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second, fl
     }
     const auto channel = [&](float from, float to) { return Lerp(from * first.a, to * second.a, share) / alpha; };
     return D2D1::ColorF(channel(first.r, second.r), channel(first.g, second.g), channel(first.b, second.b), alpha);
+}
+
+Fold::Fold(const ModuleStyle& style) :
+    _revealTransition(style.transition), _turnTransition(style.icon.transition), _foldedDegrees(style.icon.rotationDegrees), _unfoldedDegrees(style.expandedIconRotationDegrees) {}
+
+void Fold::Toggle(std::chrono::steady_clock::time_point now) {
+    _unfolded          = !_unfolded;
+    const float target = _unfolded ? 1.0f : 0.0f;
+    _reveal.Retarget(target, _revealTransition, now);
+    _turn.Retarget(target, _turnTransition, now);
+}
+
+FoldPosition Fold::At(std::chrono::steady_clock::time_point now) const {
+    return FoldPosition{.revealed = _reveal.Value(now), .angleDegrees = Lerp(_foldedDegrees, _unfoldedDegrees, _turn.Value(now))};
+}
+
+bool Fold::Running(std::chrono::steady_clock::time_point now) const {
+    return _reveal.Running(now) || _turn.Running(now);
 }

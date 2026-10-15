@@ -1,9 +1,8 @@
 #include "bar/Tooltip.hpp"
 
-#include "bar/Box.hpp"
-#include "bar/PixelGrid.hpp"
 #include "platform/Errors.hpp"
 #include "platform/Win32Window.hpp"
+#include "render/Box.hpp"
 #include "render/Graphics.hpp"
 
 #include <algorithm>

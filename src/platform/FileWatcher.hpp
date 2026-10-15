@@ -1,8 +1,7 @@
 #pragma once
 
 #include "platform/Handle.hpp"
-#include "platform/StoppableThread.hpp"
-#include "platform/ThreadFailure.hpp"
+#include "platform/Threads.hpp"
 
 #include <windows.h>
 

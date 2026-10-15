@@ -1,21 +1,18 @@
 #pragma once
 
-#include "LaunchOptions.hpp"
 #include "audio/IAudio.hpp"
 #include "bar/Bar.hpp"
-#include "bar/Dock.hpp"
 #include "battery/IBattery.hpp"
 #include "config/Config.hpp"
-#include "modules/CommandPoller.hpp"
-#include "modules/CounterSampler.hpp"
-#include "modules/WindowIcons.hpp"
+#include "modules/Counter.hpp"
+#include "modules/Custom.hpp"
+#include "modules/WindowList.hpp"
 #include "network/IpHelper.hpp"
-#include "platform/ChangeSignal.hpp"
 #include "platform/FileWatcher.hpp"
 #include "platform/Launcher.hpp"
 #include "platform/Monitors.hpp"
-#include "platform/WindowProc.hpp"
-#include "render/CompositionThread.hpp"
+#include "platform/Threads.hpp"
+#include "platform/Win32Window.hpp"
 #include "render/Graphics.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 #include "wm/IWindowManager.hpp"
@@ -27,9 +24,29 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
+
+// The command line: intarsia.exe [--config <path>] [--log <path>] [--glazewm-port <port>] [--tray-class <name>].
+struct LaunchOptions {
+    std::filesystem::path configPath;
+    // The soak tests log beside their config, since a running bar keeps the default log open.
+    std::filesystem::path logPath;
+    std::uint16_t         glazeWmPort; // the soak tests point the bar at its own server while GlazeWM holds 6123
+    // The soak tests give the tray a class no app sends to, so it never takes the desktop's icons.
+    std::wstring trayClass;
+};
+
+class LaunchOptionsError : public std::runtime_error {
+  public:
+    using std::runtime_error::runtime_error;
+};
+
+// arguments excludes the program name. Throws LaunchOptionsError naming the bad argument.
+LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, const std::filesystem::path& defaultLogPath,
+                                 std::uint16_t defaultGlazeWmPort, const std::wstring& defaultTrayClass);
 
 // Owns the config, the graphics devices and one bar per matched monitor, and rebuilds the bars when the config file changes.
 class App {
