@@ -11,6 +11,8 @@ intarsia runs on Windows 10 1903 or later. It has no dependencies.
    - `config\glazewm`: a bar for GlazeWM with workspaces. Its files comment every key.
 3. Start `intarsia.exe`.
 
+Set `$version` to the version you downloaded:
+
 ```powershell
 $version = '0.2.0'
 $app = "$env:LOCALAPPDATA\Programs\intarsia-$version"
@@ -24,17 +26,19 @@ The bar reads `config.lua` for what it shows and `style.conf` for how it looks. 
 
 ## From source
 
-See [Build](../README.md#build) in the README for what the build needs. The starter configs are in the repo's `config`
-folder. Then:
+See [Build](../README.md#build) in the README for what the build needs. From the repo's root, copy a starter config
+from its `config` folder the first time, then install:
 
 ```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.config\intarsia" | Out-Null
+Copy-Item config\windows\* "$env:USERPROFILE\.config\intarsia"
 pwsh -File scripts/install-build.ps1
 ```
 
-This builds the release preset, checks your config with the new build, and installs `intarsia.exe` and
-`intarsia-cli.exe` to `%LOCALAPPDATA%\Programs\intarsia`. A bar already running from there closes first, and the new
-one starts. Run it again after pulling to update. If the new build rejects your config, it prints the error and the
-running bar stays.
+This builds the release preset, checks your config with the new build (and stops if there is none), and installs
+`intarsia.exe` and `intarsia-cli.exe` to `%LOCALAPPDATA%\Programs\intarsia`. A bar already running from there closes
+first, and the new one starts. Run it again after pulling to update. If the new build rejects your config, it prints
+the error and the running bar stays.
 
 ## Starting at login
 
@@ -47,6 +51,9 @@ general:
   startup_commands:
     - 'shell-exec %LOCALAPPDATA%/Programs/intarsia-0.2.0/intarsia.exe'
 ```
+
+Use the folder of the version you unzipped, or `%LOCALAPPDATA%/Programs/intarsia/intarsia.exe` for a build installed
+from source.
 
 If GlazeWM runs elevated, the bar relaunches itself unelevated so tray icons still reach it.
 
