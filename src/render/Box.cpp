@@ -376,13 +376,23 @@ namespace {
         return D2D1::RoundedRect(box, radius, radius);
     }
 
+    // A line's width, or a shadow's offset or spread (the width of the line a hard shadow draws), rounded toward zero to
+    // whole device pixels but never to none, keeping its sign. Borders and shadows snap alike, so a 1 DIP border beside
+    // a 1 DIP shadow draws them equally wide at any scale.
+    float SnapLineLength(float pixelsPerDip, float dips) {
+        if (dips == 0.0f) {
+            return 0.0f;
+        }
+        // The small allowance keeps a length that is whole pixels in float error from losing one.
+        const float pixels = std::max(std::floor((std::abs(dips) * pixelsPerDip) + 0.001f), 1.0f);
+        return std::copysign(pixels / pixelsPerDip, dips);
+    }
+
     BorderSide SnapSide(float pixelsPerDip, const BorderSide& side) {
         if (side.widthDips <= 0.0f) {
             return side;
         }
-        // The small allowance keeps a width that is whole pixels in float error from losing one.
-        const float pixels = std::max(std::floor((side.widthDips * pixelsPerDip) + 0.001f), 1.0f);
-        return BorderSide{.widthDips = pixels / pixelsPerDip, .color = side.color};
+        return BorderSide{.widthDips = SnapLineLength(pixelsPerDip, side.widthDips), .color = side.color};
     }
 
 } // namespace
@@ -437,9 +447,9 @@ BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
                   .left   = SnapSide(pixelsPerDip, style.border.left),
     };
     for (InsetShadow& shadow : snapped.shadows) {
-        shadow.xDips      = SnapLength(grid, shadow.xDips);
-        shadow.yDips      = SnapLength(grid, shadow.yDips);
-        shadow.spreadDips = SnapLength(grid, shadow.spreadDips);
+        shadow.xDips      = SnapLineLength(pixelsPerDip, shadow.xDips);
+        shadow.yDips      = SnapLineLength(pixelsPerDip, shadow.yDips);
+        shadow.spreadDips = SnapLineLength(pixelsPerDip, shadow.spreadDips);
     }
     return snapped;
 }

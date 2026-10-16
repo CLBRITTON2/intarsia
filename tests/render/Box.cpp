@@ -227,7 +227,7 @@ TEST(Box, ACornerOfTwoColorsSplitsItsCurveOnTheDiagonal) {
     EXPECT_GT(Red(pixels, 30, 0), 200);
 }
 
-TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
+TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadTowardZeroButNotBlur) {
     const InsetShadow shadow{
         .xDips      = 0.0f,
         .yDips      = 1.0f,
@@ -237,9 +237,41 @@ TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
     };
     const BoxStyle snapped = SnapLines(kFractionalScale, Lined(Uniform(0.0f), {shadow}));
     ASSERT_EQ(snapped.shadows.size(), 1u);
+    EXPECT_FLOAT_EQ(snapped.shadows[0].xDips, 0.0f);
     EXPECT_FLOAT_EQ(snapped.shadows[0].yDips, 0.8f);
-    EXPECT_FLOAT_EQ(snapped.shadows[0].spreadDips, -6.4f);
+    EXPECT_FLOAT_EQ(snapped.shadows[0].spreadDips, -5.6f);
     EXPECT_FLOAT_EQ(snapped.shadows[0].blurDips, 14.0f);
+}
+
+// At 150% a DIP is a pixel and a half: a cut of a border beside a shadow must draw both sides one pixel wide.
+TEST(Box, SnapLinesDrawsABorderAndAShadowOfOneLengthEquallyWide) {
+    const PixelGrid oneAndAHalf{
+        .pixelsPerDip = 1.5f,
+        .offsetX      = 0.0f,
+        .offsetY      = 0.0f,
+    };
+    const BoxStyle snapped = SnapLines(oneAndAHalf,
+                                       Lined(Uniform(1.0f),
+                                             {
+                                                 InsetShadow{
+                                                     .xDips      = 1.0f,
+                                                     .yDips      = 0.0f,
+                                                     .blurDips   = 0.0f,
+                                                     .spreadDips = 0.0f,
+                                                     .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.3f),
+                                                 },
+                                                 InsetShadow{
+                                                     .xDips      = -1.0f,
+                                                     .yDips      = 0.0f,
+                                                     .blurDips   = 0.0f,
+                                                     .spreadDips = 0.0f,
+                                                     .color      = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.8f),
+                                                 },
+                                             }));
+    ASSERT_EQ(snapped.shadows.size(), 2u);
+    EXPECT_FLOAT_EQ(snapped.border.left.widthDips, 1.0f / 1.5f);
+    EXPECT_FLOAT_EQ(snapped.shadows[0].xDips, 1.0f / 1.5f);
+    EXPECT_FLOAT_EQ(snapped.shadows[1].xDips, -1.0f / 1.5f);
 }
 
 // A cache key that ignored the shadow's color would draw the first shadow again: a fade frozen on its first frame.
