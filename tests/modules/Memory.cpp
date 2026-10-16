@@ -19,7 +19,7 @@ TEST(Memory, TheTooltipValuesAreGibibytesAndAPercent) {
     };
     EXPECT_EQ(
         FormatPlaceholders("{used:.1f}/{total:.0f} GB {percent}% free {available:.0f} cached {cached:.0f} commit {committed:.0f}/{commit_limit:.0f}", MemoryPlaceholders(usage)),
-        "24.0/32 GB 75% free 8 cached 6 commit 30/37");
+        L"24.0/32 GB 75% free 8 cached 6 commit 30/37");
 }
 
 TEST(Memory, FormatMustRenderADouble) {

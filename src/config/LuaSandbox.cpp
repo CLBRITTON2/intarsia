@@ -72,17 +72,12 @@ namespace {
     }
 
     // A config's error() can hold any bytes, and the message reaches a console that refuses ones that are not UTF-8.
-    std::string ErrorText(const char* message) {
+    std::string ErrorMessage(lua_State* lua) {
+        const char* message = lua_tostring(lua, -1);
         if (message == nullptr) {
             return "non-string Lua error";
         }
         return ToUtf8(DrawableText(std::string_view(message)));
-    }
-
-    std::string PopErrorMessage(lua_State* lua) {
-        std::string text = ErrorText(lua_tostring(lua, -1));
-        lua_pop(lua, 1);
-        return text;
     }
 
     // The ConfigError for a load or call that did not return LUA_OK.
@@ -93,7 +88,7 @@ namespace {
         if (status == LUA_ERRMEM) {
             return ConfigError(std::format("{}: the config used more than {} MiB of memory", source, kMaxConfigMemoryBytes >> 20));
         }
-        return ConfigError(PopErrorMessage(lua));
+        return ConfigError(ErrorMessage(lua));
     }
 
 } // namespace

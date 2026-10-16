@@ -172,8 +172,8 @@ App::App(HINSTANCE instance, LaunchOptions options) :
     _instance(instance), _configPath(std::move(options.configPath)), _glazeWmPort(options.glazeWmPort), _trayClass(std::move(options.trayClass)),
     _config(std::make_unique<Config>(LoadConfig(_configPath))), _graphics(CreateGraphicsDevice()), _deviceRetryWait(kFirstDeviceRetry),
     _control(CreateControlWindow(instance, this, OwnedWindowProc<App>)), _changes(_control.get(), kSourcesChanged),
-    _watcher(std::make_unique<FileWatcher>(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()},
-                                           _control.get(), kConfigChanged, kWatcherFailed, kConfigSettle)),
+    _watcher(_configPath.parent_path(), std::vector<std::wstring>{_configPath.filename().wstring(), StylePath(_configPath).filename().wstring()}, _control.get(), kConfigChanged,
+             kWatcherFailed, kConfigSettle),
     _windowManager(CreateWindowManager(*_config, _changes, _glazeWmPort)), _commandPollers(std::make_unique<CommandPollers>(*_config, _changes)),
     _counterSamplers(std::make_unique<CounterSamplers>(*_config, _changes)) {
     MatchSourcesToConfig();
@@ -231,7 +231,7 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 std::rethrow_exception(_configError);
             }
             return 0;
-        case kWatcherFailed: _watcher->RethrowFailure(); return 0;
+        case kWatcherFailed: _watcher.RethrowFailure(); return 0;
         case kTrayFailed:
             // Any process on the desktop can post this message, even while no tray exists.
             if (_tray == nullptr) {

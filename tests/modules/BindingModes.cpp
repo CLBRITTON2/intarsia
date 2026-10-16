@@ -11,7 +11,6 @@ TEST(BindingModes, LayoutReportsAChangeOnlyWhenTheModesChange) {
     const TextOnlyRender render;
     BindingModes         module(windowManager, TestModuleStyle());
 
-    EXPECT_TRUE(module.Layout(render.Context()));
     EXPECT_FALSE(module.Layout(render.Context()));
     windowManager.bindingModes = {L"resize"};
     EXPECT_TRUE(module.Layout(render.Context()));

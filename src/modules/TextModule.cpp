@@ -24,12 +24,11 @@ ModuleText NormalText(std::wstring icon, std::wstring text) {
 }
 
 bool TextLine::Update(const RenderContext& render, ModuleText content) {
-    if (_laidOut && content == _shown) {
+    if (content == _shown) {
         return false;
     }
-    _text    = LayOutIconText(render, content.icon, content.text);
-    _shown   = std::move(content);
-    _laidOut = true;
+    _text  = LayOutIconText(render, content.icon, content.text);
+    _shown = std::move(content);
     return true;
 }
 

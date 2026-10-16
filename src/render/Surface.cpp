@@ -53,14 +53,14 @@ namespace {
         ThrowIfDeviceFailed(surface->EndDraw(), "ICompositionDrawingSurfaceInterop::EndDraw");
     }
 
-    BackdropVisual CreateBackdrop(const CompositionDevice& device, const composition::CompositionEffectFactory& factory) {
+    BackdropVisual CreateBackdrop(CompositionDevice& device, const Backdrop& tone) {
         BackdropVisual backdrop{
             .sprite = device.compositor.CreateSpriteVisual(),
             .mask   = device.graphics.CreateDrawingSurface2({.Width = 0, .Height = 0}, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
                                                             winrt::Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied),
             .box    = std::nullopt,
         };
-        const composition::CompositionEffectBrush brush = factory.CreateBrush();
+        const composition::CompositionEffectBrush brush = device.backdrops.For(device.compositor, tone).CreateBrush();
         brush.SetSourceParameter(L"backdrop", device.compositor.CreateHostBackdropBrush());
         brush.SetSourceParameter(L"mask", device.compositor.CreateSurfaceBrush(backdrop.mask));
         backdrop.sprite.Brush(brush);
@@ -81,14 +81,13 @@ namespace {
 
 } // namespace
 
-// The window's visuals from the bottom: the backdrops, then the swap chain's content. The backdrops' brushes come from
-// factory, made for tone, none before the first.
+// The window's visuals from the bottom: the backdrops, then the swap chain's content. The backdrops' brushes are made
+// for tone, none before the first.
 struct SurfaceVisuals {
     composition::Desktop::DesktopWindowTarget target{nullptr};
     composition::ContainerVisual              backdropLayer{nullptr};
     composition::SpriteVisual                 content{nullptr};
     std::vector<BackdropVisual>               backdrops{};
-    composition::CompositionEffectFactory     factory{nullptr};
     std::optional<Backdrop>                   tone{};
 };
 
@@ -191,12 +190,9 @@ void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const B
             _visuals->backdropLayer.Children().Remove(backdrops.back().sprite);
             backdrops.pop_back();
         }
-        if (!boxes.empty() && retoned) {
-            _visuals->factory = _composition->backdrops.For(_composition->compositor, backdrop);
-            _visuals->tone    = backdrop;
-        }
+        _visuals->tone = backdrop;
         while (backdrops.size() < boxes.size()) {
-            backdrops.push_back(CreateBackdrop(*_composition, _visuals->factory));
+            backdrops.push_back(CreateBackdrop(*_composition, backdrop));
             _visuals->backdropLayer.Children().InsertAtTop(backdrops.back().sprite);
         }
         // Only a box that moved or changed size redraws its mask, so a bar at rest makes no composition change.

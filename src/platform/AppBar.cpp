@@ -199,12 +199,7 @@ RECT ReserveAppBarRectThroughTaskbar(HWND window, const RECT& monitorRect, Edge 
                    [taskbar, taskbarProcess](std::uint32_t message, APPBARDATA& data) { SendToTaskbar(taskbar, taskbarProcess, message, data); });
 }
 
-void NotifyAppBarActivated(HWND window) {
+void NotifyAppBar(HWND window, std::uint32_t message) {
     APPBARDATA data = AppBarData(window);
-    SHAppBarMessage(ABM_ACTIVATE, &data);
-}
-
-void NotifyAppBarMoved(HWND window) {
-    APPBARDATA data = AppBarData(window);
-    SHAppBarMessage(ABM_WINDOWPOSCHANGED, &data);
+    SHAppBarMessage(message, &data);
 }

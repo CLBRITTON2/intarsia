@@ -113,7 +113,7 @@ ModuleText Counter::Format(const std::string& spec) {
     const CounterReading reading = _sampler.Reading();
     switch (reading.outcome) {
         case CounterOutcome::Pending: return NormalText(Settings().icon, L"");
-        case CounterOutcome::Sampled: return NormalText(Settings().icon, ToWide(FormatPlaceholders(spec, CounterPlaceholders(reading.value))));
+        case CounterOutcome::Sampled: return NormalText(Settings().icon, FormatPlaceholders(spec, CounterPlaceholders(reading.value)));
         case CounterOutcome::Failed:
             return ModuleText{
                 .icon       = Settings().icon,

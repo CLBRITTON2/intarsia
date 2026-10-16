@@ -55,12 +55,12 @@ TEST(MonitorTable, ListsEachTargetUnderItsColumns) {
     const MonitorDescription laptop{
         .monitor = nullptr,
         .primary = true,
-        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal", .internal = true}},
+        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal"}},
     };
     const MonitorDescription desk{
         .monitor = nullptr,
         .primary = false,
-        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort", .internal = false}},
+        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort"}},
     };
     const MonitorDescription pathless{.monitor = nullptr, .primary = false, .targets = {}};
     EXPECT_EQ(MonitorTable({laptop, desk, pathless}, bar),
@@ -82,7 +82,7 @@ TEST(MonitorTable, ReplacesControlCharactersInAName) {
     const MonitorDescription hostile{
         .monitor = nullptr,
         .primary = true,
-        .targets = {DisplayTarget{.id = "DEL41A8", .name = "EVIL\x1B]0;owned\x07", .connection = "HDMI", .internal = false}},
+        .targets = {DisplayTarget{.id = "DEL41A8", .name = "EVIL\x1B]0;owned\x07", .connection = "HDMI"}},
     };
     const std::string table = MonitorTable({hostile}, bar);
     EXPECT_EQ(table.find('\x1B'), std::string::npos) << table;

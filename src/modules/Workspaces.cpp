@@ -52,18 +52,13 @@ bool Workspaces::LayOutItems(const RenderContext& render) {
     const WindowManagerStatus status           = _windowManager.Status();
     std::wstring              disconnectedText = DisconnectedText(status);
     std::vector<Workspace>    shown            = ShownWorkspaces(_windowManager, status, _monitor);
-    if (_laidOut && shown == _shown && disconnectedText == _disconnectedText) {
+    if (shown == _shown && disconnectedText == _disconnectedText) {
         return false;
     }
     _shown            = std::move(shown);
     _disconnectedText = std::move(disconnectedText);
-    _laidOut          = true;
     _labels.clear();
-    if (_disconnectedText.empty()) {
-        _disconnected = EmptyIconText();
-    } else {
-        _disconnected = LayOutIconText(render, L"", _disconnectedText);
-    }
+    _disconnected = LayOutIconText(render, L"", _disconnectedText);
 
     std::vector<D2D1_SIZE_F> contents;
     for (const Workspace& workspace : _shown) {

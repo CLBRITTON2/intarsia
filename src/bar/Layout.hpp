@@ -67,11 +67,6 @@ struct BarGeometry {
 // margin and insets.
 float BoxCrossLength(const BarGeometry& bar);
 
-// Each module's room along the bar: what it draws plus its insets and margin at both ends. A module showing nothing,
-// such as a battery module with no battery, takes no room at all. A group's length takes in the revealed share of its
-// members'.
-std::vector<float> BoxLengths(Axis axis, const std::vector<ModuleEntry>& entries);
-
 // The section's box, inside the bar's margin.
 D2D1_RECT_F SectionBounds(const BarGeometry& bar, const SectionLayout& layout);
 

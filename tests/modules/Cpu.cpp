@@ -45,7 +45,7 @@ TEST(Cpu, TheTooltipCanNameTheClockSpeedAndTheBusiestCore) {
                                      .maxCorePercent = 71,
                                      .cores          = {},
                                  })),
-              "12% 3.60 GHz busiest 71%");
+              L"12% 3.60 GHz busiest 71%");
 }
 
 TEST(Cpu, CoreUsageListsEveryCoreInOrderFourToALine) {

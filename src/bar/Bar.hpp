@@ -42,16 +42,6 @@ std::vector<BarPlacement> PlacementsFor(const std::vector<HMONITOR>& monitors);
 // rescaled or swapped for another makes them.
 bool MonitorsDiffer(const std::vector<BarPlacement>& placements, const std::vector<MonitorDescription>& descriptions);
 
-// The whole monitor's length along the bar's edge, which picks the config's layout.
-float EdgeLengthDips(const BarPlacement& placement, Edge edge);
-
-// Where SetWindowPos puts a bar of layer in the z-order.
-HWND LayerZOrder(Layer layer);
-
-// The bar window's rect on monitorRect, thickness pixels across, reserved with the shell through route when bar
-// reserves space.
-RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness, AppBarRoute route);
-
 // One appbar window docked to one edge of one monitor, drawing its own module instances. When the graphics device is
 // lost it stops drawing and posts deviceLostMessage to control, since only App can replace the device.
 class Bar {

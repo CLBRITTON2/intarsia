@@ -26,8 +26,8 @@ The bar reads `config.lua` for what it shows and `style.conf` for how it looks. 
 
 ## From source
 
-See [Build](../README.md#build) in the README for what the build needs. From the repo's root, copy a starter config
-from its `config` folder the first time, then install:
+See [Requirements](../README.md#requirements) in the README for what the build needs. From the repo's root, copy a
+starter config from its `config` folder the first time, then install:
 
 ```powershell
 New-Item -ItemType Directory -Force "$env:USERPROFILE\.config\intarsia" | Out-Null

@@ -1,7 +1,5 @@
 #include "modules/Clock.hpp"
 
-#include "platform/Text.hpp"
-
 #include <utility>
 
 Clock::Clock(TextModuleConfig config) : TextModule(std::move(config), "clock", ClockPlaceholders(std::chrono::system_clock::now())) {}
@@ -11,7 +9,7 @@ Clock::Clock(TextModuleConfig config) : TextModule(std::move(config), "clock", C
 ModuleText Clock::Format(const std::string& spec) {
     const std::chrono::sys_seconds second = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
     if (second != _formattedSecond || spec != _formattedSpec) {
-        _formatted       = ToWide(FormatPlaceholders(spec, ClockPlaceholders(second)));
+        _formatted       = FormatPlaceholders(spec, ClockPlaceholders(second));
         _formattedSecond = second;
         _formattedSpec   = spec;
     }

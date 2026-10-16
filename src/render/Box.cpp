@@ -466,16 +466,46 @@ BoxCache::BoxCache(ID2D1DeviceContext* context) :
     }()),
     _brushes(_context.Get()) {}
 
-ID2D1Bitmap1* BoxCache::Find(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height) {
+ID2D1Bitmap1* BoxCache::BitmapFor(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height) {
     const auto found = std::ranges::find_if(_entries, [&](const Entry& entry) {
         return entry.radius == radius && entry.pixelsPerDip == pixelsPerDip && entry.width == width && entry.height == height && SameBorder(entry.border, lines.border) &&
             std::ranges::equal(entry.shadows, lines.shadows, SameShadow);
     });
     if (found == _entries.end()) {
-        return nullptr;
+        return Render(lines, radius, pixelsPerDip, width, height);
     }
     std::rotate(found, found + 1, _entries.end());
     return _entries.back().bitmap.Get();
+}
+
+ID2D1Bitmap1* BoxCache::Render(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height) {
+    const float          dpi = pixelsPerDip * USER_DEFAULT_SCREEN_DPI;
+    ComPtr<ID2D1Bitmap1> drawn;
+    ThrowIfDeviceFailed(
+        _context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0,
+                               D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi), &drawn),
+        "ID2D1DeviceContext::CreateBitmap(box)");
+    _context->SetTarget(drawn.Get());
+    _context->SetDpi(dpi, dpi);
+    _context->BeginDraw();
+    _context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+    DrawDecorations(_context.Get(), _brushes, D2D1::RectF(0.0f, 0.0f, static_cast<float>(width) / pixelsPerDip, static_cast<float>(height) / pixelsPerDip), radius, lines);
+    const HRESULT ended = _context->EndDraw();
+    _context->SetTarget(nullptr);
+    ThrowIfDeviceFailed(ended, "ID2D1DeviceContext::EndDraw(box)");
+    if (_entries.size() == kMostCachedBoxes) {
+        _entries.erase(_entries.begin());
+    }
+    _entries.push_back(Entry{
+        .border       = lines.border,
+        .shadows      = lines.shadows,
+        .radius       = radius,
+        .pixelsPerDip = pixelsPerDip,
+        .width        = width,
+        .height       = height,
+        .bitmap       = drawn,
+    });
+    return drawn.Get();
 }
 
 void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2D1_RECT_F& box, float radius, const BoxStyle& lines) {
@@ -485,37 +515,7 @@ void BoxCache::Draw(ID2D1DeviceContext* context, const PixelGrid& grid, const D2
     const std::uint32_t depth        = PixelLength(box.bottom - box.top, pixelsPerDip);
     const std::uint32_t width        = SlicedLength(length, reach);
     const std::uint32_t height       = SlicedLength(depth, reach);
-    ID2D1Bitmap1*       bitmap       = Find(lines, radius, pixelsPerDip, width, height);
-    if (bitmap == nullptr) {
-        const float          dpi = pixelsPerDip * USER_DEFAULT_SCREEN_DPI;
-        ComPtr<ID2D1Bitmap1> drawn;
-        ThrowIfDeviceFailed(
-            _context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0,
-                                   D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi),
-                                   &drawn),
-            "ID2D1DeviceContext::CreateBitmap(box)");
-        _context->SetTarget(drawn.Get());
-        _context->SetDpi(dpi, dpi);
-        _context->BeginDraw();
-        _context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-        DrawDecorations(_context.Get(), _brushes, D2D1::RectF(0.0f, 0.0f, static_cast<float>(width) / pixelsPerDip, static_cast<float>(height) / pixelsPerDip), radius, lines);
-        const HRESULT ended = _context->EndDraw();
-        _context->SetTarget(nullptr);
-        ThrowIfDeviceFailed(ended, "ID2D1DeviceContext::EndDraw(box)");
-        if (_entries.size() == kMostCachedBoxes) {
-            _entries.erase(_entries.begin());
-        }
-        _entries.push_back(Entry{
-            .border       = lines.border,
-            .shadows      = lines.shadows,
-            .radius       = radius,
-            .pixelsPerDip = pixelsPerDip,
-            .width        = width,
-            .height       = height,
-            .bitmap       = drawn,
-        });
-        bitmap = drawn.Get();
-    }
+    ID2D1Bitmap1* const bitmap       = BitmapFor(lines, radius, pixelsPerDip, width, height);
     for (const Slice& across : Slices(box.left, box.right, width, length, reach, pixelsPerDip)) {
         for (const Slice& down : Slices(box.top, box.bottom, height, depth, reach, pixelsPerDip)) {
             const D2D1_RECT_F drawnRect = D2D1::RectF(across.drawnFrom, down.drawnFrom, across.drawnTo, down.drawnTo);

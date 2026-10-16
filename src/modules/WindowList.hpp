@@ -95,6 +95,5 @@ class WindowList final : public IModule {
     std::intptr_t                 _monitor;
     ModuleStyle                   _style;
     std::vector<Slot>             _slots;
-    ItemRow                       _row     = EmptyItemRow();
-    bool                          _laidOut = false;
+    ItemRow                       _row = EmptyItemRow();
 };

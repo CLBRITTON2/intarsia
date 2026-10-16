@@ -2,7 +2,6 @@
 
 #include "modules/TextModule.hpp"
 #include "platform/Errors.hpp"
-#include "platform/Text.hpp"
 
 #include <windows.h>
 
@@ -51,7 +50,7 @@ Memory::Memory(TextModuleConfig config) :
 
 ModuleText Memory::Format(const std::string& spec) {
     _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { _usage = ReadMemoryUsage(); });
-    return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, MemoryPlaceholders(_usage))); }));
+    return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return FormatPlaceholders(spec, MemoryPlaceholders(_usage)); }));
 }
 
 std::vector<Placeholder> MemoryPlaceholders(const MemoryUsage& usage) {

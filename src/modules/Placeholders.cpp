@@ -1,6 +1,7 @@
 #include "modules/Placeholders.hpp"
 
 #include "config/Config.hpp"
+#include "platform/Text.hpp"
 
 #include <algorithm>
 #include <array>
@@ -80,7 +81,7 @@ namespace {
 
 } // namespace
 
-std::string FormatPlaceholders(std::string_view format, const std::vector<Placeholder>& placeholders) {
+std::wstring FormatPlaceholders(std::string_view format, const std::vector<Placeholder>& placeholders) {
     std::string result;
     WalkFormat(
         format, [&result](std::string_view text) { result += text; },
@@ -91,7 +92,7 @@ std::string FormatPlaceholders(std::string_view format, const std::vector<Placeh
             }
             result += FormatOne(*found, spec);
         });
-    return result;
+    return ToWide(result);
 }
 
 bool FormatNames(std::string_view format, std::string_view name) {

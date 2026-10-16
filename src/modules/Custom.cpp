@@ -268,7 +268,7 @@ ModuleText Custom::Format(const std::string& spec) {
         case CommandOutcome::Succeeded:
             return ModuleText{
                 .icon       = Settings().icon,
-                .text       = ToWide(FormatPlaceholders(spec, CustomPlaceholders(result.text))),
+                .text       = FormatPlaceholders(spec, CustomPlaceholders(result.text)),
                 .state      = SucceededState(result),
                 .classIndex = result.classIndex.value_or(0),
             };

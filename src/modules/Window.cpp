@@ -39,7 +39,7 @@ std::optional<std::wstring> Window::TooltipText() {
     if (!Settings().tooltip.has_value() || !focused.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*Settings().tooltip, WindowPlaceholders(focused->title)));
+    return FormatPlaceholders(*Settings().tooltip, WindowPlaceholders(focused->title));
 }
 
 std::wstring TruncateTitle(std::wstring_view title, size_t maxLength) {

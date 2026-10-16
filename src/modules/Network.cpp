@@ -69,14 +69,14 @@ std::optional<std::wstring> Network::TooltipText() {
     if (!Settings().tooltip.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*Settings().tooltip, NetworkPlaceholders(_network.State())));
+    return FormatPlaceholders(*Settings().tooltip, NetworkPlaceholders(_network.State()));
 }
 
 ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state) {
     switch (state.link) {
-        case NetworkLink::None: return NormalText(config.iconDisconnected, ToWide(FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state))));
-        case NetworkLink::Ethernet: return NormalText(config.iconEthernet, ToWide(FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state))));
-        case NetworkLink::Wifi: return NormalText(WifiIcon(config.iconsWifi, state.signalPercent), ToWide(FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state))));
+        case NetworkLink::None: return NormalText(config.iconDisconnected, FormatPlaceholders(config.formatDisconnected, NetworkPlaceholders(state)));
+        case NetworkLink::Ethernet: return NormalText(config.iconEthernet, FormatPlaceholders(config.formatEthernet, NetworkPlaceholders(state)));
+        case NetworkLink::Wifi: return NormalText(WifiIcon(config.iconsWifi, state.signalPercent), FormatPlaceholders(config.formatWifi, NetworkPlaceholders(state)));
     }
     throw std::invalid_argument(std::format("unknown network link {}", static_cast<std::int32_t>(state.link)));
 }

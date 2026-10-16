@@ -35,7 +35,6 @@ class BindingModes final : public IModule {
     const IWindowManager&         _windowManager;
     ModuleStyle                   _style;
     std::vector<std::wstring>     _shown;
-    bool                          _laidOut = false;
     std::vector<IconText>         _labels;
     ItemRow                       _row = EmptyItemRow();
 };

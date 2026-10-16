@@ -25,11 +25,14 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-    // Null when the item has no tooltip. ReadItem checks the field is a string first.
+    // Null when the item has no tooltip.
     std::optional<std::string> TooltipOf(const nlohmann::json& item) {
         const auto tooltip = item.find("tooltip");
         if (tooltip == item.end()) {
             return std::nullopt;
+        }
+        if (!tooltip->is_string()) {
+            throw OutputError("printed a JSON item tooltip that is not a string");
         }
         return tooltip->get<std::string>();
     }
@@ -57,10 +60,6 @@ namespace {
         const auto active = item.find("active");
         if (active != item.end() && !active->is_boolean()) {
             throw OutputError("printed a JSON item active that is not true or false");
-        }
-        const auto tooltip = item.find("tooltip");
-        if (tooltip != item.end() && !tooltip->is_string()) {
-            throw OutputError("printed a JSON item tooltip that is not a string");
         }
         MenuEntry entry{
             .id      = id->get<std::string>(),
@@ -399,9 +398,9 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
         case WM_MOUSEMOVE: {
             const D2D1_POINT_2F point = ClientDips(ClientPoint(lParam), _dpi);
             if (_thumbGrabDips.has_value()) {
-                Scroll(ScrolledToThumb(_scroll, _track, point.y - *_thumbGrabDips));
+                Scroll(ScrolledToThumb(_layout.scroll, _layout.track, point.y - *_thumbGrabDips));
             } else {
-                const std::optional<size_t> entry = EntryAt(_rows, _scroll, point);
+                const std::optional<size_t> entry = EntryAt(_layout.rows, _layout.scroll, point);
                 if (entry != _highlight) {
                     RestartHover();
                 }
@@ -413,7 +412,7 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
         case WM_MOUSELEAVE: _tooltip.Hide(); return 0;
         case WM_LBUTTONDOWN: {
             const D2D1_POINT_2F point = ClientDips(ClientPoint(lParam), _dpi);
-            if (Contains(_gutter, point)) {
+            if (Contains(_layout.gutter, point)) {
                 GrabThumb(point);
             }
             return 0;
@@ -424,7 +423,7 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
                 ReleaseCapture();
                 return 0;
             }
-            const std::optional<size_t> entry = EntryAt(_rows, _scroll, ClientDips(ClientPoint(lParam), _dpi));
+            const std::optional<size_t> entry = EntryAt(_layout.rows, _layout.scroll, ClientDips(ClientPoint(lParam), _dpi));
             if (entry.has_value()) {
                 Pick(*entry);
             }
@@ -510,18 +509,14 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
         }
     }
 
-    MenuLayout layout = LayOutMenu(std::move(rows), style, anchor.monitorRect, anchor.dpi);
-    const SIZE size   = layout.size;
+    _layout         = LayOutMenu(std::move(rows), style, anchor.monitorRect, anchor.dpi);
+    const SIZE size = _layout.size;
     // A window takes one composition target at a time, so the old surface goes before the new one is made.
     _canvas.reset();
     _entries   = std::move(entries);
-    _rows      = std::move(layout.rows);
     _highlight = std::nullopt;
     _onSelect  = onSelect;
     _dpi       = anchor.dpi;
-    _scroll    = layout.scroll;
-    _gutter    = layout.gutter;
-    _track     = layout.track;
     _thumbGrabDips.reset();
     _canvas = std::make_unique<Canvas>(_graphics, _window.get(), static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
     _shown  = true;
@@ -548,7 +543,7 @@ void Menu::Hide() {
     _tooltip.Hide();
     ShowWindow(_window.get(), SW_HIDE);
     _canvas.reset();
-    _rows.clear();
+    _layout.rows.clear();
     _entries.clear();
     _highlight = std::nullopt;
     _thumbGrabDips.reset();
@@ -569,11 +564,11 @@ void Menu::Draw() {
     const PixelGrid grid = PixelGridOf(context);
     _canvas->surface.ShowBackdrops(BackdropOutlines(style.backdrop, grid, {whole}, style.box), style.backdrop);
     // Whole pixels, so scrolled text stays as sharp as unscrolled text.
-    const float offset = SnapLength(grid, _scroll.offsetDips);
-    context->PushAxisAlignedClip(_scroll.viewport, D2D1_ANTIALIAS_MODE_ALIASED);
+    const float offset = SnapLength(grid, _layout.scroll.offsetDips);
+    context->PushAxisAlignedClip(_layout.scroll.viewport, D2D1_ANTIALIAS_MODE_ALIASED);
     context->SetTransform(D2D1::Matrix3x2F::Translation(0.0f, -offset));
-    for (const MenuRow& row : _rows) {
-        if (row.text == nullptr || row.box.bottom - offset < _scroll.viewport.top || row.box.top - offset > _scroll.viewport.bottom) {
+    for (const MenuRow& row : _layout.rows) {
+        if (row.text == nullptr || row.box.bottom - offset < _layout.scroll.viewport.top || row.box.top - offset > _layout.scroll.viewport.bottom) {
             continue;
         }
         const ItemStyle& itemStyle = *row.style;
@@ -591,7 +586,7 @@ void Menu::Draw() {
     context->SetTransform(D2D1::Matrix3x2F::Identity());
     context->PopAxisAlignedClip();
     const ScrollbarStyle&            scrollbar = style.scrollbar;
-    const std::optional<D2D1_RECT_F> thumb     = ThumbRect(_scroll, _track);
+    const std::optional<D2D1_RECT_F> thumb     = ThumbRect(_layout.scroll, _layout.track);
     if (thumb.has_value() && scrollbar.widthDips > 0.0f) {
         const BoxStyle box{
             .background = scrollbar.background,
@@ -621,17 +616,17 @@ void Menu::Pick(size_t entry) {
 }
 
 void Menu::Scroll(const MenuScroll& scroll) {
-    if (!_shown || scroll.offsetDips == _scroll.offsetDips) {
+    if (!_shown || scroll.offsetDips == _layout.scroll.offsetDips) {
         return;
     }
     // It would no longer sit level with its row.
     _tooltip.Hide();
-    _scroll = scroll;
+    _layout.scroll = scroll;
     Draw();
 }
 
 void Menu::Wheel(std::int16_t delta) {
-    if (!_shown || _rows.empty()) {
+    if (!_shown || _layout.rows.empty()) {
         return;
     }
     std::uint32_t lines = 0;
@@ -639,9 +634,9 @@ void Menu::Wheel(std::int16_t delta) {
         ThrowLastError("SystemParametersInfoW(SPI_GETWHEELSCROLLLINES)");
     }
     const float notches  = static_cast<float>(delta) / WHEEL_DELTA;
-    const float rowDips  = _scroll.contentDips / static_cast<float>(_rows.size());
-    const float pageDips = _scroll.viewport.bottom - _scroll.viewport.top;
-    Scroll(ScrolledTo(_scroll, _scroll.offsetDips - (notches * WheelStepDips(lines, pageDips, rowDips))));
+    const float rowDips  = _layout.scroll.contentDips / static_cast<float>(_layout.rows.size());
+    const float pageDips = _layout.scroll.viewport.bottom - _layout.scroll.viewport.top;
+    Scroll(ScrolledTo(_layout.scroll, _layout.scroll.offsetDips - (notches * WheelStepDips(lines, pageDips, rowDips))));
     // The rows moved under a cursor that did not.
     POINT cursor{};
     if (!GetCursorPos(&cursor)) {
@@ -650,7 +645,7 @@ void Menu::Wheel(std::int16_t delta) {
     if (!ScreenToClient(_window.get(), &cursor)) {
         ThrowLastError("ScreenToClient(menu)");
     }
-    Highlight(EntryAt(_rows, _scroll, ClientDips(cursor, _dpi)));
+    Highlight(EntryAt(_layout.rows, _layout.scroll, ClientDips(cursor, _dpi)));
 }
 
 void Menu::Step(MenuStep step) {
@@ -659,22 +654,22 @@ void Menu::Step(MenuStep step) {
     }
     _tooltip.Hide();
     const std::optional<size_t> entry = StepHighlight(_highlight, _entries.size(), step);
-    const auto                  row   = std::ranges::find(_rows, entry, &MenuRow::entry);
-    if (entry.has_value() && row != _rows.end()) {
-        _scroll = ScrolledToShow(_scroll, row->box);
+    const auto                  row   = std::ranges::find(_layout.rows, entry, &MenuRow::entry);
+    if (entry.has_value() && row != _layout.rows.end()) {
+        _layout.scroll = ScrolledToShow(_layout.scroll, row->box);
     }
     _highlight = entry;
     Draw();
 }
 
 void Menu::GrabThumb(D2D1_POINT_2F point) {
-    const std::optional<D2D1_RECT_F> thumb = ThumbRect(_scroll, _track);
+    const std::optional<D2D1_RECT_F> thumb = ThumbRect(_layout.scroll, _layout.track);
     if (!thumb.has_value()) {
         return;
     }
     _thumbGrabDips = ThumbGrabDips(point.y, *thumb);
     SetCapture(_window.get());
-    Scroll(ScrolledToThumb(_scroll, _track, point.y - *_thumbGrabDips));
+    Scroll(ScrolledToThumb(_layout.scroll, _layout.track, point.y - *_thumbGrabDips));
 }
 
 void Menu::RestartHover() {
@@ -694,10 +689,10 @@ void Menu::ShowTooltip() {
     if (!_shown || !_highlight.has_value() || !_entries[*_highlight].tooltip.has_value()) {
         return;
     }
-    const auto row = std::ranges::find(_rows, _highlight, &MenuRow::entry);
-    if (row == _rows.end()) {
+    const auto row = std::ranges::find(_layout.rows, _highlight, &MenuRow::entry);
+    if (row == _layout.rows.end()) {
         return;
     }
-    const D2D1_RECT_F shown = Offset(row->box, D2D1::Point2F(0.0f, -_scroll.offsetDips));
+    const D2D1_RECT_F shown = Offset(row->box, D2D1::Point2F(0.0f, -_layout.scroll.offsetDips));
     _tooltip.Show(ToWide(*_entries[*_highlight].tooltip), RowTooltipAnchor(DipsToScreen(_rect, shown, _dpi), _monitorRect, _dpi));
 }

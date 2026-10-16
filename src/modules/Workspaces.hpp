@@ -42,10 +42,9 @@ class Workspaces final : public IModule {
     IWindowManager&               _windowManager;
     std::intptr_t                 _monitor;
     ModuleStyle                   _style;
-    // What the items show, once laid out, so an unchanged list lays out nothing.
+    // What the items show, so an unchanged list lays out nothing.
     std::vector<Workspace> _shown;
     std::wstring           _disconnectedText;
-    bool                   _laidOut = false;
     std::vector<IconText>  _labels; // one per shown workspace
     ItemRow                _row          = EmptyItemRow();
     IconText               _disconnected = EmptyIconText();

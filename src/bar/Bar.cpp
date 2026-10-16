@@ -68,6 +68,31 @@ namespace {
         throw std::invalid_argument(std::format("unknown appbar route {}", static_cast<std::int32_t>(route)));
     }
 
+    // The whole monitor's length along the bar's edge, which picks the config's layout.
+    float EdgeLengthDips(const BarPlacement& placement, Edge edge) {
+        return PixelsToDips(EdgeLengthPixels(placement.monitorRect, edge), placement.dpi);
+    }
+
+    // Where SetWindowPos puts a bar of layer in the z-order.
+    HWND LayerZOrder(Layer layer) {
+        switch (layer) {
+            case Layer::Top: return HWND_TOPMOST;
+            case Layer::Bottom: return HWND_BOTTOM;
+        }
+        throw std::invalid_argument(std::format("unknown layer {}", static_cast<std::int32_t>(layer)));
+    }
+
+    // The bar window's rect on monitorRect, thickness pixels across, reserved with the shell through route when bar
+    // reserves space. A shared bar stays a registered appbar, so the shell still tells it of fullscreen apps and of other
+    // appbars moving.
+    RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness, AppBarRoute route) {
+        switch (bar.space) {
+            case Space::Reserve: return ReserveRect(window, monitorRect, bar.edge, thickness, route);
+            case Space::Share: return DockedRect(monitorRect, bar.edge, thickness);
+        }
+        throw std::invalid_argument(std::format("unknown space {}", static_cast<std::int32_t>(bar.space)));
+    }
+
     constexpr wchar_t       kWindowClass[]    = L"IntarsiaBar";
     constexpr std::uint32_t kAppBarCallback   = WM_APP + 1;
     constexpr std::uint32_t kAnimationFrame   = WM_APP + 2;
@@ -170,27 +195,6 @@ bool MonitorsDiffer(const std::vector<BarPlacement>& placements, const std::vect
         const std::vector<HMONITOR> monitors = ListMonitors();
         return PlacementsFor(monitors) != placements || DescribeMonitors(monitors) != descriptions;
     } catch (const MonitorGoneError&) { return true; }
-}
-
-float EdgeLengthDips(const BarPlacement& placement, Edge edge) {
-    return PixelsToDips(EdgeLengthPixels(placement.monitorRect, edge), placement.dpi);
-}
-
-HWND LayerZOrder(Layer layer) {
-    switch (layer) {
-        case Layer::Top: return HWND_TOPMOST;
-        case Layer::Bottom: return HWND_BOTTOM;
-    }
-    throw std::invalid_argument(std::format("unknown layer {}", static_cast<std::int32_t>(layer)));
-}
-
-// A shared bar stays a registered appbar, so the shell still tells it of fullscreen apps and of other appbars moving.
-RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness, AppBarRoute route) {
-    switch (bar.space) {
-        case Space::Reserve: return ReserveRect(window, monitorRect, bar.edge, thickness, route);
-        case Space::Share: return DockedRect(monitorRect, bar.edge, thickness);
-    }
-    throw std::invalid_argument(std::format("unknown space {}", static_cast<std::int32_t>(bar.space)));
 }
 
 void Bar::RegisterWindowClass(HINSTANCE instance) {
@@ -360,8 +364,8 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             HandleInput(point, WheelInput(wParam));
             return 0;
         }
-        case WM_ACTIVATE: NotifyAppBarActivated(window); return 0;
-        case WM_WINDOWPOSCHANGED: NotifyAppBarMoved(window); return DefWindowProcW(window, message, wParam, lParam);
+        case WM_ACTIVATE: NotifyAppBar(window, ABM_ACTIVATE); return 0;
+        case WM_WINDOWPOSCHANGED: NotifyAppBar(window, ABM_WINDOWPOSCHANGED); return DefWindowProcW(window, message, wParam, lParam);
         case kAppBarCallback:
             if (wParam == ABN_POSCHANGED) {
                 Dock();

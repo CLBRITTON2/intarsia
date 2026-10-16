@@ -4,7 +4,6 @@
 
 #include <windows.h>
 
-#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -18,7 +17,6 @@ namespace {
     constexpr std::uint32_t    kProbeColor   = 0x27AE60;
     constexpr std::uint32_t    kRulerColor   = 0xF39C12;
     constexpr std::uint32_t    kTooltipColor = 0x3498DB;
-    constexpr auto             kLimit        = std::chrono::seconds(5);
 
     constexpr std::string_view kModuleConfig = R"(
 return {
@@ -136,17 +134,17 @@ tooltip {
 
 TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
     integration::RunningBar bar("hover-module", kModuleConfig, kModuleStyle);
-    const std::int32_t      probe = bar.DrawnColumn(kRestColor, kLimit);
+    const std::int32_t      probe = bar.DrawnColumn(kRestColor, integration::kLimit);
     EXPECT_EQ(bar.PixelCount(kHoverColor), size_t{0}) << "the hover background drew with no cursor over the module";
 
     const integration::SavedCursor saved;
     bar.MoveCursorTo(probe);
-    EXPECT_TRUE(bar.Draws(kHoverColor, kLimit)) << "the hover background never drew under the cursor";
-    EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("animation_frames").empty(); }, kLimit)) << "the hover transition logged no frames";
+    EXPECT_TRUE(bar.Draws(kHoverColor, integration::kLimit)) << "the hover background never drew under the cursor";
+    EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("animation_frames").empty(); }, integration::kLimit)) << "the hover transition logged no frames";
 
     bar.MoveCursorTo(bar.OffsetPastLastModule());
-    EXPECT_TRUE(bar.StopsDrawing(kHoverColor, kLimit)) << "the hover background still drew after the cursor moved off";
-    EXPECT_TRUE(bar.Draws(kRestColor, kLimit)) << "the rest background never came back";
+    EXPECT_TRUE(bar.StopsDrawing(kHoverColor, integration::kLimit)) << "the hover background still drew after the cursor moved off";
+    EXPECT_TRUE(bar.Draws(kRestColor, integration::kLimit)) << "the rest background never came back";
 }
 
 TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
@@ -162,7 +160,7 @@ TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
             span                               = integration::ColumnSpan(capture, kRestColor);
             return middle.has_value() && span.has_value();
         },
-        kLimit))
+        integration::kLimit))
         << "the window items never drew their background at rest";
 
     const integration::SavedCursor saved;
@@ -177,12 +175,12 @@ TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
             rest                               = integration::MeanColumn(capture, kRestColor);
             return hovered.has_value() && rest.has_value() && *hovered < *rest;
         },
-        kLimit))
+        integration::kLimit))
         << "the first item did not draw the hover background alone: hovered column " << hovered.value_or(-1) << ", rest column " << rest.value_or(-1);
     integration::Log("hover_columns", std::format("hovered={:.1f} rest={:.1f}", hovered.value_or(-1), rest.value_or(-1)));
 
     bar.MoveCursorTo(bar.OffsetPastLastModule());
-    EXPECT_TRUE(bar.StopsDrawing(kHoverColor, kLimit)) << "the item's hover background still drew after the cursor moved off";
+    EXPECT_TRUE(bar.StopsDrawing(kHoverColor, integration::kLimit)) << "the item's hover background still drew after the cursor moved off";
 }
 
 TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
@@ -196,7 +194,7 @@ TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
             rulerSpan                          = integration::ColumnSpan(capture, kRulerColor);
             return probeColumn.has_value() && rulerSpan.has_value();
         },
-        kLimit))
+        integration::kLimit))
         << "the modules never drew in their colors";
     const auto                     probeX = static_cast<std::int32_t>(std::lround(probeColumn.value_or(0)));
 
@@ -212,12 +210,12 @@ TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
             tooltipSpan = integration::ColumnSpan(integration::CaptureScreenOver(tooltip), kTooltipColor);
             return tooltipSpan.has_value();
         },
-        kLimit))
+        integration::kLimit))
         << "resting over the module never showed its tooltip text";
     integration::Log("tooltip_shown", std::format("text_columns={} ruler_columns={}", tooltipSpan.value_or(-1), rulerSpan.value_or(-1)));
     // The same text in the same font spans the same columns, give or take antialiasing at its ends.
     EXPECT_NEAR(tooltipSpan.value_or(0), rulerSpan.value_or(0), 2) << "the tooltip does not show the module's tooltip text";
 
     bar.MoveCursorTo(bar.OffsetPastLastModule());
-    EXPECT_TRUE(integration::Eventually([&] { return bar.Tooltip() == nullptr; }, kLimit)) << "moving off the module left its tooltip shown";
+    EXPECT_TRUE(integration::Eventually([&] { return bar.Tooltip() == nullptr; }, integration::kLimit)) << "moving off the module left its tooltip shown";
 }

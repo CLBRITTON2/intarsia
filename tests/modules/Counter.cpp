@@ -114,7 +114,7 @@ TEST_F(Sampler, ANewValueOfTheSameOutcomeIsReadWithoutANotify) {
 }
 
 TEST(Counter, TheValueIsANumberAndTheRateIsBytesPerSecond) {
-    EXPECT_EQ(FormatPlaceholders("{value:.1f}% {rate}", CounterPlaceholders(3'400'000.0)), "3400000.0% 3.4 MB/s");
+    EXPECT_EQ(FormatPlaceholders("{value:.1f}% {rate}", CounterPlaceholders(3'400'000.0)), L"3400000.0% 3.4 MB/s");
 }
 
 TEST_F(CounterModule, FormatsAreCheckedAgainstTheValues) {

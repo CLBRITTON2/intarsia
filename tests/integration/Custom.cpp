@@ -2,7 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -15,7 +14,6 @@ namespace {
     constexpr std::uint32_t kOrange = 0xF39C12;
     constexpr std::uint32_t kRed    = 0xE74C3C;
     constexpr std::uint32_t kBlue   = 0x2E86C1;
-    constexpr auto          kDrawn  = std::chrono::seconds(5);
 
     // left is the Lua list contents of the left section, modules the Lua definitions of the modules it names.
     std::string CustomConfig(std::string_view left, std::string_view modules) {
@@ -71,7 +69,7 @@ TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
         "custom-fails", CustomConfig(R"("probe")", R"(probe = { type = "custom", command = { "cmd", "/c", "exit 3" }, run = "interval", timeout = 5, output = "text", classes = {},
                   format = "{text}", icon = "", interval = 30 },)"),
         StyleWithRules(""));
-    EXPECT_TRUE(bar.Draws(kRed, kDrawn)) << "the failing command never drew the alert color";
+    EXPECT_TRUE(bar.Draws(kRed, integration::kLimit)) << "the failing command never drew the alert color";
     EXPECT_FALSE(bar.Events("command_failed").empty()) << "the bar logged no command_failed";
 }
 
@@ -85,11 +83,11 @@ TEST(Custom, ShowsEachLineAContinuousCommandPrintsInItsClassColorThenItsExitThen
     const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module),
                                       StyleWithRules("probe {\n  color: #2e86c1\n  one {\n    color: #27ae60\n  }\n  two {\n    color: #f39c12\n  }\n}\n"));
 
-    ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";
+    ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit)) << "the first line's class never drew";
     EXPECT_EQ(bar.PixelCount(kBlue), size_t{0}) << "the module's own color drew beside its class's";
-    ASSERT_TRUE(bar.Draws(kOrange, kDrawn)) << "the second line's class never drew";
+    ASSERT_TRUE(bar.Draws(kOrange, integration::kLimit)) << "the second line's class never drew";
     EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the first line's class still drew beside the second's";
-    ASSERT_TRUE(bar.Draws(kRed, kDrawn)) << "the command's exit never drew the alert color";
+    ASSERT_TRUE(bar.Draws(kRed, integration::kLimit)) << "the command's exit never drew the alert color";
     EXPECT_FALSE(bar.LogLines("exited with code 3").empty()) << "the bar logged no exit code";
-    EXPECT_TRUE(bar.Draws(kGreen, kDrawn)) << "the command never restarted after its interval";
+    EXPECT_TRUE(bar.Draws(kGreen, integration::kLimit)) << "the command never restarted after its interval";
 }

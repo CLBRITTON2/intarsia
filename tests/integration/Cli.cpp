@@ -1,6 +1,7 @@
 #include "Harness.hpp"
 
 #include "ChildProcess.hpp"
+#include "platform/Text.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -8,7 +9,9 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -51,9 +54,9 @@ return {
         std::vector<std::string> errors;
     };
 
-    // Runs intarsia-cli.exe command --config on config and kStyle written to a new work directory. nullopt when it has
-    // not exited within kExitLimit.
-    std::optional<CliRun> RunCli(std::string_view testName, std::wstring_view command, std::string_view config) {
+    // Runs intarsia-cli.exe command --config on config and kStyle written to a new work directory. Throws when it has not
+    // exited within kExitLimit.
+    CliRun RunCli(std::string_view testName, std::wstring_view command, std::string_view config) {
         const std::filesystem::path directory  = integration::NewWorkDirectory(testName);
         const std::filesystem::path configPath = directory / "config.lua";
         integration::WriteText(configPath, config);
@@ -61,7 +64,7 @@ return {
         const integration::ChildProcess cli(integration::CliPath(), {std::wstring(command), L"--config", configPath.wstring()}, directory / "stdout.txt", directory / "stderr.txt");
         const std::optional<std::uint32_t> exitCode = cli.Close(kExitLimit);
         if (!exitCode.has_value()) {
-            return std::nullopt;
+            throw std::runtime_error(std::format("intarsia-cli {} did not exit within {} s ({})", ToUtf8(command), kExitLimit.count(), directory.string()));
         }
         return CliRun{
             .exitCode = *exitCode,
@@ -73,31 +76,22 @@ return {
 } // namespace
 
 TEST(Cli, CheckPrintsThatAValidConfigLoads) {
-    const std::optional<CliRun> run = RunCli("cli_check_valid", L"check", ConfigWithMonitors(R"({ "*" })"));
-    if (!run.has_value()) {
-        FAIL() << "intarsia-cli check did not exit";
-    }
-    EXPECT_EQ(run->exitCode, 0U);
-    EXPECT_THAT(run->output, ElementsAre(HasSubstr("load")));
-    EXPECT_THAT(run->errors, IsEmpty());
+    const CliRun run = RunCli("cli_check_valid", L"check", ConfigWithMonitors(R"({ "*" })"));
+    EXPECT_EQ(run.exitCode, 0U);
+    EXPECT_THAT(run.output, ElementsAre(HasSubstr("load")));
+    EXPECT_THAT(run.errors, IsEmpty());
 }
 
 TEST(Cli, CheckPrintsTheFirstErrorAndExitsOne) {
-    const std::optional<CliRun> run = RunCli("cli_check_invalid", L"check", ConfigWithMonitors(R"({ "primary", "primary" })"));
-    if (!run.has_value()) {
-        FAIL() << "intarsia-cli check did not exit";
-    }
-    EXPECT_EQ(run->exitCode, 1U);
-    EXPECT_THAT(run->output, IsEmpty());
-    EXPECT_THAT(run->errors, Contains(HasSubstr("bar.monitors lists 'primary' twice")));
+    const CliRun run = RunCli("cli_check_invalid", L"check", ConfigWithMonitors(R"({ "primary", "primary" })"));
+    EXPECT_EQ(run.exitCode, 1U);
+    EXPECT_THAT(run.output, IsEmpty());
+    EXPECT_THAT(run.errors, Contains(HasSubstr("bar.monitors lists 'primary' twice")));
 }
 
 TEST(Cli, PrintsUsageAndExitsTwoOnAnUnknownCommand) {
-    const std::optional<CliRun> run = RunCli("cli_unknown_command", L"frobnicate", ConfigWithMonitors(R"({ "*" })"));
-    if (!run.has_value()) {
-        FAIL() << "intarsia-cli did not exit";
-    }
-    EXPECT_EQ(run->exitCode, 2U);
-    EXPECT_THAT(run->output, IsEmpty());
-    EXPECT_THAT(run->errors, Contains(HasSubstr("usage: intarsia-cli")));
+    const CliRun run = RunCli("cli_unknown_command", L"frobnicate", ConfigWithMonitors(R"({ "*" })"));
+    EXPECT_EQ(run.exitCode, 2U);
+    EXPECT_THAT(run.output, IsEmpty());
+    EXPECT_THAT(run.errors, Contains(HasSubstr("usage: intarsia-cli")));
 }

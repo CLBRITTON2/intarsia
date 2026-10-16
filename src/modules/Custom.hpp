@@ -2,6 +2,7 @@
 
 #include "config/Config.hpp"
 #include "modules/IModule.hpp"
+#include "modules/SharedWorkers.hpp"
 #include "modules/TextModule.hpp"
 #include "platform/Threads.hpp"
 

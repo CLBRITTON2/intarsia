@@ -42,7 +42,6 @@ return {{
     constexpr std::uint32_t kGreen  = 0x27AE60;
     constexpr std::uint32_t kOrange = 0xF39C12;
     constexpr std::uint32_t kBlue   = 0x2E86C1;
-    constexpr auto          kDrawn  = std::chrono::seconds(5);
 
     std::string             StyleWithRules(std::string_view rules) {
         return std::string(R"(
@@ -121,8 +120,6 @@ return {{
                            integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record));
     }
 
-    constexpr auto kReloaded = std::chrono::seconds(5);
-
     // monitors is the Lua list contents of bar.monitors.
     std::string MonitorsConfig(std::string_view monitors) {
         return std::format(R"(
@@ -159,7 +156,7 @@ mark {
                 lines.assign(all.begin() + static_cast<std::ptrdiff_t>(std::min(skipped, all.size())), all.end());
                 return lines.size() >= count;
             },
-            kReloaded);
+            integration::kLimit);
         return lines;
     }
 
@@ -167,16 +164,16 @@ mark {
 
 TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
     integration::RunningBar bar("config-resave", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
-    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
+    ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit));
 
     // Cut short, as a reload can read a file an editor is still writing.
     const std::string valid = OneModuleConfig(R"("mark")", "");
     bar.SaveConfig(std::string_view(valid).substr(0, valid.size() / 2));
-    ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("config_invalid").empty(); }, kDrawn)) << "the cut-short save was not logged as invalid";
+    ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("config_invalid").empty(); }, integration::kLimit)) << "the cut-short save was not logged as invalid";
     bar.SaveStyle(MarkStyleWithBackground("#f39c12"));
     bar.SaveConfig(valid);
 
-    EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the replacing save never drew";
+    EXPECT_TRUE(bar.Draws(kOrange, integration::kLimit)) << "the replacing save never drew";
     // Past the second an invalid file must stay unchanged before it ends the bar.
     integration::PumpFor(std::chrono::seconds(2));
     EXPECT_THAT(bar.Events("fatal"), testing::IsEmpty());
@@ -194,7 +191,7 @@ TEST(Config, DrawsARightBorderPastTheBackground) {
             border                             = integration::MeanColumn(capture, kBlue);
             return background.has_value() && border.has_value() && *border > *background;
         },
-        kDrawn))
+        integration::kLimit))
         << "the border did not draw right of the background: background column " << background.value_or(-1) << ", border column " << border.value_or(-1);
     integration::Log("border_columns", std::format("background={:.1f} border={:.1f}", background.value_or(-1), border.value_or(-1)));
 }
@@ -213,7 +210,7 @@ TEST(Config, AClickOnAModulesMarginRunsNothing) {
             span                               = integration::ColumnSpan(capture, kGreen);
             return middle.has_value() && span.has_value();
         },
-        kDrawn))
+        integration::kLimit))
         << "the module never drew its background";
     const auto boxLeft = static_cast<std::int32_t>(std::lround(middle.value_or(0) - (static_cast<double>(span.value_or(0)) / 2)));
     integration::Log("module_box", std::format("left={} span={}", boxLeft, span.value_or(-1)));
@@ -223,13 +220,13 @@ TEST(Config, AClickOnAModulesMarginRunsNothing) {
     EXPECT_FALSE(std::filesystem::exists(record)) << "a click in the margin ran the module's action";
 
     bar.ClickAt(static_cast<std::int32_t>(std::lround(middle.value_or(0))));
-    EXPECT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kDrawn))
+    EXPECT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, integration::kLimit))
         << "a click on the box ran no action, so the margin click proves nothing";
 }
 
 TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
     integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
-    const std::int32_t      left     = bar.DrawnColumn(kGreen, kDrawn);
+    const std::int32_t      left     = bar.DrawnColumn(kGreen, integration::kLimit);
     const RECT              barRect  = integration::ScreenRect(bar.PrimaryBar());
     const std::int32_t      barWidth = barRect.right - barRect.left;
     const double            middle   = static_cast<double>(barWidth) / 2;
@@ -243,26 +240,26 @@ TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
             right = bar.MeanColumnOf(kGreen);
             return right.value_or(0) > middle;
         },
-        kDrawn))
+        integration::kLimit))
         << "the module stayed at column " << right.value_or(-1) << " after the save moved it right";
     integration::Log("module_column", std::format("section=right column={:.1f}", right.value_or(-1)));
 }
 
 TEST(Config, DrawsTheColorOfASavedStyle) {
     const integration::RunningBar bar("config-style", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
-    ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the module never drew in the first style's color";
+    ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit)) << "the module never drew in the first style's color";
 
     bar.SaveStyle(MarkStyleWithBackground("#f39c12"));
-    EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the saved style's color never drew";
-    EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the first style's color still drew";
+    EXPECT_TRUE(bar.Draws(kOrange, integration::kLimit)) << "the saved style's color never drew";
+    EXPECT_TRUE(bar.StopsDrawing(kGreen, integration::kLimit)) << "the first style's color still drew";
 }
 
 TEST(Config, EndsWithExitCode1AfterAnInvalidSave) {
     integration::RunningBar bar("config-invalid", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
-    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
+    ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit));
 
     bar.SaveConfig(OneModuleConfig(R"("mark", "missing")", ""));
-    ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("fatal").empty(); }, kDrawn)) << "the bar logged no fatal error after the invalid save";
+    ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("fatal").empty(); }, integration::kLimit)) << "the bar logged no fatal error after the invalid save";
     const std::vector<std::string> fatal = bar.Events("fatal");
     integration::Log("bar_logged", std::format("event=fatal lines={}", fatal.size()));
     EXPECT_THAT(fatal.front(), HasSubstr("missing"));
@@ -277,7 +274,7 @@ TEST(Config, ShowsTheLastLayoutTheMonitorsLengthReaches) {
                                       StyleWithRules("low {\n  background: #27ae60\n}\nreached {\n  background: #f39c12\n}\nbeyond {\n  background: #2e86c1\n}\n"));
     integration::Log("layouts", std::format("primary_length_dips={:.2f} reached_min_length={} beyond_min_length={}", length, reached, reached + 1));
 
-    EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the layout the monitor reaches never drew";
+    EXPECT_TRUE(bar.Draws(kOrange, integration::kLimit)) << "the layout the monitor reaches never drew";
     EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the top-level lists drew";
     EXPECT_EQ(bar.PixelCount(kBlue), size_t{0}) << "the layout past the monitor's length drew";
 }
@@ -296,7 +293,7 @@ TEST(Monitors, KeepsRunningWithNoBarWhenNoMonitorMatches) {
     for (const std::string& line : unmatched) {
         EXPECT_THAT(line, HasSubstr(" bar=no"));
     }
-    EXPECT_TRUE(integration::Eventually([&] { return bar.PrimaryBar() == nullptr; }, kReloaded)) << "the primary bar stayed although no monitor matches";
+    EXPECT_TRUE(integration::Eventually([&] { return bar.PrimaryBar() == nullptr; }, integration::kLimit)) << "the primary bar stayed although no monitor matches";
     // Long enough for a failure after the rebuild to reach the fatal box.
     integration::PumpFor(std::chrono::seconds(2));
     EXPECT_EQ(bar.PrimaryBar(), nullptr) << "a bar came back although no monitor matches";
@@ -304,7 +301,7 @@ TEST(Monitors, KeepsRunningWithNoBarWhenNoMonitorMatches) {
 
     const size_t unmatchedEnd = bar.Events("monitor").size();
     bar.SaveConfig(MonitorsConfig(R"("*")"));
-    EXPECT_TRUE(integration::Eventually([&] { return bar.PrimaryBar() != nullptr; }, kReloaded)) << "the bar did not return once every monitor matched again";
+    EXPECT_TRUE(integration::Eventually([&] { return bar.PrimaryBar() != nullptr; }, integration::kLimit)) << "the bar did not return once every monitor matched again";
     const std::vector<std::string> matched = MonitorLinesAfter(bar, unmatchedEnd, startLines);
     integration::Log("monitor_lines", std::format("phase=matched lines={}", matched.size()));
     EXPECT_THAT(matched, testing::Contains(HasSubstr(" bar=yes")));

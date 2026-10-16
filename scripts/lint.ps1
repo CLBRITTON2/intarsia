@@ -53,12 +53,7 @@ if ($allSources.Count -eq 0) {
 $allUnits = @($allSources | Where-Object { $_ -like '*.cpp' })
 
 if ($Changed) {
-    Push-Location $repoRoot
-    try {
-        $changedPaths = @(Invoke-Checked 'git diff' { git diff --name-only HEAD }) + @(Invoke-Checked 'git ls-files' { git ls-files --others --exclude-standard })
-    } finally {
-        Pop-Location
-    }
+    $changedPaths = @(Invoke-Checked 'git diff' { git -C $repoRoot diff --name-only HEAD }) + @(Invoke-Checked 'git ls-files' { git -C $repoRoot ls-files --others --exclude-standard })
     $changedFull = @($changedPaths | ForEach-Object { [System.IO.Path]::GetFullPath((Join-Path $repoRoot $_)) })
     $sources     = @($allSources | Where-Object { $_ -in $changedFull })
     # A header change reaches every unit that names it in an include, matched by file name.

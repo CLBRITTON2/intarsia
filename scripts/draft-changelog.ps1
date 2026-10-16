@@ -28,12 +28,7 @@ if ($null -ne (Get-ReleaseNotes $changelog $Version)) {
     throw "CHANGELOG.md already has a section for $Version"
 }
 
-Push-Location $repoRoot
-try {
-    $subjects = @(Invoke-Checked "git log $From..HEAD" { git log --no-merges --reverse --format=%s "$From..HEAD" })
-} finally {
-    Pop-Location
-}
+$subjects = @(Invoke-Checked "git log $From..HEAD" { git -C $repoRoot log --no-merges --reverse --format=%s "$From..HEAD" })
 if ($subjects.Count -eq 0) {
     throw "No commits after $From"
 }
@@ -45,10 +40,10 @@ if ($insertAt -lt 0) {
     $insertAt = $lines.Count
 }
 $section = @("## $Version ($(Get-Date -Format 'yyyy-MM-dd'))", '') + @($subjects | ForEach-Object { "- $($_.Trim())" }) + @('')
-$before  = if ($insertAt -gt 0) { @($lines[0..($insertAt - 1)]) } else { @() }
+$before  = @($lines | Select-Object -First $insertAt)
 if ($before.Count -gt 0 -and $before[-1] -ne '') {
     $before += ''
 }
-$after   = if ($insertAt -lt $lines.Count) { @($lines[$insertAt..($lines.Count - 1)]) } else { @() }
+$after   = @($lines | Select-Object -Skip $insertAt)
 Set-Content -Path $changelog -Value ($before + $section + $after)
 Write-Host "Added $Version to CHANGELOG.md with $($subjects.Count) entries: edit them, then commit"

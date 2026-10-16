@@ -1,7 +1,6 @@
 #include "modules/Battery.hpp"
 
 #include "modules/Placeholders.hpp"
-#include "platform/Text.hpp"
 
 #include <cstdint>
 #include <format>
@@ -64,7 +63,7 @@ std::optional<std::wstring> Battery::TooltipText() {
     if (!Settings().tooltip.has_value() || !state.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*Settings().tooltip, BatteryPlaceholders(*state)));
+    return FormatPlaceholders(*Settings().tooltip, BatteryPlaceholders(*state));
 }
 
 ModuleText FormatBattery(const BatteryConfig& config, const std::optional<BatteryState>& state) {
@@ -75,12 +74,12 @@ ModuleText FormatBattery(const BatteryConfig& config, const std::optional<Batter
         case ChargeState::Discharging:
             return ModuleText{
                 .icon       = LevelIcon(config.icons, state->percent),
-                .text       = ToWide(FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state))),
+                .text       = FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state)),
                 .state      = DischargingState(config, state->percent),
                 .classIndex = 0,
             };
-        case ChargeState::Charging: return NormalText(config.iconCharging, ToWide(FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state))));
-        case ChargeState::Plugged: return NormalText(config.iconPlugged, ToWide(FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state))));
+        case ChargeState::Charging: return NormalText(config.iconCharging, FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state)));
+        case ChargeState::Plugged: return NormalText(config.iconPlugged, FormatPlaceholders(config.formatPlugged, BatteryPlaceholders(*state)));
     }
     throw std::invalid_argument(std::format("unknown battery charge {}", static_cast<std::int32_t>(state->charge)));
 }

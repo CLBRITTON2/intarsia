@@ -16,7 +16,6 @@ namespace {
 
     constexpr std::uint32_t kTextColor = 0x27AE60;
     constexpr std::uint32_t kMenuColor = 0x8E44AD;
-    constexpr auto          kLimit     = std::chrono::seconds(5);
 
     // A command that records each run in listing and prints two entries, ids "one" and "two".
     std::string ListingCommand(const std::filesystem::path& listing) {
@@ -64,13 +63,13 @@ menu {
 )";
 
     bool                       MenuShown(const integration::RunningBar& bar) {
-        const bool shown = integration::Eventually([&] { return bar.Menu() != nullptr; }, kLimit);
+        const bool shown = integration::Eventually([&] { return bar.Menu() != nullptr; }, integration::kLimit);
         integration::Log("menu_shown", std::format("shown={}", shown));
         return shown;
     }
 
     bool MenuHidden(const integration::RunningBar& bar) {
-        const bool hidden = integration::Eventually([&] { return bar.Menu() == nullptr; }, kLimit);
+        const bool hidden = integration::Eventually([&] { return bar.Menu() == nullptr; }, integration::kLimit);
         integration::Log("menu_hidden", std::format("hidden={}", hidden));
         return hidden;
     }
@@ -83,17 +82,18 @@ TEST(Menu, PicksTheEntryTheKeysHighlightAndRunsOnSelectWithItsId) {
     const std::filesystem::path   selected  = work / "selected.txt";
     const integration::RunningBar bar(kTestName, MenuConfig(ListingCommand(work / "listing.txt"), selected), kStyle);
 
-    bar.ClickAt(bar.DrawnColumn(kTextColor, kLimit));
+    bar.ClickAt(bar.DrawnColumn(kTextColor, integration::kLimit));
     ASSERT_TRUE(MenuShown(bar)) << "the click showed no menu";
     HWND menu = bar.Menu();
-    EXPECT_TRUE(integration::Eventually([&] { return integration::CountPixels(integration::CaptureScreenOver(menu), kMenuColor) > 0; }, kLimit))
+    EXPECT_TRUE(integration::Eventually([&] { return integration::CountPixels(integration::CaptureScreenOver(menu), kMenuColor) > 0; }, integration::kLimit))
         << "the menu never drew its background";
 
     integration::SendKey(menu, VK_DOWN);
     integration::SendKey(menu, VK_DOWN);
     integration::SendKey(menu, VK_RETURN);
     EXPECT_TRUE(MenuHidden(bar)) << "picking an entry left the menu shown";
-    ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(selected).empty(); }, kLimit)) << "no pick reached on_select (" << selected.string() << ")";
+    ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(selected).empty(); }, integration::kLimit))
+        << "no pick reached on_select (" << selected.string() << ")";
     EXPECT_THAT(integration::ReadLines(selected), ElementsAre("two"));
 }
 
@@ -103,7 +103,7 @@ TEST(Menu, EscapeAndASecondClickOnItsModuleEachCloseIt) {
     const std::filesystem::path   listing   = work / "listing.txt";
     const std::filesystem::path   selected  = work / "selected.txt";
     const integration::RunningBar bar(kTestName, MenuConfig(ListingCommand(listing), selected), kStyle);
-    const std::int32_t            column = bar.DrawnColumn(kTextColor, kLimit);
+    const std::int32_t            column = bar.DrawnColumn(kTextColor, integration::kLimit);
 
     bar.ClickAt(column);
     ASSERT_TRUE(MenuShown(bar)) << "the first click showed no menu";
@@ -127,7 +127,7 @@ TEST(Menu, LogsACommandThatFails) {
     const std::string             failing   = std::format(R"({{ {}, "/c", "exit 3" }})", integration::LuaString(R"(C:\Windows\System32\cmd.exe)"));
     const integration::RunningBar bar(kTestName, MenuConfig(failing, selected), kStyle);
 
-    bar.ClickAt(bar.DrawnColumn(kTextColor, kLimit));
-    EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("menu_failed").empty(); }, kLimit)) << "the failed command was never logged";
+    bar.ClickAt(bar.DrawnColumn(kTextColor, integration::kLimit));
+    EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("menu_failed").empty(); }, integration::kLimit)) << "the failed command was never logged";
     EXPECT_TRUE(MenuShown(bar)) << "the failure showed no menu row";
 }

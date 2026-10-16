@@ -24,9 +24,7 @@ $running = @(Get-Process intarsia -ErrorAction Ignore | Where-Object Path -EQ $b
 foreach ($process in $running) {
     Invoke-Checked "taskkill /PID $($process.Id)" { taskkill /PID $process.Id }
 }
-if ($running.Count -gt 0) {
-    $running | Wait-Process -Timeout 10
-}
+$running | Wait-Process -Timeout 10
 
 New-Item -ItemType Directory -Force $install | Out-Null
 Copy-Item (Join-Path $built 'intarsia.exe'), (Join-Path $built 'intarsia-cli.exe') $install

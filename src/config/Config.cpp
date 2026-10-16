@@ -23,6 +23,7 @@
 #include <fstream>
 #include <functional>
 #include <initializer_list>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <ranges>
@@ -758,9 +759,13 @@ namespace {
         return layouts;
     }
 
-    // A module's style block is named for it, beside the style's own top-level blocks.
-    void RejectReservedModuleNames(const TableReader& definitions) {
+    // A module's style block is named for it, beside the style's own top-level blocks, so its name is a style key and
+    // none of theirs.
+    void RequireValidModuleNames(const TableReader& definitions) {
         for (const std::string& name : definitions.Keys()) {
+            if (name.empty() || !std::ranges::all_of(name, IsNameCharacter)) {
+                throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
+            }
             if (IsReservedModuleName(name)) {
                 throw definitions.Error(std::format("{} names a block of style.conf's own: give the module another name", definitions.KeyPath(name)));
             }
@@ -770,9 +775,6 @@ namespace {
     // A defined module no list shows is an error, so a misspelled name in a list or in modules is caught either way.
     void RejectUnshownModules(const TableReader& definitions, const Config& config) {
         for (const std::string& name : definitions.Keys()) {
-            if (name.empty() || !std::ranges::all_of(name, IsNameCharacter)) {
-                throw definitions.Error(std::format("{} is not a valid module name: use letters, digits, '_' or '-'", definitions.KeyPath(name)));
-            }
             if (!AnyModuleInConfig(config, [&name](const ModuleInstance& instance) { return instance.name == name; })) {
                 throw definitions.Error(std::format("{} is defined but no _modules list or group shows it", definitions.KeyPath(name)));
             }
@@ -781,30 +783,31 @@ namespace {
 
     // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
     void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
-        std::vector<const Sections<ModuleInstance>*> lists{&config.modules};
-        for (const LayoutConfig& layout : config.layouts) {
-            lists.push_back(&layout.modules);
-        }
+        std::set<std::string, std::less<>>              listed;
         std::map<std::string, std::string, std::less<>> groupOf;
-        for (const Sections<ModuleInstance>* sections : lists) {
-            ForEachInSections(*sections, [&](const ModuleInstance& instance) {
-                const auto* group = std::get_if<GroupConfig>(&instance.settings);
-                if (group == nullptr) {
-                    return;
+        // Notes each module a list shows, and the one group each member belongs to.
+        const auto recordShown = [&listed, &groupOf, &definitions](const ModuleInstance& instance) {
+            listed.insert(instance.name);
+            const auto* group = std::get_if<GroupConfig>(&instance.settings);
+            if (group == nullptr) {
+                return;
+            }
+            for (const ModuleInstance& member : group->members) {
+                const auto [entry, added] = groupOf.try_emplace(member.name, instance.name);
+                if (!added && entry->second != instance.name) {
+                    throw definitions.Error(
+                        std::format("{} is a member of both group '{}' and group '{}', and one group shows it", definitions.KeyPath(member.name), entry->second, instance.name));
                 }
-                for (const ModuleInstance& member : group->members) {
-                    const auto listed = [&member](const ModuleInstance& shown) { return shown.name == member.name; };
-                    if (std::ranges::any_of(lists, [&listed](const Sections<ModuleInstance>* other) { return AnyInSections(*other, listed); })) {
-                        throw definitions.Error(
-                            std::format("{} is a member of group '{}', so no _modules list may show it as well", definitions.KeyPath(member.name), instance.name));
-                    }
-                    const auto [entry, added] = groupOf.try_emplace(member.name, instance.name);
-                    if (!added && entry->second != instance.name) {
-                        throw definitions.Error(std::format("{} is a member of both group '{}' and group '{}', and one group shows it", definitions.KeyPath(member.name),
-                                                            entry->second, instance.name));
-                    }
-                }
-            });
+            }
+        };
+        ForEachInSections(config.modules, recordShown);
+        for (const LayoutConfig& layout : config.layouts) {
+            ForEachInSections(layout.modules, recordShown);
+        }
+        for (const auto& [member, group] : groupOf) {
+            if (listed.contains(member)) {
+                throw definitions.Error(std::format("{} is a member of group '{}', so no _modules list may show it as well", definitions.KeyPath(member), group));
+            }
         }
     }
 
@@ -897,7 +900,7 @@ Config LoadConfig(const std::filesystem::path& path) {
     const StyleSheet            sheet       = ParseStyleSheet(ReadFile(stylePath, "style", kMaxStyleFileBytes), ToUtf8(stylePath.wstring()));
     StyleConfig                 style       = ResolveBarStyle(sheet);
     const TableReader           definitions = root.Table("modules");
-    RejectReservedModuleNames(definitions);
+    RequireValidModuleNames(definitions);
     Sections<ModuleInstance>  modules = ReadSections(root, definitions, sheet, style);
     std::vector<LayoutConfig> layouts = ReadLayouts(root, definitions, sheet, style);
 
@@ -922,11 +925,7 @@ Config LoadConfig(const std::filesystem::path& path) {
     RequireMembersInOneGroup(definitions, config);
     RequireKnownModules(sheet, definitions.Keys());
     std::vector<std::string> declared;
-    ForEachModuleInConfig(config, [&declared](const ModuleInstance& instance) {
-        if (const auto* custom = std::get_if<CustomConfig>(&instance.settings)) {
-            declared.insert(declared.end(), custom->classes.begin(), custom->classes.end());
-        }
-    });
+    ForEachModuleInConfig(config, [&declared](const ModuleInstance& instance) { std::ranges::copy(ClassesOf(instance.settings), std::back_inserter(declared)); });
     RequireDeclaredClasses(sheet, declared);
     RejectWhatNeedsAWindowManager(root, config);
     return config;
@@ -951,7 +950,7 @@ bool ShowsBarOn(const BarConfig& bar, const MonitorDescription& description) {
             return description.primary;
         }
         if (std::holds_alternative<InternalMonitor>(match)) {
-            return std::ranges::any_of(description.targets, &DisplayTarget::internal);
+            return std::ranges::any_of(description.targets, &DisplayTarget::IsInternal);
         }
         const std::string& id = std::get<MonitorWithId>(match).id;
         return std::ranges::any_of(description.targets, [&id](const DisplayTarget& target) { return target.id == id; });

@@ -42,6 +42,14 @@ namespace {
         return handle;
     }
 
+    void SetDwordOption(HINTERNET handle, DWORD option, DWORD value, std::string_view name) {
+        // The call takes a writable buffer.
+        DWORD buffer = value;
+        if (!WinHttpSetOption(handle, option, &buffer, sizeof(buffer))) {
+            ThrowLastError(std::format("WinHttpSetOption({})", name));
+        }
+    }
+
     UniqueInternet OpenSession() {
         UniqueInternet session(Checked(WinHttpOpen(L"intarsia", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0), "WinHttpOpen"));
         // Set on the session so the request and the WebSocket made from it inherit them.
@@ -101,14 +109,9 @@ WebSocket::WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_vi
     }
     // The peer is checked only after the upgrade, so until then its answers must not send the bar elsewhere or draw the
     // user's logon out of it.
-    DWORD disabled = WINHTTP_DISABLE_REDIRECTS | WINHTTP_DISABLE_AUTHENTICATION | WINHTTP_DISABLE_COOKIES;
-    if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disabled, sizeof(disabled))) {
-        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_DISABLE_FEATURE)");
-    }
-    DWORD autologon = WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH;
-    if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_AUTOLOGON_POLICY, &autologon, sizeof(autologon))) {
-        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_AUTOLOGON_POLICY)");
-    }
+    SetDwordOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, WINHTTP_DISABLE_REDIRECTS | WINHTTP_DISABLE_AUTHENTICATION | WINHTTP_DISABLE_COOKIES,
+                   "WINHTTP_OPTION_DISABLE_FEATURE");
+    SetDwordOption(request.get(), WINHTTP_OPTION_AUTOLOGON_POLICY, WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH, "WINHTTP_OPTION_AUTOLOGON_POLICY");
     if (!WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
         ThrowLastError("WinHttpSendRequest");
     }
@@ -126,16 +129,10 @@ WebSocket::WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_vi
     }
     _localPort = LocalPortOf(request.get());
     // Set on the request, which the WebSocket inherits it from: the WebSocket handle itself rejects the option.
-    DWORD idleTimeout = kIdleTimeoutMs;
-    if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_RECEIVE_TIMEOUT, &idleTimeout, sizeof(idleTimeout))) {
-        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_RECEIVE_TIMEOUT)");
-    }
+    SetDwordOption(request.get(), WINHTTP_OPTION_RECEIVE_TIMEOUT, kIdleTimeoutMs, "WINHTTP_OPTION_RECEIVE_TIMEOUT");
     _socket.reset(Checked(WinHttpWebSocketCompleteUpgrade(request.get(), 0), "WinHttpWebSocketCompleteUpgrade"));
 
-    DWORD closeTimeout = kCloseTimeoutSeconds;
-    if (!WinHttpSetOption(_socket.get(), WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT, &closeTimeout, sizeof(closeTimeout))) {
-        ThrowLastError("WinHttpSetOption(WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT)");
-    }
+    SetDwordOption(_socket.get(), WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT, kCloseTimeoutSeconds, "WINHTTP_OPTION_WEB_SOCKET_CLOSE_TIMEOUT");
 }
 
 std::uint16_t WebSocket::LocalPort() const {

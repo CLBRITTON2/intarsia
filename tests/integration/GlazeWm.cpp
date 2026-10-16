@@ -184,7 +184,7 @@ TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
 
     // The direction has no text and takes no room, so no click reaches the toggle.
     EXPECT_THAT(bar.CommandsFromSweep(), ElementsAre("command focus --workspace 1", "command focus --workspace 2", "command focus --next-workspace"));
-    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("command_failed").empty(); }, std::chrono::seconds(5))) << "the rejected focus --workspace 1 was never logged";
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("command_failed").empty(); }, integration::kLimit)) << "the rejected focus --workspace 1 was never logged";
     for (const std::string& line : bar.Events("command_failed")) {
         EXPECT_NE(line.find("focus --workspace 1"), std::string::npos) << line;
     }
@@ -230,7 +230,7 @@ namespace {
 
 TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActiveAndTheConfiguredTextForTheTilingDirection) {
     integration::RunningBar bar("binding-mode", kModesConfig, kModesStyle);
-    ASSERT_TRUE(bar.Draws(kTilingColor, std::chrono::seconds(5))) << "the tiling direction never drew, so the bar has no answers yet";
+    ASSERT_TRUE(bar.Draws(kTilingColor, integration::kLimit)) << "the tiling direction never drew, so the bar has no answers yet";
     EXPECT_EQ(bar.PixelCount(kModeColor), size_t{0}) << "a binding mode drew while none is active";
     std::optional<std::int32_t> horizontal;
     ASSERT_TRUE(integration::Eventually(
@@ -238,23 +238,23 @@ TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActiveAndTheConfiguredTextForTheTili
             horizontal = TilingSpan(bar);
             return horizontal.has_value();
         },
-        std::chrono::seconds(5)))
+        integration::kLimit))
         << "the horizontal direction never drew";
 
     bar.PushFocus(1);
-    EXPECT_TRUE(bar.Draws(kModeColor, std::chrono::seconds(5))) << "the active binding mode never drew";
+    EXPECT_TRUE(bar.Draws(kModeColor, integration::kLimit)) << "the active binding mode never drew";
     std::optional<std::int32_t> vertical;
     EXPECT_TRUE(integration::Eventually(
         [&] {
             vertical = TilingSpan(bar);
             return horizontal.has_value() && vertical.has_value() && *vertical < *horizontal;
         },
-        std::chrono::seconds(5)))
+        integration::kLimit))
         << "the direction's box stayed " << horizontal.value_or(-1) << " px wide for the shorter vertical text, now " << vertical.value_or(-1);
     integration::Log("tiling_spans", std::format("horizontal={} vertical={}", horizontal.value_or(-1), vertical.value_or(-1)));
 
     bar.PushFocus(2);
-    EXPECT_TRUE(bar.StopsDrawing(kModeColor, std::chrono::seconds(5))) << "the binding mode still drew once it ended";
+    EXPECT_TRUE(bar.StopsDrawing(kModeColor, integration::kLimit)) << "the binding mode still drew once it ended";
 }
 
 namespace {
@@ -299,7 +299,7 @@ TEST(GlazeWm, StylesAnEmptyWorkspaceApartFromTheFocusedOne) {
             focused                            = integration::MeanColumn(capture, kFocusedColor);
             return empty.has_value() && focused.has_value() && *empty < *focused;
         },
-        std::chrono::seconds(5)))
+        integration::kLimit))
         << "workspace 1 (empty) did not draw left of workspace 2 (focused): empty column " << empty.value_or(-1) << ", focused column " << focused.value_or(-1);
     integration::Log("workspace_columns", std::format("empty={:.1f} focused={:.1f}", empty.value_or(-1), focused.value_or(-1)));
 }
@@ -340,13 +340,13 @@ TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosingAndTakesClicks
             connectedPixels                    = integration::CountPixels(capture, kAlertColor);
             return integration::CountPixels(capture, kTextColor) > 0 && connectedPixels == 0;
         },
-        std::chrono::seconds(5)))
+        integration::kLimit))
         << "the connected workspaces never drew in the text color alone, " << connectedPixels << " alert pixels";
     integration::Log("pixels_counted", std::format("color=#{:06x} count={} while=connected", kAlertColor, connectedPixels));
 
     bar.StopServer();
     EXPECT_TRUE(bar.Draws(kAlertColor, std::chrono::seconds(2))) << "no pixel drew in the alert color within 2 s of the server closing";
-    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("disconnected").empty(); }, std::chrono::seconds(5)));
+    EXPECT_TRUE(integration::Eventually([&bar] { return !bar.Events("disconnected").empty(); }, integration::kLimit));
     integration::Log("bar_logged", std::format("event=disconnected lines={}", bar.Events("disconnected").size()));
 
     bar.StartServer();
@@ -399,7 +399,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
     const integration::TestWindow second(L" 2");
     integration::RunningBar       bar("focus", kWindowsConfig, kFocusedStyle);
 
-    const std::int32_t            firstColumn = bar.DrawnColumn(kFocusedColor, std::chrono::seconds(5));
+    const std::int32_t            firstColumn = bar.DrawnColumn(kFocusedColor, integration::kLimit);
     integration::Log("focused_color_found", std::format("color=#{:06x} column={}", kFocusedColor, firstColumn));
 
     bar.PushFocus(1);
@@ -409,7 +409,7 @@ TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
             secondColumn = bar.MeanColumnOf(kFocusedColor);
             return secondColumn.has_value() && *secondColumn > firstColumn;
         },
-        std::chrono::seconds(5)))
+        integration::kLimit))
         << "the focused color stayed at column " << firstColumn << ", now " << secondColumn.value_or(-1);
     integration::Log("focused_color_found", std::format("color=#{:06x} mean_column={:.1f}", kFocusedColor, secondColumn.value_or(-1)));
 }

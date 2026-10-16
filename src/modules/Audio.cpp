@@ -60,7 +60,7 @@ std::optional<std::wstring> Audio::TooltipText() {
     if (!Settings().tooltip.has_value() || !device.has_value()) {
         return std::nullopt;
     }
-    return ToWide(FormatPlaceholders(*Settings().tooltip, AudioPlaceholders(*device)));
+    return FormatPlaceholders(*Settings().tooltip, AudioPlaceholders(*device));
 }
 
 ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevice>& device) {
@@ -70,12 +70,12 @@ ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevic
     if (device->muted) {
         return ModuleText{
             .icon       = config.iconMuted,
-            .text       = ToWide(FormatPlaceholders(config.formatMuted, AudioPlaceholders(*device))),
+            .text       = FormatPlaceholders(config.formatMuted, AudioPlaceholders(*device)),
             .state      = TextState::Muted,
             .classIndex = 0,
         };
     }
-    return NormalText(config.icon, ToWide(FormatPlaceholders(config.format, AudioPlaceholders(*device))));
+    return NormalText(config.icon, FormatPlaceholders(config.format, AudioPlaceholders(*device)));
 }
 
 float SteppedVolume(float volume, std::int32_t stepPercent, ScrollDirection direction) {

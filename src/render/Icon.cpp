@@ -17,11 +17,6 @@ namespace {
 
     using UniqueBitmap = UniqueReleased<HBITMAP, &DeleteObject>;
 
-    struct IconSize {
-        std::uint32_t width;
-        std::uint32_t height;
-    };
-
     // A monochrome icon has no color bitmap, so its mask gives its size.
     HBITMAP SizedBitmap(const UniqueBitmap& color, const UniqueBitmap& mask) {
         if (color != nullptr) {
@@ -39,7 +34,7 @@ namespace {
     }
 
     // Copies the icon's bitmaps, since no call reports the size without them, but spares WIC's copy and its conversion.
-    IconSize ReadIconSize(HICON icon) {
+    D2D1_SIZE_U ReadIconSize(HICON icon) {
         ICONINFO info{};
         if (GetIconInfo(icon, &info) == 0) {
             ThrowLastError("GetIconInfo");
@@ -50,7 +45,7 @@ namespace {
         if (GetObjectW(SizedBitmap(color, mask), sizeof(bitmap), &bitmap) == 0) {
             ThrowLastError("GetObjectW(icon bitmap)");
         }
-        return IconSize{.width = static_cast<std::uint32_t>(bitmap.bmWidth), .height = static_cast<std::uint32_t>(IconHeight(bitmap, color))};
+        return D2D1::SizeU(static_cast<std::uint32_t>(bitmap.bmWidth), static_cast<std::uint32_t>(IconHeight(bitmap, color)));
     }
 
     void RequireReadableSize(std::uint32_t width, std::uint32_t height) {
@@ -68,7 +63,7 @@ ComPtr<IWICImagingFactory> CreateImagingFactory() {
 }
 
 IconPixels IconToPixels(IWICImagingFactory& imaging, HICON icon) {
-    const IconSize size = ReadIconSize(icon);
+    const D2D1_SIZE_U size = ReadIconSize(icon);
     RequireReadableSize(size.width, size.height);
     ComPtr<IWICBitmap> bitmap;
     ThrowIfFailed(imaging.CreateBitmapFromHICON(icon, &bitmap), "IWICImagingFactory::CreateBitmapFromHICON");

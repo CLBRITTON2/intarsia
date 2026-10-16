@@ -1135,11 +1135,12 @@ namespace {
         };
     }
 
-    // An item in one state: the state's blocks over the item's, and under the cursor the state's colors over the item's
-    // hover, so a state such as focused keeps the colors it sets.
+    // An item in one state: the state's blocks over the item's, and under the cursor the state's own hover, then the
+    // state's colors, then the item's hover, so a state such as focused keeps the colors it sets.
     ItemStyle ResolveItemState(const Chain& items, std::string_view state, const D2D1_COLOR_F& color) {
         const Chain states = Children(items, state);
-        return ResolveItem(Concat(states, items), Concat(states, Children(items, "hover")), color);
+        const Chain hover  = Concat(Children(states, "hover"), Concat(states, Children(items, "hover")));
+        return ResolveItem(Concat(states, items), hover, color);
     }
 
     // A module's text and icon colors in one state: the state's blocks win over the module's own, and the icon inherits
@@ -1178,7 +1179,6 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
     const Chain        tooltipChain = ChainOf({TopLevel(sheet, "tooltip")});
     const Chain        menuChain    = ChainOf({TopLevel(sheet, "menu")});
     const Chain        items        = Children(menuChain, "item");
-    const Chain        active       = Children(items, "active");
     const D2D1_COLOR_F color        = ParseColor(Required(sheet, *bar, "color", "#e0def4").value);
     const D2D1_COLOR_F menuColor    = ResolveColor(menuChain, "color", color);
     const Chain        scrollbar    = Children(menuChain, "scrollbar");
@@ -1206,7 +1206,7 @@ StyleConfig ResolveBarStyle(const StyleSheet& sheet) {
                 .maxWidthDips  = Read(menuChain, "max-width", ParseCap, std::nullopt),
                 .maxHeightDips = Read(menuChain, "max-height", ParseCap, std::nullopt),
                 .item          = ResolveItem(items, Children(items, "hover"), menuColor),
-                .active        = ResolveItem(Concat(active, items), Concat(Children(active, "hover"), Concat(active, Children(items, "hover"))), menuColor),
+                .active        = ResolveItemState(items, "active", menuColor),
                 .scrollbar =
                     {
                         .widthDips  = Read(scrollbar, "width", ParsePositiveLength, 0.0f),

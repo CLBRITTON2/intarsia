@@ -22,6 +22,8 @@ namespace integration {
     inline constexpr std::wstring_view kWindowTitle = L"intarsia integration";
     // The bar's --tray-class, one no app uses, so the bar never takes the desktop's tray.
     inline constexpr std::wstring_view kTrayClass = L"IntarsiaIntegrationTray";
+    // How long a test waits for the bar to draw, log or run something.
+    inline constexpr std::chrono::seconds kLimit{5};
 
     // A visible, minimized top-level window titled kWindowTitle plus suffix, so the test server lists it.
     class TestWindow {

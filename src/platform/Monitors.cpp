@@ -228,16 +228,13 @@ namespace {
         target.header.id        = path.targetInfo.id;
         ThrowIfWin32Failed(static_cast<DWORD>(DisplayConfigGetDeviceInfo(&target.header)), "DisplayConfigGetDeviceInfo(target name)");
 
-        std::string connection = ConnectionName(target.outputTechnology);
-        const bool  internal   = connection == "internal";
         return ActivePath{
             .sourceDevice = source.viewGdiDeviceName,
             .target =
                 DisplayTarget{
                     .id         = TargetId(target.monitorDevicePath),
                     .name       = FriendlyName(target),
-                    .connection = std::move(connection),
-                    .internal   = internal,
+                    .connection = ConnectionName(target.outputTechnology),
                 },
         };
     }
@@ -277,6 +274,10 @@ bool IsMonitorId(std::string_view text) {
     const std::string_view serial = text.substr(kModelLength + 1);
     return text[kModelLength] == '-' && !serial.empty() && serial.size() <= kMaxSerialLength && serial.front() != ' ' && serial.back() != ' ' &&
         std::ranges::all_of(serial, IsPrintable);
+}
+
+bool DisplayTarget::IsInternal() const {
+    return connection == "internal";
 }
 
 std::vector<HMONITOR> ListMonitors() {

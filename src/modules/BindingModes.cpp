@@ -17,11 +17,10 @@ bool BindingModes::Layout(const RenderContext& render) {
 
 bool BindingModes::LayOutItems(const RenderContext& render) {
     std::vector<std::wstring> modes = _windowManager.BindingModes();
-    if (_laidOut && modes == _shown) {
+    if (modes == _shown) {
         return false;
     }
-    _shown   = std::move(modes);
-    _laidOut = true;
+    _shown = std::move(modes);
     _labels.clear();
     std::vector<D2D1_SIZE_F> contents;
     for (const std::wstring& mode : _shown) {

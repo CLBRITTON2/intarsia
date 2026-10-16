@@ -12,7 +12,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <ranges>
 #include <string>
 #include <utility>
 
@@ -150,8 +149,7 @@ bool WindowList::LayOutItems(const RenderContext& render) {
     for (const ManagedWindow& window : shown) {
         pixels.push_back(_icons.For(window.handle));
     }
-    const auto same = [&](size_t index) { return _slots[index].window == shown[index] && _slots[index].pixels == pixels[index]; };
-    if (_laidOut && shown.size() == _slots.size() && std::ranges::all_of(std::views::iota(size_t{0}, shown.size()), same)) {
+    if (std::ranges::equal(shown, _slots, {}, {}, &Slot::window) && std::ranges::equal(pixels, _slots, {}, {}, &Slot::pixels)) {
         return false;
     }
 
@@ -165,8 +163,7 @@ bool WindowList::LayOutItems(const RenderContext& render) {
             .bitmap = std::move(bitmap),
         });
     }
-    _slots   = std::move(slots);
-    _laidOut = true;
+    _slots = std::move(slots);
 
     const float icon = _style.icon.sizeDips;
     _row             = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), ItemStyles(), render.axis);
@@ -195,7 +192,7 @@ Microsoft::WRL::ComPtr<ID2D1Bitmap> WindowList::BitmapFor(const RenderContext& r
     if (kept != _slots.end()) {
         return kept->bitmap;
     }
-    if (pixels != nullptr && pixels->width > 0) {
+    if (pixels != nullptr) {
         return CreateIconBitmap(render.context, *pixels);
     }
     return nullptr;

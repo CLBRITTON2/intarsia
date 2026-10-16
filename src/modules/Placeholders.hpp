@@ -15,9 +15,9 @@ struct Placeholder {
 };
 
 // The format with each {name} replaced by that placeholder's value, and {name:spec} formatted by spec as std::format
-// formats it ("{signal:>3}", "{time:%H:%M}"). {{ and }} are literal braces. Throws std::format_error for a name no
-// placeholder has, a spec that does not fit the value, or an unmatched brace.
-std::string FormatPlaceholders(std::string_view format, const std::vector<Placeholder>& placeholders);
+// formats it ("{signal:>3}", "{time:%H:%M}"), as wide text. {{ and }} are literal braces. Throws std::format_error for
+// a name no placeholder has, a spec that does not fit the value, or an unmatched brace.
+std::wstring FormatPlaceholders(std::string_view format, const std::vector<Placeholder>& placeholders);
 
 // Whether the format has a {name} or {name:spec} field. Throws std::format_error for an unmatched brace.
 bool FormatNames(std::string_view format, std::string_view name);

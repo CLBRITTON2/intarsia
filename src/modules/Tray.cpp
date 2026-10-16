@@ -47,13 +47,12 @@ bool Tray::LayOutItems(const RenderContext& render) {
     if (position.revealed > 0.0f) {
         const std::vector<TrayIcon> shown = ShownIcons(_tray.Icons());
         if (!std::ranges::equal(shown, _slots, {}, {}, &Slot::icon)) {
-            changed = changed || shown.size() != _slots.size();
+            const auto samePixels = [](const TrayIcon& icon, const Slot& slot) { return icon.pixels == slot.icon.pixels; };
+            changed               = changed || !std::ranges::equal(shown, _slots, samePixels);
             std::vector<Slot> slots;
             slots.reserve(shown.size());
             for (size_t index = 0; index < shown.size(); ++index) {
                 auto bitmap = BitmapFor(render, shown[index]);
-                // changed is already true when the counts differ, so _slots[index] is only read while it exists.
-                changed = changed || _slots[index].icon.pixels != shown[index].pixels;
                 slots.push_back(Slot{.icon = shown[index], .bitmap = std::move(bitmap)});
             }
             _slots = std::move(slots);

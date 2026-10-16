@@ -90,15 +90,6 @@ namespace loopback {
         return ListenOn(0);
     }
 
-    inline Socket Connect(std::uint16_t port) {
-        Socket            client(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
-        const sockaddr_in address = Address(port);
-        if (connect(client.Get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
-            throw std::runtime_error("connect failed with " + std::to_string(WSAGetLastError()));
-        }
-        return client;
-    }
-
     inline Socket Accept(const Socket& listener) {
         return Socket(accept(listener.Get(), nullptr, nullptr));
     }

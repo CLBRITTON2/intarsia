@@ -205,12 +205,9 @@ class Menu {
     RECT                                        _rect{}; // the shown menu, in screen pixels
     RECT                                        _monitorRect{};
     std::vector<MenuEntry>                      _entries;
-    std::vector<MenuRow>                        _rows;
+    MenuLayout                                  _layout{};  // as Show laid it out, its scroll moved since
     std::optional<size_t>                       _highlight; // the entry under the cursor or picked with the arrow keys
     Command                                     _onSelect;
-    MenuScroll                                  _scroll{};
-    D2D1_RECT_F                                 _gutter{}; // beside the viewport, where the track takes clicks
-    D2D1_RECT_F                                 _track{};
     std::optional<float>                        _thumbGrabDips; // while dragging the thumb, how far below its top the cursor holds it
     // Only while shown: Show creates it at the rows' size and Hide releases it.
     std::unique_ptr<Canvas> _canvas;

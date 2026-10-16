@@ -79,5 +79,5 @@ RECT ReserveAppBarRect(HWND window, const RECT& monitorRect, Edge edge, std::int
 // not answer within a moment leaves the request as it is, logged, as SHAppBarMessage would.
 RECT ReserveAppBarRectThroughTaskbar(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, HWND taskbar);
 
-void NotifyAppBarActivated(HWND window);
-void NotifyAppBarMoved(HWND window);
+// message is an ABM_ code that takes the window alone and has no result, such as ABM_ACTIVATE.
+void NotifyAppBar(HWND window, std::uint32_t message);

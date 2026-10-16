@@ -70,7 +70,10 @@ class BoxCache {
         Microsoft::WRL::ComPtr<ID2D1Bitmap1> bitmap;
     };
 
-    ID2D1Bitmap1* Find(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height);
+    // lines' bitmap of width by height pixels, drawn on a miss, and now the most recently drawn.
+    ID2D1Bitmap1* BitmapFor(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height);
+    // Draws lines into a new bitmap and stores it, in place of the least recently drawn once the cache is full.
+    ID2D1Bitmap1* Render(const BoxStyle& lines, float radius, float pixelsPerDip, std::uint32_t width, std::uint32_t height);
 
     // Its own, on the caller's device, so a miss draws while the caller's context is mid-frame.
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;

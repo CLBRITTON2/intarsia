@@ -25,15 +25,6 @@
 
 namespace {
 
-    template <typename Settings>
-    const Settings& RequireSettings(const ModuleInstance& instance) {
-        const Settings* settings = std::get_if<Settings>(&instance.settings);
-        if (settings == nullptr) {
-            throw std::logic_error(std::format("module {} has the wrong settings for its type, LoadConfig should have read them", instance.name));
-        }
-        return *settings;
-    }
-
     template <typename Source>
     Source& RequireSource(Source* source, const ModuleInstance& instance) {
         if (source == nullptr) {
@@ -51,28 +42,31 @@ namespace {
 
     std::unique_ptr<IModule> CreateModule(const ModuleInstance& instance, const ModuleSources& sources) {
         switch (instance.kind) {
-            case ModuleKind::Clock: return std::make_unique<Clock>(RequireSettings<TextModuleConfig>(instance));
-            case ModuleKind::Window: return std::make_unique<Window>(RequireSettings<WindowConfig>(instance), sources.windowManager);
+            case ModuleKind::Clock: return std::make_unique<Clock>(std::get<TextModuleConfig>(instance.settings));
+            case ModuleKind::Window: return std::make_unique<Window>(std::get<WindowConfig>(instance.settings), sources.windowManager);
             case ModuleKind::Workspaces: return std::make_unique<Workspaces>(sources.windowManager, sources.monitor, instance.style);
             case ModuleKind::Windows: return std::make_unique<WindowList>(sources.windowManager, RequireSource(sources.windowIcons, instance), sources.monitor, instance.style);
             case ModuleKind::BindingMode: return std::make_unique<BindingModes>(sources.windowManager, instance.style);
-            case ModuleKind::TilingDirection: return std::make_unique<DirectionToggle>(RequireSettings<TilingDirectionConfig>(instance), sources.windowManager);
-            case ModuleKind::Cpu: return std::make_unique<Cpu>(RequireSettings<TextModuleConfig>(instance));
-            case ModuleKind::Memory: return std::make_unique<Memory>(RequireSettings<TextModuleConfig>(instance));
+            case ModuleKind::TilingDirection: return std::make_unique<DirectionToggle>(std::get<TilingDirectionConfig>(instance.settings), sources.windowManager);
+            case ModuleKind::Cpu: return std::make_unique<Cpu>(std::get<TextModuleConfig>(instance.settings));
+            case ModuleKind::Memory: return std::make_unique<Memory>(std::get<TextModuleConfig>(instance.settings));
             case ModuleKind::Audio: {
-                const AudioConfig& config = RequireSettings<AudioConfig>(instance);
+                const AudioConfig& config = std::get<AudioConfig>(instance.settings);
                 return std::make_unique<Audio>(config, RequireSource(AudioSourceFor(config.flow, sources), instance));
             }
-            case ModuleKind::Network: return std::make_unique<Network>(RequireSettings<NetworkConfig>(instance), RequireSource(sources.network, instance));
-            case ModuleKind::Battery: return std::make_unique<Battery>(RequireSettings<BatteryConfig>(instance), RequireSource(sources.battery, instance));
-            case ModuleKind::Tray: return std::make_unique<Tray>(RequireSettings<TrayConfig>(instance), RequireSource(sources.tray, instance), instance.style);
-            case ModuleKind::Custom: return std::make_unique<Custom>(RequireSettings<CustomConfig>(instance), sources.commandPollers.For(instance.name));
-            case ModuleKind::Counter: return std::make_unique<Counter>(RequireSettings<CounterConfig>(instance), sources.counterSamplers.For(instance.name));
+            case ModuleKind::Network: return std::make_unique<Network>(std::get<NetworkConfig>(instance.settings), RequireSource(sources.network, instance));
+            case ModuleKind::Battery: return std::make_unique<Battery>(std::get<BatteryConfig>(instance.settings), RequireSource(sources.battery, instance));
+            case ModuleKind::Tray: return std::make_unique<Tray>(std::get<TrayConfig>(instance.settings), RequireSource(sources.tray, instance), instance.style);
+            case ModuleKind::Custom: return std::make_unique<Custom>(std::get<CustomConfig>(instance.settings), sources.commandPollers.For(instance.name));
+            case ModuleKind::Counter: return std::make_unique<Counter>(std::get<CounterConfig>(instance.settings), sources.counterSamplers.For(instance.name));
             case ModuleKind::Group: throw std::logic_error(std::format("module {} is a group, which CreateEntry builds with its members", instance.name));
         }
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(instance.kind)));
     }
 
+    std::vector<ModuleEntry> CreateEntries(const std::vector<ModuleInstance>& instances, const ModuleSources& sources);
+
+    // A group's entry holds its members' entries, and LoadConfig makes sure no member is a group.
     ModuleEntry CreateEntry(const ModuleInstance& instance, const ModuleSources& sources) {
         const auto* settings = std::get_if<GroupConfig>(&instance.settings);
         if (settings == nullptr) {
@@ -84,13 +78,9 @@ namespace {
                 .members = {},
             };
         }
-        auto                     group = std::make_unique<Group>(*settings, instance.style);
-        const Group*             view  = group.get();
-        std::vector<ModuleEntry> members;
-        members.reserve(settings->members.size());
-        for (const ModuleInstance& member : settings->members) {
-            members.push_back(CreateEntry(member, sources));
-        }
+        auto                     group   = std::make_unique<Group>(*settings, instance.style);
+        const Group*             view    = group.get();
+        std::vector<ModuleEntry> members = CreateEntries(settings->members, sources);
         return ModuleEntry{
             .module  = std::move(group),
             .style   = instance.style,
@@ -99,8 +89,21 @@ namespace {
         };
     }
 
+    std::vector<ModuleEntry> CreateEntries(const std::vector<ModuleInstance>& instances, const ModuleSources& sources) {
+        std::vector<ModuleEntry> entries;
+        entries.reserve(instances.size());
+        for (const ModuleInstance& instance : instances) {
+            entries.push_back(CreateEntry(instance, sources));
+        }
+        return entries;
+    }
+
 } // namespace
 
 Sections<ModuleEntry> CreateModules(const Sections<ModuleInstance>& modules, const ModuleSources& sources) {
-    return MapSections(modules, [&sources](const ModuleInstance& instance) { return CreateEntry(instance, sources); });
+    return Sections<ModuleEntry>{
+        .left   = CreateEntries(modules.left, sources),
+        .center = CreateEntries(modules.center, sources),
+        .right  = CreateEntries(modules.right, sources),
+    };
 }

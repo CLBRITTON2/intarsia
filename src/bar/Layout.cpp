@@ -40,6 +40,22 @@ namespace {
         return ArrangeGroup(MainLength(entry.module->Size(), axis), memberLengths, entry.group->Revealed(), MainInsets(entry.style.box, axis));
     }
 
+    // Each module's room along the bar: what it draws plus its insets and margin at both ends. A module showing nothing,
+    // such as a battery module with no battery, takes no room at all. A group's length takes in the revealed share of its
+    // members'.
+    std::vector<float> BoxLengths(Axis axis, const std::vector<ModuleEntry>& entries) {
+        std::vector<float> lengths;
+        lengths.reserve(entries.size());
+        for (const ModuleEntry& entry : entries) {
+            if (entry.group != nullptr) {
+                lengths.push_back(ArrangeMembers(axis, entry, BoxLengths(axis, entry.members)).length + (2.0f * MainOf(entry.style.margin, axis)));
+            } else {
+                lengths.push_back(ModuleBoxLength(axis, entry));
+            }
+        }
+        return lengths;
+    }
+
     // The entry's box from start along the bar, spanning across it as every module's box does, less its margin.
     HitBox PlaceBox(const BarGeometry& bar, const ModuleEntry& entry, float start, float length) {
         const float       margin   = CrossOf(entry.style.margin, bar.axis);
@@ -58,6 +74,28 @@ namespace {
         return PlaceBox(bar, entry, start + margin, length - (2.0f * margin));
     }
 
+    // The entry in the room from start that BoxLengths gave it.
+    PlacedEntry PlaceEntry(const BarGeometry& bar, const ModuleEntry& entry, float start, float length) {
+        PlacedEntry placed{
+            .entry        = &entry,
+            .box          = PlaceInRoom(bar, entry, start, length),
+            .toggleBounds = {},
+            .members      = {},
+            .shownBounds  = {},
+        };
+        if (entry.group != nullptr) {
+            const float              boxStart      = start + MainOf(entry.style.margin, bar.axis);
+            const std::vector<float> memberLengths = BoxLengths(bar.axis, entry.members);
+            const GroupLayout        group         = ArrangeMembers(bar.axis, entry, memberLengths);
+            placed.toggleBounds                    = PlaceBox(bar, entry, boxStart, group.toggleLength).bounds;
+            placed.shownBounds                     = PlaceBox(bar, entry, boxStart + group.toggleLength, group.shownLength).bounds;
+            for (size_t member = 0; member < entry.members.size(); ++member) {
+                placed.members.push_back(PlaceInRoom(bar, entry.members[member], boxStart + group.offsets[member], memberLengths[member]));
+            }
+        }
+        return placed;
+    }
+
     std::vector<PlacedEntry> PlaceSection(const BarGeometry& bar, const std::vector<ModuleEntry>& entries, const std::vector<float>& lengths, const SectionLayout& layout) {
         std::vector<PlacedEntry> placed;
         if (layout.length <= 0.0f) {
@@ -65,25 +103,7 @@ namespace {
         }
         placed.reserve(entries.size());
         for (size_t index = 0; index < entries.size(); ++index) {
-            const ModuleEntry& entry = entries[index];
-            PlacedEntry        placedEntry{
-                       .entry        = &entry,
-                       .box          = PlaceInRoom(bar, entry, layout.offsets[index], lengths[index]),
-                       .toggleBounds = {},
-                       .members      = {},
-                       .shownBounds  = {},
-            };
-            if (entry.group != nullptr) {
-                const float              start         = layout.offsets[index] + MainOf(entry.style.margin, bar.axis);
-                const std::vector<float> memberLengths = BoxLengths(bar.axis, entry.members);
-                const GroupLayout        group         = ArrangeMembers(bar.axis, entry, memberLengths);
-                placedEntry.toggleBounds               = PlaceBox(bar, entry, start, group.toggleLength).bounds;
-                placedEntry.shownBounds                = PlaceBox(bar, entry, start + group.toggleLength, group.shownLength).bounds;
-                for (size_t member = 0; member < entry.members.size(); ++member) {
-                    placedEntry.members.push_back(PlaceInRoom(bar, entry.members[member], start + group.offsets[member], memberLengths[member]));
-                }
-            }
-            placed.push_back(std::move(placedEntry));
+            placed.push_back(PlaceEntry(bar, entries[index], layout.offsets[index], lengths[index]));
         }
         return placed;
     }
@@ -139,19 +159,6 @@ D2D1_POINT_2F ContentOrigin(Axis axis, const D2D1_RECT_F& box, const Insets& ins
 float BoxCrossLength(const BarGeometry& bar) {
     const EndInsets insets = CrossInsets(bar.section.box, bar.axis);
     return CrossLength(bar.size, bar.axis) - (2.0f * CrossOf(bar.section.margin, bar.axis)) - insets.start - insets.end;
-}
-
-std::vector<float> BoxLengths(Axis axis, const std::vector<ModuleEntry>& entries) {
-    std::vector<float> lengths;
-    lengths.reserve(entries.size());
-    for (const ModuleEntry& entry : entries) {
-        if (entry.group != nullptr) {
-            lengths.push_back(ArrangeMembers(axis, entry, BoxLengths(axis, entry.members)).length + (2.0f * MainOf(entry.style.margin, axis)));
-        } else {
-            lengths.push_back(ModuleBoxLength(axis, entry));
-        }
-    }
-    return lengths;
 }
 
 D2D1_RECT_F SectionBounds(const BarGeometry& bar, const SectionLayout& layout) {

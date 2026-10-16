@@ -40,9 +40,10 @@ struct DisplayTarget {
     std::optional<std::string> id;   // MonitorId, absent for a screen with no EDID (a virtual display)
     std::optional<std::string> name; // Windows' friendly name, absent when it gives none
     std::string                connection;
-    bool                       internal; // a laptop's own panel
 
-    bool                       operator==(const DisplayTarget& other) const = default;
+    // A laptop's own panel.
+    bool IsInternal() const;
+    bool operator==(const DisplayTarget& other) const = default;
 };
 
 struct MonitorDescription {

@@ -360,12 +360,11 @@ function New-SoakConfig([string] $path, [int] $revision, [string[]] $optional) {
         fail    = Format-CustomModule @($cmdPath, '/c', 'exit 3') 5 'text'
         # A process slow to start, printing JSON. cmd.exe would keep the backslashes of escaped quotes.
         json    = Format-CustomModule @($powershellPath, '-NoProfile', '-Command', '''{\"text\":\"ok\",\"tooltip\":\"line\",\"alert\":true}''') 5 'json'
+        # Last, since modules_right lists the shown modules in this order.
         tray    = '{ type = "tray", icon = ">" }'
     }
     $shown       = @($optionalModules.Keys | Where-Object { $_ -in $optional })
-    $custom      = @($shown | Where-Object { $_ -ne 'tray' })
-    $trayList    = @($shown | Where-Object { $_ -eq 'tray' })
-    $rightList   = (@('"tiling"') + ($custom | ForEach-Object { "`"$_`"" }) + ($trayList | ForEach-Object { "`"$_`"" })) -join ', '
+    $rightList   = (@('"tiling"') + ($shown | ForEach-Object { "`"$_`"" })) -join ', '
     $definitions = ($shown | ForEach-Object { "        $_ = $($optionalModules[$_])," }) -join "`n"
     $config = @"
 -- soak revision $revision
@@ -544,6 +543,75 @@ tray {
     [System.IO.File]::WriteAllText($path, $style)
 }
 
+# Kills process and waits for it to exit, unless there is none or it already exited.
+function Stop-IfRunning([System.Diagnostics.Process] $process) {
+    if ($null -ne $process -and -not $process.HasExited) {
+        Stop-Process -Id $process.Id -Force
+        $process.WaitForExit()
+    }
+}
+
+# How the bar grew past the limits from the warmed-up baseline to the last sample, or, in a run of $longRunSeconds or
+# more, per hour over the run's second half.
+function Test-Growth([System.Collections.Generic.List[object]] $samples) {
+    $failures = @()
+    $baseline = $samples[$warmupSeconds]
+    $final    = $samples[$samples.Count - 1]
+    $limits   = [ordered]@{ PrivateMB = $maxPrivateGrowthMB; Handles = $maxHandleGrowth; Gdi = $maxGuiObjectGrowth; User = $maxGuiObjectGrowth; Threads = $maxThreadGrowth }
+    if ($Seconds -ge $longRunSeconds) {
+        # The first half's growth is caches filling, and a leak keeps growing through the second.
+        $settled = $samples.GetRange([int] ($samples.Count / 2), $samples.Count - [int] ($samples.Count / 2)).ToArray()
+        foreach ($property in $limits.Keys) {
+            $perHour = Get-GrowthPerHour $settled $property
+            if ($perHour -gt $limits[$property]) { $failures += "$property grew $([math]::Round($perHour, 1)) an hour over the second half, past $($limits[$property])" }
+        }
+    } else {
+        foreach ($property in $limits.Keys) {
+            if ($final.$property - $baseline.$property -gt $limits[$property]) { $failures += "$property grew $($baseline.$property) to $($final.$property)" }
+        }
+    }
+    return $failures
+}
+
+# The bar's CPU use from the warmed-up baseline to the last sample, in percent of one core.
+function Get-CpuPercent([System.Collections.Generic.List[object]] $samples) {
+    $baseline = $samples[$warmupSeconds]
+    $final    = $samples[$samples.Count - 1]
+    return ($final.Cpu - $baseline.Cpu).TotalMilliseconds / (($samples.Count - 1 - $warmupSeconds) * 10.0)
+}
+
+# Closes the bar and returns how it failed to exit cleanly.
+function Close-Bar([System.Diagnostics.Process] $bar, [string] $name) {
+    $failures = @()
+    # taskkill gives up on a window a rebuild destroys under it, before it reaches the rest.
+    if ($name -eq 'reload') {
+        Start-Sleep -Seconds 1
+    }
+    # WM_CLOSE through taskkill without /F, as a user would stop it: every bar must release its strip and exit.
+    taskkill /PID $bar.Id | Out-Null
+    if (-not $bar.WaitForExit(10000)) {
+        $failures += 'did not exit within 10 s of WM_CLOSE'
+        Stop-Process -Id $bar.Id -Force
+    } elseif ($bar.ExitCode -ne 0) {
+        $failures += "exited with code $($bar.ExitCode) on WM_CLOSE, expected 0"
+    }
+    return $failures
+}
+
+# The scenario's row of the results table: the last sample's figures, and its failures or where its logs are.
+function New-ScenarioResult([string] $name, [string[]] $failures, [Nullable[double]] $cpuPercent, [System.Collections.Generic.List[object]] $samples, [string] $work) {
+    $last = if ($samples.Count -gt 0) { $samples[$samples.Count - 1] } else { $null }
+    return [pscustomobject]@{
+        Scenario = $name
+        Result   = if ($failures.Count -eq 0) { 'pass' } else { 'FAIL' }
+        CpuPercent = if ($null -ne $cpuPercent) { [math]::Round($cpuPercent, 2) } else { '' }
+        PrivateMB = if ($last) { $last.PrivateMB } else { '' }
+        Handles  = if ($last) { $last.Handles } else { '' }
+        Threads  = if ($last) { $last.Threads } else { '' }
+        Detail   = if ($failures.Count -eq 0) { $work } else { ($failures -join '; ') + " (logs in $work)" }
+    }
+}
+
 function Invoke-Scenario([string] $name, [int] $run) {
     $work = Join-Path $LogRoot "intarsia-soak-$name-$PID-$run"
     New-Item -ItemType Directory -Force $work | Out-Null
@@ -629,10 +697,7 @@ function Invoke-Scenario([string] $name, [int] $run) {
                 }
                 # Every owner window of the last sender dies with it, without deleting its icons.
                 if ($null -eq $sender -or $second % $senderRestartSeconds -eq 0) {
-                    if ($null -ne $sender) {
-                        Stop-Process -Id $sender.Id -Force
-                        $sender.WaitForExit()
-                    }
+                    Stop-IfRunning $sender
                     $senderStarts++
                     $sender = Start-Process $senderExe -ArgumentList '--class', $trayClass -PassThru -WindowStyle Hidden `
                         -RedirectStandardOutput (Join-Path $work "sender-$senderStarts.out") -RedirectStandardError (Join-Path $work "sender-$senderStarts.err")
@@ -667,22 +732,8 @@ function Invoke-Scenario([string] $name, [int] $run) {
             $failures.Add("ran only $($samples.Count) s, too short to judge growth after the $warmupSeconds s warmup")
         }
         if ($failures.Count -eq 0) {
-            $baseline = $samples[$warmupSeconds]
-            $final    = $samples[$samples.Count - 1]
-            $limits   = [ordered]@{ PrivateMB = $maxPrivateGrowthMB; Handles = $maxHandleGrowth; Gdi = $maxGuiObjectGrowth; User = $maxGuiObjectGrowth; Threads = $maxThreadGrowth }
-            if ($Seconds -ge $longRunSeconds) {
-                # The first half's growth is caches filling, and a leak keeps growing through the second.
-                $settled = $samples.GetRange([int] ($samples.Count / 2), $samples.Count - [int] ($samples.Count / 2)).ToArray()
-                foreach ($property in $limits.Keys) {
-                    $perHour = Get-GrowthPerHour $settled $property
-                    if ($perHour -gt $limits[$property]) { $failures.Add("$property grew $([math]::Round($perHour, 1)) an hour over the second half, past $($limits[$property])") }
-                }
-            } else {
-                foreach ($property in $limits.Keys) {
-                    if ($final.$property - $baseline.$property -gt $limits[$property]) { $failures.Add("$property grew $($baseline.$property) to $($final.$property)") }
-                }
-            }
-            $cpuPercent = ($final.Cpu - $baseline.Cpu).TotalMilliseconds / (($samples.Count - 1 - $warmupSeconds) * 10.0)
+            $failures.AddRange([string[]] @(Test-Growth $samples))
+            $cpuPercent = Get-CpuPercent $samples
             if ($name -eq 'idle' -and $cpuPercent -gt $maxIdleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU while nearly idle") }
             if ($name -eq 'retitle' -and $cpuPercent -gt $maxRetitleCpuPercent) { $failures.Add("used $([math]::Round($cpuPercent, 1))% CPU following retitles") }
         }
@@ -703,41 +754,15 @@ function Invoke-Scenario([string] $name, [int] $run) {
         if ($null -ne $savedCursor) {
             [Soak.Native]::PlaceCursor($savedCursor.X, $savedCursor.Y)
         }
-        if ($null -ne $sender -and -not $sender.HasExited) {
-            Stop-Process -Id $sender.Id -Force
-        }
-        if ($null -ne $retitler -and -not $retitler.HasExited) {
-            Stop-Process -Id $retitler.Id -Force
-        }
+        Stop-IfRunning $sender
+        Stop-IfRunning $retitler
         if ($null -ne $bar -and -not $bar.HasExited) {
-            # taskkill gives up on a window a rebuild destroys under it, before it reaches the rest.
-            if ($name -eq 'reload') {
-                Start-Sleep -Seconds 1
-            }
-            # WM_CLOSE through taskkill without /F, as a user would stop it: every bar must release its strip and exit.
-            taskkill /PID $bar.Id | Out-Null
-            if (-not $bar.WaitForExit(10000)) {
-                $failures.Add('did not exit within 10 s of WM_CLOSE')
-                Stop-Process -Id $bar.Id -Force
-            } elseif ($bar.ExitCode -ne 0) {
-                $failures.Add("exited with code $($bar.ExitCode) on WM_CLOSE, expected 0")
-            }
+            $failures.AddRange([string[]] @(Close-Bar $bar $name))
         }
-        if ($null -ne $server) {
-            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
-        }
+        Stop-IfRunning $server
     }
 
-    $last = if ($samples.Count -gt 0) { $samples[$samples.Count - 1] } else { $null }
-    return [pscustomobject]@{
-        Scenario = $name
-        Result   = if ($failures.Count -eq 0) { 'pass' } else { 'FAIL' }
-        CpuPercent = if ($null -ne $cpuPercent) { [math]::Round($cpuPercent, 2) } else { '' }
-        PrivateMB = if ($last) { $last.PrivateMB } else { '' }
-        Handles  = if ($last) { $last.Handles } else { '' }
-        Threads  = if ($last) { $last.Threads } else { '' }
-        Detail   = if ($failures.Count -eq 0) { $work } else { ($failures -join '; ') + " (logs in $work)" }
-    }
+    return New-ScenarioResult $name $failures $cpuPercent $samples $work
 }
 
 & (Join-Path $PSScriptRoot 'build.ps1') -Preset debug

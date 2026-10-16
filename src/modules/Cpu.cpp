@@ -2,7 +2,6 @@
 
 #include "modules/TextModule.hpp"
 #include "platform/Errors.hpp"
-#include "platform/Text.hpp"
 
 #include <windows.h>
 
@@ -108,7 +107,7 @@ Cpu::Cpu(TextModuleConfig config) :
 // A sample over a few milliseconds would also swing between 0 and 100.
 ModuleText Cpu::Format(const std::string& spec) {
     _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { Sample(); });
-    return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return ToWide(FormatPlaceholders(spec, CpuPlaceholders(_sample))); }));
+    return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return FormatPlaceholders(spec, CpuPlaceholders(_sample)); }));
 }
 
 void Cpu::Sample() {

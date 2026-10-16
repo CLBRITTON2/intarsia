@@ -288,12 +288,12 @@ TEST(Config, ShowsBarOnMatchesAnyEntry) {
     const MonitorDescription laptop{
         .monitor = nullptr,
         .primary = true,
-        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal", .internal = true}},
+        .targets = {DisplayTarget{.id = "BOE0B4D", .name = std::nullopt, .connection = "internal"}},
     };
     const MonitorDescription desk{
         .monitor = nullptr,
         .primary = false,
-        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort", .internal = false}},
+        .targets = {DisplayTarget{.id = "DEL41A8-7XYZ123", .name = "DELL U2720Q", .connection = "DisplayPort"}},
     };
     const MonitorDescription pathless{.monitor = nullptr, .primary = false, .targets = {}};
     EXPECT_TRUE(ShowsBarOn(bar({AllMonitors{}}), pathless));

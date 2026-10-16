@@ -50,9 +50,8 @@ class TextLine {
     void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
 
   private:
-    ModuleText _shown   = NormalText(L"", L""); // what _text holds, once laid out
-    bool       _laidOut = false;
-    IconText   _text    = EmptyIconText();
+    ModuleText _shown = NormalText(L"", L""); // what _text holds
+    IconText   _text  = EmptyIconText();
 };
 
 // A module that shows one ModuleText, laid out again only when it changes, and runs the actions its config binds.

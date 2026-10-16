@@ -16,18 +16,18 @@ namespace {
 } // namespace
 
 TEST(Placeholders, NamesAreReplacedByTheirValues) {
-    EXPECT_EQ(FormatPlaceholders("{ssid} {signal}%", kValues), "home 72%");
-    EXPECT_EQ(FormatPlaceholders("", kValues), "");
-    EXPECT_EQ(FormatPlaceholders("no values", kValues), "no values");
-    EXPECT_EQ(FormatPlaceholders("{signal}{signal}", kValues), "7272");
+    EXPECT_EQ(FormatPlaceholders("{ssid} {signal}%", kValues), L"home 72%");
+    EXPECT_EQ(FormatPlaceholders("", kValues), L"");
+    EXPECT_EQ(FormatPlaceholders("no values", kValues), L"no values");
+    EXPECT_EQ(FormatPlaceholders("{signal}{signal}", kValues), L"7272");
 }
 
 TEST(Placeholders, ASpecFormatsTheValueAsStdFormatDoes) {
-    EXPECT_EQ(FormatPlaceholders("{signal:>4}|{rate:.1f}|{ssid:.2}", kValues), "  72|1.2|ho");
+    EXPECT_EQ(FormatPlaceholders("{signal:>4}|{rate:.1f}|{ssid:.2}", kValues), L"  72|1.2|ho");
 }
 
 TEST(Placeholders, DoubledBracesAreLiteral) {
-    EXPECT_EQ(FormatPlaceholders("{{ssid}} {{}}", kValues), "{ssid} {}");
+    EXPECT_EQ(FormatPlaceholders("{{ssid}} {{}}", kValues), L"{ssid} {}");
 }
 
 TEST(Placeholders, UnknownNamesBadSpecsAndStrayBracesThrow) {
@@ -45,7 +45,7 @@ TEST(Placeholders, ASpecCannotNestAnotherField) {
     EXPECT_THROW(FormatPlaceholders("{ssid:>{signal}}", kValues), std::format_error);
     EXPECT_THROW(FormatPlaceholders("{:>3}", kValues), std::format_error);
     EXPECT_THROW(FormatPlaceholders("{ ssid}", kValues), std::format_error);
-    EXPECT_EQ(FormatPlaceholders("{ssid:}", kValues), "home");
+    EXPECT_EQ(FormatPlaceholders("{ssid:}", kValues), L"home");
 }
 
 TEST(Placeholders, FormatNamesFindsAFieldByItsName) {

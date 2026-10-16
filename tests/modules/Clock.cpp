@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <string>
 
 namespace {
 
@@ -17,9 +18,9 @@ namespace {
 } // namespace
 
 TEST(Clock, FormatRendersLiteralTextAroundTheSpec) {
-    const std::string text = FormatPlaceholders("at {time:%Y}!", ClockPlaceholders(AtMilliseconds(0)));
-    EXPECT_TRUE(text.starts_with("at 19")) << text;
-    EXPECT_TRUE(text.ends_with("!")) << text;
+    const std::wstring text = FormatPlaceholders("at {time:%Y}!", ClockPlaceholders(AtMilliseconds(0)));
+    EXPECT_TRUE(text.starts_with(L"at 19")) << text;
+    EXPECT_TRUE(text.ends_with(L"!")) << text;
 }
 
 TEST(Clock, AnInvalidSpecFailsWhenTheModuleIsBuilt) {

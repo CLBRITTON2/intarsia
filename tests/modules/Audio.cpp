@@ -92,7 +92,7 @@ TEST(Audio, WithNoDeviceNothingIsShownOrChanged) {
     FakeAudio            audio;
     const TextOnlyRender render;
     Audio                module(TestConfig(), audio);
-    EXPECT_TRUE(module.Layout(render.Context()));
+    EXPECT_FALSE(module.Layout(render.Context()));
     EXPECT_FLOAT_EQ(module.Size().width, 0.0f);
     module.Click(D2D1::Point2F(0.0f, 0.0f));
     module.Scroll(ScrollDirection::Up);
