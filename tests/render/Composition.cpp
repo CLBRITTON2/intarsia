@@ -23,7 +23,8 @@ namespace {
 
 TEST(Composition, BackdropColorMatrixLeavesAPlainBlurAsItIs) {
     const std::array<float, 4> out = Apply(BackdropColorMatrix({
-                                               .blur       = true,
+                                               .source     = BackdropSource::System,
+                                               .radiusDips = 0.0f,
                                                .brightness = 1.0f,
                                                .saturation = 1.0f,
                                            }),
@@ -36,7 +37,8 @@ TEST(Composition, BackdropColorMatrixLeavesAPlainBlurAsItIs) {
 
 TEST(Composition, BackdropColorMatrixGreysByLuminanceAndScalesByBrightnessButNeverAlpha) {
     const std::array<float, 4> grey = Apply(BackdropColorMatrix({
-                                                .blur       = true,
+                                                .source     = BackdropSource::System,
+                                                .radiusDips = 0.0f,
                                                 .brightness = 0.5f,
                                                 .saturation = 0.0f,
                                             }),
@@ -47,7 +49,8 @@ TEST(Composition, BackdropColorMatrixGreysByLuminanceAndScalesByBrightnessButNev
     EXPECT_FLOAT_EQ(grey[3], 1.0f);
     // A grey stays grey at any saturation.
     const std::array<float, 4> kept = Apply(BackdropColorMatrix({
-                                                .blur       = true,
+                                                .source     = BackdropSource::System,
+                                                .radiusDips = 0.0f,
                                                 .brightness = 1.0f,
                                                 .saturation = 1.8f,
                                             }),

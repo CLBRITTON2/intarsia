@@ -76,8 +76,8 @@ void Tooltip::RegisterWindowClass(HINSTANCE instance) {
     ::RegisterWindowClass(instance, kWindowClass, TooltipWindowProc, LoadCursorW(nullptr, IDC_ARROW), "tooltip");
 }
 
-Tooltip::Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat) :
-    _graphics(graphics), _config(config), _textFormat(textFormat),
+Tooltip::Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, const std::vector<WallpaperBlur>& wallpapers) :
+    _graphics(graphics), _config(config), _textFormat(textFormat), _wallpapers(wallpapers),
     _window(CreatePopupWindow(instance, kWindowClass, L"intarsia tooltip", WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, nullptr, "tooltip")) {}
 
 void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
@@ -102,17 +102,17 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     _canvas.reset();
     _canvas = std::make_unique<Canvas>(_graphics, _window.get(), static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
 
+    const RECT          rect    = TooltipRect(anchor, size);
     ID2D1DeviceContext* context = _canvas->surface.Context();
     const D2D1_SIZE_F   area    = context->GetSize();
     const D2D1_RECT_F   box     = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
+    DrawBackdrops(_canvas->surface, _wallpapers, _config.style.tooltip.backdrop, {box}, style, rect);
     DrawBox(context, _canvas->brushes, _canvas->boxes, box, style, style.background);
     context->DrawTextLayout(D2D1::Point2F(insets.left, insets.top), layout.Get(), _canvas->brushes.Get(_config.style.tooltip.color));
-    _canvas->surface.ShowBackdrops(BackdropOutlines(_config.style.tooltip.backdrop, PixelGridOf(context), {box}, style), _config.style.tooltip.backdrop);
     _canvas->surface.EndDrawAndPresent();
 
-    const RECT rect = TooltipRect(anchor, size);
     if (!SetWindowPos(_window.get(), HWND_TOPMOST, rect.left, rect.top, size.cx, size.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW)) {
         ThrowLastError("SetWindowPos(tooltip)");
     }

@@ -310,12 +310,34 @@ namespace {
         return static_cast<DWRITE_FONT_WEIGHT>(static_cast<std::int32_t>(*value));
     }
 
-    // on or off.
-    bool ParseSwitch(std::string_view text) {
-        if (text != "on" && text != "off") {
-            throw std::invalid_argument("must be on or off");
+    // What blur names: its source, and the wallpaper's own radius.
+    struct Blur {
+        BackdropSource source;
+        float          radiusDips;
+    };
+
+    constexpr Blur kNoBlur{.source = BackdropSource::None, .radiusDips = 0.0f};
+
+    // D2D's Gaussian blur takes a standard deviation of at most 250 pixels, which this keeps clear of at any scale.
+    constexpr float kLargestWallpaperBlur = 100.0f;
+
+    // on (the system's blur), off, or wallpaper and the radius to blur it at.
+    Blur ParseBlur(std::string_view text) {
+        const std::vector<std::string_view> words = Split(text, kSpace);
+        if (words.size() == 1 && words[0] == "on") {
+            return Blur{.source = BackdropSource::System, .radiusDips = 0.0f};
         }
-        return text == "on";
+        if (words.size() == 1 && words[0] == "off") {
+            return kNoBlur;
+        }
+        if (words.size() == 2 && words[0] == "wallpaper") {
+            const float radius = ParseLength(words[1]);
+            if (radius > kLargestWallpaperBlur) {
+                throw std::invalid_argument(std::format("takes a wallpaper radius of at most {}", kLargestWallpaperBlur));
+            }
+            return Blur{.source = BackdropSource::Wallpaper, .radiusDips = radius};
+        }
+        throw std::invalid_argument("must be on, off, or wallpaper and a radius, as wallpaper 8");
     }
 
     // none, or transitions separated by commas, each a property, a duration and an optional timing function (ease when
@@ -398,7 +420,7 @@ namespace {
         Weight,
         Transition,
         Shadows,
-        Switch
+        Blur
     };
 
     struct PropertyKind {
@@ -427,7 +449,7 @@ namespace {
         {.key = "max-height", .kind = ValueKind::PositiveLength},
         {.key = "transition", .kind = ValueKind::Transition},
         {.key = "rotate", .kind = ValueKind::SignedNumber},
-        {.key = "blur", .kind = ValueKind::Switch},
+        {.key = "blur", .kind = ValueKind::Blur},
         {.key = "brightness", .kind = ValueKind::Length},
         {.key = "saturate", .kind = ValueKind::Length},
     }};
@@ -449,7 +471,7 @@ namespace {
             case ValueKind::Weight: ParseWeight(value); return;
             case ValueKind::Transition: ParseTransitionValues(value); return;
             case ValueKind::Shadows: ParseShadows(value); return;
-            case ValueKind::Switch: ParseSwitch(value); return;
+            case ValueKind::Blur: ParseBlur(value); return;
         }
         throw std::invalid_argument(std::format("unknown value kind {}", static_cast<std::int32_t>(entry->kind)));
     }
@@ -904,13 +926,14 @@ namespace {
         return std::format("{} > {}", parent, key);
     }
 
-    // brightness and saturate tone the system's blur, so either without blur: on would do nothing.
+    // brightness and saturate tone the blur, so either without one would do nothing. Runs after CheckBlock has checked
+    // blur's value.
     void RequireBlurForTone(const StyleNode& block, std::string_view path, std::string_view source) {
         const auto blur   = std::ranges::find(block.children, std::string_view("blur"), &StyleNode::key);
-        const bool blurOn = blur != block.children.end() && blur->value == "on";
+        const bool blurOn = blur != block.children.end() && ParseBlur(blur->value).source != BackdropSource::None;
         for (const StyleNode& child : block.children) {
             if ((child.key == "brightness" || child.key == "saturate") && !blurOn) {
-                throw StyleError(source, child.line, std::format("{}: {} tones the system's blur, so it takes blur: on beside it", path, child.key));
+                throw StyleError(source, child.line, std::format("{}: {} tones the blur, so it takes blur: on or blur: wallpaper beside it", path, child.key));
             }
         }
     }
@@ -1100,17 +1123,20 @@ namespace {
     }
 
     constexpr Backdrop kNoBackdrop{
-        .blur       = false,
+        .source     = BackdropSource::None,
+        .radiusDips = 0.0f,
         .brightness = 1.0f,
         .saturation = 1.0f,
     };
 
     Backdrop ResolveBackdrop(const Chain& chain) {
-        if (!Read(chain, "blur", ParseSwitch, false)) {
+        const Blur blur = Read(chain, "blur", ParseBlur, kNoBlur);
+        if (blur.source == BackdropSource::None) {
             return kNoBackdrop;
         }
         return Backdrop{
-            .blur       = true,
+            .source     = blur.source,
+            .radiusDips = blur.radiusDips,
             .brightness = Read(chain, "brightness", ParseLength, 1.0f),
             .saturation = Read(chain, "saturate", ParseLength, 1.0f),
         };

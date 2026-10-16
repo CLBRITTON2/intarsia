@@ -70,6 +70,9 @@ class Bar {
     // next change, so a fade the change started runs on the frame clock.
     void Redraw();
 
+    // Blurs the monitor's wallpaper again, as after the desktop's changed, and draws the bar with it.
+    void ReloadWallpaper();
+
   private:
     template <typename Owner>
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
@@ -113,8 +116,10 @@ class Bar {
     // The group's box, its hover fading in over the toggle's span alone under the cursor, the toggle, then its members.
     void DrawGroup(const PlacedEntry& placed);
     // The module's box (its background, or fading to its hover under the cursor), then the module.
-    void                           DrawModule(const HitBox& box, const ModuleStyle& style);
-    std::vector<D2D1_ROUNDED_RECT> SectionBackdrops(const std::vector<const SectionLayout*>& layouts) const;
+    void DrawModule(const HitBox& box, const ModuleStyle& style);
+    // The box of each section that holds a module.
+    std::vector<D2D1_RECT_F> SectionBoxes(const std::vector<const SectionLayout*>& layouts) const;
+    RECT                     WindowRect() const;
 
     // The box under a point in client pixels, or null between modules.
     const HitBox* BoxAt(POINT client) const;
@@ -168,6 +173,8 @@ class Bar {
     std::uint32_t                         _taskbarCreated;
     std::optional<MenuOwner>              _menuOwner; // null once any other input came after the menu's
 
+    // Before the tooltip and menu, which hold it.
+    std::vector<WallpaperBlur> _wallpapers;
     // Null until the constructor has docked the window and knows its size.
     std::unique_ptr<Canvas>                               _canvas;
     std::unique_ptr<Tooltip>                              _tooltip;

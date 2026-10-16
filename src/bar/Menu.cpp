@@ -372,8 +372,8 @@ void Menu::RegisterWindowClass(HINSTANCE instance) {
 }
 
 Menu::Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, WindowProcError& windowProcError,
-           Tooltip& tooltip, std::function<void(const DeviceLostError&)> onDeviceLost) :
-    _graphics(graphics), _config(config), _textFormat(textFormat), _launcher(launcher), _windowProcError(windowProcError), _tooltip(tooltip),
+           Tooltip& tooltip, const std::vector<WallpaperBlur>& wallpapers, std::function<void(const DeviceLostError&)> onDeviceLost) :
+    _graphics(graphics), _config(config), _textFormat(textFormat), _launcher(launcher), _windowProcError(windowProcError), _tooltip(tooltip), _wallpapers(wallpapers),
     _onDeviceLost(std::move(onDeviceLost)),
     _window(CreatePopupWindow(instance, kWindowClass, L"intarsia menu", WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, this, "menu")) {}
 
@@ -520,10 +520,11 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
     _thumbGrabDips.reset();
     _canvas = std::make_unique<Canvas>(_graphics, _window.get(), static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
     _shown  = true;
-    Draw();
-
+    // Before drawing, which places the wallpaper's blur by it.
     _rect        = TooltipRect(anchor, size);
     _monitorRect = anchor.monitorRect;
+    Draw();
+
     if (!SetWindowPos(_window.get(), HWND_TOPMOST, _rect.left, _rect.top, size.cx, size.cy, SWP_SHOWWINDOW)) {
         ThrowLastError("SetWindowPos(menu)");
     }
@@ -560,9 +561,9 @@ void Menu::Draw() {
     const D2D1_RECT_F   whole   = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
+    DrawBackdrops(_canvas->surface, _wallpapers, style.backdrop, {whole}, style.box, _rect);
     DrawBox(context, _canvas->brushes, _canvas->boxes, whole, style.box, style.box.background);
     const PixelGrid grid = PixelGridOf(context);
-    _canvas->surface.ShowBackdrops(BackdropOutlines(style.backdrop, grid, {whole}, style.box), style.backdrop);
     // Whole pixels, so scrolled text stays as sharp as unscrolled text.
     const float offset = SnapLength(grid, _layout.scroll.offsetDips);
     context->PushAxisAlignedClip(_layout.scroll.viewport, D2D1_ANTIALIAS_MODE_ALIASED);

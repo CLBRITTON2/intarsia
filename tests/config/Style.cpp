@@ -362,37 +362,58 @@ TEST(Style, ShadowsAreInsetAndKeepTheirOrder) {
                 ThrowsWith<ConfigError>("module > item > hover: shadow is not a property"));
 }
 
-TEST(Style, SectionsTooltipsAndMenusTakeTheSystemsBlurAndNothingElseDoes) {
+TEST(Style, SectionsTooltipsAndMenusTakeABlurAndNothingElseDoes) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section {\n  blur: on\n}\nmenu {\n  blur: off\n}\n"));
     const Backdrop    none{
-           .blur       = false,
+           .source     = BackdropSource::None,
+           .radiusDips = 0.0f,
            .brightness = 1.0f,
            .saturation = 1.0f,
     };
     EXPECT_EQ(bar.section.backdrop,
               (Backdrop{
-                  .blur       = true,
+                  .source     = BackdropSource::System,
+                  .radiusDips = 0.0f,
                   .brightness = 1.0f,
                   .saturation = 1.0f,
               }));
     EXPECT_EQ(bar.tooltip.backdrop, none);
     EXPECT_EQ(bar.menu.backdrop, none);
-    EXPECT_THAT([] { return Parse("tooltip {\n  blur: 20\n}\n"); }, ThrowsWith<ConfigError>("tooltip: blur must be on or off"));
+    EXPECT_THAT([] { return Parse("tooltip {\n  blur: 20\n}\n"); }, ThrowsWith<ConfigError>("tooltip: blur must be on, off, or wallpaper and a radius"));
     EXPECT_THAT([] { return Parse("module {\n  blur: on\n}\n"); }, ThrowsWith<ConfigError>("module: blur is not a property"));
+}
+
+TEST(Style, AWallpaperBlurTakesARadiusOfAtMostAHundred) {
+    const StyleConfig bar = ResolveBarStyle(WithBar("section {\n  blur: wallpaper 6\n  brightness: 0.8\n}\ntooltip {\n  blur: wallpaper 0\n}\n"));
+    EXPECT_EQ(bar.section.backdrop,
+              (Backdrop{
+                  .source     = BackdropSource::Wallpaper,
+                  .radiusDips = 6.0f,
+                  .brightness = 0.8f,
+                  .saturation = 1.0f,
+              }));
+    EXPECT_EQ(bar.tooltip.backdrop.source, BackdropSource::Wallpaper);
+    EXPECT_FLOAT_EQ(bar.tooltip.backdrop.radiusDips, 0.0f);
+    EXPECT_THAT([] { return Parse("section {\n  blur: wallpaper 101\n}\n"); }, ThrowsWith<ConfigError>("section: blur takes a wallpaper radius of at most 100"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: wallpaper -2\n}\n"); }, ThrowsWith<ConfigError>("section: blur must be 0 or more"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: wallpaper\n}\n"); }, ThrowsWith<ConfigError>("must be on, off, or wallpaper and a radius"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: desktop 6\n}\n"); }, ThrowsWith<ConfigError>("must be on, off, or wallpaper and a radius"));
 }
 
 TEST(Style, BrightnessAndSaturateToneTheBlur) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section {\n  blur: on\n  saturate: 1.8\n  brightness: 0.4\n}\ntooltip {\n  brightness: 0.4\n  blur: on\n}\n"));
     EXPECT_EQ(bar.section.backdrop,
               (Backdrop{
-                  .blur       = true,
+                  .source     = BackdropSource::System,
+                  .radiusDips = 0.0f,
                   .brightness = 0.4f,
                   .saturation = 1.8f,
               }));
     EXPECT_FLOAT_EQ(bar.tooltip.backdrop.brightness, 0.4f);
     EXPECT_FLOAT_EQ(bar.tooltip.backdrop.saturation, 1.0f);
-    EXPECT_THAT([] { return Parse("section {\n  brightness: 0.4\n}\n"); }, ThrowsWith<ConfigError>("section: brightness tones the system's blur, so it takes blur: on beside it"));
-    EXPECT_THAT([] { return Parse("section {\n  blur: off\n  saturate: 2\n}\n"); }, ThrowsWith<ConfigError>("takes blur: on beside it"));
+    EXPECT_THAT([] { return Parse("section {\n  brightness: 0.4\n}\n"); },
+                ThrowsWith<ConfigError>("section: brightness tones the blur, so it takes blur: on or blur: wallpaper beside it"));
+    EXPECT_THAT([] { return Parse("section {\n  blur: off\n  saturate: 2\n}\n"); }, ThrowsWith<ConfigError>("takes blur: on or blur: wallpaper beside it"));
     EXPECT_THAT([] { return Parse("section {\n  blur: on\n  saturate: -1\n}\n"); }, ThrowsWith<ConfigError>("section: saturate must be 0 or more"));
 }
 

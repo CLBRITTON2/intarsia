@@ -51,13 +51,22 @@ struct BoxStyle {
     std::vector<InsetShadow> shadows; // the first on top
 };
 
-// What shows through a box's background. Blur is the system's own, whose radius it alone sets, and shows nothing while
-// the system's transparency effects are off. brightness and saturate tone it.
+// What a box's backdrop blurs.
+enum class BackdropSource : std::uint8_t {
+    None, // nothing shows behind the background
+    // Whatever lies behind the window, blurred by the system at a radius it alone sets. It shows nothing while the
+    // system's transparency effects are off, and goes for a few seconds after a window is dragged across the box.
+    System,
+    Wallpaper, // the monitor's desktop wallpaper, under any window, blurred at the backdrop's radius
+};
+
+// What shows through a box's background, toned by brightness and saturate.
 struct Backdrop {
-    bool  blur;       // none shows nothing behind the background
-    float brightness; // 0 is black, 1 leaves the blur as it is
-    float saturation; // 0 is grey, 1 leaves the blur as it is
-    bool  operator==(const Backdrop&) const = default;
+    BackdropSource source;
+    float          radiusDips; // the wallpaper's blur as CSS's blur() takes it, a standard deviation, 0 for the other sources
+    float          brightness; // 0 is black, 1 leaves the blur as it is
+    float          saturation; // 0 is grey, 1 leaves the blur as it is
+    bool           operator==(const Backdrop&) const = default;
 };
 
 // The box behind each non-empty section (left, center, right).

@@ -160,9 +160,10 @@ TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitorRect, std::ui
 // tooltip once the cursor rests on it.
 class Menu {
   public:
-    // onDeviceLost receives a lost device met while drawing from the menu's own messages.
+    // wallpapers are the bar's, blurred for its monitor. onDeviceLost receives a lost device met while drawing from the
+    // menu's own messages.
     Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, WindowProcError& windowProcError,
-         Tooltip& tooltip, std::function<void(const DeviceLostError&)> onDeviceLost);
+         Tooltip& tooltip, const std::vector<WallpaperBlur>& wallpapers, std::function<void(const DeviceLostError&)> onDeviceLost);
     Menu(const Menu&)                  = delete;
     Menu&       operator=(const Menu&) = delete;
 
@@ -199,6 +200,7 @@ class Menu {
     Launcher&                                   _launcher;
     WindowProcError&                            _windowProcError;
     Tooltip&                                    _tooltip;
+    const std::vector<WallpaperBlur>&           _wallpapers;
     std::function<void(const DeviceLostError&)> _onDeviceLost;
     bool                                        _shown = false;
     std::uint32_t                               _dpi   = USER_DEFAULT_SCREEN_DPI;

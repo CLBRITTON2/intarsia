@@ -446,7 +446,7 @@ BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style) {
 
 std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style) {
     std::vector<D2D1_ROUNDED_RECT> outlines;
-    if (!backdrop.blur) {
+    if (backdrop.source == BackdropSource::None) {
         return outlines;
     }
     outlines.reserve(boxes.size());
@@ -454,6 +454,15 @@ std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const 
         outlines.push_back(SnappedOutline(grid, box, style));
     }
     return outlines;
+}
+
+void DrawBackdrops(Surface& surface, const std::vector<WallpaperBlur>& wallpapers, const Backdrop& backdrop, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style,
+                   const RECT& windowRect) {
+    const std::vector<D2D1_ROUNDED_RECT> outlines = BackdropOutlines(backdrop, PixelGridOf(surface.Context()), boxes, style);
+    if (backdrop.source == BackdropSource::Wallpaper) {
+        BlurFor(wallpapers, backdrop).Fill(surface.Context(), windowRect, outlines);
+    }
+    surface.ShowBackdrops(outlines, backdrop);
 }
 
 BoxCache::BoxCache(ID2D1DeviceContext* context) :

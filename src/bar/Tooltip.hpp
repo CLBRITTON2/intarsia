@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <string_view>
+#include <vector>
 
 // Where a tooltip goes: beside the hovered module, on the side of the bar that faces the desktop. Screen pixels.
 struct TooltipAnchor {
@@ -28,7 +29,8 @@ RECT TooltipRect(const TooltipAnchor& anchor, SIZE size);
 // windows while shown.
 class Tooltip {
   public:
-    Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat);
+    // wallpapers are the bar's, blurred for its monitor.
+    Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, const std::vector<WallpaperBlur>& wallpapers);
     Tooltip(const Tooltip&)               = delete;
     Tooltip&    operator=(const Tooltip&) = delete;
 
@@ -42,6 +44,7 @@ class Tooltip {
     const GraphicsDevice&                _graphics;
     const Config&                        _config;
     IDWriteTextFormat*                   _textFormat;
+    const std::vector<WallpaperBlur>&    _wallpapers;
     UniqueReleased<HWND, &DestroyWindow> _window;
     // Only while shown: Show creates it at the text's size and Hide releases it.
     std::unique_ptr<Canvas> _canvas;

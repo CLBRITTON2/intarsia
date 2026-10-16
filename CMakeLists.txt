@@ -103,6 +103,7 @@ add_library(intarsia_core STATIC
   src/platform/Process.cpp
   src/platform/Text.cpp
   src/platform/Threads.cpp
+  src/platform/Wallpaper.cpp
   src/platform/Win32Window.cpp
   src/platform/WebSocket.cpp
   src/render/Axis.cpp
@@ -112,6 +113,7 @@ add_library(intarsia_core STATIC
   src/render/Graphics.cpp
   src/render/Icon.cpp
   src/render/Surface.cpp
+  src/render/WallpaperBlur.cpp
   src/tray/ShellNotifyIcon.cpp
   src/wm/GlazeWm.cpp
   src/wm/Native.cpp
@@ -196,6 +198,7 @@ if(BUILD_TESTING)
     tests/platform/PerformanceCounter.cpp
     tests/platform/Text.cpp
     tests/platform/Threads.cpp
+    tests/platform/Wallpaper.cpp
     tests/platform/WebSocket.cpp
     tests/platform/Win32Window.cpp
     tests/render/Axis.cpp
@@ -205,6 +208,7 @@ if(BUILD_TESTING)
     tests/render/Graphics.cpp
     tests/render/Icon.cpp
     tests/render/Surface.cpp
+    tests/render/WallpaperBlur.cpp
     tests/tray/ShellNotifyIcon.cpp
     tests/wm/Native.cpp
   )

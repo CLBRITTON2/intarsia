@@ -209,6 +209,14 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             // Setting the timer again restarts it, so the rebuild waits for the last change in a burst.
             StartTimer(_control.get(), kDisplaysTimer, kDisplaysSettleMs, "displays");
             return 0;
+        case WM_SETTINGCHANGE:
+            // A pending device recovery reads the wallpaper when it builds the bars.
+            if (wParam == SPI_SETDESKWALLPAPER && !_recovering) {
+                for (const std::unique_ptr<Bar>& bar : _bars) {
+                    bar->ReloadWallpaper();
+                }
+            }
+            return DefWindowProcW(window, message, wParam, lParam);
         case WM_TIMER:
             if (wParam == kRedrawTimer) {
                 KillTimer(_control.get(), kRedrawTimer);

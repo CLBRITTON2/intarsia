@@ -3,6 +3,7 @@
 #include "config/Config.hpp"
 #include "render/Graphics.hpp"
 #include "render/Surface.hpp"
+#include "render/WallpaperBlur.hpp"
 
 #include <d2d1_1.h>
 #include <windows.h>
@@ -43,8 +44,14 @@ bool   SameShadow(const InsetShadow& first, const InsetShadow& second);
 // rounded to the nearest. At a fractional scale a 1px line otherwise half-lights two rows of pixels and looks blurred.
 BoxStyle SnapLines(const PixelGrid& grid, const BoxStyle& style);
 
-// The outline of each box for Surface::ShowBackdrops, or none when backdrop has no blur.
+// The outline of each box for its backdrop to show inside, or none when backdrop has no blur.
 std::vector<D2D1_ROUNDED_RECT> BackdropOutlines(const Backdrop& backdrop, const PixelGrid& grid, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style);
+
+// Shows backdrop inside each box of style, the system's blur through surface's backdrops or a blur from wallpapers
+// drawn on its context, for a window at windowRect. The context is mid-frame with no world transform, and the boxes
+// draw over this.
+void DrawBackdrops(Surface& surface, const std::vector<WallpaperBlur>& wallpapers, const Backdrop& backdrop, const std::vector<D2D1_RECT_F>& boxes, const BoxStyle& style,
+                   const RECT& windowRect);
 
 // The inset shadows and per-side border colors of boxes, drawn once into a bitmap for one device context's device and
 // drawn from it again, since each takes dozens of path geometries and layers that D2D tessellates on the CPU at every

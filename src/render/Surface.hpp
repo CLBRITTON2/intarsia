@@ -41,9 +41,10 @@ class Surface {
     // Null while the swap chain has no statistics yet, or they restarted (DXGI_ERROR_FRAME_STATISTICS_DISJOINT).
     std::optional<ShownPresent> LatestShown() const;
 
-    // Shows the system's blur of whatever lies behind the window inside each box (in DIPs, on whole pixels), toned by
-    // backdrop's brightness and saturation, under the drawing, in place of the boxes the last call showed.
-    void ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop);
+    // Shows the system's blur of whatever lies behind the window inside each outline (in DIPs, on whole pixels), toned
+    // by backdrop's brightness and saturation, under the drawing, in place of the outlines the last call showed. A
+    // backdrop of another source shows none, since WallpaperBlur draws it into the content.
+    void ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& outlines, const Backdrop& backdrop);
 
   private:
     void                                       BindRenderTarget();

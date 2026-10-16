@@ -79,6 +79,14 @@ namespace {
         DrawMask(backdrop.mask, box, dpi);
     }
 
+    // Only the system's blur is a composition visual. The other sources draw into the content, and show none here.
+    std::vector<D2D1_ROUNDED_RECT> SystemBlurBoxes(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop) {
+        if (backdrop.source != BackdropSource::System) {
+            return {};
+        }
+        return boxes;
+    }
+
 } // namespace
 
 // The window's visuals from the bottom: the backdrops, then the swap chain's content. The backdrops' brushes are made
@@ -181,7 +189,8 @@ std::optional<ShownPresent> Surface::LatestShown() const {
     return ShownPresent{.present = statistics.PresentCount, .refresh = statistics.PresentRefreshCount};
 }
 
-void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop) {
+void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& outlines, const Backdrop& backdrop) {
+    const std::vector<D2D1_ROUNDED_RECT> boxes = SystemBlurBoxes(outlines, backdrop);
     Composing("Surface::ShowBackdrops", [this, &boxes, &backdrop] {
         std::vector<BackdropVisual>& backdrops = _visuals->backdrops;
         const bool                   retoned   = _visuals->tone != backdrop;

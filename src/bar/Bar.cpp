@@ -242,11 +242,12 @@ void Bar::Build(HINSTANCE instance) {
     }
     _canvas = std::make_unique<Canvas>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     BuildContexts();
-    _boxFades = RestingBoxFades(_modules);
-    _tooltip  = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get());
-    _menu     = std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _windowProcError, *_tooltip,
-                                       [this](const DeviceLostError& error) { ReportDeviceLost(error); });
-    _lister   = std::make_unique<MenuLister>(_window, kMenuListed);
+    _boxFades   = RestingBoxFades(_modules);
+    _wallpapers = BlurWallpapers(_graphics, _config.style, _placement.monitorRect, _placement.dpi);
+    _tooltip    = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get(), _wallpapers);
+    _menu       = std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _windowProcError, *_tooltip, _wallpapers,
+                                         [this](const DeviceLostError& error) { ReportDeviceLost(error); });
+    _lister     = std::make_unique<MenuLister>(_window, kMenuListed);
     ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
@@ -266,6 +267,16 @@ bool Bar::DeviceLost() const {
 
 bool Bar::HasPresented() const {
     return _presented;
+}
+
+void Bar::ReloadWallpaper() {
+    if (_deviceLost) {
+        return;
+    }
+    try {
+        _wallpapers = BlurWallpapers(_graphics, _config.style, _placement.monitorRect, _placement.dpi);
+        Render();
+    } catch (const DeviceLostError& error) { ReportDeviceLost(error); }
 }
 
 void Bar::ReportDeviceLost(const DeviceLostError& error) {
@@ -312,6 +323,8 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         case WM_DPICHANGED:
             _placement.dpi = HIWORD(wParam);
+            // The wallpaper's radius is in DIPs, so it blurs over other pixels.
+            _wallpapers = BlurWallpapers(_graphics, _config.style, _placement.monitorRect, _placement.dpi);
             Dock();
             return 0;
         case WM_PAINT:
@@ -542,12 +555,9 @@ BarGeometry Bar::Geometry() const {
 }
 
 PlacedBar Bar::PlaceModules() {
-    PlacedBar placed = PlaceBar(Geometry(), _modules);
-    _hitBoxes        = HitBoxes(placed.entries);
-    RECT windowRect{};
-    if (!GetWindowRect(_window, &windowRect)) {
-        ThrowLastError("GetWindowRect");
-    }
+    PlacedBar placed      = PlaceBar(Geometry(), _modules);
+    _hitBoxes             = HitBoxes(placed.entries);
+    const RECT windowRect = WindowRect();
     for (const HitBox& box : _hitBoxes) {
         box.module->Place(ModulePlacement{
             .windowRect    = windowRect,
@@ -570,10 +580,11 @@ void Bar::Paint(const PlacedBar& placed) {
     ID2D1DeviceContext* context = _canvas->surface.Context();
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
+    const SectionStyle& section = _config.style.section;
+    DrawBackdrops(_canvas->surface, _wallpapers, section.backdrop, SectionBoxes({&placed.layout.left, &placed.layout.center, &placed.layout.right}), section.box, WindowRect());
     DrawSection(placed.entries.left, placed.layout.left);
     DrawSection(placed.entries.center, placed.layout.center);
     DrawSection(placed.entries.right, placed.layout.right);
-    _canvas->surface.ShowBackdrops(SectionBackdrops({&placed.layout.left, &placed.layout.center, &placed.layout.right}), _config.style.section.backdrop);
     const std::chrono::steady_clock::time_point presenting = std::chrono::steady_clock::now();
     _canvas->surface.EndDrawAndPresent();
     _presented = true;
@@ -621,7 +632,7 @@ void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
     box.module->Draw(_contexts.at(&style), box.contentOrigin);
 }
 
-std::vector<D2D1_ROUNDED_RECT> Bar::SectionBackdrops(const std::vector<const SectionLayout*>& layouts) const {
+std::vector<D2D1_RECT_F> Bar::SectionBoxes(const std::vector<const SectionLayout*>& layouts) const {
     const BarGeometry        bar = Geometry();
     std::vector<D2D1_RECT_F> sections;
     for (const SectionLayout* layout : layouts) {
@@ -629,8 +640,15 @@ std::vector<D2D1_ROUNDED_RECT> Bar::SectionBackdrops(const std::vector<const Sec
             sections.push_back(SectionBounds(bar, *layout));
         }
     }
-    const SectionStyle& style = _config.style.section;
-    return BackdropOutlines(style.backdrop, PixelGridOf(_canvas->surface.Context()), sections, style.box);
+    return sections;
+}
+
+RECT Bar::WindowRect() const {
+    RECT windowRect{};
+    if (!GetWindowRect(_window, &windowRect)) {
+        ThrowLastError("GetWindowRect");
+    }
+    return windowRect;
 }
 
 const HitBox* Bar::BoxAt(POINT client) const {
@@ -746,11 +764,8 @@ void Bar::ShowTooltip() {
 }
 
 TooltipAnchor Bar::AnchorFor(const D2D1_RECT_F& span) const {
-    RECT barRect{};
-    if (!GetWindowRect(_window, &barRect)) {
-        ThrowLastError("GetWindowRect");
-    }
-    const std::uint32_t dpi = _placement.dpi;
+    const RECT          barRect = WindowRect();
+    const std::uint32_t dpi     = _placement.dpi;
     return TooltipAnchor{
         .target      = DipsToScreen(barRect, span, dpi),
         .barRect     = barRect,

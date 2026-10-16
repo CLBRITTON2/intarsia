@@ -128,9 +128,12 @@ Hover blocks change colors only, so nothing moves under the cursor.
 - `shadow`: `none`, or comma separated shadows drawn inside the box, the first on top. Each is an x and y offset, an
   optional blur and spread, and a color: `shadow: 0 1 0 #ffffff 15%, 0 -1 1 #000000 25%`. An item's shadows fade over
   its `background` transition.
-- `blur`: `on` or `off`. The system's blur of what lies behind the box, which shows through a translucent
-  `background`. `brightness` and `saturate` tone it (numbers of 0 or more, 1 unchanged) and need `blur: on` beside
-  them.
+- `blur`: `on`, `off`, or `wallpaper` and a radius up to 100: `blur: wallpaper 12`. Either shows through a
+  translucent `background`. `on` is the system's blur of whatever lies behind the box, windows included, which the
+  system can drop for a few seconds after a window is dragged over it. `wallpaper` blurs the monitor's desktop wallpaper
+  at the radius (a standard deviation in DIPs, 0 for none), so a window behind the box never shows. It reloads when
+  the wallpaper changes, and a wallpaper that does not decode stops the bar. `brightness` and `saturate` tone either
+  (numbers of 0 or more, 1 unchanged) and need a `blur` other than `off` beside them.
 - `rotate`: degrees, for turning the tray or group toggle when it unfolds.
 - `transition`: `none`, or comma separated `property duration timing`, with the duration in `ms` or `s` up to 60 s
   and timing one of `linear`, `ease`, `ease-in`, `ease-out`, `ease-in-out` (`ease` when left out). A module animates
@@ -171,7 +174,7 @@ section {
   background: $box
   border: 1 $line
   radius: 10
-  blur: on
+  blur: wallpaper 12
 }
 
 tooltip {

@@ -175,7 +175,8 @@ TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSid
     const std::vector<D2D1_RECT_F>       boxes{D2D1::RectF(10.3f, 0.0f, 60.0f, 16.0f), D2D1::RectF(70.0f, 0.0f, 200.0f, 40.0f)};
     const std::vector<D2D1_ROUNDED_RECT> outlines = BackdropOutlines(
         {
-            .blur       = true,
+            .source     = BackdropSource::System,
+            .radiusDips = 0.0f,
             .brightness = 1.0f,
             .saturation = 1.0f,
         },
@@ -184,9 +185,20 @@ TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSid
     EXPECT_FLOAT_EQ(outlines[0].rect.left, 10.4f);
     EXPECT_FLOAT_EQ(outlines[0].radiusX, 8.0f);
     EXPECT_FLOAT_EQ(outlines[1].radiusY, 12.0f);
+    EXPECT_EQ(BackdropOutlines(
+                  {
+                      .source     = BackdropSource::Wallpaper,
+                      .radiusDips = 8.0f,
+                      .brightness = 1.0f,
+                      .saturation = 1.0f,
+                  },
+                  kFractionalScale, boxes, style)
+                  .size(),
+              2u);
     EXPECT_TRUE(BackdropOutlines(
                     {
-                        .blur       = false,
+                        .source     = BackdropSource::None,
+                        .radiusDips = 0.0f,
                         .brightness = 1.0f,
                         .saturation = 1.0f,
                     },
