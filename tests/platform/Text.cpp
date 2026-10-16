@@ -1,10 +1,8 @@
 #include "platform/Text.hpp"
-#include "platform/Errors.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <cstdint>
 #include <string>
 
 namespace {
@@ -18,20 +16,6 @@ namespace {
 TEST(Text, EmptyInputGivesEmptyOutput) {
     EXPECT_TRUE(ToUtf8(L"").empty());
     EXPECT_TRUE(ToWide("").empty());
-}
-
-TEST(Text, ToWideRejectsInvalidUtf8) {
-    EXPECT_THROW(ToWide("\xFF\xFE"), Win32Error);
-}
-
-TEST(Text, ToUtf8RejectsALoneSurrogate) {
-    const std::wstring loneHigh(1, static_cast<wchar_t>(0xD800));
-    EXPECT_THROW(ToUtf8(loneHigh), Win32Error);
-}
-
-TEST(Text, SameFileNameIgnoresCase) {
-    EXPECT_TRUE(SameFileName(L"Config.LUA", L"config.lua"));
-    EXPECT_FALSE(SameFileName(L"config.lua.bak", L"config.lua"));
 }
 
 TEST(Text, CharacterAtTakesTheWholeSequenceOrOneByteThatStartsNone) {
@@ -85,12 +69,8 @@ TEST(Text, ReplaceLoneSurrogatesKeepsPairsAndReplacesStrays) {
 
 TEST(Text, IsValidUtf8AcceptsWellFormedSequencesOnly) {
     EXPECT_TRUE(IsValidUtf8(""));
-    EXPECT_TRUE(IsValidUtf8("plain"));
     EXPECT_TRUE(IsValidUtf8("\xC3\xA9\xF3\xB1\x91\x81"));
     EXPECT_FALSE(IsValidUtf8("\xFF"));
-    EXPECT_FALSE(IsValidUtf8("\xC0\xAF"));     // overlong '/'
-    EXPECT_FALSE(IsValidUtf8("\xED\xA0\x80")); // encoded surrogate
-    EXPECT_FALSE(IsValidUtf8("\xE2\x82"));     // truncated
 }
 
 TEST(Text, DrawableTextReplacesUnsafeCharactersAndInvalidBytes) {

@@ -134,8 +134,9 @@ namespace integration {
         // ones.
         std::optional<size_t> PixelCount(std::uint32_t rgb) const;
         std::optional<double> MeanColumnOf(std::uint32_t rgb) const;
-        // MeanColumnOf rounded to a pixel once the primary bar draws rgb, or nullopt when it does not within limit.
-        std::optional<std::int32_t> DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const;
+        // MeanColumnOf rounded to a pixel once the primary bar draws rgb. Throws std::runtime_error, failing the test,
+        // when it does not within limit.
+        std::int32_t DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         // Each waits until the primary bar draws some pixel in rgb, or none, within limit and logs the count.
         bool Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         bool StopsDrawing(std::uint32_t rgb, std::chrono::milliseconds limit) const;
@@ -160,6 +161,8 @@ namespace integration {
         std::optional<std::uint32_t> Close();
 
       private:
+        // The bar's process. Throws std::logic_error once the test has closed it.
+        const ChildProcess& OpenBar() const;
         // Sweeps once, logs each command it sent with how many clicks sent it, and returns them all.
         std::vector<std::string> Sweep(std::uint32_t attempt) const;
         // Prints the bar's log and every server's stderr, each line tagged with its file.

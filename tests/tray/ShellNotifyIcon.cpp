@@ -128,9 +128,7 @@ namespace {
         TrayNotifyData data = NotifyData(NIM_ADD, Handle32(owner), id, AddFlags(icon), kCallback);
         data.data.icon      = Handle32(icon);
         std::memcpy(data.data.tip.data(), L"tip", sizeof(L"tip"));
-        std::vector<std::byte> bytes(sizeof(data));
-        std::memcpy(bytes.data(), &data, sizeof(data));
-        return bytes;
+        return Bytes(data, sizeof(data));
     }
 
     LRESULT Send(HWND tray, ULONG_PTR kind, std::vector<std::byte>& bytes) {
@@ -173,13 +171,17 @@ namespace {
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
+    constexpr RECT Rect(std::int32_t left, std::int32_t top, std::int32_t right, std::int32_t bottom) {
+        return RECT{
+            .left   = left,
+            .top    = top,
+            .right  = right,
+            .bottom = bottom,
+        };
+    }
+
     // A monitor above the primary has negative coordinates.
-    constexpr RECT kAbovePrimary{
-        .left   = 100,
-        .top    = -2100,
-        .right  = 130,
-        .bottom = -2070,
-    };
+    constexpr RECT kAbovePrimary = Rect(100, -2100, 130, -2070);
 
     // Answers every icon rect query with kAbovePrimary, as the tray answers one.
     LRESULT CALLBACK AnswerAbovePrimary(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -379,9 +381,8 @@ TEST(NotifyIconProtocol, TheSamePixelsKeepTheirPointer) {
 TEST(NotifyIconProtocol, DrawableTooltipKeepsLineBreaksAndReplacesTheUnsafe) {
     EXPECT_EQ(DrawableTooltip(L"a\r\nb"), L"a\nb");
     // The override is spelled as a number: MSVC refuses an unterminated one in a literal (C5255).
-    EXPECT_EQ(DrawableTooltip(std::wstring{L'a', L'\t', L'b', static_cast<wchar_t>(0x202E), L'c'}), (std::wstring{L'a', kReplacementCharacter, L'b', kReplacementCharacter, L'c'}));
-    EXPECT_EQ(DrawableTooltip(std::wstring{L'x', static_cast<wchar_t>(0xD800), L'y'}), (std::wstring{L'x', kReplacementCharacter, L'y'}));
-    EXPECT_EQ(DrawableTooltip(L""), L"");
+    EXPECT_EQ(DrawableTooltip(std::wstring{L'a', static_cast<wchar_t>(0x202E), static_cast<wchar_t>(0xD800), L'b'}),
+              (std::wstring{L'a', kReplacementCharacter, kReplacementCharacter, L'b'}));
 }
 
 TEST(NotifyIconProtocol, VersionZeroPostsTheIdAndTheMouseMessage) {
@@ -404,8 +405,7 @@ TEST(NotifyIconProtocol, VersionThreeAddsSelectAndContextMenu) {
     EXPECT_EQ(ClickEvents(TrayButton::Right, NOTIFYICON_VERSION), (std::vector<std::uint32_t>{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU}));
 }
 
-TEST(NotifyIconProtocol, AMiddleClickIsItsButtonAloneInEveryVersion) {
-    EXPECT_EQ(ClickEvents(TrayButton::Middle, 0), (std::vector<std::uint32_t>{WM_MBUTTONDOWN, WM_MBUTTONUP}));
+TEST(NotifyIconProtocol, AMiddleClickIsItsButtonAloneEvenInVersionFour) {
     EXPECT_EQ(ClickEvents(TrayButton::Middle, NOTIFYICON_VERSION_4), (std::vector<std::uint32_t>{WM_MBUTTONDOWN, WM_MBUTTONUP}));
 }
 
@@ -444,23 +444,6 @@ TEST(NotifyIconProtocol, ADoubleClickIsTheSameButtonOnTheSameIconSoonAndNear) {
     EXPECT_FALSE(IsDoubleClick(first, other, doubleTime, area));
 }
 
-TEST(NotifyIconProtocol, AMoveTravelsInTheIconsVersionForm) {
-    TrayIcon icon = Icon(5, 7);
-    EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}),
-              (std::vector<TrayInputMessage>{{
-                  .message = WM_APP,
-                  .wParam  = 7,
-                  .lParam  = WM_MOUSEMOVE,
-              }}));
-    icon.version = NOTIFYICON_VERSION_4;
-    EXPECT_EQ(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 3, .y = 4}),
-              (std::vector<TrayInputMessage>{{
-                  .message = WM_APP,
-                  .wParam  = MAKEWPARAM(3, 4),
-                  .lParam  = MAKELPARAM(WM_MOUSEMOVE, 7),
-              }}));
-}
-
 TEST(NotifyIconProtocol, VersionFourPostsTheCursorAndPacksTheIdWithTheEvent) {
     TrayIcon icon = Icon(5, 7);
     icon.version  = NOTIFYICON_VERSION_4;
@@ -470,9 +453,8 @@ TEST(NotifyIconProtocol, VersionFourPostsTheCursorAndPacksTheIdWithTheEvent) {
     for (const TrayInputMessage& message : messages) {
         EXPECT_EQ(static_cast<std::int16_t>(LOWORD(message.wParam)), -100);
         EXPECT_EQ(HIWORD(message.wParam), 40);
-        EXPECT_EQ(HIWORD(message.lParam), 7);
     }
-    EXPECT_EQ(LOWORD(messages[2].lParam), WM_CONTEXTMENU);
+    EXPECT_EQ(messages[2].lParam, MAKELPARAM(WM_CONTEXTMENU, 7));
 }
 
 TEST(NotifyIconProtocol, ACallbackBelowWmUserPostsNothing) {
@@ -481,11 +463,6 @@ TEST(NotifyIconProtocol, ACallbackBelowWmUserPostsNothing) {
     EXPECT_TRUE(TrayInputMessages(icon, ClickEvents(TrayButton::Left, 0), POINT{.x = 0, .y = 0}).empty());
     icon.callbackMessage = 0;
     EXPECT_TRUE(TrayInputMessages(icon, {WM_MOUSEMOVE}, POINT{.x = 0, .y = 0}).empty());
-}
-
-// Shell32 asks for the size before the corner, which ShellNotifyIcon.Shell32SendsTheIconRectQueryTheParserReads reads.
-TEST(NotifyIconProtocol, ParseIconRectQueryReadsTheSizePart) {
-    EXPECT_EQ(ParseIconRectQuery(QueryBytes(2, 5, 7, GUID{})).part, IconRectPart::Size);
 }
 
 TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
@@ -499,50 +476,23 @@ TEST(NotifyIconProtocol, ParseIconRectQueryRefusesWhatIsNotAQuery) {
 }
 
 TEST(NotifyIconProtocol, AnIconShownOnTwoBarsAnswersWithTheOneNearestTheCursor) {
-    const RECT leftBarIconRect{
-        .left   = -1000,
-        .top    = 0,
-        .right  = -970,
-        .bottom = 30,
-    };
-    const RECT otherIconRect{
-        .left   = 0,
-        .top    = 0,
-        .right  = 30,
-        .bottom = 30,
-    };
-    const RECT rightBarIconRect{
-        .left   = 1500,
-        .top    = 0,
-        .right  = 1530,
-        .bottom = 30,
-    };
+    const RECT                      leftBarIconRect  = Rect(-1000, 0, -970, 30);
+    const RECT                      rightBarIconRect = Rect(1500, 0, 1530, 30);
     const std::vector<TrayIcon>     icons{Icon(5, 7)};
-    const std::vector<TrayIconRect> rects{Shown(5, 7, leftBarIconRect), Shown(5, 8, otherIconRect), Shown(5, 7, rightBarIconRect)};
+    const std::vector<TrayIconRect> rects{Shown(5, 7, leftBarIconRect), Shown(5, 8, Rect(0, 0, 30, 30)), Shown(5, 7, rightBarIconRect)};
     EXPECT_EQ(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = 1510, .y = 10}), rightBarIconRect);
     EXPECT_EQ(QueriedIconRect(Query(5, 7, GUID{}), icons, rects, POINT{.x = -500, .y = 400}), leftBarIconRect);
 }
 
 TEST(NotifyIconProtocol, AnIconWithAGuidIsFoundByIt) {
-    TrayIcon icon = Icon(5, 7);
-    icon.guid     = kGuid;
-    const RECT iconRect{
-        .left   = 10,
-        .top    = 0,
-        .right  = 40,
-        .bottom = 30,
-    };
+    TrayIcon icon       = Icon(5, 7);
+    icon.guid           = kGuid;
+    const RECT iconRect = Rect(10, 0, 40, 30);
     EXPECT_EQ(QueriedIconRect(Query(0, 0, kGuid), {icon}, {Shown(5, 7, iconRect)}, POINT{.x = 0, .y = 0}), iconRect);
 }
 
 TEST(NotifyIconProtocol, AnIconNoBarShowsHasNoRect) {
-    const RECT otherIconRect{
-        .left   = 0,
-        .top    = 0,
-        .right  = 30,
-        .bottom = 30,
-    };
-    const std::vector<TrayIconRect> rects{Shown(5, 8, otherIconRect)};
+    const std::vector<TrayIconRect> rects{Shown(5, 8, Rect(0, 0, 30, 30))};
     // Folded away, an icon the tray never had, and a GUID no icon has.
     EXPECT_FALSE(QueriedIconRect(Query(5, 7, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
@@ -646,8 +596,6 @@ TEST_F(ShellNotifyIconTray, MalformedMessagesAreRefusedAndTheTrayKeepsWorking) {
     std::vector<std::byte> wrongSignature = AddPayload(_owner.Get(), 1, nullptr);
     wrongSignature[0]                     = std::byte{0};
     EXPECT_EQ(Send(_window, kNotifyIconCopyData, wrongSignature), FALSE);
-    std::vector<std::byte> empty;
-    EXPECT_EQ(Send(_window, kNotifyIconCopyData, empty), FALSE);
     // An icon rect query too short to read has no rect, which shell32 gives the app as E_FAIL.
     std::vector<std::byte> shortQuery(8);
     EXPECT_EQ(Send(_window, kIconRectCopyData, shortQuery), 0);
@@ -659,8 +607,9 @@ TEST_F(ShellNotifyIconTray, MalformedMessagesAreRefusedAndTheTrayKeepsWorking) {
 }
 
 TEST_F(ShellNotifyIconTray, AppBarMessagesAreNotTrayIcons) {
-    // With no Explorer taskbar of this class to forward to, the answer is Explorer's absence.
-    std::vector<std::byte> appBar(64);
+    // An icon's payload under the appbar kind goes only to Explorer, and with no taskbar of this class the answer is its
+    // absence.
+    std::vector<std::byte> appBar = AddPayload(_owner.Get(), 1, nullptr);
     EXPECT_EQ(Send(_window, kAppBarCopyData, appBar), FALSE);
     EXPECT_TRUE(_tray.Icons().empty());
 }

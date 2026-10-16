@@ -135,15 +135,12 @@ tooltip {
 } // namespace
 
 TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
-    integration::RunningBar           bar("hover-module", kModuleConfig, kModuleStyle);
-    const std::optional<std::int32_t> probe = bar.DrawnColumn(kRestColor, kLimit);
-    if (!probe.has_value()) {
-        FAIL() << "the module never drew its background at rest";
-    }
+    integration::RunningBar bar("hover-module", kModuleConfig, kModuleStyle);
+    const std::int32_t      probe = bar.DrawnColumn(kRestColor, kLimit);
     EXPECT_EQ(bar.PixelCount(kHoverColor), size_t{0}) << "the hover background drew with no cursor over the module";
 
     const integration::SavedCursor saved;
-    bar.MoveCursorTo(*probe);
+    bar.MoveCursorTo(probe);
     EXPECT_TRUE(bar.Draws(kHoverColor, kLimit)) << "the hover background never drew under the cursor";
     EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("animation_frames").empty(); }, kLimit)) << "the hover transition logged no frames";
 

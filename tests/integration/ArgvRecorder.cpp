@@ -4,32 +4,18 @@
 //
 //   argv_recorder.exe <record file> [argument...]
 
+#include "platform/Errors.hpp"
 #include "platform/Handle.hpp"
+#include "platform/Text.hpp"
 
 #include <windows.h>
 
 #include <shellapi.h>
 
 #include <cstdint>
-#include <optional>
 #include <string>
-#include <string_view>
 
 namespace {
-
-    // Nullopt when the text is not valid UTF-16.
-    std::optional<std::string> Utf8(std::wstring_view text) {
-        if (text.empty()) {
-            return std::string();
-        }
-        const std::int32_t size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<std::int32_t>(text.size()), nullptr, 0, nullptr, nullptr);
-        if (size <= 0) {
-            return std::nullopt;
-        }
-        std::string converted(static_cast<size_t>(size), '\0');
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<std::int32_t>(text.size()), converted.data(), size, nullptr, nullptr);
-        return converted;
-    }
 
     bool WriteAll(HANDLE file, const std::string& text) {
         DWORD written = 0;
@@ -48,15 +34,15 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) { // NOLINT(misc-use-inter
     std::string lines;
     std::string joined;
     for (std::int32_t index = 2; index < count; ++index) {
-        const std::optional<std::string> argument = Utf8(argv[index]);
-        if (!argument.has_value()) {
-            return 6;
-        }
-        lines += *argument + "\n";
+        std::string argument;
+        try {
+            argument = ToUtf8(argv[index]);
+        } catch (const Win32Error&) { return 6; }
+        lines += argument + "\n";
         if (index > 2) {
             joined += " ";
         }
-        joined += *argument;
+        joined += argument;
     }
     HANDLE record = CreateFileW(argv[1], FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (record == INVALID_HANDLE_VALUE) {

@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -64,30 +63,24 @@ member {
 } // namespace
 
 TEST(Group, UnfoldsItsMembersOnAClickAndTakesNoClickForThemWhileFolded) {
-    const std::filesystem::path       record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
-    const integration::RunningBar     bar(kTestName, GroupConfig(record), kStyle);
-    const std::optional<std::int32_t> toggle = bar.DrawnColumn(kGroupColor, kLimit);
-    if (!toggle.has_value()) {
-        FAIL() << "the folded group never drew";
-    }
+    const std::filesystem::path   record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
+    const integration::RunningBar bar(kTestName, GroupConfig(record), kStyle);
+    const std::int32_t            toggle = bar.DrawnColumn(kGroupColor, kLimit);
     EXPECT_EQ(bar.PixelCount(kMemberColor), size_t{0}) << "a member drew while the group starts folded";
 
-    bar.ClickAt(*toggle);
-    const std::optional<std::int32_t> member = bar.DrawnColumn(kMemberColor, kLimit);
-    if (!member.has_value()) {
-        FAIL() << "a click on the toggle never unfolded the member";
-    }
-    EXPECT_GT(*member, *toggle) << "the member did not unfold after the toggle";
+    bar.ClickAt(toggle);
+    const std::int32_t member = bar.DrawnColumn(kMemberColor, kLimit);
+    EXPECT_GT(member, toggle) << "the member did not unfold after the toggle";
 
-    bar.ClickAt(*toggle);
+    bar.ClickAt(toggle);
     ASSERT_TRUE(bar.StopsDrawing(kMemberColor, kLimit)) << "a second click on the toggle left the member shown";
-    bar.ClickAt(*member);
+    bar.ClickAt(member);
     integration::PumpFor(std::chrono::seconds(1));
     EXPECT_FALSE(std::filesystem::exists(record)) << "a click where the folded member was ran its action";
 
-    bar.ClickAt(*toggle);
+    bar.ClickAt(toggle);
     ASSERT_TRUE(bar.Draws(kMemberColor, kLimit)) << "a third click on the toggle never unfolded the member";
-    bar.ClickAt(*member);
+    bar.ClickAt(member);
     ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kLimit))
         << "a click on the unfolded member ran no action (" << record.string() << ")";
     EXPECT_THAT(integration::ReadLines(record), ElementsAre("member"));

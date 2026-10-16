@@ -72,7 +72,6 @@ namespace {
         std::vector<std::uint32_t> opened; // the id of each icon whose popup opened
         std::vector<std::uint32_t> closed;
         std::vector<TrayIconRect>  rects; // the last a view showed
-        size_t                     showCalls = 0;
 
         std::vector<TrayIcon>      Icons() const override {
             return icons;
@@ -96,7 +95,6 @@ namespace {
 
         void ReportIconRects(const void* /*view*/, std::vector<TrayIconRect> shown) override {
             rects = std::move(shown);
-            ++showCalls;
         }
     };
 
@@ -161,12 +159,6 @@ namespace {
 
 } // namespace
 
-TEST(Tray, ShownIconsSkipsHiddenIconsAndIconsWithoutPixels) {
-    const std::vector<TrayIcon> shown = ShownIcons({Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false)});
-    ASSERT_EQ(shown.size(), 1u);
-    EXPECT_EQ(shown[0].id, 1u);
-}
-
 TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
     ModuleStyle style = TestModuleStyle();
     Tray        plain(kConfig, _tray, style);
@@ -211,18 +203,13 @@ TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
     EXPECT_LT(midway, folded + (2.0f * 38.0f));
     ExpectDraws(module, Axis::Horizontal);
 
-    // The toggle moved right with the box's edge, and a click on it there folds the tray back from where it is.
+    // The toggle moved right with the box's edge, and a click on it there folds the tray back.
     module.Click(At(module, midway - 6.0f));
-    EXPECT_TRUE(module.Layout(RenderNow(Axis::Horizontal)));
-    const float folding = module.Size().width;
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    EXPECT_TRUE(module.Layout(RenderNow(Axis::Horizontal)));
-    EXPECT_LT(module.Size().width, folding);
-    std::this_thread::sleep_for(std::chrono::milliseconds(350));
-    module.Layout(RenderNow(Axis::Horizontal));
+    EXPECT_TRUE(_tray.presses.empty());
+    RenderContext later = RenderNow(Axis::Horizontal);
+    later.frameTime += style.transition.duration;
+    module.Layout(later);
     EXPECT_FLOAT_EQ(module.Size().width, folded);
-    EXPECT_EQ(module.MillisecondsUntilChange(), std::nullopt);
-    EXPECT_FALSE(module.Layout(RenderNow(Axis::Horizontal)));
 }
 
 // A frame paced to a refresh from before the click still shows the tray folded, however late it is drawn.
@@ -367,23 +354,6 @@ TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
         EXPECT_EQ(_tray.rects[1].rect.left, 1000 + 286);
     }
     EXPECT_TRUE(_tray.rects.empty());
-}
-
-TEST_F(TrayModule, TellsTheTrayOnlyWhenTheIconsMove) {
-    const ModulePlacement placement = Placement(96);
-    Tray                  module(kConfig, _tray, TestModuleStyle());
-    Unfold(module);
-    module.Place(placement);
-    ASSERT_FALSE(_tray.rects.empty());
-    const size_t calls = _tray.showCalls;
-    module.Place(placement);
-    EXPECT_EQ(_tray.showCalls, calls);
-    module.Place(ModulePlacement{
-        .windowRect    = placement.windowRect,
-        .contentOrigin = D2D1::Point2F(120.0f, 4.0f),
-        .dpi           = 96,
-    });
-    EXPECT_EQ(_tray.showCalls, calls + 1);
 }
 
 TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {

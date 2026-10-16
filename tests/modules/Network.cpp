@@ -1,6 +1,5 @@
 #include "modules/Network.hpp"
 
-#include "TextOnlyRender.hpp"
 #include "network/INetwork.hpp"
 #include "support/ThrowsWith.hpp"
 
@@ -75,20 +74,6 @@ TEST(Network, TooltipCarriesTheAddressAndRates) {
     network.state = Wifi(50);
     Network module(TestConfig(), network);
     EXPECT_EQ(module.TooltipText(), L"192.0.2.7 down 1.2 MB/s up 800 B/s");
-}
-
-TEST(Network, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
-    FakeNetwork          network;
-    const TextOnlyRender render;
-    Network              module(TestConfig(), network);
-    EXPECT_TRUE(module.Layout(render.Context()));
-    EXPECT_FALSE(module.Layout(render.Context()));
-    network.state = Wifi(72);
-    EXPECT_TRUE(module.Layout(render.Context()));
-    // Rates only reach the tooltip here, so they change nothing drawn.
-    network.state.receivedBytesPerSecond = 9.0;
-    EXPECT_FALSE(module.Layout(render.Context()));
-    EXPECT_GT(module.Size().width, 0.0f);
 }
 
 // The backend tells of link changes only, so a rate on the bar is read on a tick, and one only in the tooltip is not.

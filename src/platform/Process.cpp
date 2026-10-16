@@ -178,16 +178,6 @@ namespace {
         return Pipe{.read = std::move(read), .write = std::move(write)};
     }
 
-    UniqueHandle KillOnCloseJob() {
-        UniqueHandle                         job = OwnHandle(CreateJobObjectW(nullptr, nullptr), "CreateJobObjectW");
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        if (!SetInformationJobObject(job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
-            ThrowLastError("SetInformationJobObject(kill on close)");
-        }
-        return job;
-    }
-
     // One port for the pipe's reads and the job's messages, which says when no process is left in the job.
     // Associated before any process is in the job, so none of its messages is missed.
     UniqueHandle OutputPort(HANDLE pipe, HANDLE job) {
@@ -494,6 +484,16 @@ std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program) {
         return std::nullopt;
     }
     return std::filesystem::path(std::wstring(found.data(), length));
+}
+
+UniqueHandle KillOnCloseJob() {
+    UniqueHandle                         job = OwnHandle(CreateJobObjectW(nullptr, nullptr), "CreateJobObjectW");
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (!SetInformationJobObject(job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
+        ThrowLastError("SetInformationJobObject(kill on close)");
+    }
+    return job;
 }
 
 std::wstring JoinArguments(const std::vector<std::wstring>& arguments) {

@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -15,16 +14,8 @@ namespace {
     constexpr std::uint32_t kGreen  = 0x27AE60;
     constexpr std::uint32_t kOrange = 0xF39C12;
     constexpr std::uint32_t kRed    = 0xE74C3C;
+    constexpr std::uint32_t kBlue   = 0x2E86C1;
     constexpr auto          kDrawn  = std::chrono::seconds(5);
-
-    // A custom module named name whose command is the recorder printing printed, recording to the test's work
-    // directory. printed is a Lua expression.
-    std::string RecorderModule(std::string_view testName, std::string_view name, std::string_view output, std::string_view classes, std::string_view printed) {
-        const std::filesystem::path record = integration::WorkDirectoryPath(testName) / std::format("{}.txt", name);
-        return std::format(R"({} = {{ type = "custom", command = {{ {}, {}, {} }}, run = "interval", timeout = 5, output = "{}", classes = {{ {} }}, format = "{{text}}", icon = "",
-                  interval = 30 }},)",
-                           name, integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record), printed, output, classes);
-    }
 
     // left is the Lua list contents of the left section, modules the Lua definitions of the modules it names.
     std::string CustomConfig(std::string_view left, std::string_view modules) {
@@ -75,14 +66,6 @@ module {
 
 } // namespace
 
-TEST(Custom, DrawsTheColorOfTheClassItsJsonNames) {
-    constexpr std::string_view    kTestName = "custom-class";
-    const integration::RunningBar bar(kTestName, CustomConfig(R"("probe")", RecorderModule(kTestName, "probe", "json", R"("good")", R"([[{"text":"WWWW","class":"good"}]])")),
-                                      StyleWithRules("probe {\n  color: #27ae60\n  good {\n    color: #f39c12\n  }\n}\n"));
-    EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the class the output names never drew its color";
-    EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the module's own color drew beside its class's";
-}
-
 TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
     const integration::RunningBar bar(
         "custom-fails", CustomConfig(R"("probe")", R"(probe = { type = "custom", command = { "cmd", "/c", "exit 3" }, run = "interval", timeout = 5, output = "text", classes = {},
@@ -92,7 +75,7 @@ TEST(Custom, DrawsTheAlertColorWhenItsCommandFails) {
     EXPECT_FALSE(bar.Events("command_failed").empty()) << "the bar logged no command_failed";
 }
 
-TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
+TEST(Custom, ShowsEachLineAContinuousCommandPrintsInItsClassColorThenItsExitThenItsRestart) {
     // Apart from the bar's work directory, which the bar's start empties.
     const std::filesystem::path script = integration::NewWorkDirectory("custom-continuous-script") / "lines.cmd";
     integration::WriteText(script, kContinuousScript);
@@ -100,9 +83,10 @@ TEST(Custom, ShowsEachLineAContinuousCommandPrintsThenItsExitThenItsRestart) {
                   format = "{{text}}", icon = "", interval = 2 }},)",
                                            integration::LuaString(R"(C:\Windows\System32\cmd.exe)"), integration::LuaPath(script));
     const integration::RunningBar bar("custom-continuous", CustomConfig(R"("probe")", module),
-                                      StyleWithRules("probe {\n  one {\n    color: #27ae60\n  }\n  two {\n    color: #f39c12\n  }\n}\n"));
+                                      StyleWithRules("probe {\n  color: #2e86c1\n  one {\n    color: #27ae60\n  }\n  two {\n    color: #f39c12\n  }\n}\n"));
 
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn)) << "the first line's class never drew";
+    EXPECT_EQ(bar.PixelCount(kBlue), size_t{0}) << "the module's own color drew beside its class's";
     ASSERT_TRUE(bar.Draws(kOrange, kDrawn)) << "the second line's class never drew";
     EXPECT_EQ(bar.PixelCount(kGreen), size_t{0}) << "the first line's class still drew beside the second's";
     ASSERT_TRUE(bar.Draws(kRed, kDrawn)) << "the command's exit never drew the alert color";

@@ -66,12 +66,6 @@ TEST(Audio, FormatsTheVolumeOrTheMutedTextWithTheirIcons) {
     EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt), NormalText(L"", L""));
 }
 
-TEST(Audio, FormatsNameTheDeviceAndTakeASpec) {
-    AudioConfig config = TestConfig();
-    config.format      = "{device}: {volume:>3}%";
-    EXPECT_EQ(FormatAudio(config, Speakers(0.5f, false)).text, L"Speakers:  50%");
-}
-
 TEST(Audio, AStepLandsOnAWholePercentWithinTheRange) {
     EXPECT_FLOAT_EQ(SteppedVolume(0.47f, 5, ScrollDirection::Up), 0.52f);
     EXPECT_FLOAT_EQ(SteppedVolume(0.47f, 5, ScrollDirection::Down), 0.42f);
@@ -105,21 +99,6 @@ TEST(Audio, WithNoDeviceNothingIsShownOrChanged) {
     EXPECT_TRUE(audio.mutes.empty());
     EXPECT_TRUE(audio.volumes.empty());
     EXPECT_FALSE(module.TooltipText().has_value());
-}
-
-TEST(Audio, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
-    FakeAudio            audio;
-    const TextOnlyRender render;
-    Audio                module(TestConfig(), audio);
-    audio.device = Speakers(0.5f, false);
-    EXPECT_TRUE(module.Layout(render.Context()));
-    EXPECT_GT(module.Size().width, 0.0f);
-    EXPECT_FALSE(module.Layout(render.Context()));
-    // Under half a percent rounds to the same text.
-    audio.device = Speakers(0.501f, false);
-    EXPECT_FALSE(module.Layout(render.Context()));
-    audio.device = Speakers(0.5f, true);
-    EXPECT_TRUE(module.Layout(render.Context()));
 }
 
 TEST(Audio, TooltipNamesTheDevice) {

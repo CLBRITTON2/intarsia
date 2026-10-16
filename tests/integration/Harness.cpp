@@ -169,6 +169,14 @@ namespace integration {
             return POINT{.x = offset, .y = client.bottom / 2};
         }
 
+        POINT ScreenAlongBar(HWND bar, std::int32_t offset) {
+            POINT point = AlongBar(bar, offset);
+            if (!ClientToScreen(bar, &point)) {
+                ThrowLastError("ClientToScreen(bar)");
+            }
+            return point;
+        }
+
         void SendButtonUp(HWND window, std::uint32_t message, POINT client) {
             // Sent, not posted, so the window handles each input before the next and none waits in its queue.
             SendAndWait(window, message, 0, MAKELPARAM(client.x, client.y), std::format("button message {:#x} at {},{}", message, client.x, client.y));
@@ -484,11 +492,15 @@ namespace integration {
         }
     }
 
-    HWND RunningBar::PrimaryBar() const {
+    const ChildProcess& RunningBar::OpenBar() const {
         if (!_bar.has_value()) {
             throw std::logic_error("the bar is closed");
         }
-        return PrimaryBarWindow(_bar->Id());
+        return *_bar;
+    }
+
+    HWND RunningBar::PrimaryBar() const {
+        return PrimaryBarWindow(OpenBar().Id());
     }
 
     void RunningBar::ClickAt(std::int32_t offset) const {
@@ -503,22 +515,15 @@ namespace integration {
     }
 
     void RunningBar::WheelAt(std::int32_t offset, std::int16_t delta) const {
-        HWND  bar   = PrimaryBar();
-        POINT point = AlongBar(bar, offset);
+        HWND bar = PrimaryBar();
         // A real wheel message carries screen coordinates.
-        if (!ClientToScreen(bar, &point)) {
-            ThrowLastError("ClientToScreen(bar)");
-        }
+        const POINT point = ScreenAlongBar(bar, offset);
         SendAndWait(bar, WM_MOUSEWHEEL, MAKEWPARAM(0, delta), MAKELPARAM(point.x, point.y), std::format("WM_MOUSEWHEEL delta {} at {},{}", delta, point.x, point.y));
         Log("wheel", std::format("delta={} offset={}", delta, offset));
     }
 
     void RunningBar::MoveCursorTo(std::int32_t offset) const {
-        HWND  bar   = PrimaryBar();
-        POINT point = AlongBar(bar, offset);
-        if (!ClientToScreen(bar, &point)) {
-            ThrowLastError("ClientToScreen(bar)");
-        }
+        const POINT point = ScreenAlongBar(PrimaryBar(), offset);
         if (!SetCursorPos(point.x, point.y)) {
             ThrowLastError(std::format("SetCursorPos(bar offset {})", offset));
         }
@@ -531,17 +536,11 @@ namespace integration {
     }
 
     HWND RunningBar::Tooltip() const {
-        if (!_bar.has_value()) {
-            throw std::logic_error("the bar is closed");
-        }
-        return VisibleWindow(_bar->Id(), L"IntarsiaTooltip");
+        return VisibleWindow(OpenBar().Id(), L"IntarsiaTooltip");
     }
 
     HWND RunningBar::Menu() const {
-        if (!_bar.has_value()) {
-            throw std::logic_error("the bar is closed");
-        }
-        return VisibleWindow(_bar->Id(), L"IntarsiaMenu");
+        return VisibleWindow(OpenBar().Id(), L"IntarsiaMenu");
     }
 
     std::optional<size_t> RunningBar::PixelCount(std::uint32_t rgb) const {
@@ -560,7 +559,7 @@ namespace integration {
         return MeanColumn(CaptureScreenOver(window), rgb);
     }
 
-    std::optional<std::int32_t> RunningBar::DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const {
+    std::int32_t RunningBar::DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const {
         std::optional<double> column;
         if (!Eventually(
                 [&] {
@@ -568,7 +567,7 @@ namespace integration {
                     return column.has_value();
                 },
                 limit)) {
-            return std::nullopt;
+            throw std::runtime_error(std::format("the primary bar never drew #{:06x} within {} (bar log {})", rgb, limit, BarErrors().string()));
         }
         return static_cast<std::int32_t>(std::lround(column.value_or(0)));
     }
@@ -695,12 +694,9 @@ namespace integration {
 
     // The child is killed with its job when it is reset still running.
     std::optional<std::uint32_t> RunningBar::Close() {
-        if (!_bar.has_value()) {
-            throw std::logic_error("the bar is closed");
-        }
-        const std::uint32_t                pid     = _bar->Id();
+        const std::uint32_t                pid     = OpenBar().Id();
         const auto                         closing = std::chrono::steady_clock::now();
-        const std::optional<std::uint32_t> code    = _bar->Close(kExitLimit);
+        const std::optional<std::uint32_t> code    = OpenBar().Close(kExitLimit);
         _bar.reset();
         if (code.has_value()) {
             Log("bar_exited", std::format("pid={} code={} after_ms={}", pid, *code, MillisecondsSince(closing)));

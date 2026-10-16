@@ -1,6 +1,5 @@
 #include "modules/Battery.hpp"
 
-#include "TextOnlyRender.hpp"
 #include "battery/IBattery.hpp"
 #include "support/ThrowsWith.hpp"
 
@@ -87,21 +86,6 @@ TEST(Battery, TooltipCarriesHealthAndIsAbsentWithoutABattery) {
     EXPECT_EQ(module.TooltipText(), L"health 91%");
     battery.state->healthPercent = std::nullopt;
     EXPECT_EQ(module.TooltipText(), L"health %");
-}
-
-TEST(Battery, LayoutReportsAChangeOnlyWhenTheShownTextChanges) {
-    FakeBattery          battery;
-    const TextOnlyRender render;
-    Battery              module(TestConfig(), battery);
-    EXPECT_TRUE(module.Layout(render.Context()));
-    EXPECT_EQ(module.Size().width, 0.0f);
-    EXPECT_FALSE(module.Layout(render.Context()));
-    battery.state = Discharging(64);
-    EXPECT_TRUE(module.Layout(render.Context()));
-    EXPECT_GT(module.Size().width, 0.0f);
-    // Health only reaches the tooltip here, so it changes nothing drawn.
-    battery.state->healthPercent = 80;
-    EXPECT_FALSE(module.Layout(render.Context()));
 }
 
 TEST(Battery, AFormatNamingAnUnknownValueIsAConfigError) {

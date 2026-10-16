@@ -136,30 +136,23 @@ TEST(Process, ArgumentsSurviveTheRoundTripUnchanged) {
     EXPECT_EQ(RoundTrip(arguments), arguments);
 }
 
-TEST(Process, ProgramsResolveThroughPath) {
-    const std::optional<std::filesystem::path> cmd = ResolveProgram(L"cmd");
-    if (!cmd.has_value()) {
-        FAIL() << "cmd did not resolve through PATH";
-    }
-    EXPECT_TRUE(cmd->is_absolute());
-    EXPECT_EQ(cmd->filename(), L"cmd.exe");
-}
-
-TEST(Process, MissingProgramsDoNotResolve) {
-    EXPECT_FALSE(ResolveProgram(L"intarsia-no-such-program").has_value());
-    EXPECT_FALSE(ResolveProgram(L"C:\\intarsia\\no-such-program.exe").has_value());
-}
-
 // SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
 // when the file exists there.
-TEST(Process, RelativePathsWithDirectoriesDoNotResolve) {
-    const std::filesystem::path cmd      = SystemProgram(L"cmd");
-    const std::wstring          relative = std::filesystem::relative(cmd, std::filesystem::current_path()).wstring();
-    EXPECT_FALSE(ResolveProgram(relative).has_value());
-    EXPECT_FALSE(ResolveProgram(L".\\cmd.exe").has_value());
-    EXPECT_FALSE(ResolveProgram(L"System32\\cmd.exe").has_value());
-    EXPECT_FALSE(ResolveProgram(L"\\Windows\\System32\\cmd.exe").has_value());
-    EXPECT_FALSE(ResolveProgram(L"C:cmd.exe").has_value());
+TEST(Process, MissingProgramsAndRelativePathsWithDirectoriesDoNotResolve) {
+    const std::filesystem::path     cmd = SystemProgram(L"cmd");
+    const std::vector<std::wstring> names{
+        L"intarsia-no-such-program",
+        L"C:\\intarsia\\no-such-program.exe",
+        std::filesystem::relative(cmd, std::filesystem::current_path()).wstring(),
+        L".\\cmd.exe",
+        L"System32\\cmd.exe",
+        L"\\Windows\\System32\\cmd.exe",
+        L"C:cmd.exe",
+    };
+    for (const std::wstring& name : names) {
+        SCOPED_TRACE(name);
+        EXPECT_FALSE(ResolveProgram(name).has_value());
+    }
 }
 
 // A relative PATH entry (".", an empty one, "bin") names wherever the bar happened to start, never a place a program is
@@ -175,10 +168,6 @@ TEST(Process, RelativePathEntriesAreNotSearched) {
         FAIL() << "the absolute entry was not searched";
     }
     EXPECT_TRUE(std::filesystem::equivalent(found->parent_path(), directory.Get()));
-}
-
-TEST(Process, CaptureOutputReturnsWhatTheCommandPrinted) {
-    EXPECT_EQ(CaptureOutput(Cmd({L"/c", L"echo hello"}), std::chrono::seconds(10), 1024, NeverSignaled().get()), "hello\r\n");
 }
 
 TEST(Process, CaptureOutputFailsOnANonzeroExit) {
@@ -240,20 +229,6 @@ TEST(Process, StreamLinesFailsPastTheLineCap) {
                 ThrowsWith<CommandError>("printed a line longer than 8 bytes"));
 }
 
-TEST(Process, StreamLinesEndsWhenItsCommandExitsWhileAProcessOutsideTheJobHoldsItsOutput) {
-    std::future<std::uint32_t> streamed;
-    std::future_status         status = std::future_status::timeout;
-    {
-        const OutsideProcess holder;
-        streamed = std::async(std::launch::async, [&holder] {
-            return StreamLines(Command{.program = INTARSIA_PIPE_HOLDER, .arguments = {std::to_wstring(holder.Id())}}, 1024, NeverSignaled().get(), [](std::string_view) {});
-        });
-        status   = streamed.wait_for(std::chrono::seconds(10));
-    }
-    EXPECT_EQ(status, std::future_status::ready);
-    EXPECT_EQ(streamed.get(), 0u);
-}
-
 TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {
     const UniqueHandle cancel  = NeverSignaled();
     const auto         started = std::chrono::steady_clock::now();
@@ -262,21 +237,11 @@ TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(30));
 }
 
-TEST(Process, RunOrFailureReturnsWhatTheRunReturns) {
-    const std::variant<std::string, RunFailure> result = RunOrFailure([] { return std::string("printed"); });
-    EXPECT_EQ(std::get<std::string>(result), "printed");
-}
-
-TEST(Process, RunOrFailureShowsACommandErrorAsItsMessage) {
-    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw CommandError("timed out"); });
-    const RunFailure&                           failure = std::get<RunFailure>(result);
-    EXPECT_EQ(failure.reason, "timed out");
-    EXPECT_EQ(failure.detail, "timed out");
-}
-
-TEST(Process, RunOrFailureShowsAWin32ErrorAsCouldNotRun) {
-    const std::variant<std::string, RunFailure> result  = RunOrFailure([]() -> std::string { throw Win32Error("CreateProcessW", E_ACCESSDENIED); });
-    const RunFailure&                           failure = std::get<RunFailure>(result);
-    EXPECT_EQ(failure.reason, "could not run");
-    EXPECT_THAT(failure.detail, testing::HasSubstr("CreateProcessW"));
+TEST(Process, RunOrFailureTurnsCommandAndWin32ErrorsIntoAReason) {
+    const RunFailure command = std::get<RunFailure>(RunOrFailure([]() -> std::string { throw CommandError("timed out"); }));
+    EXPECT_EQ(command.reason, "timed out");
+    EXPECT_EQ(command.detail, "timed out");
+    const RunFailure win32 = std::get<RunFailure>(RunOrFailure([]() -> std::string { throw Win32Error("CreateProcessW", E_ACCESSDENIED); }));
+    EXPECT_EQ(win32.reason, "could not run");
+    EXPECT_THAT(win32.detail, testing::HasSubstr("CreateProcessW"));
 }

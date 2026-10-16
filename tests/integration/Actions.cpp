@@ -8,7 +8,6 @@
 #include <filesystem>
 #include <format>
 #include <functional>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -109,14 +108,9 @@ probe {
 } // namespace
 
 TEST(Actions, AClickStartsItsProgramWithEachArgumentAsWritten) {
-    const std::filesystem::path       record = integration::WorkDirectoryPath(kClickTestName) / "argv.txt";
-    const integration::RunningBar     bar(kClickTestName, ClickConfig(record), kClickStyle);
-    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
-    if (!column.has_value()) {
-        FAIL() << "the module never drew in its color";
-    }
-
-    bar.ClickAt(*column);
+    const std::filesystem::path   record = integration::WorkDirectoryPath(kClickTestName) / "argv.txt";
+    const integration::RunningBar bar(kClickTestName, ClickConfig(record), kClickStyle);
+    bar.ClickAt(bar.DrawnColumn(kTextColor, kLimit));
     ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, kLimit))
         << "the click started no recorder within " << kLimit.count() << " s (" << record.string() << ")";
     integration::Log("argv_recorded", std::format("path={} lines={}", integration::LogValue(record.string()), integration::ReadLines(record).size()));
@@ -124,13 +118,9 @@ TEST(Actions, AClickStartsItsProgramWithEachArgumentAsWritten) {
 }
 
 TEST(Input, RightMiddleAndWheelInputsEachRunTheirAction) {
-    const std::filesystem::path       record = integration::WorkDirectoryPath(kInputsTestName) / "argv.txt";
-    integration::RunningBar           bar(kInputsTestName, InputsConfig(record), kInputsStyle);
-    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
-    if (!column.has_value()) {
-        FAIL() << "the module never drew in its color";
-    }
-    const std::int32_t at = *column;
+    const std::filesystem::path record = integration::WorkDirectoryPath(kInputsTestName) / "argv.txt";
+    integration::RunningBar     bar(kInputsTestName, InputsConfig(record), kInputsStyle);
+    const std::int32_t          at = bar.DrawnColumn(kTextColor, kLimit);
 
     EXPECT_TRUE(RecordsAfter(record, 1, [&] { bar.ButtonUpAt(WM_RBUTTONUP, at); }));
     EXPECT_TRUE(RecordsAfter(record, 2, [&] { bar.ButtonUpAt(WM_MBUTTONUP, at); }));

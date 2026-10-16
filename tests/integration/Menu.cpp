@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -79,16 +78,12 @@ menu {
 } // namespace
 
 TEST(Menu, PicksTheEntryTheKeysHighlightAndRunsOnSelectWithItsId) {
-    constexpr std::string_view        kTestName = "menu-pick";
-    const std::filesystem::path       work      = integration::WorkDirectoryPath(kTestName);
-    const std::filesystem::path       selected  = work / "selected.txt";
-    const integration::RunningBar     bar(kTestName, MenuConfig(ListingCommand(work / "listing.txt"), selected), kStyle);
-    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
-    if (!column.has_value()) {
-        FAIL() << "the module never drew in its color";
-    }
+    constexpr std::string_view    kTestName = "menu-pick";
+    const std::filesystem::path   work      = integration::WorkDirectoryPath(kTestName);
+    const std::filesystem::path   selected  = work / "selected.txt";
+    const integration::RunningBar bar(kTestName, MenuConfig(ListingCommand(work / "listing.txt"), selected), kStyle);
 
-    bar.ClickAt(*column);
+    bar.ClickAt(bar.DrawnColumn(kTextColor, kLimit));
     ASSERT_TRUE(MenuShown(bar)) << "the click showed no menu";
     HWND menu = bar.Menu();
     EXPECT_TRUE(integration::Eventually([&] { return integration::CountPixels(integration::CaptureScreenOver(menu), kMenuColor) > 0; }, kLimit))
@@ -103,24 +98,21 @@ TEST(Menu, PicksTheEntryTheKeysHighlightAndRunsOnSelectWithItsId) {
 }
 
 TEST(Menu, EscapeAndASecondClickOnItsModuleEachCloseIt) {
-    constexpr std::string_view        kTestName = "menu-close";
-    const std::filesystem::path       work      = integration::WorkDirectoryPath(kTestName);
-    const std::filesystem::path       listing   = work / "listing.txt";
-    const std::filesystem::path       selected  = work / "selected.txt";
-    const integration::RunningBar     bar(kTestName, MenuConfig(ListingCommand(listing), selected), kStyle);
-    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
-    if (!column.has_value()) {
-        FAIL() << "the module never drew in its color";
-    }
+    constexpr std::string_view    kTestName = "menu-close";
+    const std::filesystem::path   work      = integration::WorkDirectoryPath(kTestName);
+    const std::filesystem::path   listing   = work / "listing.txt";
+    const std::filesystem::path   selected  = work / "selected.txt";
+    const integration::RunningBar bar(kTestName, MenuConfig(ListingCommand(listing), selected), kStyle);
+    const std::int32_t            column = bar.DrawnColumn(kTextColor, kLimit);
 
-    bar.ClickAt(*column);
+    bar.ClickAt(column);
     ASSERT_TRUE(MenuShown(bar)) << "the first click showed no menu";
     integration::SendKey(bar.Menu(), VK_ESCAPE);
     EXPECT_TRUE(MenuHidden(bar)) << "escape left the menu shown";
 
-    bar.ClickAt(*column);
+    bar.ClickAt(column);
     ASSERT_TRUE(MenuShown(bar)) << "a click after escape showed no menu";
-    bar.ClickAt(*column);
+    bar.ClickAt(column);
     EXPECT_TRUE(MenuHidden(bar)) << "a second click on the menu's module left it shown";
 
     // Each showing runs the command once, and the closing click runs it no more.
@@ -130,16 +122,12 @@ TEST(Menu, EscapeAndASecondClickOnItsModuleEachCloseIt) {
 }
 
 TEST(Menu, LogsACommandThatFails) {
-    constexpr std::string_view        kTestName = "menu-failed";
-    const std::filesystem::path       selected  = integration::WorkDirectoryPath(kTestName) / "selected.txt";
-    const std::string                 failing   = std::format(R"({{ {}, "/c", "exit 3" }})", integration::LuaString(R"(C:\Windows\System32\cmd.exe)"));
-    const integration::RunningBar     bar(kTestName, MenuConfig(failing, selected), kStyle);
-    const std::optional<std::int32_t> column = bar.DrawnColumn(kTextColor, kLimit);
-    if (!column.has_value()) {
-        FAIL() << "the module never drew in its color";
-    }
+    constexpr std::string_view    kTestName = "menu-failed";
+    const std::filesystem::path   selected  = integration::WorkDirectoryPath(kTestName) / "selected.txt";
+    const std::string             failing   = std::format(R"({{ {}, "/c", "exit 3" }})", integration::LuaString(R"(C:\Windows\System32\cmd.exe)"));
+    const integration::RunningBar bar(kTestName, MenuConfig(failing, selected), kStyle);
 
-    bar.ClickAt(*column);
+    bar.ClickAt(bar.DrawnColumn(kTextColor, kLimit));
     EXPECT_TRUE(integration::Eventually([&] { return !bar.Events("menu_failed").empty(); }, kLimit)) << "the failed command was never logged";
     EXPECT_TRUE(MenuShown(bar)) << "the failure showed no menu row";
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/Errors.hpp"
+#include "platform/Handle.hpp"
 
 #include <windows.h>
 
@@ -46,6 +47,9 @@ struct Command {
 // PATH directories (".exe" added when the name has no extension). Never the current directory, where a planted program
 // would win, so a relative path with a directory part resolves to nothing. Nullopt when there is no such file.
 std::optional<std::filesystem::path> ResolveProgram(std::wstring_view program);
+
+// A job that kills every process in it once its last handle closes. Throws Win32Error.
+UniqueHandle KillOnCloseJob();
 
 // Arguments joined into one command line that CommandLineToArgvW and the C runtime split back into the same arguments.
 std::wstring JoinArguments(const std::vector<std::wstring>& arguments);

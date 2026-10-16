@@ -230,20 +230,6 @@ TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadButNotBlur) {
     EXPECT_FLOAT_EQ(snapped.shadows[0].blurDips, 14.0f);
 }
 
-// A shadow box far longer than its edges reach, both ways, so it draws from a bitmap of both ends and one row and
-// column between: each edge of the hard shadow still lands on its own pixel.
-TEST(Box, AShadowLongerThanItsReachDrawsEachEdgeInPlace) {
-    const std::vector<std::uint8_t> pixels = DrawnPixels(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)));
-    EXPECT_GT(Red(pixels, 30, 4), 200);
-    EXPECT_LT(Red(pixels, 30, 5), 50);
-    EXPECT_LT(Red(pixels, 30, 28), 50);
-    EXPECT_GT(Red(pixels, 30, 29), 200);
-    EXPECT_GT(Red(pixels, 2, 15), 200);
-    EXPECT_LT(Red(pixels, 3, 15), 50);
-    EXPECT_LT(Red(pixels, 56, 15), 50);
-    EXPECT_GT(Red(pixels, 57, 15), 200);
-}
-
 // A cache key that ignored the shadow's color would draw the first shadow again: a fade frozen on its first frame.
 TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
     BitmapCanvas                    canvas;
@@ -254,12 +240,19 @@ TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
     EXPECT_LT(Red(blue, 30, 4), 50);
 }
 
-// Both lengths draw from one sliced bitmap, and each still puts its far edge in place.
+// A shadow box far longer than its edges reach, both ways, draws from a bitmap of both ends and one row and column
+// between. Both lengths draw from one such bitmap, and each edge of the hard shadow still lands on its own pixel.
 TEST(Box, OneCacheDrawsOneStyleAtTwoLengthsWithEachEdgeInPlace) {
     BitmapCanvas                    canvas;
     const BoxStyle                  style  = HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));
     const std::vector<std::uint8_t> narrow = canvas.Draw(style, 60.0f);
     const std::vector<std::uint8_t> wide   = canvas.Draw(style, 100.0f);
+    EXPECT_GT(Red(narrow, 30, 4), 200);
+    EXPECT_LT(Red(narrow, 30, 5), 50);
+    EXPECT_LT(Red(narrow, 30, 28), 50);
+    EXPECT_GT(Red(narrow, 30, 29), 200);
+    EXPECT_GT(Red(narrow, 2, 15), 200);
+    EXPECT_LT(Red(narrow, 3, 15), 50);
     EXPECT_LT(Red(narrow, 56, 15), 50);
     EXPECT_GT(Red(narrow, 57, 15), 200);
     EXPECT_GT(Red(wide, 2, 15), 200);

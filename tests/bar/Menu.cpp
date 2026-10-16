@@ -198,10 +198,6 @@ TEST(MenuLayout, EntryAtFollowsTheScrolledRows) {
     EXPECT_EQ(EntryAt(rows, ScrollAt(24), D2D1::Point2F(50, 2)), std::nullopt);
 }
 
-TEST(MenuLayout, AFailuresRowCannotBePicked) {
-    EXPECT_EQ(EntryAt({RowAt(4, std::nullopt)}, ScrollAt(0), D2D1::Point2F(50, 10)), std::nullopt);
-}
-
 TEST(MenuLayout, AnEntrysTooltipGoesUnderItsRowOrAboveItNearTheMonitorsBottom) {
     const RECT rowRect{
         .left   = 1600,

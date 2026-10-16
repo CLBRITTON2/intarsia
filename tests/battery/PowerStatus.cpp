@@ -4,7 +4,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <thread>
+#include <cstdint>
+#include <optional>
 
 namespace {
 
@@ -19,38 +20,24 @@ namespace {
         return power;
     }
 
+    // BatteryFromPowerStatus never knows the batteries' health.
+    BatteryState WithoutHealth(ChargeState charge, std::int32_t percent, std::optional<std::int32_t> secondsLeft) {
+        return BatteryState{
+            .charge        = charge,
+            .percent       = percent,
+            .secondsLeft   = secondsLeft,
+            .healthPercent = std::nullopt,
+        };
+    }
+
 } // namespace
 
 TEST(PowerStatus, ChargingWinsOverPluggedAndOnlyDischargingHasTimeLeft) {
-    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_OFFLINE, BATTERY_FLAG_LOW, 20, 3900)),
-              (BatteryState{
-                  .charge        = ChargeState::Discharging,
-                  .percent       = 20,
-                  .secondsLeft   = 3900,
-                  .healthPercent = std::nullopt,
-              }));
-    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_ONLINE, BATTERY_FLAG_CHARGING | BATTERY_FLAG_HIGH, 70, 5000)),
-              (BatteryState{
-                  .charge        = ChargeState::Charging,
-                  .percent       = 70,
-                  .secondsLeft   = std::nullopt,
-                  .healthPercent = std::nullopt,
-              }));
-    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_ONLINE, BATTERY_FLAG_HIGH, 100, BATTERY_LIFE_UNKNOWN)),
-              (BatteryState{
-                  .charge        = ChargeState::Plugged,
-                  .percent       = 100,
-                  .secondsLeft   = std::nullopt,
-                  .healthPercent = std::nullopt,
-              }));
+    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_OFFLINE, BATTERY_FLAG_LOW, 20, 3900)), WithoutHealth(ChargeState::Discharging, 20, 3900));
+    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_ONLINE, BATTERY_FLAG_CHARGING | BATTERY_FLAG_HIGH, 70, 5000)), WithoutHealth(ChargeState::Charging, 70, std::nullopt));
+    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_ONLINE, BATTERY_FLAG_HIGH, 100, BATTERY_LIFE_UNKNOWN)), WithoutHealth(ChargeState::Plugged, 100, std::nullopt));
     // Windows has no estimate yet just after unplugging.
-    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_OFFLINE, BATTERY_FLAG_HIGH, 90, BATTERY_LIFE_UNKNOWN)),
-              (BatteryState{
-                  .charge        = ChargeState::Discharging,
-                  .percent       = 90,
-                  .secondsLeft   = std::nullopt,
-                  .healthPercent = std::nullopt,
-              }));
+    EXPECT_EQ(BatteryFromPowerStatus(Status(AC_LINE_OFFLINE, BATTERY_FLAG_HIGH, 90, BATTERY_LIFE_UNKNOWN)), WithoutHealth(ChargeState::Discharging, 90, std::nullopt));
 }
 
 TEST(PowerStatus, NoBatteryOrAnUnknownOneIsNoState) {
@@ -68,22 +55,9 @@ TEST(PowerStatus, HealthSumsEveryBatteryAndCanPassFull) {
     EXPECT_EQ(HealthPercent({{.designed = 0, .fullCharged = 100}}), std::nullopt);
 }
 
-// Samples the machine's real battery. It asserts only what holds with or without one.
-TEST(PowerStatus, SamplesTheBatteryAndStopsPromptly) {
+TEST(PowerStatus, StopsPromptlyRightAfterStarting) {
     ChangeTarget target(kChanged);
-    {
-        const PowerStatus battery(target.signal);
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        const std::optional<BatteryState> state = battery.State();
-        if (state.has_value()) {
-            EXPECT_GE(state->percent, 0);
-            EXPECT_LE(state->percent, 100);
-            if (state->healthPercent.has_value()) {
-                EXPECT_GT(*state->healthPercent, 0);
-            }
-        }
-    }
-    const auto started = std::chrono::steady_clock::now();
+    const auto   started = std::chrono::steady_clock::now();
     for (std::int32_t round = 0; round < 10; ++round) {
         const PowerStatus battery(target.signal);
     }

@@ -6,6 +6,8 @@
 //
 //   tray_sender.exe --class <window class the bar's tray registered, from --tray-class>
 
+#include "platform/Errors.hpp"
+#include "support/TrayCopyData.hpp"
 #include "support/TrayPayload.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 
@@ -21,6 +23,7 @@
 #include <cstring>
 #include <format>
 #include <iostream>
+#include <optional>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -31,10 +34,8 @@ namespace {
 
     constexpr std::int32_t  kExitHung   = 2;
     constexpr std::int32_t  kExitNoTray = 3;
-    constexpr UINT          kCallback   = WM_APP + 9;
     constexpr size_t        kOwners     = 4;
     constexpr std::uint32_t kIds        = 4;
-    constexpr std::uint32_t kAnswerMs   = 5000;
     // About ten messages a second across every owner.
     constexpr std::chrono::milliseconds kMessageGap{100};
 
@@ -92,26 +93,20 @@ namespace {
 
     // Returns whether the tray took the message. Throws TrayHung when it does not answer in time.
     bool Send(HWND tray, HWND sender, TrayNotifyData data) {
-        COPYDATASTRUCT copy{
-            .dwData = kNotifyIconCopyData,
-            .cbData = sizeof(data),
-            .lpData = &data,
-        };
-        DWORD_PTR result = 0;
-        if (SendMessageTimeoutW(tray, WM_COPYDATA, reinterpret_cast<WPARAM>(sender), reinterpret_cast<LPARAM>(&copy), SMTO_NORMAL, kAnswerMs, &result) == 0) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_TIMEOUT) {
-                throw TrayHung(std::format("the tray answered no WM_COPYDATA within {} ms", kAnswerMs));
-            }
-            throw NoTray(std::format("SendMessageTimeoutW(WM_COPYDATA) failed with {}", error));
+        std::optional<LRESULT> answer;
+        try {
+            answer = SendTrayCopyData(tray, sender, kNotifyIconCopyData, &data, sizeof(data));
+        } catch (const Win32Error& error) { throw NoTray(error.what()); }
+        if (!answer.has_value()) {
+            throw TrayHung(std::format("the tray answered no WM_COPYDATA within {} ms", kTrayAnswerMs));
         }
-        return result != FALSE;
+        return *answer != FALSE;
     }
 
     // An add or an icon change, with pixels the tray has not seen. The tray reads them while the send waits, as
     // Explorer does, so the icon can go right after.
     bool SendIcon(HWND tray, HWND owner, std::uint32_t command, std::uint32_t id, std::mt19937& random) {
-        TrayNotifyData data = NotifyData(command, Handle32(owner), id, 0, kCallback);
+        TrayNotifyData data = NotifyData(command, Handle32(owner), id, 0, kTrayAppCallback);
         HICON          icon = CreateSolidIcon(static_cast<std::uint32_t>(random()));
         data.data.flags     = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         data.data.icon      = Handle32(icon);
@@ -131,13 +126,13 @@ namespace {
             case 2: return SendIcon(tray, owner, NIM_MODIFY, id, random);
             case 3:
             case 4: {
-                TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kCallback);
+                TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kTrayAppCallback);
                 data.data.flags     = NIF_TIP | NIF_SHOWTIP;
                 SetTip(data, AppTip(random));
                 return Send(tray, owner, data);
             }
             case 5: {
-                TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kCallback);
+                TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kTrayAppCallback);
                 data.data.flags     = NIF_STATE;
                 data.data.stateMask = static_cast<std::uint32_t>(NIS_HIDDEN);
                 if ((random() % 2) == 0) {
@@ -147,9 +142,9 @@ namespace {
                 }
                 return Send(tray, owner, data);
             }
-            case 6: return Send(tray, owner, NotifyData(NIM_DELETE, Handle32(owner), id, 0, kCallback));
+            case 6: return Send(tray, owner, NotifyData(NIM_DELETE, Handle32(owner), id, 0, kTrayAppCallback));
             default: {
-                TrayNotifyData data = NotifyData(NIM_SETVERSION, Handle32(owner), id, 0, kCallback);
+                TrayNotifyData data = NotifyData(NIM_SETVERSION, Handle32(owner), id, 0, kTrayAppCallback);
                 if ((random() % 2) == 0) {
                     data.data.version = NOTIFYICON_VERSION_4;
                 } else {

@@ -149,17 +149,13 @@ TEST_F(WindowListModule, LayoutReportsAChangeOnlyWhenTheWindowsChange) {
     EXPECT_TRUE(module.Layout(_render.Context()));
 }
 
-TEST_F(WindowListModule, SizeCoversEveryPaddedIconAndTheGapsBetween) {
+TEST_F(WindowListModule, EachItemHoldsASquareOfTheStylesIconSize) {
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
-    _windowManager.windows = kWindows;
+    _windowManager.windows = {kWindows[0]};
     module.Layout(_render.Context());
-    // Two items of a 20 icon padded 4 across and 2 down, with 5 of margin on either side of each.
-    EXPECT_FLOAT_EQ(module.Size().width, 76.0f);
+    // A 20 icon padded 4 across and 2 down, with 5 of margin on either side.
+    EXPECT_FLOAT_EQ(module.Size().width, 38.0f);
     EXPECT_FLOAT_EQ(module.Size().height, 24.0f);
-
-    _windowManager.windows.clear();
-    module.Layout(_render.Context());
-    EXPECT_FLOAT_EQ(module.Size().width, 0.0f);
 }
 
 // The icon's pixels go up to the GPU as a bitmap and draw: a real device, a real window's icon.

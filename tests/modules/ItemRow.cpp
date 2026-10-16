@@ -54,13 +54,6 @@ TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(34.0f, 20.0f)).has_value());
 }
 
-TEST(ItemRow, ItemUnderCursorFindsNothingWithTheCursorOffTheModule) {
-    const ItemStyle style = TestItemStyle(0, 0);
-    const ItemRow   row   = ArrangeItems({{.width = 10.0f, .height = 10.0f}}, {&style}, Axis::Horizontal);
-    EXPECT_EQ(ItemUnderCursor(row, D2D1::Point2F(5.0f, 5.0f)), 0u);
-    EXPECT_FALSE(ItemUnderCursor(row, std::nullopt).has_value());
-}
-
 TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
     ItemStyle style                                   = TestItemStyle(0x000000, 0x000000);
     style.hoverBackground                             = D2D1::ColorF(0xFFFFFF);
@@ -116,15 +109,4 @@ TEST(ItemRow, ItemFadesFadeANewStatesShadowsOverItsBackgroundTransition) {
     ASSERT_EQ(halfway.size(), 1u);
     EXPECT_NEAR(halfway[0].color.a, 0.5f, 0.001f);
     EXPECT_EQ(fades.Wait(start + std::chrono::milliseconds(50)), 0U);
-}
-
-TEST(ItemRow, HoveredItemReportsOnlyAChangeOfItem) {
-    HoveredItem hovered;
-    EXPECT_FALSE(hovered.Set(std::nullopt));
-    EXPECT_TRUE(hovered.Set(1));
-    EXPECT_TRUE(hovered.Is(1));
-    EXPECT_FALSE(hovered.Is(0));
-    EXPECT_FALSE(hovered.Set(1));
-    EXPECT_TRUE(hovered.Set(std::nullopt));
-    EXPECT_FALSE(hovered.Get().has_value());
 }

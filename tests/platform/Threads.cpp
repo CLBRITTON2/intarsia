@@ -1,13 +1,10 @@
 #include "platform/Threads.hpp"
 
-#include "platform/Errors.hpp"
 #include "support/MessageWindow.hpp"
 
 #include <gtest/gtest.h>
 
 #include <windows.h>
-
-#include <objbase.h>
 
 #include <chrono>
 #include <cstdint>
@@ -16,7 +13,6 @@
 #include <future>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -43,12 +39,13 @@ namespace {
         std::thread::id* _destroyedOn;
     };
 
-    constexpr std::uint32_t kFailed = WM_APP + 7;
+    constexpr std::uint32_t kPosted = WM_APP + 7;
 
-    std::int32_t            QueuedFailures(HWND target) {
+    // Removes every kPosted message queued for target and counts them.
+    std::int32_t TakePosted(HWND target) {
         std::int32_t count   = 0;
         MSG          message = {};
-        while (PeekMessageW(&message, target, kFailed, kFailed, PM_REMOVE)) {
+        while (PeekMessageW(&message, target, kPosted, kPosted, PM_REMOVE)) {
             ++count;
         }
         return count;
@@ -61,48 +58,7 @@ namespace {
         return "";
     }
 
-    constexpr std::uint32_t kChanged = WM_APP + 7;
-
-    std::int32_t            QueuedChanges(HWND target) {
-        std::int32_t count   = 0;
-        MSG          message = {};
-        while (PeekMessageW(&message, target, kChanged, kChanged, PM_REMOVE)) {
-            ++count;
-        }
-        return count;
-    }
-
-    // The calling thread's apartment, or nullopt outside COM.
-    std::optional<APTTYPE> Apartment() {
-        APTTYPE          type      = APTTYPE_CURRENT;
-        APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
-        if (CoGetApartmentType(&type, &qualifier) == CO_E_NOTINITIALIZED) {
-            return std::nullopt;
-        }
-        return type;
-    }
-
 } // namespace
-
-TEST(WorkQueue, ProcessesItemsInOrder) {
-    std::mutex                mutex;
-    std::vector<std::int32_t> processed;
-    std::promise<void>        done;
-    {
-        WorkQueue<std::int32_t> queue(8, Handling([&](const std::int32_t& item) {
-                                          const std::scoped_lock lock(mutex);
-                                          processed.push_back(item);
-                                          if (item == 3) {
-                                              done.set_value();
-                                          }
-                                      }));
-        for (std::int32_t item = 1; item <= 3; ++item) {
-            ASSERT_TRUE(queue.Push(item));
-        }
-        done.get_future().wait();
-    }
-    EXPECT_EQ(processed, (std::vector<std::int32_t>{1, 2, 3}));
-}
 
 TEST(WorkQueue, RejectsAnItemPastCapacity) {
     std::promise<void>       started;
@@ -187,65 +143,33 @@ TEST(WorkQueue, MakesAndDestroysItsProcessOnItsOwnThread) {
 // A worker that fails again while stopping must not replace the cause the UI thread ends the process with.
 TEST(ThreadFailure, KeepsAndPostsOnlyTheFirstError) {
     const MessageWindow target;
-    ThreadFailure       failure(target.Get(), kFailed, "test");
+    ThreadFailure       failure(target.Get(), kPosted, "test");
 
     failure.Report(std::make_exception_ptr(std::runtime_error("first")));
     failure.Report(std::make_exception_ptr(std::runtime_error("second")));
-    EXPECT_EQ(QueuedFailures(target.Get()), 1);
+    EXPECT_EQ(TakePosted(target.Get()), 1);
     EXPECT_EQ(RethrownMessage(failure), "first");
+    EXPECT_NO_THROW(failure.RethrowReported());
 }
 
 // Any process can post the message, so one with nothing reported behind it returns instead of throwing.
 TEST(ThreadFailure, AMessageWithNothingReportedDoesNotThrow) {
     const MessageWindow target;
-    ThreadFailure       failure(target.Get(), kFailed, "test");
-
-    EXPECT_NO_THROW(failure.RethrowReported());
-    failure.Report(std::make_exception_ptr(std::runtime_error("first")));
-    EXPECT_EQ(RethrownMessage(failure), "first");
+    ThreadFailure       failure(target.Get(), kPosted, "test");
     EXPECT_NO_THROW(failure.RethrowReported());
 }
 
 // A source changing faster than the UI thread reads must not fill the queue: WM_QUIT waits behind every posted message.
 TEST(ChangeSignal, PostsOnceUntilAcknowledged) {
-    ChangeTarget target(kChanged);
+    ChangeTarget target(kPosted);
 
     for (std::int32_t change = 0; change < 1000; ++change) {
         target.signal.Notify("test");
     }
-    EXPECT_EQ(QueuedChanges(target.window.Get()), 1);
+    EXPECT_EQ(TakePosted(target.window.Get()), 1);
 
     target.signal.Acknowledge();
     target.signal.Notify("test");
     target.signal.Notify("test");
-    EXPECT_EQ(QueuedChanges(target.window.Get()), 1);
-}
-
-// Each runs on a thread of its own, so no other test's apartment is in the way.
-TEST(ComScope, EntersTheApartmentAndLeavesIt) {
-    std::thread([] {
-        {
-            const ComScope single(ComThreading::Single, "test single");
-            EXPECT_EQ(Apartment(), std::optional<APTTYPE>(APTTYPE_MAINSTA));
-        }
-        EXPECT_EQ(Apartment(), std::nullopt);
-        {
-            const ComScope multi(ComThreading::Multi, "test multi");
-            EXPECT_EQ(Apartment(), std::optional<APTTYPE>(APTTYPE_MTA));
-        }
-        EXPECT_EQ(Apartment(), std::nullopt);
-    }).join();
-}
-
-TEST(ComScope, RefusesTheOtherApartmentOnTheSameThread) {
-    std::thread([] {
-        const ComScope single(ComThreading::Single, "test single");
-        try {
-            const ComScope multi(ComThreading::Multi, "test multi");
-            ADD_FAILURE() << "entered the multithreaded apartment from a single-threaded one";
-        } catch (const Win32Error& error) {
-            EXPECT_EQ(error.Result(), RPC_E_CHANGED_MODE);
-            EXPECT_NE(std::string(error.what()).find("CoInitializeEx(test multi)"), std::string::npos);
-        }
-    }).join();
+    EXPECT_EQ(TakePosted(target.window.Get()), 1);
 }

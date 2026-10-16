@@ -17,22 +17,22 @@ namespace {
 
 } // namespace
 
-TEST(CliOptions, MonitorsKeepsTheDefaultConfig) {
-    const CliOptions options = Parse({L"monitors"});
-    EXPECT_EQ(options.command, CliCommand::Monitors);
-    EXPECT_EQ(options.configPath, kDefaultConfig);
-}
-
-TEST(CliOptions, MonitorsReadsTheConfigPath) {
-    const CliOptions options = Parse({L"monitors", L"--config", L"D:\\scratch\\config.lua"});
-    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\scratch\\config.lua"));
-}
-
-TEST(CliOptions, CheckReadsTheConfigPath) {
-    EXPECT_EQ(Parse({L"check"}).command, CliCommand::Check);
-    const CliOptions options = Parse({L"check", L"--config", L"D:\\scratch\\config.lua"});
-    EXPECT_EQ(options.command, CliCommand::Check);
-    EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\scratch\\config.lua"));
+TEST(CliOptions, ReadsTheCommandAndTheConfigPathOrKeepsTheDefault) {
+    const std::filesystem::path scratch = L"D:\\scratch\\config.lua";
+    struct Case {
+        std::wstring name;
+        CliCommand   command;
+    };
+    const Case cases[] = {{.name = L"monitors", .command = CliCommand::Monitors}, {.name = L"check", .command = CliCommand::Check}};
+    for (const Case& test : cases) {
+        SCOPED_TRACE(test.name);
+        const CliOptions defaulted = Parse({test.name});
+        EXPECT_EQ(defaulted.command, test.command);
+        EXPECT_EQ(defaulted.configPath, kDefaultConfig);
+        const CliOptions configured = Parse({test.name, L"--config", scratch.wstring()});
+        EXPECT_EQ(configured.command, test.command);
+        EXPECT_EQ(configured.configPath, scratch);
+    }
 }
 
 TEST(CliOptions, RejectsBadArguments) {

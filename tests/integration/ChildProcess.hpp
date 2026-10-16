@@ -20,7 +20,6 @@ namespace integration {
                      const std::filesystem::path& stderrPath);
 
         std::uint32_t Id() const;
-        bool          Running() const;
         // Posts WM_CLOSE to every top-level window of the process, hidden ones included, as taskkill without /F does,
         // then waits for it to exit. The exit code, or nullopt when it is still running after limit.
         std::optional<std::uint32_t> Close(std::chrono::milliseconds limit) const;

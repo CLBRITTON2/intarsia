@@ -1,39 +1,17 @@
 #include "ChildProcess.hpp"
 
 #include "platform/Errors.hpp"
+#include "platform/Process.hpp"
 
 #include <windows.h>
 
 #include <format>
+#include <string>
+#include <vector>
 
 namespace integration {
 
     namespace {
-
-        // The backslashes written for the run of slashes before unit: before a quote they double, plus one that escapes it.
-        size_t EscapedSlashes(wchar_t unit, size_t slashes) {
-            if (unit == L'"') {
-                return (slashes * 2) + 1;
-            }
-            return slashes;
-        }
-
-        // Windows quotes arguments as CommandLineToArgvW reads them back, so a path holding spaces survives.
-        std::wstring Quoted(const std::wstring& argument) {
-            std::wstring quoted  = L"\"";
-            size_t       slashes = 0;
-            for (const wchar_t unit : argument) {
-                if (unit == L'\\') {
-                    ++slashes;
-                    continue;
-                }
-                quoted.append(EscapedSlashes(unit, slashes), L'\\');
-                slashes = 0;
-                quoted += unit;
-            }
-            quoted.append(slashes * 2, L'\\');
-            return quoted + L"\"";
-        }
 
         UniqueHandle InheritableFile(const std::filesystem::path& path) {
             SECURITY_ATTRIBUTES inherit{
@@ -44,16 +22,6 @@ namespace integration {
             return OwnHandle(
                 CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
                 "CreateFileW(child output)");
-        }
-
-        UniqueHandle KillOnCloseJob() {
-            UniqueHandle                         job = OwnHandle(CreateJobObjectW(nullptr, nullptr), "CreateJobObjectW");
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if (!SetInformationJobObject(job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
-                ThrowLastError("SetInformationJobObject");
-            }
-            return job;
         }
 
         struct ProcessWindows {
@@ -81,12 +49,11 @@ namespace integration {
 
     ChildProcess::ChildProcess(const std::filesystem::path& program, const std::vector<std::wstring>& arguments, const std::filesystem::path& stdoutPath,
                                const std::filesystem::path& stderrPath) : _job(KillOnCloseJob()), _id(0) {
-        std::wstring commandLine = Quoted(program.wstring());
-        for (const std::wstring& argument : arguments) {
-            commandLine += L" " + Quoted(argument);
-        }
-        const UniqueHandle  output = InheritableFile(stdoutPath);
-        const UniqueHandle  errors = InheritableFile(stderrPath);
+        std::vector<std::wstring> programAndArguments{program.wstring()};
+        programAndArguments.insert(programAndArguments.end(), arguments.begin(), arguments.end());
+        std::wstring        commandLine = JoinArguments(programAndArguments);
+        const UniqueHandle  output      = InheritableFile(stdoutPath);
+        const UniqueHandle  errors      = InheritableFile(stderrPath);
         SECURITY_ATTRIBUTES inherit{
             .nLength              = sizeof(SECURITY_ATTRIBUTES),
             .lpSecurityDescriptor = nullptr,
@@ -128,10 +95,6 @@ namespace integration {
         return _id;
     }
 
-    bool ChildProcess::Running() const {
-        return WaitForSingleObject(_process.get(), 0) == WAIT_TIMEOUT;
-    }
-
     std::optional<std::uint32_t> ChildProcess::Close(std::chrono::milliseconds limit) const {
         for (HWND window : TopLevelWindows(_id)) {
             PostMessageW(window, WM_CLOSE, 0, 0);
@@ -147,7 +110,7 @@ namespace integration {
     }
 
     void ChildProcess::Kill() const {
-        if (Running()) {
+        if (WaitForSingleObject(_process.get(), 0) == WAIT_TIMEOUT) {
             TerminateProcess(_process.get(), 1);
             WaitForSingleObject(_process.get(), INFINITE);
         }

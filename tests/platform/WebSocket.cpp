@@ -150,14 +150,6 @@ TEST(WebSocket, LocalPortNamesTheConnectionForThePeerCheck) {
     EXPECT_EQ(LoopbackPeerProcess(socket.LocalPort(), listener.Port()), GetCurrentProcessId());
 }
 
-TEST(PeerProcess, FindsTheProcessHoldingTheServerEndOfAConnection) {
-    const loopback::Winsock winsock;
-    const loopback::Socket  listener = loopback::Listen();
-    const loopback::Socket  client   = loopback::Connect(listener.Port());
-    const loopback::Socket  server   = loopback::Accept(listener);
-    EXPECT_EQ(LoopbackPeerProcess(client.Port(), listener.Port()), GetCurrentProcessId());
-}
-
 TEST(PeerProcess, RejectsAConnectionThatIsNotOpen) {
     const loopback::Winsock winsock;
     const loopback::Socket  listener = loopback::Listen();

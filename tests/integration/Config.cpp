@@ -228,16 +228,13 @@ TEST(Config, AClickOnAModulesMarginRunsNothing) {
 }
 
 TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
-    integration::RunningBar           bar("config-move", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
-    const std::optional<std::int32_t> left = bar.DrawnColumn(kGreen, kDrawn);
-    if (!left.has_value()) {
-        FAIL() << "the module never drew in the left section";
-    }
-    const RECT         barRect  = integration::ScreenRect(bar.PrimaryBar());
-    const std::int32_t barWidth = barRect.right - barRect.left;
-    const double       middle   = static_cast<double>(barWidth) / 2;
-    integration::Log("module_column", std::format("section=left column={} bar_width={}", *left, barWidth));
-    EXPECT_LT(*left, middle);
+    integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
+    const std::int32_t      left     = bar.DrawnColumn(kGreen, kDrawn);
+    const RECT              barRect  = integration::ScreenRect(bar.PrimaryBar());
+    const std::int32_t      barWidth = barRect.right - barRect.left;
+    const double            middle   = static_cast<double>(barWidth) / 2;
+    integration::Log("module_column", std::format("section=left column={} bar_width={}", left, barWidth));
+    EXPECT_LT(left, middle);
 
     bar.SaveConfig(OneModuleConfig("", R"("mark")"));
     std::optional<double> right;

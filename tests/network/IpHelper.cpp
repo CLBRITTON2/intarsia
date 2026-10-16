@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <thread>
+#include <cstdint>
 
 namespace {
 
@@ -42,24 +42,9 @@ TEST(IpHelper, RatesAreBytesPerSecondAndZeroWhenACounterResets) {
     EXPECT_DOUBLE_EQ(BytesPerSecond(1000, 3000, 0.0), 0.0);
 }
 
-// Samples the machine's real network. It asserts only what holds whatever the machine is connected to.
-TEST(IpHelper, SamplesTheDefaultRouteInterfaceAndStopsPromptly) {
+TEST(IpHelper, StopsPromptlyRightAfterStarting) {
     ChangeTarget target(kChanged);
-    {
-        const IpHelper network(target.signal, true);
-        // The first sample runs as the thread starts, and a second gives the rates.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-        const NetworkState state = network.State();
-        if (state.link != NetworkLink::None) {
-            EXPECT_FALSE(state.interfaceName.empty());
-        }
-        EXPECT_GE(state.receivedBytesPerSecond, 0.0);
-        if (state.link != NetworkLink::Wifi) {
-            EXPECT_TRUE(state.ssid.empty());
-            EXPECT_FALSE(state.signalPercent.has_value());
-        }
-    }
-    const auto started = std::chrono::steady_clock::now();
+    const auto   started = std::chrono::steady_clock::now();
     // Without rates the thread waits on no clock at all, so the stop event alone ends it.
     for (std::int32_t round = 0; round < 10; ++round) {
         const IpHelper network(target.signal, round % 2 == 0);

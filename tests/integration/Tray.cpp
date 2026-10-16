@@ -1,6 +1,7 @@
 #include "Harness.hpp"
 
 #include "platform/Errors.hpp"
+#include "support/TrayCopyData.hpp"
 #include "support/TrayPayload.hpp"
 #include "tray/ShellNotifyIcon.hpp"
 
@@ -70,20 +71,18 @@ tray {
     constexpr std::uint32_t    kOrange = 0xF39C12;
     constexpr auto             kDrawn  = std::chrono::seconds(5);
     // The tray drops the icons of closed owners every 5 s.
-    constexpr auto          kSwept = std::chrono::seconds(7);
+    constexpr auto    kSwept = std::chrono::seconds(7);
 
-    constexpr wchar_t       kOwnerClass[] = L"IntarsiaIntegrationTrayApp";
-    constexpr UINT          kCallback     = WM_APP + 9;
-    constexpr std::uint32_t kAnswerMs     = 5000;
+    constexpr wchar_t kOwnerClass[] = L"IntarsiaIntegrationTrayApp";
 
-    LRESULT CALLBACK        OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-        if (message == kCallback) {
+    LRESULT CALLBACK  OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+        if (message == kTrayAppCallback) {
             auto* received = reinterpret_cast<std::vector<TrayInputMessage>*>(GetWindowLongPtrW(window, GWLP_USERDATA)); // NOLINT(performance-no-int-to-ptr)
             if (received != nullptr) {
                 received->push_back(TrayInputMessage{
-                           .message = message,
-                           .wParam  = wParam,
-                           .lParam  = lParam,
+                     .message = message,
+                     .wParam  = wParam,
+                     .lParam  = lParam,
                 });
             }
             return 0;
@@ -155,7 +154,6 @@ tray {
         const std::vector<TrayInputMessage>& Received() const;
 
       private:
-        bool                          Send(ULONG_PTR kind, void* payload, size_t size, LRESULT& answer) const;
         bool                          SendNotify(std::uint32_t command, std::uint32_t flags, std::optional<std::uint32_t> rgb) const;
 
         HWND                          _tray;
@@ -228,20 +226,20 @@ tray {
             .id        = _id,
             .guid      = GUID{},
         };
-        LRESULT size = 0;
-        if (!Send(kIconRectCopyData, &query, sizeof(query), size) || size == 0) {
+        const std::optional<LRESULT> size = SendTrayCopyData(_tray, _owner, kIconRectCopyData, &query, sizeof(query));
+        if (!size.has_value() || *size == 0) {
             return std::nullopt;
         }
-        query.part       = static_cast<std::uint32_t>(IconRectPart::Position);
-        LRESULT position = 0;
-        if (!Send(kIconRectCopyData, &query, sizeof(query), position)) {
+        query.part                            = static_cast<std::uint32_t>(IconRectPart::Position);
+        const std::optional<LRESULT> position = SendTrayCopyData(_tray, _owner, kIconRectCopyData, &query, sizeof(query));
+        if (!position.has_value()) {
             return std::nullopt;
         }
         return RECT{
-            .left   = Low16(position),
-            .top    = High16(position),
-            .right  = Low16(position) + Low16(size),
-            .bottom = High16(position) + High16(size),
+            .left   = Low16(*position),
+            .top    = High16(*position),
+            .right  = Low16(*position) + Low16(*size),
+            .bottom = High16(*position) + High16(*size),
         };
     }
 
@@ -249,49 +247,24 @@ tray {
         return _received;
     }
 
-    // Whether the tray answered in time. Throws when the send fails for any other reason than a timeout.
-    bool TrayApp::Send(ULONG_PTR kind, void* payload, size_t size, LRESULT& answer) const {
-        COPYDATASTRUCT data{
-            .dwData = kind,
-            .cbData = static_cast<DWORD>(size),
-            .lpData = payload,
-        };
-        DWORD_PTR result = 0;
-        if (SendMessageTimeoutW(_tray, WM_COPYDATA, reinterpret_cast<WPARAM>(_owner), reinterpret_cast<LPARAM>(&data), SMTO_NORMAL, kAnswerMs, &result) == 0) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_TIMEOUT) {
-                return false;
-            }
-            throw Win32Error("SendMessageTimeoutW(WM_COPYDATA to the tray)", HRESULT_FROM_WIN32(error));
-        }
-        answer = static_cast<LRESULT>(result);
-        return true;
-    }
-
     // The icon handle lives until the send returns, since the tray reads its pixels while the sender waits.
     bool TrayApp::SendNotify(std::uint32_t command, std::uint32_t flags, std::optional<std::uint32_t> rgb) const {
-        TrayNotifyData message = NotifyData(command, Handle32(_owner), _id, flags, kCallback);
+        TrayNotifyData message = NotifyData(command, Handle32(_owner), _id, flags, kTrayAppCallback);
         message.data.version   = _version;
         std::optional<OwnedIcon> icon;
         if (rgb.has_value()) {
             icon.emplace(*rgb);
             message.data.icon = Handle32(icon->Get());
         }
-        LRESULT    answer   = FALSE;
-        const bool answered = Send(kNotifyIconCopyData, &message, sizeof(message), answer);
-        const bool taken    = answered && answer != FALSE;
+        const std::optional<LRESULT> answer = SendTrayCopyData(_tray, _owner, kNotifyIconCopyData, &message, sizeof(message));
+        const bool                   taken  = answer.has_value() && *answer != FALSE;
         integration::Log("tray_sent", std::format("command={} id={} version={} color={} taken={}", CommandName(command), _id, _version, ColorField(rgb), taken));
         return taken;
     }
 
-    // Clicks the middle of the pixels drawn in rgb. False when none are drawn within kDrawn.
-    bool ClickColor(const integration::RunningBar& bar, std::uint32_t rgb) {
-        const std::optional<std::int32_t> column = bar.DrawnColumn(rgb, kDrawn);
-        if (!column.has_value()) {
-            return false;
-        }
-        bar.ClickAt(*column);
-        return true;
+    // Clicks the tray's toggle, which the tray starts folded behind.
+    void UnfoldTray(const integration::RunningBar& bar) {
+        bar.ClickAt(bar.DrawnColumn(kToggleColor, kDrawn));
     }
 
     std::vector<LPARAM> LParams(const std::vector<TrayInputMessage>& messages, std::uint32_t id) {
@@ -315,41 +288,27 @@ tray {
 
 } // namespace
 
-TEST(Tray, PostsAClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
+TEST(Tray, PostsALeftAndARightClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
     const integration::RunningBar bar("tray-click", kConfig, kStyle);
     const TrayApp                 current(1, NOTIFYICON_VERSION_4);
     const TrayApp                 legacy(2, 0);
     ASSERT_TRUE(current.Add(kGreen));
     ASSERT_TRUE(legacy.Add(kOrange));
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    UnfoldTray(bar);
 
-    ASSERT_TRUE(ClickColor(bar, kGreen)) << "the version 4 icon never drew";
-    ASSERT_TRUE(ClickColor(bar, kOrange)) << "the version 0 icon never drew";
+    bar.ClickAt(bar.DrawnColumn(kGreen, kDrawn));
+    bar.ClickAt(bar.DrawnColumn(kOrange, kDrawn));
     integration::Eventually([&] { return current.Received().size() >= 3 && legacy.Received().size() >= 2; }, kDrawn);
 
-    EXPECT_THAT(LParams(current.Received(), 1), ElementsAre(Version4Event(WM_LBUTTONDOWN, 1), Version4Event(WM_LBUTTONUP, 1), Version4Event(NIN_SELECT, 1)));
-    EXPECT_THAT(LParams(legacy.Received(), 2), ElementsAre(WM_LBUTTONDOWN, WM_LBUTTONUP));
-    EXPECT_THAT(WParams(legacy.Received()), ElementsAre(WPARAM{2}, WPARAM{2}));
-}
+    bar.ButtonUpAt(WM_RBUTTONUP, bar.DrawnColumn(kGreen, kDrawn));
+    bar.ButtonUpAt(WM_RBUTTONUP, bar.DrawnColumn(kOrange, kDrawn));
+    integration::Eventually([&] { return current.Received().size() >= 6 && legacy.Received().size() >= 4; }, kDrawn);
 
-TEST(Tray, PostsARightClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
-    const integration::RunningBar bar("tray-right-click", kConfig, kStyle);
-    const TrayApp                 current(1, NOTIFYICON_VERSION_4);
-    const TrayApp                 legacy(2, 0);
-    ASSERT_TRUE(current.Add(kGreen));
-    ASSERT_TRUE(legacy.Add(kOrange));
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
-
-    const std::optional<std::int32_t> green = bar.DrawnColumn(kGreen, kDrawn);
-    ASSERT_TRUE(green.has_value()) << "the version 4 icon never drew";
-    bar.ButtonUpAt(WM_RBUTTONUP, green.value_or(0));
-    const std::optional<std::int32_t> orange = bar.DrawnColumn(kOrange, kDrawn);
-    ASSERT_TRUE(orange.has_value()) << "the version 0 icon never drew";
-    bar.ButtonUpAt(WM_RBUTTONUP, orange.value_or(0));
-    integration::Eventually([&] { return current.Received().size() >= 3 && legacy.Received().size() >= 2; }, kDrawn);
-
-    EXPECT_THAT(LParams(current.Received(), 1), ElementsAre(Version4Event(WM_RBUTTONDOWN, 1), Version4Event(WM_RBUTTONUP, 1), Version4Event(WM_CONTEXTMENU, 1)));
-    EXPECT_THAT(LParams(legacy.Received(), 2), ElementsAre(WM_RBUTTONDOWN, WM_RBUTTONUP));
+    EXPECT_THAT(LParams(current.Received(), 1),
+                ElementsAre(Version4Event(WM_LBUTTONDOWN, 1), Version4Event(WM_LBUTTONUP, 1), Version4Event(NIN_SELECT, 1), Version4Event(WM_RBUTTONDOWN, 1),
+                            Version4Event(WM_RBUTTONUP, 1), Version4Event(WM_CONTEXTMENU, 1)));
+    EXPECT_THAT(LParams(legacy.Received(), 2), ElementsAre(WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP));
+    EXPECT_THAT(WParams(legacy.Received()), ElementsAre(WPARAM{2}, WPARAM{2}, WPARAM{2}, WPARAM{2}));
 }
 
 TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
@@ -358,7 +317,7 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
     ASSERT_TRUE(app.Add(kGreen));
     EXPECT_FALSE(app.IconRect().has_value()) << "the tray answered a rect for an icon no bar shows";
 
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    UnfoldTray(bar);
     std::optional<double> column;
     ASSERT_TRUE(integration::Eventually(
         [&] {
@@ -379,34 +338,26 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
     EXPECT_GT(rect.bottom, rect.top);
 }
 
-TEST(Tray, DrawsTheNewPixelsOfAModifiedIcon) {
+TEST(Tray, DrawsTheNewPixelsOfAModifiedIconThenRemovesItOnceDeleted) {
     const integration::RunningBar bar("tray-modify", kConfig, kStyle);
     const TrayApp                 app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    UnfoldTray(bar);
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     ASSERT_TRUE(app.Modify(kOrange));
     EXPECT_TRUE(bar.Draws(kOrange, kDrawn)) << "the modified icon's new color never drew";
     EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the icon's old color still drew";
-}
-
-TEST(Tray, RemovesADeletedIcon) {
-    const integration::RunningBar bar("tray-delete", kConfig, kStyle);
-    const TrayApp                 app(1, NOTIFYICON_VERSION_4);
-    ASSERT_TRUE(app.Add(kGreen));
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
-    ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     ASSERT_TRUE(app.Delete());
-    EXPECT_TRUE(bar.StopsDrawing(kGreen, kDrawn)) << "the deleted icon still drew";
+    EXPECT_TRUE(bar.StopsDrawing(kOrange, kDrawn)) << "the deleted icon still drew";
 }
 
 TEST(Tray, RemovesTheIconOfAClosedOwner) {
     const integration::RunningBar bar("tray-owner", kConfig, kStyle);
     TrayApp                       app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
-    ASSERT_TRUE(ClickColor(bar, kToggleColor));
+    UnfoldTray(bar);
     ASSERT_TRUE(bar.Draws(kGreen, kDrawn));
 
     app.CloseOwner();

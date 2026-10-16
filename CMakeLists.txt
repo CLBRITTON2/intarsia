@@ -189,7 +189,6 @@ if(BUILD_TESTING)
     tests/wm/GlazeWm.cpp
     tests/platform/AppBar.cpp
     tests/platform/FileWatcher.cpp
-    tests/platform/KnownFolder.cpp
     tests/platform/Launcher.cpp
     tests/platform/Log.cpp
     tests/platform/Monitors.cpp

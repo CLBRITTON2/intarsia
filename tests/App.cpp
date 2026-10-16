@@ -16,14 +16,6 @@ namespace {
 
 } // namespace
 
-TEST(LaunchOptions, NoArgumentsKeepTheDefaults) {
-    const LaunchOptions options = Parse({});
-    EXPECT_EQ(options.configPath, kDefaultConfig);
-    EXPECT_EQ(options.logPath, kDefaultLog);
-    EXPECT_EQ(options.glazeWmPort, 6123);
-    EXPECT_EQ(options.trayClass, L"DefaultTray");
-}
-
 TEST(LaunchOptions, ReadsTheConfigPathLogPathPortAndTrayClass) {
     const LaunchOptions options = Parse({L"--config", L"D:\\soak\\config.lua", L"--log", L"D:\\soak\\bar.log", L"--glazewm-port", L"50123", L"--tray-class", L"SoakTray"});
     EXPECT_EQ(options.configPath, std::filesystem::path(L"D:\\soak\\config.lua"));

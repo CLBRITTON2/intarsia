@@ -18,7 +18,15 @@ namespace {
 
     const std::chrono::steady_clock::time_point kStart = std::chrono::steady_clock::time_point() + std::chrono::hours(1);
 
-    ModuleStyle                                 GroupStyle(std::string_view blocks) {
+    const InsetShadow                           kLine{
+                                  .xDips      = 0.0f,
+                                  .yDips      = 1.0f,
+                                  .blurDips   = 0.0f,
+                                  .spreadDips = 0.0f,
+                                  .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f),
+    };
+
+    ModuleStyle GroupStyle(std::string_view blocks) {
         const StyleSheet sheet = ParseStyleSheet("bar {\n  font: Some Font\n  size: 15\n  color: #e0def4\n}\n" + std::string(blocks), "style.conf");
         return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), ModuleKind::Group, "layout", {});
     }
@@ -60,25 +68,23 @@ TEST(ColorFade, RetargetedMidwayItStartsFromWhereItIs) {
     EXPECT_NEAR(fade.Color(start + std::chrono::milliseconds(125)).r, 0.375f, 0.001f);
 }
 
-TEST(ColorFade, WithoutATransitionItChangesAtOnce) {
+TEST(AnimatedValue, WithoutATransitionAFadeAndAFoldChangeAtOnce) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     ColorFade                                   fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), Transition{.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease}, start);
     EXPECT_FALSE(fade.Running(start));
     EXPECT_FLOAT_EQ(fade.Color(start).r, 1.0f);
+
+    Fold fold(GroupStyle(""));
+    fold.Toggle(kStart);
+    EXPECT_FLOAT_EQ(fold.At(kStart).revealed, 1.0f);
+    EXPECT_FALSE(fold.Running(kStart));
 }
 
 TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
-    const InsetShadow line{
-        .xDips      = 0.0f,
-        .yDips      = 1.0f,
-        .blurDips   = 0.0f,
-        .spreadDips = 0.0f,
-        .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f),
-    };
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     ShadowFade                                  fade({});
-    fade.Retarget({line}, kLinear100, start);
+    fade.Retarget({kLine}, kLinear100, start);
     const std::vector<InsetShadow> halfway = fade.Shadows(start + std::chrono::milliseconds(50));
     ASSERT_EQ(halfway.size(), 1u);
     EXPECT_FLOAT_EQ(halfway[0].yDips, 1.0f);
@@ -92,37 +98,27 @@ TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
 }
 
 TEST(ShadowFade, RetargetedMidwayItKeepsNoMoreShadowsThanEitherEndHolds) {
-    const InsetShadow line{
-        .xDips      = 0.0f,
-        .yDips      = 1.0f,
-        .blurDips   = 0.0f,
-        .spreadDips = 0.0f,
-        .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f),
-    };
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ShadowFade                                  fade({line});
+    ShadowFade                                  fade({kLine});
     for (std::int64_t step = 0; step < 10; ++step) {
         const std::chrono::steady_clock::time_point at = start + std::chrono::milliseconds(10 * step);
         if (step % 2 == 0) {
             fade.Retarget({}, kLinear100, at);
         } else {
-            fade.Retarget({line}, kLinear100, at);
+            fade.Retarget({kLine}, kLinear100, at);
         }
     }
     EXPECT_EQ(fade.Shadows(start + std::chrono::milliseconds(95)).size(), 1u);
     // The same target again neither restarts nor stalls the fade.
-    fade.Retarget({line}, kLinear100, start + std::chrono::milliseconds(95));
+    fade.Retarget({kLine}, kLinear100, start + std::chrono::milliseconds(95));
     EXPECT_FALSE(fade.Running(start + std::chrono::milliseconds(190)));
 }
 
-TEST(AnimatedValue, EveryTimingFunctionRunsFromZeroToOne) {
+TEST(AnimatedValue, TimingFunctionsRunFromZeroToOneInTheirCssShapes) {
     for (const TimingFunction timing : {TimingFunction::Linear, TimingFunction::Ease, TimingFunction::EaseIn, TimingFunction::EaseOut, TimingFunction::EaseInOut}) {
         EXPECT_NEAR(Eased(timing, 0.0f), 0.0f, 0.001f);
         EXPECT_NEAR(Eased(timing, 1.0f), 1.0f, 0.001f);
     }
-}
-
-TEST(AnimatedValue, TimingFunctionsHaveTheirCssShapes) {
     EXPECT_NEAR(Eased(TimingFunction::Linear, 0.5f), 0.5f, 0.001f);
     EXPECT_NEAR(Eased(TimingFunction::EaseInOut, 0.5f), 0.5f, 0.001f);
     // ease-out is fast first and ease-in slow first, by CSS's control points.
@@ -142,16 +138,11 @@ TEST(AnimatedValue, ReadBeforeItTurnedItHoldsWhereItTurned) {
     EXPECT_TRUE(value.Running(start + std::chrono::milliseconds(47)));
 }
 
-TEST(Fold, StartsFoldedAtTheIconsRotation) {
-    const Fold         fold(TurningStyle());
-    const FoldPosition position = fold.At(kStart);
-    EXPECT_FLOAT_EQ(position.revealed, 0.0f);
-    EXPECT_FLOAT_EQ(position.angleDegrees, -90.0f);
-    EXPECT_FALSE(fold.Running(kStart));
-}
-
-TEST(Fold, UnfoldsOverTheWidthTransitionAndTurnsOverTheIcons) {
+TEST(Fold, StartsFoldedThenUnfoldsOverTheWidthTransitionAndTurnsOverTheIcons) {
     Fold fold(TurningStyle());
+    EXPECT_FLOAT_EQ(fold.At(kStart).revealed, 0.0f);
+    EXPECT_FLOAT_EQ(fold.At(kStart).angleDegrees, -90.0f);
+    EXPECT_FALSE(fold.Running(kStart));
     fold.Toggle(kStart);
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(50)).revealed, 0.5f);
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(50)).angleDegrees, -45.0f);
@@ -169,11 +160,4 @@ TEST(Fold, ToggledMidWayFoldsBackFromWhereItIs) {
     // Half open, it folds over half the duration.
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(75)).revealed, 0.25f);
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(100)).revealed, 0.0f);
-}
-
-TEST(Fold, WithoutTransitionsChangesAtOnce) {
-    Fold fold(GroupStyle(""));
-    fold.Toggle(kStart);
-    EXPECT_FLOAT_EQ(fold.At(kStart).revealed, 1.0f);
-    EXPECT_FALSE(fold.Running(kStart));
 }

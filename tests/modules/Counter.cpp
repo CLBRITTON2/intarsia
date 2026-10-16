@@ -36,24 +36,25 @@ namespace {
         ChangeTarget _target{kChanged};
     };
 
-    class CounterModule : public testing::Test {
-      protected:
-        ChangeTarget _target{kChanged};
-    };
+    using CounterModule = Sampler;
 
 } // namespace
 
-TEST(CounterSampler, CombineSumsTakesTheMaxOrAverages) {
-    const std::vector<double> values{1.0, 4.0, 7.0};
-    EXPECT_DOUBLE_EQ(CombineCounterValues(values, CounterCombine::Sum), 12.0);
-    EXPECT_DOUBLE_EQ(CombineCounterValues(values, CounterCombine::Max), 7.0);
-    EXPECT_DOUBLE_EQ(CombineCounterValues(values, CounterCombine::Average), 4.0);
-}
-
-TEST(CounterSampler, NoInstancesCombineToZero) {
-    EXPECT_DOUBLE_EQ(CombineCounterValues({}, CounterCombine::Sum), 0.0);
-    EXPECT_DOUBLE_EQ(CombineCounterValues({}, CounterCombine::Max), 0.0);
-    EXPECT_DOUBLE_EQ(CombineCounterValues({}, CounterCombine::Average), 0.0);
+TEST(CounterSampler, CombineSumsTakesTheMaxOrAveragesAndNoInstancesCombineToZero) {
+    struct Case {
+        CounterCombine combine;
+        double         ofOneFourSeven;
+    };
+    const std::vector<Case> cases{
+        {.combine = CounterCombine::Sum, .ofOneFourSeven = 12.0},
+        {.combine = CounterCombine::Max, .ofOneFourSeven = 7.0},
+        {.combine = CounterCombine::Average, .ofOneFourSeven = 4.0},
+    };
+    for (const Case& test : cases) {
+        SCOPED_TRACE(static_cast<std::int32_t>(test.combine));
+        EXPECT_DOUBLE_EQ(CombineCounterValues({1.0, 4.0, 7.0}, test.combine), test.ofOneFourSeven);
+        EXPECT_DOUBLE_EQ(CombineCounterValues({}, test.combine), 0.0);
+    }
 }
 
 TEST(CounterSampler, OnlyANewOutcomeOrFailureChangesOutcome) {
