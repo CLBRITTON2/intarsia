@@ -3,6 +3,19 @@
 What each release changed, newest first. `scripts/draft-changelog.ps1` starts a version's section from the commits
 since the last release.
 
+## 0.3.0 (2026-10-19)
+
+### New
+
+- `blur: wallpaper <radius>` blurs the monitor's wallpaper behind sections, tooltips and menus, and stays when a
+  window is dragged over the bar. See `docs/styling.md`.
+
+### Fixes
+
+- Borders and inset shadows of one length draw equally wide on every side at fractional scales.
+- An app's tray popup closes when the bars are rebuilt.
+- The bar redraws at the right size after a DPI change that keeps its pixel size.
+
 ## 0.2.0 (2026-10-15)
 
 ### Config changes
