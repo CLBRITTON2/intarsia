@@ -19,7 +19,7 @@ class Battery final : public IconTextModule<BatteryConfig> {
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    ModuleText      Content() override;
+    ModuleText Content() override;
 
     const IBattery& _battery;
 };

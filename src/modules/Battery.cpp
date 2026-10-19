@@ -43,9 +43,9 @@ namespace {
 
 Battery::Battery(BatteryConfig config, const IBattery& battery) : IconTextModule(std::move(config)), _battery(battery) {
     const std::vector<Placeholder> samples = BatteryPlaceholders(BatteryState{
-        .charge        = ChargeState::Discharging,
-        .percent       = 80,
-        .secondsLeft   = 3600,
+        .charge = ChargeState::Discharging,
+        .percent = 80,
+        .secondsLeft = 3600,
         .healthPercent = 90,
     });
     RequirePlaceholders("battery format_discharging", Settings().formatDischarging, samples);
@@ -73,9 +73,9 @@ ModuleText FormatBattery(const BatteryConfig& config, const std::optional<Batter
     switch (state->charge) {
         case ChargeState::Discharging:
             return ModuleText{
-                .icon       = LevelIcon(config.icons, state->percent),
-                .text       = FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state)),
-                .state      = DischargingState(config, state->percent),
+                .icon = LevelIcon(config.icons, state->percent),
+                .text = FormatPlaceholders(config.formatDischarging, BatteryPlaceholders(*state)),
+                .state = DischargingState(config, state->percent),
                 .classIndex = 0,
             };
         case ChargeState::Charging: return NormalText(config.iconCharging, FormatPlaceholders(config.formatCharging, BatteryPlaceholders(*state)));

@@ -14,30 +14,30 @@
 class CoreAudio final : public IAudio {
   public:
     CoreAudio(ChangeSignal& changes, AudioFlow flow);
-    CoreAudio(const CoreAudio&)                            = delete;
-    CoreAudio&                 operator=(const CoreAudio&) = delete;
+    CoreAudio(const CoreAudio&) = delete;
+    CoreAudio& operator=(const CoreAudio&) = delete;
 
     std::optional<AudioDevice> Device() const override;
-    void                       SetVolume(float volume) override;
-    void                       SetMuted(bool muted) override;
+    void SetVolume(float volume) override;
+    void SetMuted(bool muted) override;
 
     // Called from Core Audio's notification threads.
     void OnDefaultDeviceChanged();
     void OnVolumeNotified(float volume, bool muted);
 
   private:
-    void                       Run(HANDLE stopEvent);
-    void                       Publish(std::optional<AudioDevice> device);
+    void Run(HANDLE stopEvent);
+    void Publish(std::optional<AudioDevice> device);
 
-    ChangeSignal&              _changes;
-    AudioFlow                  _flow;
-    UniqueHandle               _deviceEvent;  // the default device changed, so the worker attaches to it
-    UniqueHandle               _requestEvent; // a change is waiting in _pendingVolume or _pendingMuted
-    mutable std::mutex         _mutex;        // guards everything below
+    ChangeSignal& _changes;
+    AudioFlow _flow;
+    UniqueHandle _deviceEvent;  // the default device changed, so the worker attaches to it
+    UniqueHandle _requestEvent; // a change is waiting in _pendingVolume or _pendingMuted
+    mutable std::mutex _mutex;  // guards everything below
     std::optional<AudioDevice> _device;
     // Only the latest request of each kind matters, so a burst of scrolls lands as one change.
     std::optional<float> _pendingVolume;
-    std::optional<bool>  _pendingMuted;
+    std::optional<bool> _pendingMuted;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

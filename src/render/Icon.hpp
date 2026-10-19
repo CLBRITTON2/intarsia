@@ -10,11 +10,11 @@
 
 // An icon's pixels, premultiplied BGRA with no row padding, ready for ID2D1DeviceContext::CreateBitmap.
 struct IconPixels {
-    std::uint32_t             width;
-    std::uint32_t             height;
+    std::uint32_t width;
+    std::uint32_t height;
     std::vector<std::uint8_t> pbgra;
 
-    bool                      operator==(const IconPixels&) const = default;
+    bool operator==(const IconPixels&) const = default;
 };
 
 // The largest icon read, per side. Any process can hand the tray an icon of any size, and every bar keeps a copy on

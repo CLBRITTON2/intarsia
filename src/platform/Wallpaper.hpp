@@ -20,9 +20,9 @@ enum class WallpaperFit : std::uint8_t {
 // What the desktop shows on one monitor.
 struct Wallpaper {
     std::filesystem::path image; // empty for a solid color
-    WallpaperFit          fit;
-    D2D1_COLOR_F          background;  // under and around the image
-    RECT                  desktopRect; // the union of every monitor's rect, which span fills
+    WallpaperFit fit;
+    D2D1_COLOR_F background; // under and around the image
+    RECT desktopRect;        // the union of every monitor's rect, which span fills
 };
 
 // The desktop reports a wallpaper intarsia cannot place.

@@ -11,7 +11,7 @@ namespace {
 
     const std::filesystem::path kDefaultConfig = L"C:\\default\\config.lua";
 
-    CliOptions                  Parse(const std::vector<std::wstring>& arguments) {
+    CliOptions Parse(const std::vector<std::wstring>& arguments) {
         return ParseCliOptions(arguments, kDefaultConfig);
     }
 
@@ -21,7 +21,7 @@ TEST(CliOptions, ReadsTheCommandAndTheConfigPathOrKeepsTheDefault) {
     const std::filesystem::path scratch = L"D:\\scratch\\config.lua";
     struct Case {
         std::wstring name;
-        CliCommand   command;
+        CliCommand command;
     };
     const Case cases[] = {{.name = L"monitors", .command = CliCommand::Monitors}, {.name = L"check", .command = CliCommand::Check}};
     for (const Case& test : cases) {
@@ -46,11 +46,11 @@ TEST(CliOptions, RejectsBadArguments) {
 
 TEST(MonitorTable, ListsEachTargetUnderItsColumns) {
     const BarConfig bar{
-        .edge          = Edge::Top,
-        .layer         = Layer::Top,
-        .space         = Space::Reserve,
+        .edge = Edge::Top,
+        .layer = Layer::Top,
+        .space = Space::Reserve,
         .thicknessDips = 32.0F,
-        .monitors      = {MonitorWithId{.id = "DEL41A8-7XYZ123"}},
+        .monitors = {MonitorWithId{.id = "DEL41A8-7XYZ123"}},
     };
     const MonitorDescription laptop{
         .monitor = nullptr,
@@ -72,11 +72,11 @@ TEST(MonitorTable, ListsEachTargetUnderItsColumns) {
 
 TEST(MonitorTable, ReplacesControlCharactersInAName) {
     const BarConfig bar{
-        .edge          = Edge::Top,
-        .layer         = Layer::Top,
-        .space         = Space::Reserve,
+        .edge = Edge::Top,
+        .layer = Layer::Top,
+        .space = Space::Reserve,
         .thicknessDips = 32.0F,
-        .monitors      = {MonitorWithId{.id = "DEL41A8"}},
+        .monitors = {MonitorWithId{.id = "DEL41A8"}},
     };
     // An OSC sequence that would set the terminal's title.
     const MonitorDescription hostile{

@@ -34,21 +34,21 @@
 
 namespace {
 
-    constexpr size_t                    kMaxQueuedLaunches = 8;
+    constexpr size_t kMaxQueuedLaunches = 8;
 
     constexpr std::chrono::milliseconds kShellPoll{500};
 
     // ShellExecuteExW can use COM shell extensions, which need an apartment on the calling thread. Nothing here may throw
     // out of the launcher's thread, so a failed launch is logged.
     void Start(const Command& command) {
-        const std::wstring program    = command.program.wstring();
+        const std::wstring program = command.program.wstring();
         const std::wstring parameters = JoinArguments(command.arguments);
         try {
-            const ComScope    com(ComThreading::Single, "launcher");
+            const ComScope com(ComThreading::Single, "launcher");
             SHELLEXECUTEINFOW info{};
             info.cbSize = sizeof(info);
             // Zone checks stay on, so a program downloaded from the internet still gets its warning.
-            info.fMask  = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+            info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
             info.lpVerb = L"open";
             info.lpFile = program.c_str();
             if (!parameters.empty()) {
@@ -76,7 +76,7 @@ namespace {
 
     VARIANT StringVariant(const Bstr& text) {
         VARIANT variant{};
-        variant.vt      = VT_BSTR;
+        variant.vt = VT_BSTR;
         variant.bstrVal = text.get();
         return variant;
     }
@@ -87,12 +87,12 @@ namespace {
         Microsoft::WRL::ComPtr<IShellWindows> windows;
         ThrowIfFailed(CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&windows)), "CoCreateInstance(ShellWindows)");
         VARIANT location{};
-        location.vt   = VT_I4;
+        location.vt = VT_I4;
         location.lVal = CSIDL_DESKTOP;
-        VARIANT                           root{};
-        long                              window = 0;
+        VARIANT root{};
+        long window = 0;
         Microsoft::WRL::ComPtr<IDispatch> desktop;
-        const HRESULT                     found = windows->FindWindowSW(&location, &root, SWC_DESKTOP, &window, SWFO_NEEDDISPATCH, &desktop);
+        const HRESULT found = windows->FindWindowSW(&location, &root, SWC_DESKTOP, &window, SWFO_NEEDDISPATCH, &desktop);
         ThrowIfFailed(found, "IShellWindows::FindWindowSW(desktop)");
         // S_FALSE is success with no window.
         if (found != S_OK || desktop == nullptr) {
@@ -127,7 +127,7 @@ void Launcher::Launch(const Command& command) {
 
 std::uint32_t ShellIntegrityLevel(std::chrono::milliseconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    HWND       shell    = GetShellWindow();
+    HWND shell = GetShellWindow();
     if (shell == nullptr) {
         Log(LogLevel::Warning, "shell", "shell_missing", {{.key = "wait_ms", .value = std::to_string(timeout.count())}});
     }
@@ -143,7 +143,7 @@ std::uint32_t ShellIntegrityLevel(std::chrono::milliseconds timeout) {
         ThrowLastError("GetWindowThreadProcessId(shell window)");
     }
     const UniqueHandle process = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(shell)");
-    HANDLE             raw     = nullptr;
+    HANDLE raw = nullptr;
     if (!OpenProcessToken(process.get(), TOKEN_QUERY, &raw)) {
         ThrowLastError("OpenProcessToken(shell)");
     }
@@ -152,14 +152,14 @@ std::uint32_t ShellIntegrityLevel(std::chrono::milliseconds timeout) {
 }
 
 void StartThroughShell(const std::filesystem::path& program, const std::vector<std::wstring>& arguments) {
-    const ComScope                                com(ComThreading::Single, "shell launch");
-    const Microsoft::WRL::ComPtr<IShellDispatch2> shell     = DesktopShell();
-    const Bstr                                    file      = MakeBstr(program.wstring());
-    const Bstr                                    line      = MakeBstr(JoinArguments(arguments));
-    const Bstr                                    directory = MakeBstr(program.parent_path().wstring());
-    const Bstr                                    verb      = MakeBstr(L"open");
-    VARIANT                                       show{};
-    show.vt   = VT_I4;
+    const ComScope com(ComThreading::Single, "shell launch");
+    const Microsoft::WRL::ComPtr<IShellDispatch2> shell = DesktopShell();
+    const Bstr file = MakeBstr(program.wstring());
+    const Bstr line = MakeBstr(JoinArguments(arguments));
+    const Bstr directory = MakeBstr(program.parent_path().wstring());
+    const Bstr verb = MakeBstr(L"open");
+    VARIANT show{};
+    show.vt = VT_I4;
     show.lVal = SW_SHOWNORMAL;
     ThrowIfFailed(shell->ShellExecute(file.get(), StringVariant(line), StringVariant(directory), StringVariant(verb), show), "IShellDispatch2::ShellExecute");
 }

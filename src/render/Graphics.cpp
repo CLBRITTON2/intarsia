@@ -55,8 +55,8 @@ namespace {
 
 CompositionThread::CompositionThread() : _com(ComThreading::Single, "composition") {
     const DispatcherQueueOptions options{
-        .dwSize        = sizeof(DispatcherQueueOptions),
-        .threadType    = DQTYPE_THREAD_CURRENT,
+        .dwSize = sizeof(DispatcherQueueOptions),
+        .threadType = DQTYPE_THREAD_CURRENT,
         .apartmentType = DQTAT_COM_NONE,
     };
     ThrowIfFailed(CreateDispatcherQueueController(options, &_queue), "CreateDispatcherQueueController");
@@ -101,14 +101,14 @@ MonitorOutput OutputForMonitor(HMONITOR monitor) {
     const std::wstring display = MonitorInfo(monitor).szDevice;
     for (std::uint32_t adapterIndex = 0;; ++adapterIndex) {
         ComPtr<IDXGIAdapter1> adapter;
-        const HRESULT         adapterFound = factory->EnumAdapters1(adapterIndex, &adapter);
+        const HRESULT adapterFound = factory->EnumAdapters1(adapterIndex, &adapter);
         if (adapterFound == DXGI_ERROR_NOT_FOUND) {
             throw MonitorGoneError(std::format("no graphics adapter lists display {} as an output", ToUtf8(display)));
         }
         ThrowIfFailed(adapterFound, "IDXGIFactory1::EnumAdapters1");
         for (std::uint32_t outputIndex = 0;; ++outputIndex) {
             ComPtr<IDXGIOutput> output;
-            const HRESULT       outputFound = adapter->EnumOutputs(outputIndex, &output);
+            const HRESULT outputFound = adapter->EnumOutputs(outputIndex, &output);
             if (outputFound == DXGI_ERROR_NOT_FOUND) {
                 break;
             }
@@ -117,8 +117,8 @@ MonitorOutput OutputForMonitor(HMONITOR monitor) {
             ThrowIfFailed(output->GetDesc(&description), "IDXGIOutput::GetDesc");
             if (description.Monitor == monitor) {
                 return MonitorOutput{
-                    .output    = output,
-                    .adapter   = AdapterName(adapter.Get()),
+                    .output = output,
+                    .adapter = AdapterName(adapter.Get()),
                     .refreshHz = RefreshHz(display),
                 };
             }
@@ -156,8 +156,8 @@ ID2D1SolidColorBrush* BrushCache::Get(const D2D1_COLOR_F& color) {
 }
 
 ID2D1SolidColorBrush* BrushCache::Keep(const D2D1_COLOR_F& color) {
-    const std::uint32_t key   = ColorKey(color);
-    const auto          found = _kept.find(key);
+    const std::uint32_t key = ColorKey(color);
+    const auto found = _kept.find(key);
     if (found != _kept.end()) {
         return found->second.Get();
     }
@@ -182,9 +182,9 @@ std::int32_t DipsToWholePixels(float dips, std::uint32_t dpi) {
 
 RECT DipsToScreen(const RECT& window, const D2D1_RECT_F& dips, std::uint32_t dpi) {
     return RECT{
-        .left   = window.left + DipsToPixels(dips.left, dpi),
-        .top    = window.top + DipsToPixels(dips.top, dpi),
-        .right  = window.left + DipsToPixels(dips.right, dpi),
+        .left = window.left + DipsToPixels(dips.left, dpi),
+        .top = window.top + DipsToPixels(dips.top, dpi),
+        .right = window.left + DipsToPixels(dips.right, dpi),
         .bottom = window.top + DipsToPixels(dips.bottom, dpi),
     };
 }
@@ -193,8 +193,8 @@ void RequireFontFamily(IDWriteFactory* dwrite, const wchar_t* family) {
     ComPtr<IDWriteFontCollection> fonts;
     ThrowIfFailed(dwrite->GetSystemFontCollection(&fonts, FALSE), "IDWriteFactory::GetSystemFontCollection");
 
-    std::uint32_t index  = 0;
-    BOOL          exists = FALSE;
+    std::uint32_t index = 0;
+    BOOL exists = FALSE;
     ThrowIfFailed(fonts->FindFamilyName(family, &index, &exists), "IDWriteFontCollection::FindFamilyName");
     if (!exists) {
         throw std::runtime_error(std::format("font family is not installed: {}", ToUtf8(family)));

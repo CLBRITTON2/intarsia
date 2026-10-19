@@ -25,8 +25,8 @@ namespace {
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) { // NOLINT(misc-use-internal-linkage)
-    std::int32_t      count = 0;
-    LPWSTR*           argv  = CommandLineToArgvW(GetCommandLineW(), &count);
+    std::int32_t count = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &count);
     const UniqueLocal owned(static_cast<HLOCAL>(argv));
     if (argv == nullptr || count < 2) {
         return 2;

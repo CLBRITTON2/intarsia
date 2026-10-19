@@ -32,18 +32,18 @@ namespace {
 
     // One interface's byte counters at one moment, for the next sample's rates.
     struct Counters {
-        NET_IFINDEX       index;
-        std::uint64_t     received;
-        std::uint64_t     sent;
+        NET_IFINDEX index;
+        std::uint64_t received;
+        std::uint64_t sent;
         Clock::time_point at;
     };
 
     // The interface a packet to a public address would leave through: IPv4 first, then IPv6 for a network with no IPv4
     // route. A route lookup only, nothing is sent. Nullopt when neither has a route.
     std::optional<NET_IFINDEX> DefaultRouteInterface() {
-        DWORD       index = 0;
+        DWORD index = 0;
         sockaddr_in v4{};
-        v4.sin_family           = AF_INET;
+        v4.sin_family = AF_INET;
         v4.sin_addr.S_un.S_addr = htonl(0x01010101); // 1.1.1.1
         if (GetBestInterfaceEx(reinterpret_cast<sockaddr*>(&v4), &index) == NO_ERROR) {
             return index;
@@ -130,7 +130,7 @@ namespace {
         explicit WlanClient(HANDLE linkEvent);
         // Also unregisters the notification, waiting out a callback in progress.
         ~WlanClient();
-        WlanClient(const WlanClient&)            = delete;
+        WlanClient(const WlanClient&) = delete;
         WlanClient& operator=(const WlanClient&) = delete;
 
         // The network the interface is connected to and its signal quality as a percent. Throws Win32Error, with
@@ -158,11 +158,11 @@ namespace {
 
     std::pair<std::wstring, std::int32_t> WlanClient::Connection(const GUID& interfaceGuid) const {
         PWLAN_CONNECTION_ATTRIBUTES attributes = nullptr;
-        DWORD                       size       = 0;
+        DWORD size = 0;
         ThrowIfWin32Failed(WlanQueryInterface(_handle, &interfaceGuid, wlan_intf_opcode_current_connection, nullptr, &size, reinterpret_cast<void**>(&attributes), nullptr),
                            "WlanQueryInterface(current_connection)");
         const UniqueReleased<PWLAN_CONNECTION_ATTRIBUTES, &WlanFreeMemory> owned(attributes);
-        const DOT11_SSID&                                                  ssid = owned->wlanAssociationAttributes.dot11Ssid;
+        const DOT11_SSID& ssid = owned->wlanAssociationAttributes.dot11Ssid;
         // Anyone nearby can name a network, so its name is drawn only once it is safe to.
         std::wstring name = DrawableText(std::string_view(reinterpret_cast<const char*>(ssid.ucSSID), std::min<ULONG>(ssid.uSSIDLength, DOT11_SSID_MAX_LENGTH)));
         return {std::move(name), static_cast<std::int32_t>(owned->wlanAssociationAttributes.wlanSignalQuality)};
@@ -197,13 +197,13 @@ bool IpHelper::SamplesRates() const {
 
 // Nothing here may throw out of the thread, so every failure is logged once and the next sample tries again.
 void IpHelper::Run(HANDLE stopEvent) {
-    std::optional<Counters>     last;
+    std::optional<Counters> last;
     std::unique_ptr<WlanClient> wlan;
-    FailureLog                  sampleLog("network");
-    FailureLog                  wlanLog("network");
+    FailureLog sampleLog("network");
+    FailureLog wlanLog("network");
     const std::array<HANDLE, 2> events{stopEvent, _linkEvent.get()};
-    const DWORD                 timeout = SampleWaitMs(_samplesRates);
-    DWORD                       woke    = WAIT_TIMEOUT;
+    const DWORD timeout = SampleWaitMs(_samplesRates);
+    DWORD woke = WAIT_TIMEOUT;
     do {
         NetworkState state = NetworkState::None();
         try {
@@ -213,27 +213,27 @@ void IpHelper::Run(HANDLE stopEvent) {
                 row.InterfaceIndex = *index;
                 ThrowIfWin32Failed(GetIfEntry2(&row), "GetIfEntry2");
                 const Counters now{
-                    .index    = *index,
+                    .index = *index,
                     .received = row.InOctets,
-                    .sent     = row.OutOctets,
-                    .at       = Clock::now(),
+                    .sent = row.OutOctets,
+                    .at = Clock::now(),
                 };
                 if (last.has_value() && last->index == now.index) {
-                    const double seconds         = std::chrono::duration<double>(now.at - last->at).count();
+                    const double seconds = std::chrono::duration<double>(now.at - last->at).count();
                     state.receivedBytesPerSecond = BytesPerSecond(last->received, now.received, seconds);
-                    state.sentBytesPerSecond     = BytesPerSecond(last->sent, now.sent, seconds);
+                    state.sentBytesPerSecond = BytesPerSecond(last->sent, now.sent, seconds);
                 }
-                last                = now;
-                state.link          = LinkOfType(row.Type);
+                last = now;
+                state.link = LinkOfType(row.Type);
                 state.interfaceName = std::wstring(row.Alias);
-                state.ipv4          = FirstIpv4(*index);
+                state.ipv4 = FirstIpv4(*index);
                 if (state.link == NetworkLink::Wifi) {
                     try {
                         if (wlan == nullptr) {
                             wlan = std::make_unique<WlanClient>(_linkEvent.get());
                         }
                         auto [ssid, signal] = wlan->Connection(row.InterfaceGuid);
-                        state.ssid          = std::move(ssid);
+                        state.ssid = std::move(ssid);
                         state.signalPercent = signal;
                         wlanLog.Succeeded();
                     } catch (const Win32Error& error) {
@@ -259,7 +259,7 @@ void IpHelper::Run(HANDLE stopEvent) {
         {
             const std::scoped_lock lock(_mutex);
             changed = !SameLink(state, _state);
-            _state  = std::move(state);
+            _state = std::move(state);
         }
         if (changed) {
             _changes.Notify("network");

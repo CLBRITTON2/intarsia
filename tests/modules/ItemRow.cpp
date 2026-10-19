@@ -10,9 +10,9 @@
 
 TEST(ItemRow, ItemsSitSideBySideWithTheirMarginsAndCenteredAcrossTheTallest) {
     const ItemStyle flat = TestItemStyle(0, 0);
-    ItemStyle       tall = TestItemStyle(0, 0);
-    tall.margin.yDips    = 3.0f;
-    const ItemRow row    = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 20.0f, .height = 10.0f}}, {&flat, &tall}, Axis::Horizontal);
+    ItemStyle tall = TestItemStyle(0, 0);
+    tall.margin.yDips = 3.0f;
+    const ItemRow row = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 20.0f, .height = 10.0f}}, {&flat, &tall}, Axis::Horizontal);
 
     // 10 and 20 wide padded by 4 each side, 5 of margin around each. The tall item's margin sets the height: 10 + 4 + 6.
     EXPECT_FLOAT_EQ(row.size.width, 66.0f);
@@ -27,9 +27,9 @@ TEST(ItemRow, ItemsSitSideBySideWithTheirMarginsAndCenteredAcrossTheTallest) {
 
 TEST(ItemRow, DownAVerticalBarItemsStackWithTheirMarginsAndCenterAcrossTheWidest) {
     const ItemStyle flat = TestItemStyle(0, 0);
-    ItemStyle       wide = TestItemStyle(0, 0);
-    wide.margin.yDips    = 3.0f;
-    const ItemRow row    = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 20.0f, .height = 10.0f}}, {&flat, &wide}, Axis::Vertical);
+    ItemStyle wide = TestItemStyle(0, 0);
+    wide.margin.yDips = 3.0f;
+    const ItemRow row = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 20.0f, .height = 10.0f}}, {&flat, &wide}, Axis::Vertical);
 
     // 10 tall padded by 2 above and below, the first with no margin there and the second with 3. The wide item sets
     // the width: 20 + 8 + 10.
@@ -46,7 +46,7 @@ TEST(ItemRow, DownAVerticalBarItemsStackWithTheirMarginsAndCenterAcrossTheWidest
 
 TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
     const ItemStyle style = TestItemStyle(0, 0);
-    const ItemRow   row   = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 10.0f, .height = 10.0f}}, {&style, &style}, Axis::Horizontal);
+    const ItemRow row = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 10.0f, .height = 10.0f}}, {&style, &style}, Axis::Horizontal);
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(2.0f, 5.0f)).has_value());
     EXPECT_EQ(ItemAt(row, D2D1::Point2F(5.0f, 5.0f)), 0u);
     EXPECT_FALSE(ItemAt(row, D2D1::Point2F(25.0f, 5.0f)).has_value());
@@ -55,12 +55,12 @@ TEST(ItemRow, ItemAtFindsTheBoxAndNothingInItsMargins) {
 }
 
 TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
-    ItemStyle style                                   = TestItemStyle(0x000000, 0x000000);
-    style.hoverBackground                             = D2D1::ColorF(0xFFFFFF);
-    style.backgroundTransition                        = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    ItemStyle style = TestItemStyle(0x000000, 0x000000);
+    style.hoverBackground = D2D1::ColorF(0xFFFFFF);
+    style.backgroundTransition = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    HoveredItem                                 hovered;
-    ItemFades                                   fades;
+    HoveredItem hovered;
+    ItemFades fades;
     fades.Follow({&style}, hovered, start);
     EXPECT_EQ(fades.Wait(start), std::nullopt);
 
@@ -75,12 +75,12 @@ TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
 }
 
 TEST(ItemRow, ItemFadesFadeAnItemIntoANewStatesColors) {
-    const ItemStyle rest                              = TestItemStyle(0x000000, 0x000000);
-    ItemStyle       focused                           = TestItemStyle(0xFFFFFF, 0xFFFFFF);
-    focused.colorTransition                           = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    const ItemStyle rest = TestItemStyle(0x000000, 0x000000);
+    ItemStyle focused = TestItemStyle(0xFFFFFF, 0xFFFFFF);
+    focused.colorTransition = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    const HoveredItem                           hovered;
-    ItemFades                                   fades;
+    const HoveredItem hovered;
+    ItemFades fades;
     fades.Follow({&rest}, hovered, start);
     // The target's transition applies, as in CSS: the focused style's color fades and its background does not.
     fades.Follow({&focused}, hovered, start);
@@ -89,19 +89,19 @@ TEST(ItemRow, ItemFadesFadeAnItemIntoANewStatesColors) {
 }
 
 TEST(ItemRow, ItemFadesFadeANewStatesShadowsOverItsBackgroundTransition) {
-    const ItemStyle rest                              = TestItemStyle(0x000000, 0x000000);
-    ItemStyle       focused                           = TestItemStyle(0xFFFFFF, 0xFFFFFF);
-    focused.backgroundTransition                      = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
-    focused.shadows                                   = {{
-                                          .xDips      = 0.0f,
-                                          .yDips      = 1.0f,
-                                          .blurDips   = 0.0f,
-                                          .spreadDips = 0.0f,
-                                          .color      = D2D1::ColorF(0xFFFFFF),
+    const ItemStyle rest = TestItemStyle(0x000000, 0x000000);
+    ItemStyle focused = TestItemStyle(0xFFFFFF, 0xFFFFFF);
+    focused.backgroundTransition = {.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    focused.shadows = {{
+        .xDips = 0.0f,
+        .yDips = 1.0f,
+        .blurDips = 0.0f,
+        .spreadDips = 0.0f,
+        .color = D2D1::ColorF(0xFFFFFF),
     }};
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    const HoveredItem                           hovered;
-    ItemFades                                   fades;
+    const HoveredItem hovered;
+    ItemFades fades;
     fades.Follow({&rest}, hovered, start);
     EXPECT_TRUE(fades.Shadows(0, start).empty());
     fades.Follow({&focused}, hovered, start);

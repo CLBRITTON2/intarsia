@@ -19,13 +19,13 @@ namespace {
 
     constexpr PixelGrid kFractionalScale{
         .pixelsPerDip = 1.25f,
-        .offsetX      = 0.0f,
-        .offsetY      = 0.0f,
+        .offsetX = 0.0f,
+        .offsetY = 0.0f,
     };
 
-    constexpr std::uint32_t            kCanvasWidth = 100;
-    constexpr float                    kDrawnWidth  = 60.0f;
-    constexpr std::uint32_t            kDrawnHeight = 30;
+    constexpr std::uint32_t kCanvasWidth = 100;
+    constexpr float kDrawnWidth = 60.0f;
+    constexpr std::uint32_t kDrawnHeight = 30;
 
     Microsoft::WRL::ComPtr<IWICBitmap> CreateCanvasBitmap(IWICImagingFactory* imaging) {
         Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
@@ -70,13 +70,13 @@ namespace {
         }
 
       private:
-        ComScope                                   _com;
+        ComScope _com;
         Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging;
-        Microsoft::WRL::ComPtr<IWICBitmap>         _bitmap;
+        Microsoft::WRL::ComPtr<IWICBitmap> _bitmap;
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
-        BrushCache                                 _brushes;
-        BoxCache                                   _boxes;
-        float                                      _pixelsPerDip;
+        BrushCache _brushes;
+        BoxCache _boxes;
+        float _pixelsPerDip;
     };
 
     std::vector<std::uint8_t> DrawnPixels(const BoxStyle& style) {
@@ -98,20 +98,20 @@ namespace {
 
     Border Uniform(float widthDips) {
         return Border{
-            .top    = Side(widthDips),
-            .right  = Side(widthDips),
+            .top = Side(widthDips),
+            .right = Side(widthDips),
             .bottom = Side(widthDips),
-            .left   = Side(widthDips),
+            .left = Side(widthDips),
         };
     }
 
     BoxStyle Lined(const Border& border, const std::vector<InsetShadow>& shadows) {
         return BoxStyle{
             .background = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f),
-            .border     = border,
+            .border = border,
             .radiusDips = 0.0f,
-            .padding    = {},
-            .shadows    = shadows,
+            .padding = {},
+            .shadows = shadows,
         };
     }
 
@@ -120,11 +120,11 @@ namespace {
     BoxStyle HardShadowed(const D2D1_COLOR_F& color) {
         return Lined(Uniform(0.0f),
                      {InsetShadow{
-                         .xDips      = 0.0f,
-                         .yDips      = 2.0f,
-                         .blurDips   = 0.0f,
+                         .xDips = 0.0f,
+                         .yDips = 2.0f,
+                         .blurDips = 0.0f,
                          .spreadDips = 3.0f,
-                         .color      = color,
+                         .color = color,
                      }});
     }
 
@@ -141,8 +141,8 @@ TEST(PixelGrid, SnapRectMovesEachEdgeToTheNearestDevicePixel) {
 TEST(PixelGrid, SnapRectCountsTheTransformsTranslation) {
     const PixelGrid scrolled{
         .pixelsPerDip = 1.25f,
-        .offsetX      = 0.5f,
-        .offsetY      = 0.0f,
+        .offsetX = 0.5f,
+        .offsetY = 0.0f,
     };
     const D2D1_RECT_F snapped = SnapRect(scrolled, D2D1::RectF(10.3f, 0.0f, 20.0f, 10.0f));
     // 10.3 DIPs lands on device pixel 13.5 once moved by the translation, which rounds to 14.
@@ -153,10 +153,10 @@ TEST(Box, SnapLinesRoundsBorderWidthsDownToWholePixelsButKeepsAtLeastOne) {
     const BoxStyle snapped = SnapLines(kFractionalScale,
                                        Lined(
                                            Border{
-                                               .top    = Side(1.0f),
-                                               .right  = Side(2.0f),
+                                               .top = Side(1.0f),
+                                               .right = Side(2.0f),
                                                .bottom = Side(0.5f),
-                                               .left   = Side(0.0f),
+                                               .left = Side(0.0f),
                                            },
                                            {}));
     EXPECT_FLOAT_EQ(snapped.border.top.widthDips, 0.8f);
@@ -168,20 +168,20 @@ TEST(Box, SnapLinesRoundsBorderWidthsDownToWholePixelsButKeepsAtLeastOne) {
 TEST(Box, SnapLinesKeepsAWidthOfWholePixels) {
     const PixelGrid doubled{
         .pixelsPerDip = 2.0f,
-        .offsetX      = 0.0f,
-        .offsetY      = 0.0f,
+        .offsetX = 0.0f,
+        .offsetY = 0.0f,
     };
     const BoxStyle snapped = SnapLines(doubled, Lined(Uniform(1.0f), {}));
     EXPECT_FLOAT_EQ(snapped.border.top.widthDips, 1.0f);
 }
 
 TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSide) {
-    BoxStyle style   = Lined(Uniform(0.0f), {});
+    BoxStyle style = Lined(Uniform(0.0f), {});
     style.radiusDips = 12.0f;
-    const std::vector<D2D1_RECT_F>       boxes{D2D1::RectF(10.3f, 0.0f, 60.0f, 16.0f), D2D1::RectF(70.0f, 0.0f, 200.0f, 40.0f)};
+    const std::vector<D2D1_RECT_F> boxes{D2D1::RectF(10.3f, 0.0f, 60.0f, 16.0f), D2D1::RectF(70.0f, 0.0f, 200.0f, 40.0f)};
     const std::vector<D2D1_ROUNDED_RECT> outlines = BackdropOutlines(
         {
-            .source     = BackdropSource::System,
+            .source = BackdropSource::System,
             .radiusDips = 0.0f,
             .brightness = 1.0f,
             .saturation = 1.0f,
@@ -193,7 +193,7 @@ TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSid
     EXPECT_FLOAT_EQ(outlines[1].radiusY, 12.0f);
     EXPECT_EQ(BackdropOutlines(
                   {
-                      .source     = BackdropSource::Wallpaper,
+                      .source = BackdropSource::Wallpaper,
                       .radiusDips = 8.0f,
                       .brightness = 1.0f,
                       .saturation = 1.0f,
@@ -203,7 +203,7 @@ TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSid
               2u);
     EXPECT_TRUE(BackdropOutlines(
                     {
-                        .source     = BackdropSource::None,
+                        .source = BackdropSource::None,
                         .radiusDips = 0.0f,
                         .brightness = 1.0f,
                         .saturation = 1.0f,
@@ -217,15 +217,15 @@ TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSid
 TEST(Box, ACornerOfTwoColorsSplitsItsCurveOnTheDiagonal) {
     const BorderSide red{.widthDips = 1.0f, .color = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)};
     const BorderSide blue{.widthDips = 1.0f, .color = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)};
-    BoxStyle         style = Lined(
+    BoxStyle style = Lined(
         Border{
-                    .top    = red,
-                    .right  = blue,
-                    .bottom = blue,
-                    .left   = blue,
+            .top = red,
+            .right = blue,
+            .bottom = blue,
+            .left = blue,
         },
         {});
-    style.radiusDips                       = 14.0f;
+    style.radiusDips = 14.0f;
     const std::vector<std::uint8_t> pixels = DrawnPixels(style);
     // Pixel (6, 2) lies on the ring above the diagonal, (2, 6) its mirror below it.
     EXPECT_GT(Red(pixels, 6, 2), Blue(pixels, 6, 2));
@@ -235,20 +235,20 @@ TEST(Box, ACornerOfTwoColorsSplitsItsCurveOnTheDiagonal) {
 
 // At 150% a DIP is a pixel and a half, so half a DIP of offset and half of spread each round to a pixel of their own.
 TEST(Box, AHardShadowsSideDrawsAsWideAsABorderOfItsWidth) {
-    BitmapCanvas                    canvas(1.5f);
+    BitmapCanvas canvas(1.5f);
     const std::vector<std::uint8_t> pixels = canvas.Draw(Lined(
                                                              Border{
-                                                                 .top    = Side(0.0f),
-                                                                 .right  = Side(0.0f),
+                                                                 .top = Side(0.0f),
+                                                                 .right = Side(0.0f),
                                                                  .bottom = Side(0.0f),
-                                                                 .left   = BorderSide{.widthDips = 1.0f, .color = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)},
+                                                                 .left = BorderSide{.widthDips = 1.0f, .color = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)},
                                                              },
                                                              {InsetShadow{
-                                                                 .xDips      = 0.5f,
-                                                                 .yDips      = 0.0f,
-                                                                 .blurDips   = 0.0f,
+                                                                 .xDips = 0.5f,
+                                                                 .yDips = 0.0f,
+                                                                 .blurDips = 0.0f,
                                                                  .spreadDips = 0.5f,
-                                                                 .color      = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
+                                                                 .color = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
                                                              }}),
                                                          kDrawnWidth);
     EXPECT_GT(Red(pixels, 0, 15), 200);
@@ -260,14 +260,14 @@ TEST(Box, AHardShadowsSideDrawsAsWideAsABorderOfItsWidth) {
 }
 
 TEST(Box, AHardShadowsSideNarrowerThanAPixelStillDrawsOne) {
-    BitmapCanvas                    canvas(1.5f);
+    BitmapCanvas canvas(1.5f);
     const std::vector<std::uint8_t> pixels = canvas.Draw(Lined(Uniform(0.0f),
                                                                {InsetShadow{
-                                                                   .xDips      = 0.0f,
-                                                                   .yDips      = 1.0f,
-                                                                   .blurDips   = 0.0f,
+                                                                   .xDips = 0.0f,
+                                                                   .yDips = 1.0f,
+                                                                   .blurDips = 0.0f,
                                                                    .spreadDips = -0.5f,
-                                                                   .color      = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
+                                                                   .color = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
                                                                }}),
                                                          kDrawnWidth);
     EXPECT_GT(Blue(pixels, 45, 0), 200);
@@ -277,14 +277,14 @@ TEST(Box, AHardShadowsSideNarrowerThanAPixelStillDrawsOne) {
 
 TEST(Box, ABlurredShadowsSpreadUnderHalfAPixelDrawsAsNone) {
     BitmapCanvas canvas(1.5f);
-    const auto   blurred = [](float spreadDips) {
+    const auto blurred = [](float spreadDips) {
         return Lined(Uniform(0.0f),
-                       {InsetShadow{
-                           .xDips      = 0.0f,
-                           .yDips      = 0.0f,
-                           .blurDips   = 4.0f,
-                           .spreadDips = spreadDips,
-                           .color      = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
+                     {InsetShadow{
+                         .xDips = 0.0f,
+                         .yDips = 0.0f,
+                         .blurDips = 4.0f,
+                         .spreadDips = spreadDips,
+                         .color = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
                      }});
     };
     EXPECT_EQ(canvas.Draw(blurred(0.3f), kDrawnWidth), canvas.Draw(blurred(0.0f), kDrawnWidth));
@@ -292,8 +292,8 @@ TEST(Box, ABlurredShadowsSpreadUnderHalfAPixelDrawsAsNone) {
 
 // A cache key that ignored the shadow's color would draw the first shadow again: a fade frozen on its first frame.
 TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
-    BitmapCanvas                    canvas(1.0f);
-    const std::vector<std::uint8_t> red  = canvas.Draw(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)), kDrawnWidth);
+    BitmapCanvas canvas(1.0f);
+    const std::vector<std::uint8_t> red = canvas.Draw(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)), kDrawnWidth);
     const std::vector<std::uint8_t> blue = canvas.Draw(HardShadowed(D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)), kDrawnWidth);
     EXPECT_GT(Red(red, 30, 4), 200);
     EXPECT_GT(Blue(blue, 30, 4), 200);
@@ -303,10 +303,10 @@ TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
 // A shadow box far longer than its edges reach, both ways, draws from a bitmap of both ends and one row and column
 // between. Both lengths draw from one such bitmap, and each edge of the hard shadow still lands on its own pixel.
 TEST(Box, OneCacheDrawsOneStyleAtTwoLengthsWithEachEdgeInPlace) {
-    BitmapCanvas                    canvas(1.0f);
-    const BoxStyle                  style  = HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));
+    BitmapCanvas canvas(1.0f);
+    const BoxStyle style = HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));
     const std::vector<std::uint8_t> narrow = canvas.Draw(style, 60.0f);
-    const std::vector<std::uint8_t> wide   = canvas.Draw(style, 100.0f);
+    const std::vector<std::uint8_t> wide = canvas.Draw(style, 100.0f);
     EXPECT_GT(Red(narrow, 30, 4), 200);
     EXPECT_LT(Red(narrow, 30, 5), 50);
     EXPECT_LT(Red(narrow, 30, 28), 50);

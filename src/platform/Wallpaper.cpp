@@ -38,9 +38,9 @@ namespace {
 
     RECT Union(const RECT& first, const RECT& second) {
         return RECT{
-            .left   = std::min(first.left, second.left),
-            .top    = std::min(first.top, second.top),
-            .right  = std::max(first.right, second.right),
+            .left = std::min(first.left, second.left),
+            .top = std::min(first.top, second.top),
+            .right = std::max(first.right, second.right),
             .bottom = std::max(first.bottom, second.bottom),
         };
     }
@@ -48,11 +48,11 @@ namespace {
     // An image of width by height pixels with its center on areaRect's.
     RECT CenteredIn(const RECT& areaRect, double width, double height) {
         const double left = static_cast<double>(areaRect.left) + ((static_cast<double>(areaRect.right - areaRect.left) - width) / 2.0);
-        const double top  = static_cast<double>(areaRect.top) + ((static_cast<double>(areaRect.bottom - areaRect.top) - height) / 2.0);
+        const double top = static_cast<double>(areaRect.top) + ((static_cast<double>(areaRect.bottom - areaRect.top) - height) / 2.0);
         return RECT{
-            .left   = std::lround(left),
-            .top    = std::lround(top),
-            .right  = std::lround(left + width),
+            .left = std::lround(left),
+            .top = std::lround(top),
+            .right = std::lround(left + width),
             .bottom = std::lround(top + height),
         };
     }
@@ -65,7 +65,7 @@ namespace {
 
     Scales ScalesTo(const RECT& areaRect, D2D1_SIZE_U imageSize) {
         return Scales{
-            .width  = static_cast<double>(areaRect.right - areaRect.left) / static_cast<double>(imageSize.width),
+            .width = static_cast<double>(areaRect.right - areaRect.left) / static_cast<double>(imageSize.width),
             .height = static_cast<double>(areaRect.bottom - areaRect.top) / static_cast<double>(imageSize.height),
         };
     }
@@ -95,13 +95,13 @@ Wallpaper ReadWallpaper(const RECT& monitorRect) {
     ThrowIfFailed(desktop->GetMonitorDevicePathCount(&count), "IDesktopWallpaper::GetMonitorDevicePathCount");
 
     std::optional<UniqueCoString> matched;
-    std::optional<RECT>           desktopRect;
-    std::string                   seen;
+    std::optional<RECT> desktopRect;
+    std::string seen;
     for (UINT index = 0; index < count; ++index) {
         PWSTR raw = nullptr;
         ThrowIfFailed(desktop->GetMonitorDevicePathAt(index, &raw), "IDesktopWallpaper::GetMonitorDevicePathAt");
         UniqueCoString path(raw);
-        RECT           rect{};
+        RECT rect{};
         // The desktop also lists monitors it has seen that are not attached, which have no rect.
         const HRESULT read = desktop->GetMonitorRECT(path.get(), &rect);
         if (FAILED(read) || IsRectEmpty(&rect) != 0) {
@@ -124,29 +124,29 @@ Wallpaper ReadWallpaper(const RECT& monitorRect) {
 
     PWSTR image = nullptr;
     ThrowIfFailed(desktop->GetWallpaper(matched->get(), &image), "IDesktopWallpaper::GetWallpaper");
-    const UniqueCoString       imagePath(image);
+    const UniqueCoString imagePath(image);
     DESKTOP_WALLPAPER_POSITION position{};
     ThrowIfFailed(desktop->GetPosition(&position), "IDesktopWallpaper::GetPosition");
     COLORREF background = 0;
     ThrowIfFailed(desktop->GetBackgroundColor(&background), "IDesktopWallpaper::GetBackgroundColor");
     return Wallpaper{
-        .image       = std::filesystem::path(imagePath.get()),
-        .fit         = FitOf(position),
-        .background  = OpaqueColor(background),
+        .image = std::filesystem::path(imagePath.get()),
+        .fit = FitOf(position),
+        .background = OpaqueColor(background),
         .desktopRect = *desktopRect,
     };
 }
 
 RECT PlaceWallpaper(WallpaperFit fit, D2D1_SIZE_U imageSize, const RECT& monitorRect, const RECT& desktopRect) {
-    const auto width  = static_cast<double>(imageSize.width);
+    const auto width = static_cast<double>(imageSize.width);
     const auto height = static_cast<double>(imageSize.height);
     switch (fit) {
         case WallpaperFit::Center: return CenteredIn(monitorRect, width, height);
         case WallpaperFit::Tile:
             return RECT{
-                .left   = monitorRect.left,
-                .top    = monitorRect.top,
-                .right  = monitorRect.left + static_cast<LONG>(imageSize.width),
+                .left = monitorRect.left,
+                .top = monitorRect.top,
+                .right = monitorRect.left + static_cast<LONG>(imageSize.width),
                 .bottom = monitorRect.top + static_cast<LONG>(imageSize.height),
             };
         case WallpaperFit::Stretch: return monitorRect;

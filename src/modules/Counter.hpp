@@ -24,8 +24,8 @@ enum class CounterOutcome : std::uint8_t {
 
 struct CounterReading {
     CounterOutcome outcome;
-    double         value;  // Sampled: the instances combined
-    std::string    detail; // Failed: why, for the log and the tooltip
+    double value;       // Sampled: the instances combined
+    std::string detail; // Failed: why, for the log and the tooltip
 };
 
 // The instances' values made one by combine, 0 when there are none: a wildcard matching nothing, such as GPU engines
@@ -42,22 +42,22 @@ bool ChangesOutcome(const CounterReading& previous, const CounterReading& next);
 class CounterSampler {
   public:
     CounterSampler(std::string name, const CounterConfig& config, ChangeSignal& changes);
-    CounterSampler(const CounterSampler&)            = delete;
+    CounterSampler(const CounterSampler&) = delete;
     CounterSampler& operator=(const CounterSampler&) = delete;
 
-    CounterReading  Reading() const;
+    CounterReading Reading() const;
 
   private:
-    void                 Run(HANDLE stopEvent);
-    void                 Publish(const CounterReading& reading);
+    void Run(HANDLE stopEvent);
+    void Publish(const CounterReading& reading);
 
-    std::string          _name;
-    std::wstring         _path;
-    CounterCombine       _combine;
+    std::string _name;
+    std::wstring _path;
+    CounterCombine _combine;
     std::chrono::seconds _interval;
-    ChangeSignal&        _changes;
-    mutable std::mutex   _mutex;
-    CounterReading       _reading;
+    ChangeSignal& _changes;
+    mutable std::mutex _mutex;
+    CounterReading _reading;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };
@@ -77,7 +77,7 @@ class Counter final : public TextModule {
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    ModuleText            Format(const std::string& spec) override;
+    ModuleText Format(const std::string& spec) override;
 
     const CounterSampler& _sampler;
 };

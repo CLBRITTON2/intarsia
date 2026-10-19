@@ -16,7 +16,7 @@ namespace {
     class FailingOwner {
       public:
         FailingOwner(HWND& created, std::int32_t& messages, std::int32_t& messagesBeforeThrow) : _messages(messages), _window(Create(this)) {
-            created             = _window.get();
+            created = _window.get();
             messagesBeforeThrow = _messages;
             throw std::runtime_error("failed after creating its window");
         }
@@ -24,7 +24,7 @@ namespace {
       private:
         friend LRESULT CALLBACK ::OwnedWindowProc<FailingOwner>(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-        static HWND    Create(FailingOwner* owner) {
+        static HWND Create(FailingOwner* owner) {
             return CreateWindowExW(0, kOwnerClass, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), owner);
         }
 
@@ -33,8 +33,8 @@ namespace {
             return DefWindowProcW(window, message, wParam, lParam);
         }
 
-        std::int32_t&     _messages;
-        WindowProcError   _windowProcError;
+        std::int32_t& _messages;
+        WindowProcError _windowProcError;
         UniqueOwnedWindow _window;
     };
 
@@ -43,14 +43,14 @@ namespace {
 // A window left behind by a constructor that threw would call into the freed owner the next time any message loop ran.
 TEST(WindowProc, AnOwnedWindowIsDestroyedWithoutItsOwnerWhenTheOwnerFailsToConstruct) {
     WNDCLASSEXW registration{};
-    registration.cbSize        = sizeof(registration);
-    registration.lpfnWndProc   = OwnedWindowProc<FailingOwner>;
-    registration.hInstance     = GetModuleHandleW(nullptr);
+    registration.cbSize = sizeof(registration);
+    registration.lpfnWndProc = OwnedWindowProc<FailingOwner>;
+    registration.hInstance = GetModuleHandleW(nullptr);
     registration.lpszClassName = kOwnerClass;
     ASSERT_NE(RegisterClassExW(&registration), 0);
 
-    HWND         created             = nullptr;
-    std::int32_t messages            = 0;
+    HWND created = nullptr;
+    std::int32_t messages = 0;
     std::int32_t messagesBeforeThrow = 0;
     EXPECT_THROW(FailingOwner(created, messages, messagesBeforeThrow), std::runtime_error);
     ASSERT_NE(created, nullptr);

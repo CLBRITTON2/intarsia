@@ -14,10 +14,10 @@
 // (DEL41A8). serial is the descriptor's text serial, else the base block's number, and absent when the monitor leaves
 // both empty, as many laptop panels do.
 struct EdidIdentity {
-    std::string                model;
+    std::string model;
     std::optional<std::string> serial;
 
-    bool                       operator==(const EdidIdentity& other) const = default;
+    bool operator==(const EdidIdentity& other) const = default;
 };
 
 class EdidError : public std::runtime_error {
@@ -39,7 +39,7 @@ bool IsMonitorId(std::string_view text);
 struct DisplayTarget {
     std::optional<std::string> id;   // MonitorId, absent for a screen with no EDID (a virtual display)
     std::optional<std::string> name; // Windows' friendly name, absent when it gives none
-    std::string                connection;
+    std::string connection;
 
     // A laptop's own panel.
     bool IsInternal() const;
@@ -47,11 +47,11 @@ struct DisplayTarget {
 };
 
 struct MonitorDescription {
-    HMONITOR                   monitor;
-    bool                       primary;
+    HMONITOR monitor;
+    bool primary;
     std::vector<DisplayTarget> targets; // empty when Windows reports no active path for it
 
-    bool                       operator==(const MonitorDescription& other) const = default;
+    bool operator==(const MonitorDescription& other) const = default;
 };
 
 // Every monitor's handle, in Windows' order.

@@ -27,12 +27,12 @@
 
 // One entry a menu command printed.
 struct MenuEntry {
-    std::string                id; // the argument on_select gets when the entry is picked
-    std::string                text;
-    bool                       active;  // drawn in the menu item active block colors, such as the profile already connected
+    std::string id; // the argument on_select gets when the entry is picked
+    std::string text;
+    bool active;                        // drawn in the menu item active block colors, such as the profile already connected
     std::optional<std::string> tooltip; // shown beside the menu while the cursor rests on the entry
 
-    bool                       operator==(const MenuEntry&) const = default;
+    bool operator==(const MenuEntry&) const = default;
 };
 
 // A blank line between entries, as tall as one, that cannot be picked.
@@ -47,7 +47,7 @@ struct MenuFailure {
     std::string reason; // short enough to show in the menu
     std::string detail; // the full failure, for the log
 
-    bool        operator==(const MenuFailure&) const = default;
+    bool operator==(const MenuFailure&) const = default;
 };
 
 using MenuListing = std::variant<std::vector<MenuItem>, MenuFailure>;
@@ -69,7 +69,7 @@ bool HasEntries(const std::vector<MenuItem>& items);
 class MenuLister {
   public:
     MenuLister(HWND target, std::uint32_t message);
-    MenuLister(const MenuLister&)            = delete;
+    MenuLister(const MenuLister&) = delete;
     MenuLister& operator=(const MenuLister&) = delete;
 
     // Kills the listing in progress, if any, and starts command.
@@ -79,14 +79,14 @@ class MenuLister {
     std::optional<MenuListing> Take();
 
   private:
-    void                       Run(HANDLE stopEvent);
+    void Run(HANDLE stopEvent);
 
-    HWND                       _target;
-    std::uint32_t              _message;
-    std::mutex                 _mutex;
+    HWND _target;
+    std::uint32_t _message;
+    std::mutex _mutex;
     std::optional<MenuListing> _ready;
     // Captured by value, the command would make the thread body's move constructor throwing.
-    Command              _command;
+    Command _command;
     std::chrono::seconds _timeout;
     // Declared last so every member above exists while a listing runs. Destruction kills a listing in progress.
     std::unique_ptr<StoppableThread> _thread;
@@ -95,10 +95,10 @@ class MenuLister {
 // One row of a shown menu, in DIPs from the menu's top left.
 struct MenuRow {
     Microsoft::WRL::ComPtr<IDWriteTextLayout> text; // null for a separator
-    D2D1_RECT_F                               box;
-    D2D1_POINT_2F                             textOrigin;
-    const ItemStyle*                          style;
-    std::optional<size_t>                     entry; // the entry picking the row selects, null for a failure's row or a separator
+    D2D1_RECT_F box;
+    D2D1_POINT_2F textOrigin;
+    const ItemStyle* style;
+    std::optional<size_t> entry; // the entry picking the row selects, null for a failure's row or a separator
 };
 
 enum class MenuStep : std::uint8_t {
@@ -109,18 +109,18 @@ enum class MenuStep : std::uint8_t {
 // How far a menu's rows have scrolled through the part of its box that shows them, in DIPs. Rows lay out as if
 // unscrolled, from the viewport's top.
 struct MenuScroll {
-    D2D1_RECT_F viewport;    // the box inside its border and padding
-    float       contentDips; // the rows' height, margins included
-    float       offsetDips;  // how far the rows have moved up, 0 at the top
+    D2D1_RECT_F viewport; // the box inside its border and padding
+    float contentDips;    // the rows' height, margins included
+    float offsetDips;     // how far the rows have moved up, 0 at the top
 };
 
 // A menu's rows placed down its box and stretched to the widest, and the window that holds them.
 struct MenuLayout {
     std::vector<MenuRow> rows;
-    SIZE                 size;   // the window, in pixels, never larger than its monitor
-    MenuScroll           scroll; // at the top
-    D2D1_RECT_F          gutter; // beside the viewport, where the track takes clicks
-    D2D1_RECT_F          track;
+    SIZE size;          // the window, in pixels, never larger than its monitor
+    MenuScroll scroll;  // at the top
+    D2D1_RECT_F gutter; // beside the viewport, where the track takes clicks
+    D2D1_RECT_F track;
 };
 
 // The widest row's text may lay out in a menu on monitorRect before its ellipsis, capped by style's max-width.
@@ -164,8 +164,8 @@ class Menu {
     // menu's own messages.
     Menu(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, Launcher& launcher, WindowProcError& windowProcError,
          Tooltip& tooltip, const std::vector<WallpaperBlur>& wallpapers, std::function<void(const DeviceLostError&)> onDeviceLost);
-    Menu(const Menu&)                  = delete;
-    Menu&       operator=(const Menu&) = delete;
+    Menu(const Menu&) = delete;
+    Menu& operator=(const Menu&) = delete;
 
     static void RegisterWindowClass(HINSTANCE instance);
 
@@ -178,39 +178,39 @@ class Menu {
   private:
     template <typename Owner>
     friend LRESULT CALLBACK OwnedWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-    LRESULT                 HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-    LRESULT                 Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    LRESULT Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    MenuRow                 LayOutRow(std::wstring_view text, const ItemStyle& style, std::optional<size_t> entry, float maxWidthDips, IDWriteInlineObject* ellipsis) const;
-    void                    Draw();
-    void                    Highlight(std::optional<size_t> entry);
-    void                    Pick(size_t entry);
-    void                    Scroll(const MenuScroll& scroll);
-    void                    Wheel(std::int16_t delta);
-    void                    Step(MenuStep step);
+    MenuRow LayOutRow(std::wstring_view text, const ItemStyle& style, std::optional<size_t> entry, float maxWidthDips, IDWriteInlineObject* ellipsis) const;
+    void Draw();
+    void Highlight(std::optional<size_t> entry);
+    void Pick(size_t entry);
+    void Scroll(const MenuScroll& scroll);
+    void Wheel(std::int16_t delta);
+    void Step(MenuStep step);
     // Starts dragging the thumb from point, which first jumps the thumb's middle there when point misses it.
     void GrabThumb(D2D1_POINT_2F point);
     // Hides the entry's tooltip and waits for the cursor to rest again before showing the next one.
-    void                                        RestartHover();
-    void                                        ShowTooltip();
+    void RestartHover();
+    void ShowTooltip();
 
-    const GraphicsDevice&                       _graphics;
-    const Config&                               _config;
-    IDWriteTextFormat*                          _textFormat;
-    Launcher&                                   _launcher;
-    WindowProcError&                            _windowProcError;
-    Tooltip&                                    _tooltip;
-    const std::vector<WallpaperBlur>&           _wallpapers;
+    const GraphicsDevice& _graphics;
+    const Config& _config;
+    IDWriteTextFormat* _textFormat;
+    Launcher& _launcher;
+    WindowProcError& _windowProcError;
+    Tooltip& _tooltip;
+    const std::vector<WallpaperBlur>& _wallpapers;
     std::function<void(const DeviceLostError&)> _onDeviceLost;
-    bool                                        _shown = false;
-    std::uint32_t                               _dpi   = USER_DEFAULT_SCREEN_DPI;
-    RECT                                        _rect{}; // the shown menu, in screen pixels
-    RECT                                        _monitorRect{};
-    std::vector<MenuEntry>                      _entries;
-    MenuLayout                                  _layout{};  // as Show laid it out, its scroll moved since
-    std::optional<size_t>                       _highlight; // the entry under the cursor or picked with the arrow keys
-    Command                                     _onSelect;
-    std::optional<float>                        _thumbGrabDips; // while dragging the thumb, how far below its top the cursor holds it
+    bool _shown = false;
+    std::uint32_t _dpi = USER_DEFAULT_SCREEN_DPI;
+    RECT _rect{}; // the shown menu, in screen pixels
+    RECT _monitorRect{};
+    std::vector<MenuEntry> _entries;
+    MenuLayout _layout{};             // as Show laid it out, its scroll moved since
+    std::optional<size_t> _highlight; // the entry under the cursor or picked with the arrow keys
+    Command _onSelect;
+    std::optional<float> _thumbGrabDips; // while dragging the thumb, how far below its top the cursor holds it
     // Only while shown: Show creates it at the rows' size and Hide releases it.
     std::unique_ptr<Canvas> _canvas;
 

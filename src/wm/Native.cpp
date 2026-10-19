@@ -56,9 +56,9 @@ std::optional<TilingDirection> Native::Direction() const {
 
 WindowManagerStatus Native::Status() const {
     return WindowManagerStatus{
-        .name       = L"Windows",
+        .name = L"Windows",
         .connection = Connection::Connected,
-        .detail     = "",
+        .detail = "",
     };
 }
 
@@ -90,8 +90,8 @@ Native::UniqueHook Native::HookEvent(std::uint32_t event, std::uint32_t process,
 // Hooks only the window's own thread: a wider hook wakes the bar for each name change of every other window and
 // control there.
 Native::UniqueHook Native::HookTitleChanges(HWND window) {
-    DWORD       process = 0;
-    const DWORD thread  = GetWindowThreadProcessId(window, &process);
+    DWORD process = 0;
+    const DWORD thread = GetWindowThreadProcessId(window, &process);
     if (thread == 0 || process == 0) {
         return UniqueHook(nullptr);
     }
@@ -113,7 +113,7 @@ void CALLBACK Native::OnWinEvent(HWINEVENTHOOK, DWORD event, HWND window, LONG o
 // stays as it was until the next foreground change hooks again.
 void Native::Refocus(HWND window) {
     _foreground = window;
-    _title      = WindowTitle(window);
+    _title = WindowTitle(window);
     try {
         _titleHook = HookTitleChanges(window);
     } catch (const Win32Error& error) {
@@ -138,7 +138,7 @@ std::wstring WindowTitle(HWND window) {
     if (length <= 0) {
         return {};
     }
-    std::wstring       title(static_cast<size_t>(length) + 1, L'\0');
+    std::wstring title(static_cast<size_t>(length) + 1, L'\0');
     const std::int32_t copied = GetWindowTextW(window, title.data(), length + 1);
     title.resize(static_cast<size_t>(std::max(copied, 0)));
     return DrawableText(std::wstring_view(title));

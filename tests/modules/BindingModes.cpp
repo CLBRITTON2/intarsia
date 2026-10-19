@@ -7,9 +7,9 @@
 #include <gtest/gtest.h>
 
 TEST(BindingModes, LayoutReportsAChangeOnlyWhenTheModesChange) {
-    FakeWindowManager    windowManager;
+    FakeWindowManager windowManager;
     const TextOnlyRender render;
-    BindingModes         module(windowManager, TestModuleStyle());
+    BindingModes module(windowManager, TestModuleStyle());
 
     EXPECT_FALSE(module.Layout(render.Context()));
     windowManager.bindingModes = {L"resize"};

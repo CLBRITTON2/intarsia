@@ -146,12 +146,12 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
     }
 
     const std::string_view shown = text.substr(0, kept);
-    std::string            excerpt;
+    std::string excerpt;
     excerpt.reserve(kept + 16);
     size_t at = 0;
     while (at < shown.size()) {
         const char character = shown[at];
-        const auto byte      = static_cast<std::uint8_t>(character);
+        const auto byte = static_cast<std::uint8_t>(character);
         if (byte >= 0x80u) {
             const size_t bytes = Utf8SequenceBytes(shown, at);
             if (bytes == 0) {
@@ -160,7 +160,7 @@ std::string LogExcerpt(std::string_view text, size_t maxBytes) {
                 continue;
             }
             const std::string_view sequence = shown.substr(at, bytes);
-            const char32_t         code     = DecodeUtf8(sequence);
+            const char32_t code = DecodeUtf8(sequence);
             if (IsUnsafeCharacter(code)) {
                 excerpt += std::format("\\u{:04x}", static_cast<std::uint32_t>(code));
             } else {

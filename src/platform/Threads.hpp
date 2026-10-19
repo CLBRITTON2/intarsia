@@ -25,12 +25,12 @@ class StoppableThread {
     // event in the error a failed creation throws.
     StoppableThread(std::string_view name, std::function<void(HANDLE stopEvent)> body);
     ~StoppableThread();
-    StoppableThread(const StoppableThread&)            = delete;
+    StoppableThread(const StoppableThread&) = delete;
     StoppableThread& operator=(const StoppableThread&) = delete;
 
   private:
     UniqueHandle _stopEvent;
-    std::thread  _thread;
+    std::thread _thread;
 };
 
 // A bounded queue drained in order by its own thread, for work the UI thread must not wait on.
@@ -46,7 +46,7 @@ class WorkQueue {
         _capacity(capacity), _makeProcess(std::move(makeProcess)), _queuedEvent(AutoResetEvent("work queue queued")),
         _thread("work queue", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
-    WorkQueue(const WorkQueue&)            = delete;
+    WorkQueue(const WorkQueue&) = delete;
     WorkQueue& operator=(const WorkQueue&) = delete;
 
     // False, dropping the item, when capacity items are already waiting.
@@ -64,7 +64,7 @@ class WorkQueue {
 
   private:
     void Run(HANDLE stopEvent) {
-        const Process               process = _makeProcess();
+        const Process process = _makeProcess();
         const std::array<HANDLE, 2> waits{stopEvent, _queuedEvent.get()};
         while (WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, INFINITE) == WAIT_OBJECT_0 + 1) {
             while (WaitForSingleObject(stopEvent, 0) == WAIT_TIMEOUT) {
@@ -87,11 +87,11 @@ class WorkQueue {
         return item;
     }
 
-    size_t                   _capacity;
+    size_t _capacity;
     std::function<Process()> _makeProcess;
-    UniqueHandle             _queuedEvent;
-    std::mutex               _mutex;
-    std::deque<Item>         _queue;
+    UniqueHandle _queuedEvent;
+    std::mutex _mutex;
+    std::deque<Item> _queue;
     // Declared last so every member above exists before the thread starts. Destruction stops after the item in
     // progress: whatever is still queued is dropped.
     StoppableThread _thread;
@@ -103,7 +103,7 @@ class ThreadFailure {
   public:
     // component names the worker in the log lines this writes.
     ThreadFailure(HWND target, std::uint32_t message, std::string component);
-    ThreadFailure(const ThreadFailure&)            = delete;
+    ThreadFailure(const ThreadFailure&) = delete;
     ThreadFailure& operator=(const ThreadFailure&) = delete;
 
     // Any thread. Only the first error is kept and posted.
@@ -114,10 +114,10 @@ class ThreadFailure {
     void RethrowReported();
 
   private:
-    HWND               _target;
-    std::uint32_t      _message;
-    std::string        _component;
-    std::mutex         _mutex; // guards _error
+    HWND _target;
+    std::uint32_t _message;
+    std::string _component;
+    std::mutex _mutex; // guards _error
     std::exception_ptr _error;
 };
 
@@ -127,7 +127,7 @@ class ThreadFailure {
 class ChangeSignal {
   public:
     ChangeSignal(HWND target, std::uint32_t message);
-    ChangeSignal(const ChangeSignal&)            = delete;
+    ChangeSignal(const ChangeSignal&) = delete;
     ChangeSignal& operator=(const ChangeSignal&) = delete;
 
     // Any thread. component names the source in the log line a failed post writes.
@@ -137,8 +137,8 @@ class ChangeSignal {
     void Acknowledge();
 
   private:
-    HWND              _target;
-    std::uint32_t     _message;
+    HWND _target;
+    std::uint32_t _message;
     std::atomic<bool> _pending = false;
 };
 
@@ -155,6 +155,6 @@ class ComScope {
   public:
     ComScope(ComThreading threading, std::string_view name);
     ~ComScope();
-    ComScope(const ComScope&)            = delete;
+    ComScope(const ComScope&) = delete;
     ComScope& operator=(const ComScope&) = delete;
 };

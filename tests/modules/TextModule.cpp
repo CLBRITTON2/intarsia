@@ -32,11 +32,11 @@ TEST(Ticks, ASampleIsDueOncePerIntervalWithSlackForAnEarlyTimer) {
 
 TEST(Ticks, EachSpecIsFormattedOncePerSample) {
     const std::chrono::steady_clock::time_point start{std::chrono::seconds(10)};
-    SampledTexts                                texts(start);
-    std::int32_t                                samples = 0;
-    const auto                                  sample  = [&samples] { ++samples; };
-    std::int32_t                                formats = 0;
-    const auto                                  format  = [&formats] {
+    SampledTexts texts(start);
+    std::int32_t samples = 0;
+    const auto sample = [&samples] { ++samples; };
+    std::int32_t formats = 0;
+    const auto format = [&formats] {
         ++formats;
         return std::to_wstring(formats);
     };

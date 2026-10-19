@@ -30,36 +30,36 @@
 namespace {
 
     // RegisterClassExW takes a class name of up to 256 characters with its null.
-    constexpr size_t        kMaxClassNameLength = 255;
+    constexpr size_t kMaxClassNameLength = 255;
 
-    constexpr wchar_t       kControlClass[] = L"IntarsiaControl";
-    constexpr std::uint32_t kConfigChanged  = WM_APP + 2;
-    constexpr std::uint32_t kWatcherFailed  = WM_APP + 3;
+    constexpr wchar_t kControlClass[] = L"IntarsiaControl";
+    constexpr std::uint32_t kConfigChanged = WM_APP + 2;
+    constexpr std::uint32_t kWatcherFailed = WM_APP + 3;
     // Posted by the window manager backend and the command pollers when what modules show has changed.
     constexpr std::uint32_t kSourcesChanged = WM_APP + 4;
-    constexpr std::uint32_t kDeviceLost     = WM_APP + 5;
-    constexpr std::uint32_t kTrayFailed     = WM_APP + 6;
+    constexpr std::uint32_t kDeviceLost = WM_APP + 5;
+    constexpr std::uint32_t kTrayFailed = WM_APP + 6;
     // Editors save in several writes, so the reload waits until the file has been quiet this long.
     constexpr std::chrono::milliseconds kConfigSettle{100};
     // How long a config that failed to load must stay unchanged before the failure ends the app.
-    constexpr UINT_PTR                  kConfigFailedTimer = 4;
+    constexpr UINT_PTR kConfigFailedTimer = 4;
     constexpr std::chrono::milliseconds kConfigConfirm{1000};
     // Window manager changes arrive in bursts (a terminal can retitle itself many times a second), so redraws they
     // cause are held to one per frame.
-    constexpr UINT_PTR      kRedrawTimer   = 1;
+    constexpr UINT_PTR kRedrawTimer = 1;
     constexpr std::uint32_t kRedrawDelayMs = 16;
     // Docking or undocking sends several WM_DISPLAYCHANGE while monitors come up, so bars are rebuilt once it is quiet.
-    constexpr UINT_PTR      kDisplaysTimer    = 2;
+    constexpr UINT_PTR kDisplaysTimer = 2;
     constexpr std::uint32_t kDisplaysSettleMs = 500;
     // Windows is often still switching adapters when a device is lost, so the new device waits a moment, backing off
     // while each new device is lost before it draws a frame.
-    constexpr UINT_PTR                  kDeviceTimer = 3;
+    constexpr UINT_PTR kDeviceTimer = 3;
     constexpr std::chrono::milliseconds kFirstDeviceRetry{500};
     constexpr std::chrono::milliseconds kLongestDeviceRetry{10000};
     // Long enough that a window with no icon at all costs a read only now and then.
     constexpr std::chrono::milliseconds kWindowIconRetry{10000};
 
-    bool                                ReadsNetworkRates(const Config& config) {
+    bool ReadsNetworkRates(const Config& config) {
         return AnyModuleInConfig(config, [](const ModuleInstance& instance) {
             const auto* network = std::get_if<NetworkConfig>(&instance.settings);
             return network != nullptr && ReadsRates(*network);
@@ -89,7 +89,7 @@ namespace {
     // One line per target, so a user finds the id to write in bar.monitors.
     void LogMonitor(const MonitorDescription& description, bool shown) {
         const std::string primaryField = YesOrNo(description.primary);
-        const std::string barField     = YesOrNo(shown);
+        const std::string barField = YesOrNo(shown);
         if (description.targets.empty()) {
             Log(LogLevel::Info, "app", "monitor", {{.key = "id", .value = "none"}, {.key = "primary", .value = primaryField}, {.key = "bar", .value = barField}});
             return;
@@ -133,10 +133,10 @@ namespace {
 LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, const std::filesystem::path& defaultConfigPath, const std::filesystem::path& defaultLogPath,
                                  std::uint16_t defaultGlazeWmPort, const std::wstring& defaultTrayClass) {
     LaunchOptions options{
-        .configPath  = defaultConfigPath,
-        .logPath     = defaultLogPath,
+        .configPath = defaultConfigPath,
+        .logPath = defaultLogPath,
         .glazeWmPort = defaultGlazeWmPort,
-        .trayClass   = defaultTrayClass,
+        .trayClass = defaultTrayClass,
     };
     for (size_t index = 0; index < arguments.size(); index += 2) {
         const std::wstring& name = arguments[index];
@@ -150,8 +150,8 @@ LaunchOptions ParseLaunchOptions(const std::vector<std::wstring>& arguments, con
             options.logPath = value;
         } else if (name == L"--glazewm-port") {
             const std::string portText = ToUtf8(value);
-            std::uint32_t     port     = 0;
-            const auto [end, error]    = std::from_chars(portText.data(), portText.data() + portText.size(), port);
+            std::uint32_t port = 0;
+            const auto [end, error] = std::from_chars(portText.data(), portText.data() + portText.size(), port);
             if (error != std::errc() || end != portText.data() + portText.size() || port == 0 || port > 65535) {
                 throw LaunchOptionsError(std::format("--glazewm-port must be a port from 1 to 65535, got '{}'", portText));
             }
@@ -258,27 +258,27 @@ LRESULT App::HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 void App::CreateBars() {
     try {
         const std::vector<HMONITOR> monitors = ListMonitors();
-        _placements                          = PlacementsFor(monitors);
-        _monitorDescriptions                 = DescribeMonitors(monitors);
+        _placements = PlacementsFor(monitors);
+        _monitorDescriptions = DescribeMonitors(monitors);
         for (size_t index = 0; index < monitors.size(); ++index) {
             const BarPlacement& placement = _placements[index];
-            const bool          shown     = ShowsBarOn(_config->bar, _monitorDescriptions[index]);
+            const bool shown = ShowsBarOn(_config->bar, _monitorDescriptions[index]);
             LogMonitor(_monitorDescriptions[index], shown);
             if (!shown) {
                 continue;
             }
             _bars.push_back(std::make_unique<Bar>(_instance, _graphics, *_config,
                                                   ModuleSources{
-                                                      .windowManager   = *_windowManager,
-                                                      .commandPollers  = *_commandPollers,
+                                                      .windowManager = *_windowManager,
+                                                      .commandPollers = *_commandPollers,
                                                       .counterSamplers = *_counterSamplers,
-                                                      .windowIcons     = _windowIcons.get(),
-                                                      .audioOutput     = _audioOutput.get(),
-                                                      .audioInput      = _audioInput.get(),
-                                                      .network         = _network.get(),
-                                                      .battery         = _battery.get(),
-                                                      .tray            = _tray.get(),
-                                                      .monitor         = placement.monitor,
+                                                      .windowIcons = _windowIcons.get(),
+                                                      .audioOutput = _audioOutput.get(),
+                                                      .audioInput = _audioInput.get(),
+                                                      .network = _network.get(),
+                                                      .battery = _battery.get(),
+                                                      .tray = _tray.get(),
+                                                      .monitor = placement.monitor,
                                                   },
                                                   _launcher, placement, AppBarRouteForTray(), _windowProcError, _control.get(), kDeviceLost));
             if (_windowProcError.error) {
@@ -316,9 +316,9 @@ void App::ReloadConfig() {
     _commandPollers.reset();
     // Reset before creating the replacement: the native backend allows one instance at a time.
     _windowManager.reset();
-    _config          = std::move(config);
-    _windowManager   = CreateWindowManager(*_config, _changes, _glazeWmPort);
-    _commandPollers  = std::make_unique<CommandPollers>(*_config, _changes);
+    _config = std::move(config);
+    _windowManager = CreateWindowManager(*_config, _changes, _glazeWmPort);
+    _commandPollers = std::make_unique<CommandPollers>(*_config, _changes);
     _counterSamplers = std::make_unique<CounterSamplers>(*_config, _changes);
     MatchSourcesToConfig();
     // A pending device recovery builds the bars from this config once it has a device.
@@ -338,7 +338,7 @@ void App::MatchSourcesToConfig() {
     }
     _network = MatchedToConfig(std::move(_network), ShowsKind(*_config, ModuleKind::Network), [this, samplesRates] { return std::make_unique<IpHelper>(_changes, samplesRates); });
     _battery = MatchedToConfig(std::move(_battery), ShowsKind(*_config, ModuleKind::Battery), [this] { return std::make_unique<PowerStatus>(_changes); });
-    _tray    = MatchedToConfig(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
+    _tray = MatchedToConfig(std::move(_tray), ShowsKind(*_config, ModuleKind::Tray), [this] {
         auto tray = std::make_unique<ShellNotifyIcon>(_changes, _trayClass, _control.get(), kTrayFailed);
         // Apps add their icons again for the taskbar's class only, so a tray of another class has no one to tell.
         if (_trayClass == kTaskbarClass) {
@@ -397,7 +397,7 @@ std::chrono::milliseconds App::LongerDeviceRetry() const {
 
 void App::RetryDeviceLater(std::string_view event, std::string_view reason, std::chrono::milliseconds wait) {
     _deviceRetryWait = wait;
-    _recovering      = true;
+    _recovering = true;
     Log(LogLevel::Warning, "app", event, {{.key = "reason", .value = std::string(reason)}, {.key = "retry_ms", .value = std::to_string(_deviceRetryWait.count())}});
     StartTimer(_control.get(), kDeviceTimer, static_cast<std::uint32_t>(_deviceRetryWait.count()), "device");
 }

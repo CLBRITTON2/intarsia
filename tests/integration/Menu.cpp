@@ -62,7 +62,7 @@ menu {
 }
 )";
 
-    bool                       MenuShown(const integration::RunningBar& bar) {
+    bool MenuShown(const integration::RunningBar& bar) {
         const bool shown = integration::Eventually([&] { return bar.Menu() != nullptr; }, integration::kLimit);
         integration::Log("menu_shown", std::format("shown={}", shown));
         return shown;
@@ -77,9 +77,9 @@ menu {
 } // namespace
 
 TEST(Menu, PicksTheEntryTheKeysHighlightAndRunsOnSelectWithItsId) {
-    constexpr std::string_view    kTestName = "menu-pick";
-    const std::filesystem::path   work      = integration::WorkDirectoryPath(kTestName);
-    const std::filesystem::path   selected  = work / "selected.txt";
+    constexpr std::string_view kTestName = "menu-pick";
+    const std::filesystem::path work = integration::WorkDirectoryPath(kTestName);
+    const std::filesystem::path selected = work / "selected.txt";
     const integration::RunningBar bar(kTestName, MenuConfig(ListingCommand(work / "listing.txt"), selected), kStyle);
 
     bar.ClickAt(bar.DrawnColumn(kTextColor, integration::kLimit));
@@ -98,12 +98,12 @@ TEST(Menu, PicksTheEntryTheKeysHighlightAndRunsOnSelectWithItsId) {
 }
 
 TEST(Menu, EscapeAndASecondClickOnItsModuleEachCloseIt) {
-    constexpr std::string_view    kTestName = "menu-close";
-    const std::filesystem::path   work      = integration::WorkDirectoryPath(kTestName);
-    const std::filesystem::path   listing   = work / "listing.txt";
-    const std::filesystem::path   selected  = work / "selected.txt";
+    constexpr std::string_view kTestName = "menu-close";
+    const std::filesystem::path work = integration::WorkDirectoryPath(kTestName);
+    const std::filesystem::path listing = work / "listing.txt";
+    const std::filesystem::path selected = work / "selected.txt";
     const integration::RunningBar bar(kTestName, MenuConfig(ListingCommand(listing), selected), kStyle);
-    const std::int32_t            column = bar.DrawnColumn(kTextColor, integration::kLimit);
+    const std::int32_t column = bar.DrawnColumn(kTextColor, integration::kLimit);
 
     bar.ClickAt(column);
     ASSERT_TRUE(MenuShown(bar)) << "the first click showed no menu";
@@ -122,9 +122,9 @@ TEST(Menu, EscapeAndASecondClickOnItsModuleEachCloseIt) {
 }
 
 TEST(Menu, LogsACommandThatFails) {
-    constexpr std::string_view    kTestName = "menu-failed";
-    const std::filesystem::path   selected  = integration::WorkDirectoryPath(kTestName) / "selected.txt";
-    const std::string             failing   = std::format(R"({{ {}, "/c", "exit 3" }})", integration::LuaString(R"(C:\Windows\System32\cmd.exe)"));
+    constexpr std::string_view kTestName = "menu-failed";
+    const std::filesystem::path selected = integration::WorkDirectoryPath(kTestName) / "selected.txt";
+    const std::string failing = std::format(R"({{ {}, "/c", "exit 3" }})", integration::LuaString(R"(C:\Windows\System32\cmd.exe)"));
     const integration::RunningBar bar(kTestName, MenuConfig(failing, selected), kStyle);
 
     bar.ClickAt(bar.DrawnColumn(kTextColor, integration::kLimit));

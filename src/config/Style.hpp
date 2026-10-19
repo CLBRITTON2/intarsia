@@ -20,7 +20,7 @@ struct Spacing {
 };
 
 struct BorderSide {
-    float        widthDips; // 0 for none
+    float widthDips; // 0 for none
     D2D1_COLOR_F color;
 };
 
@@ -35,19 +35,19 @@ struct Border {
 // One box-shadow, always inset: the inside edge of the box's border, moved by the offset and shrunk by spread, casts
 // it onto the box blurred over blur.
 struct InsetShadow {
-    float        xDips;
-    float        yDips;
-    float        blurDips;
-    float        spreadDips; // negative grows the edge
+    float xDips;
+    float yDips;
+    float blurDips;
+    float spreadDips; // negative grows the edge
     D2D1_COLOR_F color;
 };
 
 // A rounded box with an optional border and inset shadows: a section, a module, a tooltip.
 struct BoxStyle {
-    D2D1_COLOR_F             background;
-    Border                   border;
-    float                    radiusDips; // at most half the box's shorter side
-    Spacing                  padding;
+    D2D1_COLOR_F background;
+    Border border;
+    float radiusDips; // at most half the box's shorter side
+    Spacing padding;
     std::vector<InsetShadow> shadows; // the first on top
 };
 
@@ -63,23 +63,23 @@ enum class BackdropSource : std::uint8_t {
 // What shows through a box's background, toned by brightness and saturate.
 struct Backdrop {
     BackdropSource source;
-    float          radiusDips; // the wallpaper's blur as CSS's blur() takes it, a standard deviation, 0 for the other sources
-    float          brightness; // 0 is black, 1 leaves the blur as it is
-    float          saturation; // 0 is grey, 1 leaves the blur as it is
-    bool           operator==(const Backdrop&) const = default;
+    float radiusDips; // the wallpaper's blur as CSS's blur() takes it, a standard deviation, 0 for the other sources
+    float brightness; // 0 is black, 1 leaves the blur as it is
+    float saturation; // 0 is grey, 1 leaves the blur as it is
+    bool operator==(const Backdrop&) const = default;
 };
 
 // The box behind each non-empty section (left, center, right).
 struct SectionStyle {
     BoxStyle box;
-    Spacing  margin; // between the bar's edges and the sections
+    Spacing margin; // between the bar's edges and the sections
     Backdrop backdrop;
 };
 
 struct TooltipStyle {
-    BoxStyle     box;
+    BoxStyle box;
     D2D1_COLOR_F color;
-    Backdrop     backdrop;
+    Backdrop backdrop;
 };
 
 // Timing functions, each a cubic Bézier from (0, 0) to (1, 1).
@@ -94,27 +94,27 @@ enum class TimingFunction : std::uint8_t {
 // How a change of one property plays out. A zero duration (transition: none) changes at once.
 struct Transition {
     std::chrono::milliseconds duration;
-    TimingFunction            timing;
+    TimingFunction timing;
 };
 
 // A module's icon, drawn before its text in its own font, such as a Nerd Font's proportional variant.
 struct IconStyle {
     std::wstring font;
-    float        sizeDips; // also the size of a window's icon in the windows module
+    float sizeDips; // also the size of a window's icon in the windows module
     D2D1_COLOR_F color;
-    float        gapDips;         // between the icon and the text after it
-    float        rotationDegrees; // clockwise about the icon's center, a tray's or group's only
-    Transition   transition;      // of the rotation
+    float gapDips;         // between the icon and the text after it
+    float rotationDegrees; // clockwise about the icon's center, a tray's or group's only
+    Transition transition; // of the rotation
 };
 
 // One item's box inside a module: a workspace, a window's icon, a binding mode.
 struct ItemStyle {
-    D2D1_COLOR_F             color;
-    D2D1_COLOR_F             background;
-    DWRITE_FONT_WEIGHT       weight;
-    Spacing                  padding;
-    Spacing                  margin; // x on each side of the box, so two items side by side are 2x apart
-    float                    radiusDips;
+    D2D1_COLOR_F color;
+    D2D1_COLOR_F background;
+    DWRITE_FONT_WEIGHT weight;
+    Spacing padding;
+    Spacing margin; // x on each side of the box, so two items side by side are 2x apart
+    float radiusDips;
     std::vector<InsetShadow> shadows;
     // The item under the cursor, from item > hover blocks.
     D2D1_COLOR_F hoverColor;
@@ -126,33 +126,33 @@ struct ItemStyle {
 
 // The thumb a menu draws beside its entries while they overflow its box, from menu > scrollbar.
 struct ScrollbarStyle {
-    float        widthDips; // 0 draws none, and the entries still scroll by wheel and arrow keys
+    float widthDips; // 0 draws none, and the entries still scroll by wheel and arrow keys
     D2D1_COLOR_F background;
-    float        radiusDips;
-    Spacing      margin; // x on each side of the thumb, y at each end of its track
+    float radiusDips;
+    Spacing margin; // x on each side of the thumb, y at each end of its track
 };
 
 // A popup menu's box and its entries (menu > item), the entry the listing marks active from menu > item > active.
 // The entry under the cursor or picked with the arrow keys takes its style's hover colors.
 struct MenuStyle {
-    BoxStyle             box;
-    D2D1_COLOR_F         color;
-    Backdrop             backdrop;
+    BoxStyle box;
+    D2D1_COLOR_F color;
+    Backdrop backdrop;
     std::optional<float> maxWidthDips;  // of the whole box, which never outgrows its monitor either
     std::optional<float> maxHeightDips; // the entries scroll past it
-    ItemStyle            item;
-    ItemStyle            active;
-    ScrollbarStyle       scrollbar;
+    ItemStyle item;
+    ItemStyle active;
+    ScrollbarStyle scrollbar;
 };
 
 // What style.conf sets for the whole bar. Modules inherit the font and color.
 struct StyleConfig {
     std::wstring font;
-    float        fontSizeDips;
+    float fontSizeDips;
     D2D1_COLOR_F color;
     SectionStyle section;
     TooltipStyle tooltip;
-    MenuStyle    menu;
+    MenuStyle menu;
 };
 
 // The text and icon colors of one state a module's value can be in.
@@ -169,10 +169,10 @@ struct ClassColors {
 
 // One module's style, from its own style.conf block over the module block.
 struct ModuleStyle {
-    BoxStyle     box;
-    Spacing      margin;               // around the box, which it shrinks across the bar and spaces from its neighbours along it
-    D2D1_COLOR_F hover;                // the box's background under the cursor
-    Transition   backgroundTransition; // between the background and the hover
+    BoxStyle box;
+    Spacing margin;                  // around the box, which it shrinks across the bar and spaces from its neighbours along it
+    D2D1_COLOR_F hover;              // the box's background under the cursor
+    Transition backgroundTransition; // between the background and the hover
     D2D1_COLOR_F color;
     D2D1_COLOR_F alertColor; // text in a state that needs attention, such as a failed command
     // A battery discharging at or under warning_at (warning) and critical_at (critical).
@@ -181,7 +181,7 @@ struct ModuleStyle {
     StateColors muted; // an audio output that is muted
     // A custom module's declared classes, in the order its classes key lists them.
     std::vector<ClassColors> classes;
-    IconStyle                icon;
+    IconStyle icon;
     // The box of a windows or binding_mode item, and of a focused window. Workspaces are focused, occupied (has
     // windows) or empty.
     ItemStyle item;
@@ -192,19 +192,19 @@ struct ModuleStyle {
     // A tray's or group's: the transition of its width as it unfolds and folds, and its icon's rotation while unfolded
     // (expanded).
     Transition transition;
-    float      expandedIconRotationDegrees;
+    float expandedIconRotationDegrees;
 };
 
 // One entry of style.conf: a property (key: value), or a block (key { ... }) holding the entries between its braces.
 struct StyleNode {
-    std::string            key;
-    std::string            value; // $names already replaced, empty for a block
-    std::uint32_t          line;
+    std::string key;
+    std::string value; // $names already replaced, empty for a block
+    std::uint32_t line;
     std::vector<StyleNode> children;
 };
 
 struct StyleSheet {
-    std::string            source; // the file, for error messages
+    std::string source;            // the file, for error messages
     std::vector<StyleNode> blocks; // every top-level block but vars, in file order
 };
 

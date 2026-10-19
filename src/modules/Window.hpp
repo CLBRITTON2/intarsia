@@ -17,7 +17,7 @@ class Window final : public IconTextModule<WindowConfig> {
     std::optional<std::wstring> TooltipText() override;
 
   private:
-    ModuleText            Content() override;
+    ModuleText Content() override;
 
     const IWindowManager& _windowManager;
 };

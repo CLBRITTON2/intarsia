@@ -23,13 +23,13 @@ namespace integration {
         // Posts WM_CLOSE to every top-level window of the process, hidden ones included, as taskkill without /F does,
         // then waits for it to exit. The exit code, or nullopt when it is still running after limit.
         std::optional<std::uint32_t> Close(std::chrono::milliseconds limit) const;
-        void                         Kill() const;
-        void                         WriteLine(std::string_view line) const;
+        void Kill() const;
+        void WriteLine(std::string_view line) const;
 
       private:
-        UniqueHandle  _job;
-        UniqueHandle  _input;
-        UniqueHandle  _process;
+        UniqueHandle _job;
+        UniqueHandle _input;
+        UniqueHandle _process;
         std::uint32_t _id;
     };
 

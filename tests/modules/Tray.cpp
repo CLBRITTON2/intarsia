@@ -19,42 +19,42 @@ namespace {
 
     const TrayConfig kConfig{.icon = L">"};
 
-    TrayIcon         Icon(std::uint32_t id, std::shared_ptr<const IconPixels> pixels, bool hidden) {
+    TrayIcon Icon(std::uint32_t id, std::shared_ptr<const IconPixels> pixels, bool hidden) {
         return TrayIcon{
-                    .owner           = 1,
-                    .id              = id,
-                    .guid            = std::nullopt,
-                    .ownerImage      = {},
-                    .callbackMessage = WM_APP,
-                    .version         = 0,
-                    .tooltip         = L"icon",
-                    .standardTooltip = false,
-                    .pixels          = std::move(pixels),
-                    .hidden          = hidden,
+            .owner = 1,
+            .id = id,
+            .guid = std::nullopt,
+            .ownerImage = {},
+            .callbackMessage = WM_APP,
+            .version = 0,
+            .tooltip = L"icon",
+            .standardTooltip = false,
+            .pixels = std::move(pixels),
+            .hidden = hidden,
         };
     }
 
     std::shared_ptr<const IconPixels> Pixels() {
         return std::make_shared<const IconPixels>(IconPixels{
-            .width  = 2,
+            .width = 2,
             .height = 2,
-            .pbgra  = std::vector<std::uint8_t>(16, 255),
+            .pbgra = std::vector<std::uint8_t>(16, 255),
         });
     }
 
     constexpr RECT kBarRect{
-        .left   = 1000,
-        .top    = 20,
-        .right  = 3000,
+        .left = 1000,
+        .top = 20,
+        .right = 3000,
         .bottom = 80,
     };
 
     // A bar window at kBarRect on screen, with the module's content at 100, 4 DIPs in it.
     ModulePlacement Placement(std::uint32_t dpi) {
         return ModulePlacement{
-            .windowRect    = kBarRect,
+            .windowRect = kBarRect,
             .contentOrigin = D2D1::Point2F(100.0f, 4.0f),
-            .dpi           = dpi,
+            .dpi = dpi,
         };
     }
 
@@ -63,17 +63,17 @@ namespace {
       public:
         struct Pressed {
             std::uint32_t id;
-            TrayButton    button;
+            TrayButton button;
         };
 
-        std::vector<TrayIcon>      icons;
-        std::vector<Pressed>       presses;
+        std::vector<TrayIcon> icons;
+        std::vector<Pressed> presses;
         std::vector<std::uint32_t> moves;  // the id of each icon moved over
         std::vector<std::uint32_t> opened; // the id of each icon whose popup opened
         std::vector<std::uint32_t> closed;
-        std::vector<TrayIconRect>  rects; // the last a view showed
+        std::vector<TrayIconRect> rects; // the last a view showed
 
-        std::vector<TrayIcon>      Icons() const override {
+        std::vector<TrayIcon> Icons() const override {
             return icons;
         }
 
@@ -108,15 +108,15 @@ namespace {
                                                  &_target),
                           "CreateBitmap(target)");
             _context->SetTarget(_target.Get());
-            _brushes           = std::make_unique<BrushCache>(_context.Get());
-            _render            = _text.Context();
-            _render.context    = _context.Get();
-            _boxes             = std::make_unique<BoxCache>(_context.Get());
-            _render.brushes    = _brushes.get();
-            _render.boxes      = _boxes.get();
+            _brushes = std::make_unique<BrushCache>(_context.Get());
+            _render = _text.Context();
+            _render.context = _context.Get();
+            _boxes = std::make_unique<BoxCache>(_context.Get());
+            _render.brushes = _brushes.get();
+            _render.boxes = _boxes.get();
             _render.foreground = _brushes->Keep(D2D1::ColorF(0xFFFFFF));
-            _render.accent     = _brushes->Keep(D2D1::ColorF(0x00FFFF));
-            _tray.icons        = {Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false), Icon(4, Pixels(), false)};
+            _render.accent = _brushes->Keep(D2D1::ColorF(0x00FFFF));
+            _tray.icons = {Icon(1, Pixels(), false), Icon(2, Pixels(), true), Icon(3, nullptr, false), Icon(4, Pixels(), false)};
         }
 
       protected:
@@ -141,31 +141,31 @@ namespace {
         // A frame drawn now, as a bar outside any animation draws one.
         RenderContext RenderNow(Axis axis) const {
             RenderContext render = _render;
-            render.axis          = axis;
-            render.frameTime     = std::chrono::steady_clock::now();
+            render.axis = axis;
+            render.frameTime = std::chrono::steady_clock::now();
             return render;
         }
 
-        CompositionThread                          _compositionThread;
-        GraphicsDevice                             _graphics;
+        CompositionThread _compositionThread;
+        GraphicsDevice _graphics;
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
-        Microsoft::WRL::ComPtr<ID2D1Bitmap1>       _target;
-        std::unique_ptr<BrushCache>                _brushes;
-        std::unique_ptr<BoxCache>                  _boxes;
-        TextOnlyRender                             _text;
-        RenderContext                              _render{};
-        FakeTray                                   _tray;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap1> _target;
+        std::unique_ptr<BrushCache> _brushes;
+        std::unique_ptr<BoxCache> _boxes;
+        TextOnlyRender _text;
+        RenderContext _render{};
+        FakeTray _tray;
     };
 
 } // namespace
 
 TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
     ModuleStyle style = TestModuleStyle();
-    Tray        plain(kConfig, _tray, style);
+    Tray plain(kConfig, _tray, style);
     EXPECT_TRUE(plain.Layout(RenderNow(Axis::Horizontal)));
     EXPECT_FALSE(plain.Layout(RenderNow(Axis::Horizontal)));
     style.toggle.padding.xDips = 10.0f;
-    style.toggle.margin.xDips  = 1.0f;
+    style.toggle.margin.xDips = 1.0f;
     Tray padded(kConfig, _tray, style);
     padded.Layout(RenderNow(Axis::Horizontal));
     // 6 more padding and 4 less margin on either side.
@@ -186,8 +186,8 @@ TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
 }
 
 TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
-    ModuleStyle style     = TestModuleStyle();
-    style.transition      = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};
+    ModuleStyle style = TestModuleStyle();
+    style.transition = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};
     style.icon.transition = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};
     Tray module(kConfig, _tray, style);
     module.Layout(RenderNow(Axis::Horizontal));
@@ -215,16 +215,16 @@ TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
 // A frame paced to a refresh from before the click still shows the tray folded, however late it is drawn.
 TEST_F(TrayModule, TheFoldMovesByTheFrameTimeNotTheClock) {
     ModuleStyle style = TestModuleStyle();
-    style.transition  = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};
+    style.transition = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};
     Tray module(kConfig, _tray, style);
     module.Layout(RenderNow(Axis::Horizontal));
-    const float                                 folded = module.Size().width;
+    const float folded = module.Size().width;
     const std::chrono::steady_clock::time_point before = std::chrono::steady_clock::now();
     module.Click(At(module, folded / 2.0f));
     const std::chrono::steady_clock::time_point after = std::chrono::steady_clock::now();
 
-    RenderContext                               render = RenderNow(Axis::Horizontal);
-    render.frameTime                                   = before - std::chrono::milliseconds(1);
+    RenderContext render = RenderNow(Axis::Horizontal);
+    render.frameTime = before - std::chrono::milliseconds(1);
     module.Layout(render);
     EXPECT_FLOAT_EQ(module.Size().width, folded);
     render.frameTime = after + std::chrono::milliseconds(300);
@@ -383,15 +383,15 @@ TEST_F(TrayModule, IconsThatChangeWhileFoldedShowOnTheNextUnfold) {
     EXPECT_FALSE(module.Layout(RenderNow(Axis::Horizontal)));
     EXPECT_FLOAT_EQ(module.Size().width, folded);
     const RECT movedBarRect{
-        .left   = 0,
-        .top    = 0,
-        .right  = 2000,
+        .left = 0,
+        .top = 0,
+        .right = 2000,
         .bottom = 60,
     };
     module.Place(ModulePlacement{
-        .windowRect    = movedBarRect,
+        .windowRect = movedBarRect,
         .contentOrigin = D2D1::Point2F(0.0f, 0.0f),
-        .dpi           = 96,
+        .dpi = 96,
     });
     EXPECT_TRUE(_tray.rects.empty());
 

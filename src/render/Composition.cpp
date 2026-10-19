@@ -16,9 +16,9 @@
 
 namespace {
 
-    namespace effects    = winrt::Windows::Graphics::Effects;
+    namespace effects = winrt::Windows::Graphics::Effects;
     namespace foundation = winrt::Windows::Foundation;
-    namespace abi        = ABI::Windows::Graphics::Effects;
+    namespace abi = ABI::Windows::Graphics::Effects;
 
     // One D2D effect for the compositor: its CLSID, its sources in order, and its properties by D2D property index.
     struct D2DEffect : winrt::implements<D2DEffect, effects::IGraphicsEffect, effects::IGraphicsEffectSource, abi::IGraphicsEffectD2D1Interop> {
@@ -63,10 +63,10 @@ namespace {
         }
 
       private:
-        GUID                                        _id;
-        winrt::hstring                              _name;
+        GUID _id;
+        winrt::hstring _name;
         std::vector<effects::IGraphicsEffectSource> _sources;
-        std::vector<foundation::IInspectable>       _properties;
+        std::vector<foundation::IInspectable> _properties;
     };
 
     // C++/WinRT throws rather than hand back a null factory, but its factory cache branches on one, and clang's analyzer
@@ -86,17 +86,17 @@ namespace {
     winrt::Windows::UI::Composition::CompositionEffectFactory CreateBackdropFactory(const winrt::Windows::UI::Composition::Compositor& compositor, const Backdrop& backdrop) {
         namespace composition = winrt::Windows::UI::Composition;
         return Composing("CreateBackdropFactory", [&compositor, &backdrop] {
-            const auto values  = FactoryOf<foundation::PropertyValue, foundation::IPropertyValueStatics>("RoGetActivationFactory(PropertyValue)");
+            const auto values = FactoryOf<foundation::PropertyValue, foundation::IPropertyValueStatics>("RoGetActivationFactory(PropertyValue)");
             const auto sources = FactoryOf<composition::CompositionEffectSourceParameter, composition::ICompositionEffectSourceParameterFactory>(
                 "RoGetActivationFactory(CompositionEffectSourceParameter)");
             const std::array<float, 20> matrix = BackdropColorMatrix(backdrop);
-            const auto                  toned  = winrt::make<D2DEffect>(CLSID_D2D1ColorMatrix, std::vector<effects::IGraphicsEffectSource>{sources.Create(L"backdrop")},
-                                                                        std::vector<foundation::IInspectable>{
+            const auto toned = winrt::make<D2DEffect>(CLSID_D2D1ColorMatrix, std::vector<effects::IGraphicsEffectSource>{sources.Create(L"backdrop")},
+                                                      std::vector<foundation::IInspectable>{
                                                           values.CreateSingleArray(matrix),
                                                           values.CreateUInt32(static_cast<std::uint32_t>(D2D1_COLORMATRIX_ALPHA_MODE_PREMULTIPLIED)),
                                                           values.CreateBoolean(true),
                                                       });
-            const auto                  masked =
+            const auto masked =
                 winrt::make<D2DEffect>(CLSID_D2D1AlphaMask, std::vector<effects::IGraphicsEffectSource>{toned, sources.Create(L"mask")}, std::vector<foundation::IInspectable>{});
             return compositor.CreateEffectFactory(masked);
         });

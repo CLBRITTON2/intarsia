@@ -16,9 +16,9 @@ const std::wstring& LevelIcon(const std::vector<std::wstring>& icons, std::int32
 
 ModuleText NormalText(std::wstring icon, std::wstring text) {
     return ModuleText{
-        .icon       = std::move(icon),
-        .text       = std::move(text),
-        .state      = TextState::Normal,
+        .icon = std::move(icon),
+        .text = std::move(text),
+        .state = TextState::Normal,
         .classIndex = 0,
     };
 }
@@ -27,7 +27,7 @@ bool TextLine::Update(const RenderContext& render, ModuleText content) {
     if (content == _shown) {
         return false;
     }
-    _text  = LayOutIconText(render, content.icon, content.text);
+    _text = LayOutIconText(render, content.icon, content.text);
     _shown = std::move(content);
     return true;
 }
@@ -54,7 +54,7 @@ void TextLine::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
 
 std::chrono::milliseconds TimeUntilNextTick(std::chrono::system_clock::time_point now, std::chrono::seconds interval) {
     const auto sinceEpoch = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-    const auto period     = std::chrono::duration_cast<std::chrono::milliseconds>(interval);
+    const auto period = std::chrono::duration_cast<std::chrono::milliseconds>(interval);
     return period - (sinceEpoch % period);
 }
 

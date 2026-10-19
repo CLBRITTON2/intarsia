@@ -14,9 +14,9 @@ using testing::ElementsAre;
 
 namespace {
 
-    constexpr std::string_view kTestName    = "group-fold";
-    constexpr std::uint32_t    kGroupColor  = 0x8E44AD;
-    constexpr std::uint32_t    kMemberColor = 0x27AE60;
+    constexpr std::string_view kTestName = "group-fold";
+    constexpr std::uint32_t kGroupColor = 0x8E44AD;
+    constexpr std::uint32_t kMemberColor = 0x27AE60;
 
     // A group whose one member records "member" in record on a click.
     std::string GroupConfig(const std::filesystem::path& record) {
@@ -62,9 +62,9 @@ member {
 } // namespace
 
 TEST(Group, UnfoldsItsMembersOnAClickAndTakesNoClickForThemWhileFolded) {
-    const std::filesystem::path   record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
+    const std::filesystem::path record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
     const integration::RunningBar bar(kTestName, GroupConfig(record), kStyle);
-    const std::int32_t            toggle = bar.DrawnColumn(kGroupColor, integration::kLimit);
+    const std::int32_t toggle = bar.DrawnColumn(kGroupColor, integration::kLimit);
     EXPECT_EQ(bar.PixelCount(kMemberColor), size_t{0}) << "a member drew while the group starts folded";
 
     bar.ClickAt(toggle);

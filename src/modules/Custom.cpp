@@ -20,12 +20,12 @@ namespace {
 
     CommandResult Failure(std::string text, std::string detail) {
         return CommandResult{
-            .outcome    = CommandOutcome::Failed,
-            .text       = std::move(text),
-            .tooltip    = std::nullopt,
-            .alert      = false,
+            .outcome = CommandOutcome::Failed,
+            .text = std::move(text),
+            .tooltip = std::nullopt,
+            .alert = false,
             .classIndex = std::nullopt,
-            .detail     = std::move(detail),
+            .detail = std::move(detail),
         };
     }
 
@@ -42,12 +42,12 @@ namespace {
         const std::string_view line = FirstLine(output);
         RequireDrawable(line, "output", L"");
         return CommandResult{
-            .outcome    = CommandOutcome::Succeeded,
-            .text       = std::string(line),
-            .tooltip    = std::nullopt,
-            .alert      = false,
+            .outcome = CommandOutcome::Succeeded,
+            .text = std::string(line),
+            .tooltip = std::nullopt,
+            .alert = false,
             .classIndex = std::nullopt,
-            .detail     = {},
+            .detail = {},
         };
     }
 
@@ -99,19 +99,19 @@ namespace {
             throw OutputError("printed JSON without a text string");
         }
         std::optional<std::string> tooltip = ReadTooltip(value);
-        const auto                 alert   = value.find("alert");
+        const auto alert = value.find("alert");
         if (alert != value.end() && !alert->is_boolean()) {
             throw OutputError("printed a JSON alert that is not true or false");
         }
 
-        const bool    alerted = alert != value.end() && alert->get<bool>();
+        const bool alerted = alert != value.end() && alert->get<bool>();
         CommandResult result{
-            .outcome    = CommandOutcome::Succeeded,
-            .text       = text->get<std::string>(),
-            .tooltip    = std::move(tooltip),
-            .alert      = alerted,
+            .outcome = CommandOutcome::Succeeded,
+            .text = text->get<std::string>(),
+            .tooltip = std::move(tooltip),
+            .alert = alerted,
             .classIndex = ReadClass(value, alerted, classes),
-            .detail     = {},
+            .detail = {},
         };
         RequireDrawable(result.text, "text", L"");
         if (result.tooltip.has_value()) {
@@ -151,12 +151,12 @@ CommandResult ParseOutput(std::string_view output, CustomOutput format, const st
 CommandPoller::CommandPoller(std::string name, const CustomConfig& config, ChangeSignal& changes) :
     _name(std::move(name)), _command(config.command), _interval(config.text.interval), _run(config.run), _output(config.output), _classes(config.classes), _changes(changes),
     _result{
-        .outcome    = CommandOutcome::Pending,
-        .text       = {},
-        .tooltip    = std::nullopt,
-        .alert      = false,
+        .outcome = CommandOutcome::Pending,
+        .text = {},
+        .tooltip = std::nullopt,
+        .alert = false,
         .classIndex = std::nullopt,
-        .detail     = {},
+        .detail = {},
     },
     _thread("command poller", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
@@ -175,8 +175,8 @@ void CommandPoller::Run(HANDLE stopEvent) {
 
 void CommandPoller::RunEveryInterval(HANDLE stopEvent, std::chrono::seconds timeout) {
     while (true) {
-        const auto          started = std::chrono::steady_clock::now();
-        const CommandResult result  = RunOnce(stopEvent, timeout);
+        const auto started = std::chrono::steady_clock::now();
+        const CommandResult result = RunOnce(stopEvent, timeout);
         // A run the destructor cut short says nothing about the command.
         if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) {
             return;
@@ -267,16 +267,16 @@ ModuleText Custom::Format(const std::string& spec) {
         case CommandOutcome::Pending: return NormalText(Settings().icon, L"");
         case CommandOutcome::Succeeded:
             return ModuleText{
-                .icon       = Settings().icon,
-                .text       = FormatPlaceholders(spec, CustomPlaceholders(result.text)),
-                .state      = SucceededState(result),
+                .icon = Settings().icon,
+                .text = FormatPlaceholders(spec, CustomPlaceholders(result.text)),
+                .state = SucceededState(result),
                 .classIndex = result.classIndex.value_or(0),
             };
         case CommandOutcome::Failed:
             return ModuleText{
-                .icon       = Settings().icon,
-                .text       = ToWide(result.text),
-                .state      = TextState::Alert,
+                .icon = Settings().icon,
+                .text = ToWide(result.text),
+                .state = TextState::Alert,
                 .classIndex = 0,
             };
     }

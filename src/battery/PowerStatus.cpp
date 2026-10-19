@@ -34,7 +34,7 @@ namespace {
             ThrowLastError("SetupDiGetClassDevsW(battery)");
         }
         const UniqueReleased<HDEVINFO, &SetupDiDestroyDeviceInfoList> devices(raw);
-        std::vector<std::wstring>                                     paths;
+        std::vector<std::wstring> paths;
         for (DWORD index = 0;; ++index) {
             SP_DEVICE_INTERFACE_DATA device{};
             device.cbSize = sizeof(device);
@@ -50,8 +50,8 @@ namespace {
             }
             // DWORDs keep the detail struct, a DWORD then WCHARs, aligned.
             std::vector<DWORD> buffer((required + sizeof(DWORD) - 1) / sizeof(DWORD));
-            auto*              detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(buffer.data());
-            detail->cbSize            = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+            auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(buffer.data());
+            detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
             if (!SetupDiGetDeviceInterfaceDetailW(devices.get(), &device, detail, static_cast<DWORD>(buffer.size() * sizeof(DWORD)), nullptr, nullptr)) {
                 ThrowLastError("SetupDiGetDeviceInterfaceDetailW");
             }
@@ -64,8 +64,8 @@ namespace {
     std::optional<BatteryCapacity> ReadCapacity(const std::wstring& path) {
         const UniqueHandle battery =
             OwnHandle(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr), "CreateFileW(battery)");
-        ULONG wait     = 0;
-        ULONG tag      = BATTERY_TAG_INVALID;
+        ULONG wait = 0;
+        ULONG tag = BATTERY_TAG_INVALID;
         DWORD returned = 0;
         if (!DeviceIoControl(battery.get(), IOCTL_BATTERY_QUERY_TAG, &wait, sizeof(wait), &tag, sizeof(tag), &returned, nullptr)) {
             ThrowLastError("DeviceIoControl(IOCTL_BATTERY_QUERY_TAG)");
@@ -74,7 +74,7 @@ namespace {
             return std::nullopt;
         }
         BATTERY_QUERY_INFORMATION query{};
-        query.BatteryTag       = tag;
+        query.BatteryTag = tag;
         query.InformationLevel = BatteryInformation;
         BATTERY_INFORMATION information{};
         if (!DeviceIoControl(battery.get(), IOCTL_BATTERY_QUERY_INFORMATION, &query, sizeof(query), &information, sizeof(information), &returned, nullptr)) {
@@ -105,7 +105,7 @@ namespace {
 
     UniquePowerNotification RegisterWake(const GUID& setting, HANDLE wakeEvent, std::string_view call) {
         DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS parameters{.Callback = WakeOnPowerChange, .Context = wakeEvent};
-        HPOWERNOTIFY                       notification = nullptr;
+        HPOWERNOTIFY notification = nullptr;
         ThrowIfWin32Failed(PowerSettingRegisterNotification(&setting, DEVICE_NOTIFY_CALLBACK, &parameters, &notification), call);
         return UniquePowerNotification(notification);
     }
@@ -125,10 +125,10 @@ std::optional<BatteryState> PowerStatus::State() const {
 
 // Nothing here may throw out of the thread, so every failure is logged once and the next sample tries again.
 void PowerStatus::Run(HANDLE stopEvent) {
-    FailureLog                  sampleLog("battery");
-    FailureLog                  healthLog("battery");
+    FailureLog sampleLog("battery");
+    FailureLog healthLog("battery");
     const std::array<HANDLE, 2> events{stopEvent, _wakeEvent.get()};
-    DWORD                       woke = WAIT_TIMEOUT;
+    DWORD woke = WAIT_TIMEOUT;
     do {
         std::optional<BatteryState> state;
         try {
@@ -152,7 +152,7 @@ void PowerStatus::Run(HANDLE stopEvent) {
         {
             const std::scoped_lock lock(_mutex);
             changed = state != _state;
-            _state  = state;
+            _state = state;
         }
         if (changed) {
             _changes.Notify("battery");
@@ -179,15 +179,15 @@ std::optional<BatteryState> BatteryFromPowerStatus(const SYSTEM_POWER_STATUS& po
         secondsLeft = static_cast<std::int32_t>(power.BatteryLifeTime);
     }
     return BatteryState{
-        .charge        = charge,
-        .percent       = power.BatteryLifePercent,
-        .secondsLeft   = secondsLeft,
+        .charge = charge,
+        .percent = power.BatteryLifePercent,
+        .secondsLeft = secondsLeft,
         .healthPercent = std::nullopt,
     };
 }
 
 std::optional<std::int32_t> HealthPercent(const std::vector<BatteryCapacity>& batteries) {
-    std::uint64_t designed    = 0;
+    std::uint64_t designed = 0;
     std::uint64_t fullCharged = 0;
     for (const BatteryCapacity& battery : batteries) {
         designed += battery.designed;

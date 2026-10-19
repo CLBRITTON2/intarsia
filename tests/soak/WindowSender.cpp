@@ -18,7 +18,7 @@
 namespace {
 
     constexpr std::int32_t kExitNotForeground = 2;
-    constexpr wchar_t      kWindowClass[]     = L"IntarsiaSoakRetitle";
+    constexpr wchar_t kWindowClass[] = L"IntarsiaSoakRetitle";
     // Negative, which SetWaitableTimerEx reads as relative, in 100 ns units: about 60 a second.
     constexpr LONGLONG kPeriod100ns = -166'667;
 
@@ -29,9 +29,9 @@ namespace {
 
     HWND CreateShownWindow() {
         WNDCLASSEXW windowClass{};
-        windowClass.cbSize        = sizeof(windowClass);
-        windowClass.lpfnWndProc   = DefWindowProcW;
-        windowClass.hInstance     = GetModuleHandleW(nullptr);
+        windowClass.cbSize = sizeof(windowClass);
+        windowClass.lpfnWndProc = DefWindowProcW;
+        windowClass.hInstance = GetModuleHandleW(nullptr);
         windowClass.lpszClassName = kWindowClass;
         if (RegisterClassExW(&windowClass) == 0) {
             throw std::runtime_error(std::format("RegisterClassExW failed with {}", GetLastError()));
@@ -48,9 +48,9 @@ namespace {
     // A spinner frame, a bar and a percentage that climbs and wraps.
     std::wstring ProgressTitle(std::uint64_t tick) {
         constexpr std::array<wchar_t, 10> kSpinner{L'⠋', L'⠙', L'⠹', L'⠸', L'⠼', L'⠴', L'⠦', L'⠧', L'⠇', L'⠏'};
-        const std::uint64_t               percent = (tick / 6) % 101;
-        const std::wstring                filled(static_cast<size_t>(percent / 5), L'#');
-        const std::wstring                empty(static_cast<size_t>(20 - (percent / 5)), L' ');
+        const std::uint64_t percent = (tick / 6) % 101;
+        const std::wstring filled(static_cast<size_t>(percent / 5), L'#');
+        const std::wstring empty(static_cast<size_t>(20 - (percent / 5)), L' ');
         return std::format(L"{} building [{}{}] {}%", kSpinner[tick % kSpinner.size()], filled, empty, percent);
     }
 
@@ -65,8 +65,8 @@ namespace {
         DWORD processId = 0;
         GetWindowThreadProcessId(foreground, &processId);
         std::array<char, MAX_PATH> image{};
-        DWORD                      imageLength = static_cast<DWORD>(image.size());
-        HANDLE                     process     = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+        DWORD imageLength = static_cast<DWORD>(image.size());
+        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
         if (process == nullptr || !QueryFullProcessImageNameA(process, 0, image.data(), &imageLength)) {
             imageLength = 0;
         }
@@ -98,8 +98,8 @@ namespace {
         }
         std::cout << "retitling the foreground window" << std::endl;
 
-        std::uint64_t tick   = 0;
-        auto          report = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        std::uint64_t tick = 0;
+        auto report = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (true) {
             // The timer resets as this wait returns for it, so only this result tells a tick from a message.
             const DWORD woken = MsgWaitForMultipleObjects(1, &timer, FALSE, INFINITE, QS_ALLINPUT);

@@ -30,7 +30,7 @@ namespace integration {
       public:
         explicit TestWindow(std::wstring_view suffix);
         ~TestWindow();
-        TestWindow(const TestWindow&)            = delete;
+        TestWindow(const TestWindow&) = delete;
         TestWindow& operator=(const TestWindow&) = delete;
 
       private:
@@ -45,8 +45,8 @@ namespace integration {
     // Where NewWorkDirectory(name), and so a RunningBar named name, keeps its files, known before either makes it.
     std::filesystem::path WorkDirectoryPath(std::string_view name);
     // A new empty directory under the temp directory, kept after the test so its logs can be read.
-    std::filesystem::path    NewWorkDirectory(std::string_view name);
-    void                     WriteText(const std::filesystem::path& path, std::string_view text);
+    std::filesystem::path NewWorkDirectory(std::string_view name);
+    void WriteText(const std::filesystem::path& path, std::string_view text);
     std::vector<std::string> ReadLines(const std::filesystem::path& path);
     // ReadLines of a file a child may not have written yet, empty until it has.
     std::vector<std::string> RecordedLines(const std::filesystem::path& path);
@@ -67,7 +67,7 @@ namespace integration {
       public:
         SavedCursor();
         ~SavedCursor();
-        SavedCursor(const SavedCursor&)            = delete;
+        SavedCursor(const SavedCursor&) = delete;
         SavedCursor& operator=(const SavedCursor&) = delete;
 
       private:
@@ -76,15 +76,15 @@ namespace integration {
 
     // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
     struct Capture {
-        std::int32_t               width;
-        std::int32_t               height;
+        std::int32_t width;
+        std::int32_t height;
         std::vector<std::uint32_t> pixels;
     };
 
     RECT ScreenRect(HWND window);
     // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
     Capture CaptureScreenOver(HWND window);
-    size_t  CountPixels(const Capture& capture, std::uint32_t rgb);
+    size_t CountPixels(const Capture& capture, std::uint32_t rgb);
     // Columns from the leftmost pixel in rgb to the rightmost, both counted, or nullopt when there are none.
     std::optional<std::int32_t> ColumnSpan(const Capture& capture, std::uint32_t rgb);
     // The mean column of the pixels in rgb, or nullopt when there are none.
@@ -100,8 +100,8 @@ namespace integration {
     // The server a RunningBar starts and the bar log event that shows the bar has reached it.
     struct TestServer {
         std::filesystem::path program;
-        std::wstring          scenario;
-        std::string           readyEvent;
+        std::wstring scenario;
+        std::string readyEvent;
     };
 
     // tests/support/GlazeWmServer.cpp, run with its scenario of that name, which the bar trusts and connects to.
@@ -115,10 +115,10 @@ namespace integration {
         RunningBar(std::string_view testName, std::string_view config, std::string_view style, TestServer server);
         // Closes the bar unless the test already has, and records a test failure unless it exits 0.
         ~RunningBar();
-        RunningBar(const RunningBar&)            = delete;
+        RunningBar(const RunningBar&) = delete;
         RunningBar& operator=(const RunningBar&) = delete;
 
-        HWND        PrimaryBar() const;
+        HWND PrimaryBar() const;
         // Each sends its input offset pixels along the primary bar's middle line and logs it.
         void ClickAt(std::int32_t offset) const;
         void ButtonUpAt(std::uint32_t message, std::int32_t offset) const;
@@ -151,8 +151,8 @@ namespace integration {
         std::vector<std::string> LogLines(std::string_view text) const;
         // Lines of the bar's structured stderr log whose event is event.
         std::vector<std::string> Events(std::string_view event) const;
-        void                     StopServer();
-        void                     StartServer();
+        void StopServer();
+        void StartServer();
         // Has the server focus its indexth listed window and waits until it has sent the bar the events for it.
         void PushFocus(size_t index);
         // Each writes over its file in one save, as an editor does, which the running bar reloads.
@@ -170,14 +170,14 @@ namespace integration {
         // Prints the bar's log and every server's stderr, each line tagged with its file.
         void PrintLogs() const;
         // The bar's structured stderr log.
-        std::filesystem::path       BarErrors() const;
-        std::filesystem::path       ServerOutput(std::uint32_t start) const;
-        std::filesystem::path       ServerErrors(std::uint32_t start) const;
+        std::filesystem::path BarErrors() const;
+        std::filesystem::path ServerOutput(std::uint32_t start) const;
+        std::filesystem::path ServerErrors(std::uint32_t start) const;
 
-        std::filesystem::path       _workDirectory;
-        TestServer                  _testServer;
-        std::uint16_t               _port;
-        std::uint32_t               _serverStarts;
+        std::filesystem::path _workDirectory;
+        TestServer _testServer;
+        std::uint16_t _port;
+        std::uint32_t _serverStarts;
         std::optional<ChildProcess> _server;
         std::optional<ChildProcess> _bar;
     };

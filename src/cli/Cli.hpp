@@ -15,7 +15,7 @@ enum class CliCommand : std::uint8_t {
 };
 
 struct CliOptions {
-    CliCommand            command;
+    CliCommand command;
     std::filesystem::path configPath;
 };
 

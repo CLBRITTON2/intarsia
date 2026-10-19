@@ -54,9 +54,9 @@ namespace {
     // icon again unchanged costs no upload or redraw.
     TrayIcon Updated(TrayIcon icon, const NotifyIconMessage& message, std::wstring_view ownerImage, std::shared_ptr<const IconPixels> pixels) {
         icon.owner = message.owner;
-        icon.id    = message.id;
+        icon.id = message.id;
         if ((message.flags & NIF_GUID) != 0) {
-            icon.guid       = message.guid;
+            icon.guid = message.guid;
             icon.ownerImage = ownerImage;
         }
         if ((message.flags & NIF_MESSAGE) != 0) {
@@ -97,9 +97,9 @@ namespace {
     }
 
     // Often enough that an app's message rarely goes to Explorer alone after another topmost window rose above ours.
-    constexpr UINT_PTR      kFirstTimer   = 1;
+    constexpr UINT_PTR kFirstTimer = 1;
     constexpr std::uint32_t kFirstEveryMs = 100;
-    constexpr UINT_PTR      kSweepTimer   = 2;
+    constexpr UINT_PTR kSweepTimer = 2;
     constexpr std::uint32_t kSweepEveryMs = 5000;
     // The sender waits on the forward, so a hung Explorer must not hold it for long.
     constexpr std::uint32_t kForwardTimeoutMs = 2000;
@@ -150,17 +150,17 @@ NotifyIconMessage ParseNotifyIconMessage(std::span<const std::byte> payload) {
         throw TrayMessageError(std::format("a notify icon message starts with 0x{:08X}, got 0x{:08X}", kTrayNotifySignature, raw.signature));
     }
     return NotifyIconMessage{
-        .command         = raw.command,
-        .owner           = WidenHandle(raw.data.window),
-        .id              = raw.data.id,
-        .flags           = raw.data.flags,
+        .command = raw.command,
+        .owner = WidenHandle(raw.data.window),
+        .id = raw.data.id,
+        .flags = raw.data.flags,
         .callbackMessage = raw.data.callbackMessage,
-        .icon            = WidenHandle(raw.data.icon),
-        .tip             = UpToNull(raw.data.tip),
-        .state           = raw.data.state,
-        .stateMask       = raw.data.stateMask,
-        .version         = raw.data.version,
-        .guid            = raw.data.guid,
+        .icon = WidenHandle(raw.data.icon),
+        .tip = UpToNull(raw.data.tip),
+        .state = raw.data.state,
+        .stateMask = raw.data.stateMask,
+        .version = raw.data.version,
+        .guid = raw.data.guid,
     };
 }
 
@@ -178,16 +178,16 @@ IconRectQuery ParseIconRectQuery(std::span<const std::byte> payload) {
         throw TrayMessageError(std::format("an icon rect query asks for part 1 or 2, got {}", raw.part));
     }
     return IconRectQuery{
-        .part  = static_cast<IconRectPart>(raw.part),
+        .part = static_cast<IconRectPart>(raw.part),
         .owner = WidenHandle(raw.window),
-        .id    = raw.id,
-        .guid  = raw.guid,
+        .id = raw.id,
+        .guid = raw.guid,
     };
 }
 
 std::optional<RECT> QueriedIconRect(const IconRectQuery& query, const std::vector<TrayIcon>& icons, const std::vector<TrayIconRect>& rects, POINT cursor) {
     const bool byGuid = query.guid != GUID{};
-    const auto icon   = std::ranges::find_if(icons, [&query, byGuid](const TrayIcon& candidate) {
+    const auto icon = std::ranges::find_if(icons, [&query, byGuid](const TrayIcon& candidate) {
         if (byGuid) {
             return candidate.guid == query.guid;
         }
@@ -216,8 +216,8 @@ LRESULT IconRectAnswer(IconRectPart part, const RECT& rect) {
 std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::wstring_view ownerImage,
                                                      std::shared_ptr<const IconPixels> pixels) {
     std::vector<TrayIcon> updated = icons;
-    const auto            icon    = FindIcon(updated, message);
-    const bool            found   = icon != updated.end();
+    const auto icon = FindIcon(updated, message);
+    const bool found = icon != updated.end();
     // Any process can name any GUID, so without this one could take another app's icon and the clicks on it.
     if (found && (message.flags & NIF_GUID) != 0 && !SameFileName(icon->ownerImage, ownerImage)) {
         return std::nullopt;
@@ -236,16 +236,16 @@ std::optional<std::vector<TrayIcon>> ApplyNotifyIcon(const std::vector<TrayIcon>
             }
             updated.push_back(Updated(
                 TrayIcon{
-                    .owner           = message.owner,
-                    .id              = message.id,
-                    .guid            = std::nullopt,
-                    .ownerImage      = {},
+                    .owner = message.owner,
+                    .id = message.id,
+                    .guid = std::nullopt,
+                    .ownerImage = {},
                     .callbackMessage = 0,
-                    .version         = 0,
-                    .tooltip         = {},
+                    .version = 0,
+                    .tooltip = {},
                     .standardTooltip = false,
-                    .pixels          = nullptr,
-                    .hidden          = false,
+                    .pixels = nullptr,
+                    .hidden = false,
                 },
                 message, ownerImage, std::move(pixels)));
             return updated;
@@ -303,14 +303,14 @@ std::vector<TrayInputMessage> TrayInputMessages(const TrayIcon& icon, const std:
         if (icon.version >= NOTIFYICON_VERSION_4) {
             messages.push_back(TrayInputMessage{
                 .message = icon.callbackMessage,
-                .wParam  = CursorWParam(cursor),
-                .lParam  = MAKELPARAM(static_cast<WORD>(event), static_cast<WORD>(icon.id)),
+                .wParam = CursorWParam(cursor),
+                .lParam = MAKELPARAM(static_cast<WORD>(event), static_cast<WORD>(icon.id)),
             });
         } else {
             messages.push_back(TrayInputMessage{
                 .message = icon.callbackMessage,
-                .wParam  = icon.id,
-                .lParam  = static_cast<LPARAM>(event),
+                .wParam = icon.id,
+                .lParam = static_cast<LPARAM>(event),
             });
         }
     }
@@ -329,8 +329,8 @@ bool IsDoubleClick(const std::optional<TrayClick>& previous, const TrayClick& cl
 ShellNotifyIcon::ShellNotifyIcon(ChangeSignal& changes, std::wstring windowClass, HWND target, std::uint32_t failedMessage) :
     _changes(changes), _windowClass(std::move(windowClass)), _failure(target, failedMessage, "tray"), _stopEvent(ManualResetEvent("tray stop")) {
     std::promise<void> ready;
-    std::future<void>  created = ready.get_future();
-    _thread                    = std::thread([this, &ready] { Run(ready); });
+    std::future<void> created = ready.get_future();
+    _thread = std::thread([this, &ready] { Run(ready); });
     try {
         created.get();
     } catch (...) {
@@ -354,13 +354,13 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
     if (!position.has_value()) {
         return;
     }
-    const POINT     cursor = *position;
+    const POINT cursor = *position;
     const TrayClick click{
-        .owner  = icon.owner,
-        .id     = icon.id,
+        .owner = icon.owner,
+        .id = icon.id,
         .button = button,
         .cursor = cursor,
-        .time   = std::chrono::steady_clock::now(),
+        .time = std::chrono::steady_clock::now(),
     };
     const bool doubled =
         IsDoubleClick(_lastClick, click, std::chrono::milliseconds(GetDoubleClickTime()), SIZE{.cx = GetSystemMetrics(SM_CXDOUBLECLK), .cy = GetSystemMetrics(SM_CYDOUBLECLK)});
@@ -368,10 +368,10 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
     if (doubled) {
         // A third click after a double click starts a new pair, as Windows counts them.
         _lastClick = std::nullopt;
-        events     = DoubleClickEvents(button);
+        events = DoubleClickEvents(button);
     } else {
         _lastClick = click;
-        events     = ClickEvents(button, icon.version);
+        events = ClickEvents(button, icon.version);
     }
     const std::vector<TrayInputMessage> messages = TrayInputMessages(icon, events, cursor);
     if (messages.empty()) {
@@ -554,7 +554,7 @@ LRESULT ShellNotifyIcon::AnswerIconRect(const COPYDATASTRUCT& data) {
         return 0;
     }
     std::vector<TrayIconRect> rects;
-    const std::scoped_lock    lock(_mutex);
+    const std::scoped_lock lock(_mutex);
     for (const ViewRects& reported : _views) {
         rects.insert(rects.end(), reported.rects.begin(), reported.rects.end());
     }
@@ -570,8 +570,8 @@ LRESULT ShellNotifyIcon::Forward(HWND sender, const COPYDATASTRUCT& data) {
     if (explorer == nullptr) {
         return FALSE;
     }
-    COPYDATASTRUCT copy   = data;
-    DWORD_PTR      result = 0;
+    COPYDATASTRUCT copy = data;
+    DWORD_PTR result = 0;
     if (SendMessageTimeoutW(explorer, WM_COPYDATA, reinterpret_cast<WPARAM>(sender), reinterpret_cast<LPARAM>(&copy), SMTO_ABORTIFHUNG, kForwardTimeoutMs, &result) == 0) {
         _forwardLog.Failed("forward_failed", Win32Error("SendMessageTimeoutW(WM_COPYDATA to the taskbar)", HRESULT_FROM_WIN32(GetLastError())));
         return FALSE;
@@ -617,11 +617,11 @@ void ShellNotifyIcon::Publish(std::vector<TrayIcon> icons) {
 void ShellNotifyIcon::Run(std::promise<void>& ready) {
     // WIC reads the icons on this thread.
     std::optional<ComScope> com;
-    bool                    started = false;
+    bool started = false;
     try {
         com.emplace(ComThreading::Multi, "tray");
         _imaging = CreateImagingFactory();
-        _window  = CreateTrayWindow(_windowClass, WindowProc, this);
+        _window = CreateTrayWindow(_windowClass, WindowProc, this);
         KeepFirst();
         StartTimer(_window, kFirstTimer, kFirstEveryMs, "tray first");
         StartTimer(_window, kSweepTimer, kSweepEveryMs, "tray sweep");

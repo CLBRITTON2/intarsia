@@ -32,8 +32,8 @@ namespace {
 ItemRow EmptyItemRow() {
     return ItemRow{
         .boxes = {},
-        .size  = {.width = 0.0f, .height = 0.0f},
-        .axis  = Axis::Horizontal,
+        .size = {.width = 0.0f, .height = 0.0f},
+        .axis = Axis::Horizontal,
     };
 }
 
@@ -49,17 +49,17 @@ ItemRow ArrangeItems(const std::vector<D2D1_SIZE_F>& contents, const std::vector
     boxes.reserve(contents.size());
     float start = 0.0f;
     for (size_t index = 0; index < contents.size(); ++index) {
-        const ItemStyle& style    = *styles[index];
-        const float      boxMain  = MainLength(contents[index], axis) + (2.0f * MainOf(style.padding, axis));
-        const float      boxCross = CrossLength(contents[index], axis) + (2.0f * CrossOf(style.padding, axis));
+        const ItemStyle& style = *styles[index];
+        const float boxMain = MainLength(contents[index], axis) + (2.0f * MainOf(style.padding, axis));
+        const float boxCross = CrossLength(contents[index], axis) + (2.0f * CrossOf(style.padding, axis));
         start += MainOf(style.margin, axis);
         boxes.push_back(MainCrossRect(axis, start, boxMain, (cross - boxCross) / 2.0f, boxCross));
         start += boxMain + MainOf(style.margin, axis);
     }
     return ItemRow{
         .boxes = std::move(boxes),
-        .size  = MainCrossSize(axis, start, cross),
-        .axis  = axis,
+        .size = MainCrossSize(axis, start, cross),
+        .axis = axis,
     };
 }
 
@@ -89,19 +89,19 @@ D2D1_POINT_2F ItemContentOrigin(const D2D1_RECT_F& box, const ItemStyle& style, 
 void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, const ItemStyle& style, const D2D1_COLOR_F& fill, const std::vector<InsetShadow>& shadows,
                         D2D1_POINT_2F origin) {
     const D2D1_RECT_F placed = Offset(box, origin);
-    const BoxStyle    boxStyle{
-           .background = style.background,
-           .border     = {},
-           .radiusDips = style.radiusDips,
-           .padding    = style.padding,
-           .shadows    = shadows,
+    const BoxStyle boxStyle{
+        .background = style.background,
+        .border = {},
+        .radiusDips = style.radiusDips,
+        .padding = style.padding,
+        .shadows = shadows,
     };
     DrawBox(render.context, *render.brushes, *render.boxes, placed, boxStyle, fill);
 }
 
 bool HoveredItem::Set(std::optional<size_t> item) {
     const bool changed = item != _item;
-    _item              = item;
+    _item = item;
     return changed;
 }
 
@@ -118,13 +118,13 @@ void ItemFades::Follow(const std::vector<const ItemStyle*>& styles, const Hovere
         _fades.erase(_fades.begin() + static_cast<std::ptrdiff_t>(styles.size()), _fades.end());
     }
     for (size_t index = 0; index < styles.size(); ++index) {
-        const ItemStyle& style  = *styles[index];
+        const ItemStyle& style = *styles[index];
         const ItemColors colors = TargetColors(style, hover.Is(index));
         if (index == _fades.size()) {
             _fades.push_back(Fade{
                 .background = ColorFade(colors.background),
-                .text       = ColorFade(colors.text),
-                .shadows    = ShadowFade(style.shadows),
+                .text = ColorFade(colors.text),
+                .shadows = ShadowFade(style.shadows),
             });
             continue;
         }

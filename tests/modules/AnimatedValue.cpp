@@ -14,16 +14,16 @@ namespace {
 
     using std::chrono::milliseconds;
 
-    constexpr Transition                        kLinear100{.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
+    constexpr Transition kLinear100{.duration = std::chrono::milliseconds(100), .timing = TimingFunction::Linear};
 
     const std::chrono::steady_clock::time_point kStart = std::chrono::steady_clock::time_point() + std::chrono::hours(1);
 
-    const InsetShadow                           kLine{
-                                  .xDips      = 0.0f,
-                                  .yDips      = 1.0f,
-                                  .blurDips   = 0.0f,
-                                  .spreadDips = 0.0f,
-                                  .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f),
+    const InsetShadow kLine{
+        .xDips = 0.0f,
+        .yDips = 1.0f,
+        .blurDips = 0.0f,
+        .spreadDips = 0.0f,
+        .color = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.5f),
     };
 
     ModuleStyle GroupStyle(std::string_view blocks) {
@@ -48,7 +48,7 @@ TEST(ColorFade, MixingWithTransparentKeepsTheOpaqueColorsHue) {
 
 TEST(ColorFade, FadesToItsTargetOverTheTransition) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ColorFade                                   fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    ColorFade fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     EXPECT_FALSE(fade.Running(start));
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), kLinear100, start);
     EXPECT_TRUE(fade.Running(start + std::chrono::milliseconds(50)));
@@ -59,7 +59,7 @@ TEST(ColorFade, FadesToItsTargetOverTheTransition) {
 
 TEST(ColorFade, RetargetedMidwayItStartsFromWhereItIs) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ColorFade                                   fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    ColorFade fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), kLinear100, start);
     // The same target again neither restarts nor stalls the fade.
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), kLinear100, start + std::chrono::milliseconds(50));
@@ -70,7 +70,7 @@ TEST(ColorFade, RetargetedMidwayItStartsFromWhereItIs) {
 
 TEST(AnimatedValue, WithoutATransitionAFadeAndAFoldChangeAtOnce) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ColorFade                                   fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    ColorFade fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), Transition{.duration = std::chrono::milliseconds(0), .timing = TimingFunction::Ease}, start);
     EXPECT_FALSE(fade.Running(start));
     EXPECT_FLOAT_EQ(fade.Color(start).r, 1.0f);
@@ -83,7 +83,7 @@ TEST(AnimatedValue, WithoutATransitionAFadeAndAFoldChangeAtOnce) {
 
 TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ShadowFade                                  fade({});
+    ShadowFade fade({});
     fade.Retarget({kLine}, kLinear100, start);
     const std::vector<InsetShadow> halfway = fade.Shadows(start + std::chrono::milliseconds(50));
     ASSERT_EQ(halfway.size(), 1u);
@@ -99,7 +99,7 @@ TEST(ShadowFade, AnAddedShadowFadesInInPlaceAndARemovedOneOut) {
 
 TEST(ShadowFade, RetargetedMidwayItKeepsNoMoreShadowsThanEitherEndHolds) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    ShadowFade                                  fade({kLine});
+    ShadowFade fade({kLine});
     for (std::int64_t step = 0; step < 10; ++step) {
         const std::chrono::steady_clock::time_point at = start + std::chrono::milliseconds(10 * step);
         if (step % 2 == 0) {
@@ -130,7 +130,7 @@ TEST(AnimatedValue, TimingFunctionsRunFromZeroToOneInTheirCssShapes) {
 // A bar draws at its last refresh, which can come just before the click that turned the value.
 TEST(AnimatedValue, ReadBeforeItTurnedItHoldsWhereItTurned) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    AnimatedValue                               value(0.0f);
+    AnimatedValue value(0.0f);
     value.Retarget(1.0f, kLinear100, start);
     EXPECT_NEAR(value.Value(start - std::chrono::milliseconds(3)), 0.0f, 0.001f);
     value.Retarget(0.0f, kLinear100, start + std::chrono::milliseconds(50));

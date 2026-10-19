@@ -23,23 +23,23 @@ namespace {
     BatteryConfig TestConfig() {
         return BatteryConfig{
             .formatDischarging = "{capacity}% {time}",
-            .formatCharging    = "{capacity}% charging",
-            .formatPlugged     = "",
-            .tooltip           = "health {health}%",
-            .icons             = {L"0", L"1", L"2", L"3", L"4"},
-            .iconCharging      = L"C",
-            .iconPlugged       = L"P",
-            .warningAtPercent  = 40,
+            .formatCharging = "{capacity}% charging",
+            .formatPlugged = "",
+            .tooltip = "health {health}%",
+            .icons = {L"0", L"1", L"2", L"3", L"4"},
+            .iconCharging = L"C",
+            .iconPlugged = L"P",
+            .warningAtPercent = 40,
             .criticalAtPercent = 15,
-            .actions           = kNoActions,
+            .actions = kNoActions,
         };
     }
 
     BatteryState Discharging(std::int32_t percent) {
         return BatteryState{
-            .charge        = ChargeState::Discharging,
-            .percent       = percent,
-            .secondsLeft   = 4500,
+            .charge = ChargeState::Discharging,
+            .percent = percent,
+            .secondsLeft = 4500,
             .healthPercent = 91,
         };
     }
@@ -49,10 +49,10 @@ namespace {
 TEST(Battery, EachChargeHasItsFormatAndIcon) {
     EXPECT_EQ(FormatBattery(TestConfig(), Discharging(64)), NormalText(L"3", L"64% 1:15"));
     BatteryState charging = Discharging(64);
-    charging.charge       = ChargeState::Charging;
+    charging.charge = ChargeState::Charging;
     EXPECT_EQ(FormatBattery(TestConfig(), charging), NormalText(L"C", L"64% charging"));
     BatteryState plugged = Discharging(100);
-    plugged.charge       = ChargeState::Plugged;
+    plugged.charge = ChargeState::Plugged;
     EXPECT_EQ(FormatBattery(TestConfig(), plugged), NormalText(L"P", L""));
     EXPECT_EQ(FormatBattery(TestConfig(), std::nullopt), NormalText(L"", L""));
 }
@@ -64,10 +64,10 @@ TEST(Battery, WarnsThenTurnsCriticalOnlyWhileDischargingAtOrUnderEachThreshold) 
     EXPECT_EQ(FormatBattery(TestConfig(), Discharging(15)).state, TextState::Critical);
     EXPECT_EQ(FormatBattery(TestConfig(), Discharging(3)).icon, L"0");
     BatteryState charging = Discharging(5);
-    charging.charge       = ChargeState::Charging;
+    charging.charge = ChargeState::Charging;
     EXPECT_EQ(FormatBattery(TestConfig(), charging).state, TextState::Normal);
     BatteryState plugged = Discharging(5);
-    plugged.charge       = ChargeState::Plugged;
+    plugged.charge = ChargeState::Plugged;
     EXPECT_EQ(FormatBattery(TestConfig(), plugged).state, TextState::Normal);
 }
 
@@ -80,7 +80,7 @@ TEST(Battery, TimeLeftIsHoursAndMinutes) {
 
 TEST(Battery, TooltipCarriesHealthAndIsAbsentWithoutABattery) {
     FakeBattery battery;
-    Battery     module(TestConfig(), battery);
+    Battery module(TestConfig(), battery);
     EXPECT_EQ(module.TooltipText(), std::nullopt);
     battery.state = Discharging(50);
     EXPECT_EQ(module.TooltipText(), L"health 91%");
@@ -89,8 +89,8 @@ TEST(Battery, TooltipCarriesHealthAndIsAbsentWithoutABattery) {
 }
 
 TEST(Battery, AFormatNamingAnUnknownValueIsAConfigError) {
-    FakeBattery   battery;
-    BatteryConfig config  = TestConfig();
+    FakeBattery battery;
+    BatteryConfig config = TestConfig();
     config.formatCharging = "{percent}";
     EXPECT_THAT([&] { return Battery(config, battery); }, ThrowsWith<ConfigError>("battery format_charging '{percent}' is not a valid format"));
 }

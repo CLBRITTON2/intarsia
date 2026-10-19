@@ -8,9 +8,9 @@
 namespace {
 
     const std::filesystem::path kDefaultConfig = L"C:\\default\\config.lua";
-    const std::filesystem::path kDefaultLog    = L"C:\\default\\intarsia.log";
+    const std::filesystem::path kDefaultLog = L"C:\\default\\intarsia.log";
 
-    LaunchOptions               Parse(const std::vector<std::wstring>& arguments) {
+    LaunchOptions Parse(const std::vector<std::wstring>& arguments) {
         return ParseLaunchOptions(arguments, kDefaultConfig, kDefaultLog, 6123, L"DefaultTray");
     }
 

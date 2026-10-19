@@ -32,16 +32,16 @@
 namespace {
 
     BarPlacement PlacementForMonitor(HMONITOR monitor) {
-        std::uint32_t dpiX     = 0;
-        std::uint32_t dpiY     = 0;
+        std::uint32_t dpiX = 0;
+        std::uint32_t dpiY = 0;
         const HRESULT dpiFound = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
         if (FAILED(dpiFound)) {
             throw MonitorGoneError(std::format("GetDpiForMonitor failed with 0x{:08X} for a listed handle", static_cast<std::uint32_t>(dpiFound)));
         }
         return BarPlacement{
-            .monitor     = monitor,
+            .monitor = monitor,
             .monitorRect = MonitorInfo(monitor).rcMonitor,
-            .dpi         = dpiX,
+            .dpi = dpiX,
         };
     }
 
@@ -93,14 +93,14 @@ namespace {
         throw std::invalid_argument(std::format("unknown space {}", static_cast<std::int32_t>(bar.space)));
     }
 
-    constexpr wchar_t       kWindowClass[]    = L"IntarsiaBar";
-    constexpr std::uint32_t kAppBarCallback   = WM_APP + 1;
-    constexpr std::uint32_t kAnimationFrame   = WM_APP + 2;
+    constexpr wchar_t kWindowClass[] = L"IntarsiaBar";
+    constexpr std::uint32_t kAppBarCallback = WM_APP + 1;
+    constexpr std::uint32_t kAnimationFrame = WM_APP + 2;
     constexpr std::uint32_t kFrameClockFailed = WM_APP + 3;
-    constexpr std::uint32_t kMenuListed       = WM_APP + 4;
-    constexpr UINT_PTR      kChangeTimer      = 1;
+    constexpr std::uint32_t kMenuListed = WM_APP + 4;
+    constexpr UINT_PTR kChangeTimer = 1;
 
-    HWND                    CreateBarWindow(HINSTANCE instance, void* owner) {
+    HWND CreateBarWindow(HINSTANCE instance, void* owner) {
         // No activation so clicking the bar never steals focus from the tiled window.
         return CreatePopupWindow(instance, kWindowClass, L"intarsia", WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP, owner, "bar");
     }
@@ -242,12 +242,12 @@ void Bar::Build(HINSTANCE instance) {
     }
     _canvas = std::make_unique<Canvas>(_graphics, _window, static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
     BuildContexts();
-    _boxFades   = RestingBoxFades(_modules);
+    _boxFades = RestingBoxFades(_modules);
     _wallpapers = BlurWallpapers(_graphics, _config.style, _placement.monitorRect, _placement.dpi);
-    _tooltip    = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get(), _wallpapers);
-    _menu       = std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _windowProcError, *_tooltip, _wallpapers,
-                                         [this](const DeviceLostError& error) { ReportDeviceLost(error); });
-    _lister     = std::make_unique<MenuLister>(_window, kMenuListed);
+    _tooltip = std::make_unique<Tooltip>(instance, _graphics, _config, _textFormat.Get(), _wallpapers);
+    _menu = std::make_unique<Menu>(instance, _graphics, _config, _textFormat.Get(), _launcher, _windowProcError, *_tooltip, _wallpapers,
+                                   [this](const DeviceLostError& error) { ReportDeviceLost(error); });
+    _lister = std::make_unique<MenuLister>(_window, kMenuListed);
     ShowWindow(_window, SW_SHOWNOACTIVATE);
     Render();
 }
@@ -354,7 +354,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
                 _hovered->Hover(std::nullopt);
             }
             _hovered = nullptr;
-            _cursor  = std::nullopt;
+            _cursor = std::nullopt;
             FadeBoxesToHover();
             _tooltip->Hide();
             // Draws the box that was under the cursor without its hover.
@@ -396,7 +396,7 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
 
 void Bar::Dock() {
     const std::int32_t thickness = DipsToPixels(_config.bar.thicknessDips, _placement.dpi);
-    const RECT         barRect   = BarRect(_window, _placement.monitorRect, _config.bar, thickness, _route);
+    const RECT barRect = BarRect(_window, _placement.monitorRect, _config.bar, thickness, _route);
     if (!MoveWindow(_window, barRect.left, barRect.top, barRect.right - barRect.left, barRect.bottom - barRect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }
@@ -489,7 +489,7 @@ std::chrono::steady_clock::time_point Bar::NextFrameTime() const {
 
 void Bar::ScheduleNextChange() {
     const std::optional<std::uint32_t> wait = NextChangeWait();
-    _animating                              = wait == 0u;
+    _animating = wait == 0u;
     if (!_animating && _animationFrames.has_value()) {
         LogAnimationFrames(*_animationFrames, _placement.monitorRect);
         _animationFrames.reset();
@@ -523,31 +523,31 @@ void Bar::BuildContexts() {
 }
 
 RenderContext Bar::ModuleContext(const ModuleStyle& style) const {
-    BrushCache&               brushes = _canvas->brushes;
+    BrushCache& brushes = _canvas->brushes;
     std::vector<StateBrushes> classes;
     classes.reserve(style.classes.size());
     for (const ClassColors& declared : style.classes) {
         classes.push_back(StateBrushes{.text = brushes.Keep(declared.colors.text), .icon = brushes.Keep(declared.colors.icon)});
     }
     return RenderContext{
-        .context      = _canvas->surface.Context(),
-        .dwrite       = _graphics.dwrite.Get(),
-        .textFormat   = _textFormat.Get(),
-        .iconFont     = style.icon.font.c_str(),
+        .context = _canvas->surface.Context(),
+        .dwrite = _graphics.dwrite.Get(),
+        .textFormat = _textFormat.Get(),
+        .iconFont = style.icon.font.c_str(),
         .iconSizeDips = style.icon.sizeDips,
-        .iconGapDips  = style.icon.gapDips,
-        .foreground   = brushes.Keep(style.color),
-        .accent       = brushes.Keep(style.icon.color),
-        .alert        = brushes.Keep(style.alertColor),
-        .warning      = {.text = brushes.Keep(style.warning.text), .icon = brushes.Keep(style.warning.icon)},
-        .critical     = {.text = brushes.Keep(style.critical.text), .icon = brushes.Keep(style.critical.icon)},
-        .muted        = {.text = brushes.Keep(style.muted.text), .icon = brushes.Keep(style.muted.icon)},
-        .classes      = std::move(classes),
-        .brushes      = &brushes,
-        .boxes        = &_canvas->boxes,
-        .axis         = _axis,
+        .iconGapDips = style.icon.gapDips,
+        .foreground = brushes.Keep(style.color),
+        .accent = brushes.Keep(style.icon.color),
+        .alert = brushes.Keep(style.alertColor),
+        .warning = {.text = brushes.Keep(style.warning.text), .icon = brushes.Keep(style.warning.icon)},
+        .critical = {.text = brushes.Keep(style.critical.text), .icon = brushes.Keep(style.critical.icon)},
+        .muted = {.text = brushes.Keep(style.muted.text), .icon = brushes.Keep(style.muted.icon)},
+        .classes = std::move(classes),
+        .brushes = &brushes,
+        .boxes = &_canvas->boxes,
+        .axis = _axis,
         .boxCrossDips = BoxCrossLength(Geometry()) - (2.0f * CrossOf(style.margin, _axis)),
-        .frameTime    = _frameTime,
+        .frameTime = _frameTime,
     };
 }
 
@@ -560,21 +560,21 @@ bool Bar::LayOutModules() {
 
 BarGeometry Bar::Geometry() const {
     return BarGeometry{
-        .axis    = _axis,
+        .axis = _axis,
         .section = _config.style.section,
-        .size    = _canvas->surface.Context()->GetSize(),
+        .size = _canvas->surface.Context()->GetSize(),
     };
 }
 
 PlacedBar Bar::PlaceModules() {
-    PlacedBar placed      = PlaceBar(Geometry(), _modules);
-    _hitBoxes             = HitBoxes(placed.entries);
+    PlacedBar placed = PlaceBar(Geometry(), _modules);
+    _hitBoxes = HitBoxes(placed.entries);
     const RECT windowRect = WindowRect();
     for (const HitBox& box : _hitBoxes) {
         box.module->Place(ModulePlacement{
-            .windowRect    = windowRect,
+            .windowRect = windowRect,
             .contentOrigin = box.contentOrigin,
-            .dpi           = _placement.dpi,
+            .dpi = _placement.dpi,
         });
     }
     // Items move under a cursor that stays still, as a tray unfolds, and no WM_MOUSEMOVE says so.
@@ -624,7 +624,7 @@ void Bar::DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayo
 
 void Bar::DrawGroup(const PlacedEntry& placed) {
     ID2D1DeviceContext* context = _canvas->surface.Context();
-    const ModuleStyle&  style   = placed.entry->style;
+    const ModuleStyle& style = placed.entry->style;
     DrawBox(context, _canvas->brushes, _canvas->boxes, placed.box.bounds, style.box, style.box.background);
     // The toggle's box at rest is the group's own, drawn once already with its border and shadows.
     const D2D1_COLOR_F toggleFill = _boxFades.at(placed.box.module).Color(_frameTime);
@@ -645,7 +645,7 @@ void Bar::DrawModule(const HitBox& box, const ModuleStyle& style) {
 }
 
 std::vector<D2D1_RECT_F> Bar::SectionBoxes(const std::vector<const SectionLayout*>& layouts) const {
-    const BarGeometry        bar = Geometry();
+    const BarGeometry bar = Geometry();
     std::vector<D2D1_RECT_F> sections;
     for (const SectionLayout* layout : layouts) {
         if (layout->length > 0.0f) {
@@ -665,7 +665,7 @@ RECT Bar::WindowRect() const {
 
 const HitBox* Bar::BoxAt(POINT client) const {
     const D2D1_POINT_2F point = ClientDips(client, _placement.dpi);
-    const auto          box   = std::ranges::find_if(_hitBoxes, [point](const HitBox& candidate) { return Contains(candidate.bounds, point); });
+    const auto box = std::ranges::find_if(_hitBoxes, [point](const HitBox& candidate) { return Contains(candidate.bounds, point); });
     if (box == _hitBoxes.end()) {
         return nullptr;
     }
@@ -679,8 +679,8 @@ D2D1_POINT_2F Bar::ContentPoint(POINT client, const HitBox& box) const {
 
 void Bar::HandleInput(POINT client, ModuleInput input) {
     _tooltip->Hide();
-    const bool                     menuWasShown = _menu->Shown();
-    const std::optional<MenuOwner> menuOwner    = std::exchange(_menuOwner, std::nullopt);
+    const bool menuWasShown = _menu->Shown();
+    const std::optional<MenuOwner> menuOwner = std::exchange(_menuOwner, std::nullopt);
     _menu->Hide();
     const HitBox* box = BoxAt(client);
     if (box == nullptr) {
@@ -721,8 +721,8 @@ void Bar::MoveCursor(POINT client) {
 }
 
 bool Bar::HoverAt(POINT client) {
-    const HitBox* box    = BoxAt(client);
-    IModule*      module = ModuleOf(box);
+    const HitBox* box = BoxAt(client);
+    IModule* module = ModuleOf(box);
     if (module == _hovered) {
         // Within one module the cursor can still move to another of its items, which can have its own tooltip.
         if (module != nullptr && module->Hover(ContentPoint(client, *box))) {
@@ -753,9 +753,9 @@ void Bar::FadeBoxesToHover() {
 void Bar::RestartHover() {
     _tooltip->Hide();
     TRACKMOUSEEVENT track{
-        .cbSize      = sizeof(TRACKMOUSEEVENT),
-        .dwFlags     = TME_HOVER | TME_LEAVE,
-        .hwndTrack   = _window,
+        .cbSize = sizeof(TRACKMOUSEEVENT),
+        .dwFlags = TME_HOVER | TME_LEAVE,
+        .hwndTrack = _window,
         .dwHoverTime = HOVER_DEFAULT,
     };
     if (!TrackMouseEvent(&track)) {
@@ -776,14 +776,14 @@ void Bar::ShowTooltip() {
 }
 
 TooltipAnchor Bar::AnchorFor(const D2D1_RECT_F& span) const {
-    const RECT          barRect = WindowRect();
-    const std::uint32_t dpi     = _placement.dpi;
+    const RECT barRect = WindowRect();
+    const std::uint32_t dpi = _placement.dpi;
     return TooltipAnchor{
-        .target      = DipsToScreen(barRect, span, dpi),
-        .barRect     = barRect,
+        .target = DipsToScreen(barRect, span, dpi),
+        .barRect = barRect,
         .monitorRect = _placement.monitorRect,
-        .edge        = _config.bar.edge,
-        .dpi         = dpi,
+        .edge = _config.bar.edge,
+        .dpi = dpi,
     };
 }
 

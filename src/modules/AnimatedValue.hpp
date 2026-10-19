@@ -19,15 +19,15 @@ class AnimatedValue {
   public:
     explicit AnimatedValue(float value);
 
-    void  Retarget(float target, const Transition& transition, std::chrono::steady_clock::time_point now);
+    void Retarget(float target, const Transition& transition, std::chrono::steady_clock::time_point now);
     float Value(std::chrono::steady_clock::time_point now) const;
-    bool  Running(std::chrono::steady_clock::time_point now) const;
+    bool Running(std::chrono::steady_clock::time_point now) const;
 
   private:
-    float                                 _from;
-    float                                 _to;
-    std::chrono::milliseconds             _duration{0};
-    TimingFunction                        _timing = TimingFunction::Linear;
+    float _from;
+    float _to;
+    std::chrono::milliseconds _duration{0};
+    TimingFunction _timing = TimingFunction::Linear;
     std::chrono::steady_clock::time_point _start;
 };
 
@@ -37,13 +37,13 @@ class ColorFade {
     explicit ColorFade(const D2D1_COLOR_F& color);
 
     // A target equal to the current one leaves the fade running as it was.
-    void         Retarget(const D2D1_COLOR_F& target, const Transition& transition, std::chrono::steady_clock::time_point now);
+    void Retarget(const D2D1_COLOR_F& target, const Transition& transition, std::chrono::steady_clock::time_point now);
     D2D1_COLOR_F Color(std::chrono::steady_clock::time_point now) const;
-    bool         Running(std::chrono::steady_clock::time_point now) const;
+    bool Running(std::chrono::steady_clock::time_point now) const;
 
   private:
-    D2D1_COLOR_F  _from;
-    D2D1_COLOR_F  _to;
+    D2D1_COLOR_F _from;
+    D2D1_COLOR_F _to;
     AnimatedValue _progress{1.0f};
 };
 
@@ -54,14 +54,14 @@ class ShadowFade {
     explicit ShadowFade(const std::vector<InsetShadow>& shadows);
 
     // A target equal to the current one leaves the fade running as it was.
-    void                     Retarget(const std::vector<InsetShadow>& target, const Transition& transition, std::chrono::steady_clock::time_point now);
+    void Retarget(const std::vector<InsetShadow>& target, const Transition& transition, std::chrono::steady_clock::time_point now);
     std::vector<InsetShadow> Shadows(std::chrono::steady_clock::time_point now) const;
-    bool                     Running(std::chrono::steady_clock::time_point now) const;
+    bool Running(std::chrono::steady_clock::time_point now) const;
 
   private:
     std::vector<InsetShadow> _from;
     std::vector<InsetShadow> _to;
-    AnimatedValue            _progress{1.0f};
+    AnimatedValue _progress{1.0f};
 };
 
 // first and second mixed by share, 0 all first and 1 all second, through premultiplied alpha as CSS mixes them, so a
@@ -73,7 +73,7 @@ struct FoldPosition {
     float revealed;     // 0 folded, 1 unfolded
     float angleDegrees; // from the icon rotation folded to the expanded icon one unfolded
 
-    bool  operator==(const FoldPosition&) const = default;
+    bool operator==(const FoldPosition&) const = default;
 };
 
 // What a toggle folds away and unfolds again, starting folded. It unfolds over the module's width transition and its
@@ -82,16 +82,16 @@ class Fold {
   public:
     explicit Fold(const ModuleStyle& style);
 
-    void         Toggle(std::chrono::steady_clock::time_point now);
+    void Toggle(std::chrono::steady_clock::time_point now);
     FoldPosition At(std::chrono::steady_clock::time_point now) const;
-    bool         Running(std::chrono::steady_clock::time_point now) const;
+    bool Running(std::chrono::steady_clock::time_point now) const;
 
   private:
-    Transition    _revealTransition;
-    Transition    _turnTransition;
-    float         _foldedDegrees;
-    float         _unfoldedDegrees;
-    bool          _unfolded = false;
+    Transition _revealTransition;
+    Transition _turnTransition;
+    float _foldedDegrees;
+    float _unfoldedDegrees;
+    bool _unfolded = false;
     AnimatedValue _reveal{0.0f};
     AnimatedValue _turn{0.0f};
 };

@@ -6,8 +6,8 @@ Group::Group(const GroupConfig& config, const ModuleStyle& style) : _icon(config
 
 bool Group::Layout(const RenderContext& render) {
     const FoldPosition position = _fold.At(render.frameTime);
-    const bool         changed  = !_laidOut || position != _shown;
-    _shown                      = position;
+    const bool changed = !_laidOut || position != _shown;
+    _shown = position;
     if (!_laidOut) {
         _toggle = LayOutIconText(render, _icon, L"");
     }

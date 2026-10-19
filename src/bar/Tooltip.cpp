@@ -48,26 +48,26 @@ namespace {
 } // namespace
 
 RECT TooltipRect(const TooltipAnchor& anchor, SIZE size) {
-    const RECT&  targetRect  = anchor.target;
-    const RECT&  monitorRect = anchor.monitorRect;
-    std::int32_t left        = 0;
-    std::int32_t top         = 0;
+    const RECT& targetRect = anchor.target;
+    const RECT& monitorRect = anchor.monitorRect;
+    std::int32_t left = 0;
+    std::int32_t top = 0;
     switch (anchor.edge) {
         case Edge::Top:
         case Edge::Bottom:
             left = KeepWithin(((targetRect.left + targetRect.right) / 2) - (size.cx / 2), size.cx, monitorRect.left, monitorRect.right);
-            top  = DesktopSideTop(anchor, size);
+            top = DesktopSideTop(anchor, size);
             break;
         case Edge::Left:
         case Edge::Right:
-            top  = KeepWithin(((targetRect.top + targetRect.bottom) / 2) - (size.cy / 2), size.cy, monitorRect.top, monitorRect.bottom);
+            top = KeepWithin(((targetRect.top + targetRect.bottom) / 2) - (size.cy / 2), size.cy, monitorRect.top, monitorRect.bottom);
             left = KeepWithin(DesktopSideLeft(anchor, size), size.cx, monitorRect.left, monitorRect.right);
             break;
     }
     return RECT{
-        .left   = left,
-        .top    = top,
-        .right  = left + size.cx,
+        .left = left,
+        .top = top,
+        .right = left + size.cx,
         .bottom = top + size.cy,
     };
 }
@@ -83,11 +83,11 @@ Tooltip::Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Confi
 void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     // Wrapped at the monitor's width and cut at its height: text from a command or a window title can be any length,
     // and a surface past the GPU's texture size limit cannot be created.
-    const BoxStyle&           style         = _config.style.tooltip.box;
-    const Insets              insets        = ContentInsets(style);
-    const std::int32_t        monitorWidth  = anchor.monitorRect.right - anchor.monitorRect.left;
-    const std::int32_t        monitorHeight = anchor.monitorRect.bottom - anchor.monitorRect.top;
-    const float               widthDips     = PixelsToDips(static_cast<float>(monitorWidth), anchor.dpi);
+    const BoxStyle& style = _config.style.tooltip.box;
+    const Insets insets = ContentInsets(style);
+    const std::int32_t monitorWidth = anchor.monitorRect.right - anchor.monitorRect.left;
+    const std::int32_t monitorHeight = anchor.monitorRect.bottom - anchor.monitorRect.top;
+    const float widthDips = PixelsToDips(static_cast<float>(monitorWidth), anchor.dpi);
     ComPtr<IDWriteTextLayout> layout;
     ThrowIfFailed(_graphics.dwrite->CreateTextLayout(text.data(), static_cast<std::uint32_t>(text.size()), _textFormat, std::max(widthDips - insets.left - insets.right, 1.0f),
                                                      std::numeric_limits<float>::max(), &layout),
@@ -102,10 +102,10 @@ void Tooltip::Show(std::wstring_view text, const TooltipAnchor& anchor) {
     _canvas.reset();
     _canvas = std::make_unique<Canvas>(_graphics, _window.get(), static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
 
-    const RECT          rect    = TooltipRect(anchor, size);
+    const RECT rect = TooltipRect(anchor, size);
     ID2D1DeviceContext* context = _canvas->surface.Context();
-    const D2D1_SIZE_F   area    = context->GetSize();
-    const D2D1_RECT_F   box     = D2D1::RectF(0, 0, area.width, area.height);
+    const D2D1_SIZE_F area = context->GetSize();
+    const D2D1_RECT_F box = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
     DrawBackdrops(_canvas->surface, _wallpapers, _config.style.tooltip.backdrop, {box}, style, rect);

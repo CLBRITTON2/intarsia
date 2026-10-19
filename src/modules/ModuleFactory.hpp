@@ -21,24 +21,24 @@
 // pointer is null unless the config shows a module of its kind, since a source samples the system for as long as it
 // exists, and the tray takes over every app's icons.
 struct ModuleSources {
-    IWindowManager&        windowManager;
-    const CommandPollers&  commandPollers;
+    IWindowManager& windowManager;
+    const CommandPollers& commandPollers;
     const CounterSamplers& counterSamplers;
-    WindowIcons*           windowIcons;
-    IAudio*                audioOutput;
-    IAudio*                audioInput;
-    const INetwork*        network;
-    const IBattery*        battery;
-    ITray*                 tray;
-    HMONITOR               monitor;
+    WindowIcons* windowIcons;
+    IAudio* audioOutput;
+    IAudio* audioInput;
+    const INetwork* network;
+    const IBattery* battery;
+    ITray* tray;
+    HMONITOR monitor;
 };
 
 // One module a bar shows, with its style. A group's entry also holds the group and its members, which the bar lays out
 // after the group's toggle.
 struct ModuleEntry {
     std::unique_ptr<IModule> module;
-    ModuleStyle              style;
-    const Group*             group;   // module, for a group, and null for any other type
+    ModuleStyle style;
+    const Group* group;               // module, for a group, and null for any other type
     std::vector<ModuleEntry> members; // a group's, in the order it lists them
 };
 

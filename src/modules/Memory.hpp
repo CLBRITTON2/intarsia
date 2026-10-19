@@ -28,8 +28,8 @@ class Memory final : public TextModule {
     explicit Memory(TextModuleConfig config);
 
   private:
-    ModuleText   Format(const std::string& spec) override;
+    ModuleText Format(const std::string& spec) override;
 
-    MemoryUsage  _usage;
+    MemoryUsage _usage;
     SampledTexts _texts;
 };

@@ -45,7 +45,7 @@ namespace {
         size_t index = 0;
         while (index < format.size()) {
             const char character = format[index];
-            const bool doubled   = index + 1 < format.size() && format[index + 1] == character;
+            const bool doubled = index + 1 < format.size() && format[index + 1] == character;
             if (character == '}') {
                 if (!doubled) {
                     throw std::format_error(std::format("'}}' at {} has no '{{' before it, write '}}}}' for a brace", index));
@@ -69,7 +69,7 @@ namespace {
                 throw std::format_error(std::format("'{{' at {} is never closed with '}}'", index));
             }
             const std::string_view inside = format.substr(index + 1, close - index - 1);
-            const size_t           colon  = inside.find(':');
+            const size_t colon = inside.find(':');
             if (colon == std::string_view::npos) {
                 onField(inside, std::string_view());
             } else {
@@ -103,8 +103,8 @@ bool FormatNames(std::string_view format, std::string_view name) {
 
 std::string FormatRate(double bytesPerSecond) {
     constexpr std::array<std::string_view, 4> kUnits{"B/s", "kB/s", "MB/s", "GB/s"};
-    double                                    value = bytesPerSecond;
-    size_t                                    unit  = 0;
+    double value = bytesPerSecond;
+    size_t unit = 0;
     while (value >= 1000.0 && unit + 1 < kUnits.size()) {
         value /= 1000.0;
         ++unit;

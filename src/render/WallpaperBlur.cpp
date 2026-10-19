@@ -27,7 +27,7 @@ namespace {
     // them. At most 8 times, past which stretching it back over the monitor shows bands.
     constexpr std::uint32_t kLargestDownscale = 8;
 
-    float                   DeviationPixels(const Backdrop& backdrop, std::uint32_t dpi) {
+    float DeviationPixels(const Backdrop& backdrop, std::uint32_t dpi) {
         return backdrop.radiusDips * static_cast<float>(dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
     }
 
@@ -59,24 +59,24 @@ namespace {
     PlacedImage Downscaled(const RECT& imageRect, const RECT& monitorRect, std::uint32_t downscale) {
         const auto scale = static_cast<double>(downscale);
         return PlacedImage{
-            .left   = std::llround(static_cast<double>(imageRect.left - monitorRect.left) / scale),
-            .top    = std::llround(static_cast<double>(imageRect.top - monitorRect.top) / scale),
-            .width  = std::max(std::llround(static_cast<double>(imageRect.right - imageRect.left) / scale), std::int64_t{1}),
+            .left = std::llround(static_cast<double>(imageRect.left - monitorRect.left) / scale),
+            .top = std::llround(static_cast<double>(imageRect.top - monitorRect.top) / scale),
+            .width = std::max(std::llround(static_cast<double>(imageRect.right - imageRect.left) / scale), std::int64_t{1}),
             .height = std::max(std::llround(static_cast<double>(imageRect.bottom - imageRect.top) / scale), std::int64_t{1}),
         };
     }
 
     // The part of a placed image that lands on the copy: source in the scaled image's pixels, target in the copy's.
     struct ImageSlice {
-        WICRect     source;
+        WICRect source;
         D2D1_RECT_F target;
     };
 
     // None when the image lands wholly off a copy of size.
     std::optional<ImageSlice> SliceOn(const PlacedImage& image, D2D1_SIZE_U size) {
-        const std::int64_t left   = std::max(image.left, std::int64_t{0});
-        const std::int64_t top    = std::max(image.top, std::int64_t{0});
-        const std::int64_t right  = std::min(image.left + image.width, static_cast<std::int64_t>(size.width));
+        const std::int64_t left = std::max(image.left, std::int64_t{0});
+        const std::int64_t top = std::max(image.top, std::int64_t{0});
+        const std::int64_t right = std::min(image.left + image.width, static_cast<std::int64_t>(size.width));
         const std::int64_t bottom = std::min(image.top + image.height, static_cast<std::int64_t>(size.height));
         if (right <= left || bottom <= top) {
             return std::nullopt;
@@ -84,9 +84,9 @@ namespace {
         return ImageSlice{
             .source =
                 WICRect{
-                    .X      = static_cast<INT>(left - image.left),
-                    .Y      = static_cast<INT>(top - image.top),
-                    .Width  = static_cast<INT>(right - left),
+                    .X = static_cast<INT>(left - image.left),
+                    .Y = static_cast<INT>(top - image.top),
+                    .Width = static_cast<INT>(right - left),
                     .Height = static_cast<INT>(bottom - top),
                 },
             .target = D2D1::RectF(static_cast<float>(left), static_cast<float>(top), static_cast<float>(right), static_cast<float>(bottom)),
@@ -101,15 +101,15 @@ namespace {
         if (imageSize.width == 0 || imageSize.height == 0) {
             throw WallpaperError(std::format("the wallpaper {} is {}x{} pixels", ToUtf8(wallpaper.image.wstring()), imageSize.width, imageSize.height));
         }
-        const PlacedImage               placed = Downscaled(PlaceWallpaper(wallpaper.fit, imageSize, monitorRect, wallpaper.desktopRect), monitorRect, downscale);
-        const std::optional<ImageSlice> slice  = SliceOn(placed, size);
+        const PlacedImage placed = Downscaled(PlaceWallpaper(wallpaper.fit, imageSize, monitorRect, wallpaper.desktopRect), monitorRect, downscale);
+        const std::optional<ImageSlice> slice = SliceOn(placed, size);
         if (!slice.has_value()) {
             return;
         }
         // Scaled by WIC rather than D2D, which averages every source pixel into a far smaller copy, and clipped to the
         // part that shows, so a fill of a tall image on a wide monitor never outgrows the largest bitmap.
         const ComPtr<IWICImagingFactory> imaging = CreateImagingFactory();
-        ComPtr<IWICBitmapScaler>         scaler;
+        ComPtr<IWICBitmapScaler> scaler;
         ThrowIfFailed(imaging->CreateBitmapScaler(&scaler), "IWICImagingFactory::CreateBitmapScaler");
         ThrowIfFailed(scaler->Initialize(image, static_cast<UINT>(placed.width), static_cast<UINT>(placed.height), WICBitmapInterpolationModeFant), "IWICBitmapScaler::Initialize");
         ComPtr<IWICBitmapClipper> clipper;
@@ -204,9 +204,9 @@ void WallpaperBlur::Fill(ID2D1DeviceContext* context, const RECT& windowRect, co
         return;
     }
     // From the blur's pixels to the window's DIPs: each spans _downscale monitor pixels, from the monitor's top left.
-    const float             pixelsPerDip = PixelGridOf(context).pixelsPerDip;
-    const float             scale        = static_cast<float>(_downscale) / pixelsPerDip;
-    const D2D1_MATRIX_3X2_F placement    = D2D1::Matrix3x2F::Scale(scale, scale) *
+    const float pixelsPerDip = PixelGridOf(context).pixelsPerDip;
+    const float scale = static_cast<float>(_downscale) / pixelsPerDip;
+    const D2D1_MATRIX_3X2_F placement = D2D1::Matrix3x2F::Scale(scale, scale) *
         D2D1::Matrix3x2F::Translation(static_cast<float>(_monitorRect.left - windowRect.left) / pixelsPerDip, static_cast<float>(_monitorRect.top - windowRect.top) / pixelsPerDip);
     ComPtr<ID2D1BitmapBrush1> brush;
     ThrowIfDeviceFailed(context->CreateBitmapBrush(_blurred.Get(), D2D1::BitmapBrushProperties1(D2D1_EXTEND_MODE_CLAMP, D2D1_EXTEND_MODE_CLAMP, D2D1_INTERPOLATION_MODE_LINEAR),
@@ -218,7 +218,7 @@ void WallpaperBlur::Fill(ID2D1DeviceContext* context, const RECT& windowRect, co
 }
 
 ComPtr<IWICBitmapSource> DecodeWallpaper(IWICImagingFactory& imaging, const std::filesystem::path& image) {
-    const std::string         name = ToUtf8(image.wstring());
+    const std::string name = ToUtf8(image.wstring());
     ComPtr<IWICBitmapDecoder> decoder;
     ThrowIfFailed(imaging.CreateDecoderFromFilename(image.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder),
                   std::format("IWICImagingFactory::CreateDecoderFromFilename({})", name));
@@ -242,8 +242,8 @@ std::vector<WallpaperBlur> BlurWallpapers(const GraphicsDevice& graphics, const 
     if (backdrops.empty()) {
         return blurs;
     }
-    const Wallpaper                wallpaper = ReadWallpaper(monitorRect);
-    const ComPtr<IWICBitmapSource> image     = DecodedImage(wallpaper);
+    const Wallpaper wallpaper = ReadWallpaper(monitorRect);
+    const ComPtr<IWICBitmapSource> image = DecodedImage(wallpaper);
     blurs.reserve(backdrops.size());
     for (const Backdrop& backdrop : backdrops) {
         blurs.emplace_back(graphics, wallpaper, image.Get(), monitorRect, dpi, backdrop);

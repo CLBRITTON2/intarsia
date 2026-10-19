@@ -16,8 +16,8 @@
 // margin around it, centered across the row.
 struct ItemRow {
     std::vector<D2D1_RECT_F> boxes; // from the row's origin
-    D2D1_SIZE_F              size;
-    Axis                     axis;
+    D2D1_SIZE_F size;
+    Axis axis;
 };
 
 // Nothing arranged yet.
@@ -47,8 +47,8 @@ void DrawItemBackground(const RenderContext& render, const D2D1_RECT_F& box, con
 class HoveredItem {
   public:
     // Returns whether item differs from the one held before.
-    bool                  Set(std::optional<size_t> item);
-    bool                  Is(size_t index) const;
+    bool Set(std::optional<size_t> item);
+    bool Is(size_t index) const;
     std::optional<size_t> Get() const;
 
   private:
@@ -61,17 +61,17 @@ class HoveredItem {
 class ItemFades {
   public:
     // A new index starts at its style's colors, as an item that just appeared has nothing to fade from.
-    void                     Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hover, std::chrono::steady_clock::time_point now);
-    D2D1_COLOR_F             Background(size_t index, std::chrono::steady_clock::time_point now) const;
-    D2D1_COLOR_F             Text(size_t index, std::chrono::steady_clock::time_point now) const;
+    void Follow(const std::vector<const ItemStyle*>& styles, const HoveredItem& hover, std::chrono::steady_clock::time_point now);
+    D2D1_COLOR_F Background(size_t index, std::chrono::steady_clock::time_point now) const;
+    D2D1_COLOR_F Text(size_t index, std::chrono::steady_clock::time_point now) const;
     std::vector<InsetShadow> Shadows(size_t index, std::chrono::steady_clock::time_point now) const;
     // A module's MillisecondsUntilChange: 0 while an item fades, so the bar draws every frame, and none after.
     std::optional<std::uint32_t> Wait(std::chrono::steady_clock::time_point now) const;
 
   private:
     struct Fade {
-        ColorFade  background;
-        ColorFade  text;
+        ColorFade background;
+        ColorFade text;
         ShadowFade shadows;
     };
     std::vector<Fade> _fades;

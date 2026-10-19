@@ -12,13 +12,13 @@
 struct IconText {
     Microsoft::WRL::ComPtr<IDWriteTextLayout> icon; // null when there is no icon
     Microsoft::WRL::ComPtr<IDWriteTextLayout> text; // null when there is no text
-    Axis                                      axis;
-    D2D1_SIZE_F                               iconSize;
-    float                                     iconInkShiftDips; // moves the icon's ink onto its line's center, down when positive
-    D2D1_SIZE_F                               textSize;
-    float                                     textLeftDips; // where the text's lines start in its layout, which centers them in the room
-    float                                     gapDips;      // 0 unless there are both
-    D2D1_SIZE_F                               size;         // both, and the gap
+    Axis axis;
+    D2D1_SIZE_F iconSize;
+    float iconInkShiftDips; // moves the icon's ink onto its line's center, down when positive
+    D2D1_SIZE_F textSize;
+    float textLeftDips; // where the text's lines start in its layout, which centers them in the room
+    float gapDips;      // 0 unless there are both
+    D2D1_SIZE_F size;   // both, and the gap
 };
 
 // The icon in the icon font and size, the icon gap, then the text. Layout only measures: colors are chosen at draw, so

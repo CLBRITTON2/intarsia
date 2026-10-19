@@ -12,10 +12,10 @@
 // allocator's user data.
 struct LuaLimits {
     lua_Alloc allocate; // Lua's own allocator, which the limited one bounds
-    void*     allocateData;
-    size_t    usedBytes;
-    size_t    limitBytes;
-    bool      runaway;
+    void* allocateData;
+    size_t usedBytes;
+    size_t limitBytes;
+    bool runaway;
 };
 
 // A Lua state that has run a config chunk and holds the value it returned, a table, on top of its stack. The chunk
@@ -26,13 +26,13 @@ class LuaSandbox {
     LuaSandbox(std::string_view chunk, const std::string& source);
 
     // The allocator's user data points at _limits.
-    LuaSandbox(const LuaSandbox&)            = delete;
+    LuaSandbox(const LuaSandbox&) = delete;
     LuaSandbox& operator=(const LuaSandbox&) = delete;
 
-    lua_State*  State() const;
+    lua_State* State() const;
 
   private:
     // Declared before the state, whose close frees through the limited allocator.
-    LuaLimits                              _limits;
+    LuaLimits _limits;
     UniqueReleased<lua_State*, &lua_close> _lua;
 };

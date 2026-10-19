@@ -26,10 +26,10 @@ namespace integration {
         constexpr std::int32_t kSweepStepPixels = 3;
         // How long the command stream stays unchanged before a sweep's commands count as all sent.
         constexpr std::chrono::milliseconds kQuietFor{300};
-        constexpr std::chrono::seconds      kStartLimit{15};
-        constexpr std::chrono::seconds      kExitLimit{10};
+        constexpr std::chrono::seconds kStartLimit{15};
+        constexpr std::chrono::seconds kExitLimit{10};
 
-        std::string                         ReadAll(const std::filesystem::path& path) {
+        std::string ReadAll(const std::filesystem::path& path) {
             std::ifstream file(path, std::ios::binary);
             if (!file) {
                 throw std::runtime_error(std::format("cannot open {}", path.string()));
@@ -49,13 +49,13 @@ namespace integration {
 
         // Waits until count stops changing, then returns its last value.
         size_t SettledCount(const std::function<size_t()>& count) {
-            size_t last    = count();
-            auto   changed = std::chrono::steady_clock::now();
+            size_t last = count();
+            auto changed = std::chrono::steady_clock::now();
             while (std::chrono::steady_clock::now() - changed < kQuietFor) {
                 PumpMessagesAndWait();
                 const size_t now = count();
                 if (now != last) {
-                    last    = now;
+                    last = now;
                     changed = std::chrono::steady_clock::now();
                 }
             }
@@ -135,7 +135,7 @@ namespace integration {
         // The bar's window on the primary monitor, where the test server puts every workspace, or null while it has none.
         HWND PrimaryBarWindow(std::uint32_t processId) {
             HMONITOR primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
-            HWND     window  = nullptr;
+            HWND window = nullptr;
             while ((window = FindWindowExW(nullptr, window, L"IntarsiaBar", nullptr)) != nullptr) {
                 DWORD owner = 0;
                 GetWindowThreadProcessId(window, &owner);
@@ -149,7 +149,7 @@ namespace integration {
         // The process's top-level window of a class while it is shown, or null.
         HWND VisibleWindow(std::uint32_t processId, std::wstring_view className) {
             const std::wstring name(className);
-            HWND               window = nullptr;
+            HWND window = nullptr;
             while ((window = FindWindowExW(nullptr, window, name.c_str(), nullptr)) != nullptr) {
                 DWORD owner = 0;
                 GetWindowThreadProcessId(window, &owner);
@@ -208,23 +208,23 @@ namespace integration {
 
     TestWindow::TestWindow(std::wstring_view suffix) {
         const WNDCLASSEXW windowClass{
-            .cbSize        = sizeof(WNDCLASSEXW),
-            .style         = 0,
-            .lpfnWndProc   = DefWindowProcW,
-            .cbClsExtra    = 0,
-            .cbWndExtra    = 0,
-            .hInstance     = GetModuleHandleW(nullptr),
-            .hIcon         = LoadIconW(nullptr, IDI_APPLICATION),
-            .hCursor       = nullptr,
+            .cbSize = sizeof(WNDCLASSEXW),
+            .style = 0,
+            .lpfnWndProc = DefWindowProcW,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = GetModuleHandleW(nullptr),
+            .hIcon = LoadIconW(nullptr, IDI_APPLICATION),
+            .hCursor = nullptr,
             .hbrBackground = nullptr,
-            .lpszMenuName  = nullptr,
+            .lpszMenuName = nullptr,
             .lpszClassName = kWindowClass,
-            .hIconSm       = nullptr,
+            .hIconSm = nullptr,
         };
         // A second window registers the class again, which fails harmlessly.
         RegisterClassExW(&windowClass);
         const std::wstring title = std::wstring(kWindowTitle) + std::wstring(suffix);
-        _window                  = CreateWindowExW(0, kWindowClass, title.c_str(), WS_OVERLAPPEDWINDOW, 0, 0, 200, 100, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+        _window = CreateWindowExW(0, kWindowClass, title.c_str(), WS_OVERLAPPEDWINDOW, 0, 0, 200, 100, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (_window == nullptr) {
             ThrowLastError("CreateWindowExW(test window)");
         }
@@ -257,9 +257,9 @@ namespace integration {
     }
 
     std::vector<std::string> ReadLines(const std::filesystem::path& path) {
-        const std::string        text = ReadAll(path);
+        const std::string text = ReadAll(path);
         std::vector<std::string> lines;
-        size_t                   start = 0;
+        size_t start = 0;
         // A last line with no newline yet is still being written.
         for (size_t end = text.find('\n'); end != std::string::npos; end = text.find('\n', start)) {
             std::string line = text.substr(start, end - start);
@@ -299,7 +299,7 @@ namespace integration {
 
     std::uint32_t SweepClicks(HWND bar) {
         const std::int32_t length = LengthAlongBar(ClientRect(bar));
-        std::uint32_t      clicks = 0;
+        std::uint32_t clicks = 0;
         for (std::int32_t offset = 0; offset < length; offset += kSweepStepPixels) {
             SendClick(bar, offset);
             ++clicks;
@@ -333,10 +333,10 @@ namespace integration {
 
     Capture CaptureScreenOver(HWND window) {
         const RECT rect = ScreenRect(window);
-        Capture    capture{
-               .width  = rect.right - rect.left,
-               .height = rect.bottom - rect.top,
-               .pixels = {},
+        Capture capture{
+            .width = rect.right - rect.left,
+            .height = rect.bottom - rect.top,
+            .pixels = {},
         };
         capture.pixels.resize(static_cast<size_t>(capture.width) * static_cast<size_t>(capture.height));
 
@@ -344,26 +344,26 @@ namespace integration {
         if (screen == nullptr) {
             throw std::runtime_error("GetDC(screen) failed");
         }
-        HDC     memory = CreateCompatibleDC(screen);
+        HDC memory = CreateCompatibleDC(screen);
         HBITMAP bitmap = CreateCompatibleBitmap(screen, capture.width, capture.height);
-        HGDIOBJ old    = SelectObject(memory, bitmap);
+        HGDIOBJ old = SelectObject(memory, bitmap);
         // CAPTUREBLT takes layered windows too, as the bar is one.
         const BOOL copied = BitBlt(memory, 0, 0, capture.width, capture.height, screen, rect.left, rect.top, SRCCOPY | CAPTUREBLT);
         SelectObject(memory, old);
         // A negative height asks for rows top to bottom.
         BITMAPINFO info{};
         info.bmiHeader = BITMAPINFOHEADER{
-            .biSize          = sizeof(BITMAPINFOHEADER),
-            .biWidth         = capture.width,
-            .biHeight        = -capture.height,
-            .biPlanes        = 1,
-            .biBitCount      = 32,
-            .biCompression   = BI_RGB,
-            .biSizeImage     = 0,
+            .biSize = sizeof(BITMAPINFOHEADER),
+            .biWidth = capture.width,
+            .biHeight = -capture.height,
+            .biPlanes = 1,
+            .biBitCount = 32,
+            .biCompression = BI_RGB,
+            .biSizeImage = 0,
             .biXPelsPerMeter = 0,
             .biYPelsPerMeter = 0,
-            .biClrUsed       = 0,
-            .biClrImportant  = 0,
+            .biClrUsed = 0,
+            .biClrImportant = 0,
         };
         const std::int32_t rows = GetDIBits(memory, bitmap, 0, static_cast<UINT>(capture.height), capture.pixels.data(), &info, DIB_RGB_COLORS);
         DeleteObject(bitmap);
@@ -391,8 +391,8 @@ namespace integration {
         for (size_t index = 0; index < capture.pixels.size(); ++index) {
             if (capture.pixels[index] == rgb) {
                 const auto column = static_cast<std::int32_t>(index % static_cast<size_t>(capture.width));
-                leftmost          = std::min(leftmost.value_or(column), column);
-                rightmost         = std::max(rightmost.value_or(column), column);
+                leftmost = std::min(leftmost.value_or(column), column);
+                rightmost = std::max(rightmost.value_or(column), column);
             }
         }
         if (!leftmost.has_value() || !rightmost.has_value()) {
@@ -402,7 +402,7 @@ namespace integration {
     }
 
     std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb) {
-        double sum   = 0;
+        double sum = 0;
         size_t count = 0;
         for (size_t index = 0; index < capture.pixels.size(); ++index) {
             if (capture.pixels[index] == rgb) {
@@ -434,8 +434,8 @@ namespace integration {
 
     TestServer GlazeWmTestServer(std::wstring_view scenario) {
         return TestServer{
-            .program    = Executable(INTARSIA_GLAZEWM_SERVER),
-            .scenario   = std::wstring(scenario),
+            .program = Executable(INTARSIA_GLAZEWM_SERVER),
+            .scenario = std::wstring(scenario),
             .readyEvent = "connected",
         };
     }
@@ -574,7 +574,7 @@ namespace integration {
 
     bool RunningBar::Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const {
         std::optional<size_t> count;
-        const bool            drawn = Eventually(
+        const bool drawn = Eventually(
             [&] {
                 count = PixelCount(rgb);
                 return count.value_or(0) > 0;
@@ -586,7 +586,7 @@ namespace integration {
 
     bool RunningBar::StopsDrawing(std::uint32_t rgb, std::chrono::milliseconds limit) const {
         std::optional<size_t> count;
-        const bool            gone = Eventually(
+        const bool gone = Eventually(
             [&] {
                 count = PixelCount(rgb);
                 return count == size_t{0};
@@ -616,10 +616,10 @@ namespace integration {
     }
 
     std::vector<std::string> RunningBar::Sweep(std::uint32_t attempt) const {
-        const auto          count   = [this] { return Commands().size(); };
-        const size_t        before  = count();
-        const auto          started = std::chrono::steady_clock::now();
-        const std::uint32_t clicks  = SweepClicks(PrimaryBar());
+        const auto count = [this] { return Commands().size(); };
+        const size_t before = count();
+        const auto started = std::chrono::steady_clock::now();
+        const std::uint32_t clicks = SweepClicks(PrimaryBar());
         SettledCount(count);
         const std::vector<std::string> commands = Commands();
         const std::vector<std::string> sent(commands.begin() + static_cast<std::ptrdiff_t>(before), commands.end());
@@ -671,9 +671,9 @@ namespace integration {
         if (!_server.has_value()) {
             throw std::logic_error("the test GlazeWM server is stopped");
         }
-        const std::string pushed  = std::format("pushed focus {}", index);
-        const size_t      before  = static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed));
-        const auto        started = std::chrono::steady_clock::now();
+        const std::string pushed = std::format("pushed focus {}", index);
+        const size_t before = static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed));
+        const auto started = std::chrono::steady_clock::now();
         _server->WriteLine(std::format("focus {}", index));
         if (!Eventually([&] { return static_cast<size_t>(std::ranges::count(ReadLines(ServerOutput(_serverStarts)), pushed)) > before; }, kStartLimit)) {
             PrintLogs();
@@ -694,9 +694,9 @@ namespace integration {
 
     // The child is killed with its job when it is reset still running.
     std::optional<std::uint32_t> RunningBar::Close() {
-        const std::uint32_t                pid     = OpenBar().Id();
-        const auto                         closing = std::chrono::steady_clock::now();
-        const std::optional<std::uint32_t> code    = OpenBar().Close(kExitLimit);
+        const std::uint32_t pid = OpenBar().Id();
+        const auto closing = std::chrono::steady_clock::now();
+        const std::optional<std::uint32_t> code = OpenBar().Close(kExitLimit);
         _bar.reset();
         if (code.has_value()) {
             Log("bar_exited", std::format("pid={} code={} after_ms={}", pid, *code, MillisecondsSince(closing)));

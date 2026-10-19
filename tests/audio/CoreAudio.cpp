@@ -15,9 +15,9 @@ namespace {
 
     // Whether the system has a default output device, asked of Core Audio directly.
     bool HasDefaultOutput() {
-        const ComScope                              com(ComThreading::Multi, "audio test");
+        const ComScope com(ComThreading::Multi, "audio test");
         Microsoft::WRL::ComPtr<IMMDeviceEnumerator> enumerator;
-        Microsoft::WRL::ComPtr<IMMDevice>           device;
+        Microsoft::WRL::ComPtr<IMMDevice> device;
         return SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&enumerator))) &&
             SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device));
     }
@@ -29,7 +29,7 @@ TEST(CoreAudio, ReadsTheDefaultOutputDevice) {
     if (!HasDefaultOutput()) {
         GTEST_SKIP() << "no default output device on this machine";
     }
-    ChangeTarget    target(kChanged);
+    ChangeTarget target(kChanged);
     const CoreAudio audio(target.signal, AudioFlow::Output);
     EXPECT_TRUE(Eventually([&audio] { return audio.Device().has_value(); }, std::chrono::seconds(5))) << "no output device read within 5 s";
     MSG message{};
@@ -38,7 +38,7 @@ TEST(CoreAudio, ReadsTheDefaultOutputDevice) {
 
 TEST(CoreAudio, StopsPromptlyRightAfterStarting) {
     ChangeTarget target(kChanged);
-    const auto   started = std::chrono::steady_clock::now();
+    const auto started = std::chrono::steady_clock::now();
     for (std::int32_t round = 0; round < 20; ++round) {
         const CoreAudio audio(target.signal, AudioFlow::Output);
     }

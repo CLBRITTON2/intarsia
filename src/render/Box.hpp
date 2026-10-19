@@ -37,8 +37,8 @@ struct Insets {
 
 Insets ContentInsets(const BoxStyle& style);
 
-bool   SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second);
-bool   SameShadow(const InsetShadow& first, const InsetShadow& second);
+bool SameColor(const D2D1_COLOR_F& first, const D2D1_COLOR_F& second);
+bool SameShadow(const InsetShadow& first, const InsetShadow& second);
 
 // Each drawn side's width rounded down to whole device pixels, never below one. At a fractional scale a 1px line
 // otherwise half-lights two rows of pixels and looks blurred. Shadows are snapped as they draw, side by side.
@@ -68,12 +68,12 @@ class BoxCache {
 
   private:
     struct Entry {
-        Border                               border;
-        std::vector<InsetShadow>             shadows;
-        float                                radius;
-        float                                pixelsPerDip;
-        std::uint32_t                        width; // pixels
-        std::uint32_t                        height;
+        Border border;
+        std::vector<InsetShadow> shadows;
+        float radius;
+        float pixelsPerDip;
+        std::uint32_t width; // pixels
+        std::uint32_t height;
         Microsoft::WRL::ComPtr<ID2D1Bitmap1> bitmap;
     };
 
@@ -84,8 +84,8 @@ class BoxCache {
 
     // Its own, on the caller's device, so a miss draws while the caller's context is mid-frame.
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
-    BrushCache                                 _brushes;
-    std::vector<Entry>                         _entries; // least recently drawn first
+    BrushCache _brushes;
+    std::vector<Entry> _entries; // least recently drawn first
 };
 
 // Fills bounds with fill, then paints style's inset shadows and border inside it, all rounded to style's radius and
@@ -98,7 +98,7 @@ struct Canvas {
     Canvas(const GraphicsDevice& graphics, HWND window, std::uint32_t width, std::uint32_t height, std::uint32_t dpi) :
         surface(graphics, window, width, height, dpi), brushes(surface.Context()), boxes(surface.Context()) {}
 
-    Surface    surface;
+    Surface surface;
     BrushCache brushes;
-    BoxCache   boxes;
+    BoxCache boxes;
 };

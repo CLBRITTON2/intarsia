@@ -24,7 +24,7 @@ namespace {
         ] }
     })json";
 
-    constexpr char             kFirstWindowId[] = "0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a";
+    constexpr char kFirstWindowId[] = "0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a";
 
     // Windows directly under a displayed workspace and inside a split, and one on a hidden workspace the bar skips.
     constexpr std::string_view kWindowsResponse = R"json({
@@ -131,7 +131,7 @@ TEST(GlazeWmProtocol, AWorkspaceHoldingAnUnknownContainerIsAProtocolError) {
 
 TEST(GlazeWmProtocol, DeeplyNestedSplitsDoNotOverflowTheStack) {
     constexpr std::int32_t kDepth = 20'000;
-    std::string            nested;
+    std::string nested;
     for (std::int32_t depth = 0; depth < kDepth; ++depth) {
         nested += R"({"type":"split","children":[)";
     }

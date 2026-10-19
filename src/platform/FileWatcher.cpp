@@ -50,16 +50,16 @@ void FileWatcher::Watch(HANDLE stopEvent) {
 }
 
 void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
-    const UniqueHandle          readDone = ManualResetEvent("read");
-    std::vector<DWORD>          buffer(kBufferDwords);
-    const DWORD                 bufferBytes = static_cast<DWORD>(buffer.size() * sizeof(DWORD));
-    OVERLAPPED                  overlapped{};
+    const UniqueHandle readDone = ManualResetEvent("read");
+    std::vector<DWORD> buffer(kBufferDwords);
+    const DWORD bufferBytes = static_cast<DWORD>(buffer.size() * sizeof(DWORD));
+    OVERLAPPED overlapped{};
     const std::array<HANDLE, 2> waits{stopEvent, readDone.get()};
-    bool                        pending = false;
-    bool                        reading = false;
+    bool pending = false;
+    bool reading = false;
 
-    const auto                  startRead = [&] {
-        overlapped        = OVERLAPPED{};
+    const auto startRead = [&] {
+        overlapped = OVERLAPPED{};
         overlapped.hEvent = readDone.get();
         ResetEvent(readDone.get());
         if (!ReadDirectoryChangesW(_directory.get(), buffer.data(), bufferBytes, FALSE, kNotifyFilter, nullptr, &overlapped, nullptr)) {
@@ -81,7 +81,7 @@ void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
         startRead();
         while (true) {
             const DWORD timeout = SettleWaitMs(pending, _settle);
-            const DWORD woke    = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, timeout);
+            const DWORD woke = WaitForMultipleObjects(static_cast<DWORD>(waits.size()), waits.data(), FALSE, timeout);
             if (woke == WAIT_OBJECT_0) {
                 break;
             }
@@ -96,14 +96,14 @@ void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
                 ThrowLastError("WaitForMultipleObjects");
             }
 
-            reading     = false;
+            reading = false;
             DWORD bytes = 0;
             if (!GetOverlappedResult(_directory.get(), &overlapped, &bytes, FALSE)) {
                 ThrowLastError("GetOverlappedResult(ReadDirectoryChangesW)");
             }
             // Zero bytes means the change list overflowed the buffer, so the file may have changed.
-            const std::vector<std::wstring> names   = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
-            const auto                      watched = [this](const std::wstring& name) {
+            const std::vector<std::wstring> names = ChangedFileNames(std::as_bytes(std::span<const DWORD>(buffer)).first(bytes));
+            const auto watched = [this](const std::wstring& name) {
                 return std::ranges::any_of(_fileNames, [&name](const std::wstring& fileName) { return SameFileName(name, fileName); });
             };
             if (bytes == 0 || std::ranges::any_of(names, watched)) {
@@ -120,9 +120,9 @@ void FileWatcher::WatchUntilStopped(HANDLE stopEvent) {
 
 std::vector<std::wstring> ChangedFileNames(std::span<const std::byte> buffer) {
     // Not constexpr: the UCRT's offsetof uses reinterpret_cast, which clang rejects in a constant expression.
-    const size_t              kHeaderBytes = offsetof(FILE_NOTIFY_INFORMATION, FileName);
+    const size_t kHeaderBytes = offsetof(FILE_NOTIFY_INFORMATION, FileName);
     std::vector<std::wstring> names;
-    size_t                    offset = 0;
+    size_t offset = 0;
     while (offset + kHeaderBytes <= buffer.size()) {
         FILE_NOTIFY_INFORMATION header{};
         std::memcpy(&header, buffer.data() + offset, kHeaderBytes);

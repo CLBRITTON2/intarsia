@@ -33,9 +33,9 @@ namespace {
             ThrowLastError("GetSystemTimes");
         }
         return CpuTimes{
-            .idle   = Ticks(idle),
+            .idle = Ticks(idle),
             .kernel = Ticks(kernel),
-            .user   = Ticks(user),
+            .user = Ticks(user),
         };
     }
 
@@ -80,7 +80,7 @@ namespace {
 } // namespace
 
 std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
-    const std::uint64_t idle  = after.idle - before.idle;
+    const std::uint64_t idle = after.idle - before.idle;
     const std::uint64_t total = (after.kernel - before.kernel) + (after.user - before.user);
     if (idle > total) {
         throw std::runtime_error(std::format("GetSystemTimes reported more idle time ({}) than kernel plus user time ({}) between samples", idle, total));
@@ -94,10 +94,10 @@ std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
 Cpu::Cpu(TextModuleConfig config) :
     TextModule(std::move(config), "cpu",
                CpuPlaceholders(CpuSample{
-                   .usagePercent   = 0,
-                   .gigahertz      = 0.0,
+                   .usagePercent = 0,
+                   .gigahertz = 0.0,
                    .maxCorePercent = 0,
-                   .cores          = {},
+                   .cores = {},
                })),
     _previous(ReadCpuTimes()), _texts(std::chrono::steady_clock::now()),
     _baseFrequency(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\Processor Frequency")),
@@ -112,15 +112,15 @@ ModuleText Cpu::Format(const std::string& spec) {
 
 void Cpu::Sample() {
     const CpuTimes current = ReadCpuTimes();
-    _sample.usagePercent   = CpuUsagePercent(_previous, current);
-    _previous              = current;
+    _sample.usagePercent = CpuUsagePercent(_previous, current);
+    _previous = current;
     // A failed sample blanks the counters' values until one succeeds, rather than ending the bar over a tooltip. A
     // sample without a value keeps the last one.
     try {
         if (_baseFrequency != nullptr && _performance != nullptr) {
             _baseFrequency->Collect();
             _performance->Collect();
-            const std::optional<double> baseMegahertz      = SingleValue(*_baseFrequency);
+            const std::optional<double> baseMegahertz = SingleValue(*_baseFrequency);
             const std::optional<double> performancePercent = SingleValue(*_performance);
             if (baseMegahertz.has_value() && performancePercent.has_value()) {
                 _sample.gigahertz = CpuGigahertz(*baseMegahertz, *performancePercent);
@@ -131,20 +131,20 @@ void Cpu::Sample() {
             const std::optional<std::vector<CounterInstance>> cores = _cores->Instances();
             if (cores.has_value()) {
                 _sample.maxCorePercent = BusiestCorePercent(*cores);
-                _sample.cores          = FormatCoreUsage(*cores);
+                _sample.cores = FormatCoreUsage(*cores);
             }
         }
         _counterLog.Succeeded();
     } catch (const PdhError& error) {
         _counterLog.Failed("counter_failed", error);
-        _sample.gigahertz      = 0.0;
+        _sample.gigahertz = 0.0;
         _sample.maxCorePercent = 0;
         _sample.cores.clear();
     }
 }
 
 std::string FormatCoreUsage(const std::vector<CounterInstance>& instances) {
-    constexpr size_t                                    kPerLine = 4;
+    constexpr size_t kPerLine = 4;
     std::vector<std::pair<std::uint32_t, std::int64_t>> cores;
     for (const CounterInstance& instance : instances) {
         if (instance.name.empty() || !std::ranges::all_of(instance.name, [](wchar_t unit) { return unit >= L'0' && unit <= L'9'; })) {

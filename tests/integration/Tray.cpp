@@ -39,7 +39,7 @@ return {
 }
 )";
 
-    constexpr std::uint32_t    kToggleColor = 0x8E44AD;
+    constexpr std::uint32_t kToggleColor = 0x8E44AD;
 
     // Icons at 16 DIPs, the size the test icons are made at, and no transitions, so a fold is done on the next frame.
     constexpr std::string_view kStyle = R"(
@@ -67,21 +67,21 @@ tray {
 }
 )";
 
-    constexpr std::uint32_t    kGreen  = 0x27AE60;
-    constexpr std::uint32_t    kOrange = 0xF39C12;
+    constexpr std::uint32_t kGreen = 0x27AE60;
+    constexpr std::uint32_t kOrange = 0xF39C12;
     // The tray drops the icons of closed owners every 5 s.
-    constexpr auto    kSwept = std::chrono::seconds(7);
+    constexpr auto kSwept = std::chrono::seconds(7);
 
     constexpr wchar_t kOwnerClass[] = L"IntarsiaIntegrationTrayApp";
 
-    LRESULT CALLBACK  OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+    LRESULT CALLBACK OwnerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == kTrayAppCallback) {
             auto* received = reinterpret_cast<std::vector<TrayInputMessage>*>(GetWindowLongPtrW(window, GWLP_USERDATA)); // NOLINT(performance-no-int-to-ptr)
             if (received != nullptr) {
                 received->push_back(TrayInputMessage{
-                     .message = message,
-                     .wParam  = wParam,
-                     .lParam  = lParam,
+                    .message = message,
+                    .wParam = wParam,
+                    .lParam = lParam,
                 });
             }
             return 0;
@@ -95,10 +95,10 @@ tray {
         ~OwnedIcon() {
             DestroyIcon(_icon);
         }
-        OwnedIcon(const OwnedIcon&)            = delete;
+        OwnedIcon(const OwnedIcon&) = delete;
         OwnedIcon& operator=(const OwnedIcon&) = delete;
 
-        HICON      Get() const {
+        HICON Get() const {
             return _icon;
         }
 
@@ -142,18 +142,18 @@ tray {
                 throw std::runtime_error("no window of the bar's tray class exists");
             }
             const WNDCLASSEXW ownerClass{
-                .cbSize        = sizeof(WNDCLASSEXW),
-                .style         = 0,
-                .lpfnWndProc   = OwnerProc,
-                .cbClsExtra    = 0,
-                .cbWndExtra    = 0,
-                .hInstance     = GetModuleHandleW(nullptr),
-                .hIcon         = nullptr,
-                .hCursor       = nullptr,
+                .cbSize = sizeof(WNDCLASSEXW),
+                .style = 0,
+                .lpfnWndProc = OwnerProc,
+                .cbClsExtra = 0,
+                .cbWndExtra = 0,
+                .hInstance = GetModuleHandleW(nullptr),
+                .hIcon = nullptr,
+                .hCursor = nullptr,
                 .hbrBackground = nullptr,
-                .lpszMenuName  = nullptr,
+                .lpszMenuName = nullptr,
                 .lpszClassName = kOwnerClass,
-                .hIconSm       = nullptr,
+                .hIconSm = nullptr,
             };
             // A second app registers the class again, which fails harmlessly.
             RegisterClassExW(&ownerClass);
@@ -168,7 +168,7 @@ tray {
                 DestroyWindow(_owner);
             }
         }
-        TrayApp(const TrayApp&)            = delete;
+        TrayApp(const TrayApp&) = delete;
         TrayApp& operator=(const TrayApp&) = delete;
 
         // Each returns whether the tray took the message. Add also sets the icon's version.
@@ -195,26 +195,26 @@ tray {
         std::optional<RECT> IconRect() const {
             NotifyIconIdentifier32 query{
                 .signature = kTrayNotifySignature,
-                .part      = static_cast<std::uint32_t>(IconRectPart::Size),
-                .size      = sizeof(NOTIFYICONIDENTIFIER),
-                .padding   = 0,
-                .window    = Handle32(_owner),
-                .id        = _id,
-                .guid      = GUID{},
+                .part = static_cast<std::uint32_t>(IconRectPart::Size),
+                .size = sizeof(NOTIFYICONIDENTIFIER),
+                .padding = 0,
+                .window = Handle32(_owner),
+                .id = _id,
+                .guid = GUID{},
             };
             const std::optional<LRESULT> size = SendTrayCopyData(_tray, _owner, kIconRectCopyData, &query, sizeof(query));
             if (!size.has_value() || *size == 0) {
                 return std::nullopt;
             }
-            query.part                            = static_cast<std::uint32_t>(IconRectPart::Position);
+            query.part = static_cast<std::uint32_t>(IconRectPart::Position);
             const std::optional<LRESULT> position = SendTrayCopyData(_tray, _owner, kIconRectCopyData, &query, sizeof(query));
             if (!position.has_value()) {
                 return std::nullopt;
             }
             return RECT{
-                .left   = Low16(*position),
-                .top    = High16(*position),
-                .right  = Low16(*position) + Low16(*size),
+                .left = Low16(*position),
+                .top = High16(*position),
+                .right = Low16(*position) + Low16(*size),
                 .bottom = High16(*position) + High16(*size),
             };
         }
@@ -227,22 +227,22 @@ tray {
         // The icon handle lives until the send returns, since the tray reads its pixels while the sender waits.
         bool SendNotify(std::uint32_t command, std::uint32_t flags, std::optional<std::uint32_t> rgb) const {
             TrayNotifyData message = NotifyData(command, Handle32(_owner), _id, flags, kTrayAppCallback);
-            message.data.version   = _version;
+            message.data.version = _version;
             std::optional<OwnedIcon> icon;
             if (rgb.has_value()) {
                 icon.emplace(*rgb);
                 message.data.icon = Handle32(icon->Get());
             }
             const std::optional<LRESULT> answer = SendTrayCopyData(_tray, _owner, kNotifyIconCopyData, &message, sizeof(message));
-            const bool                   taken  = answer.has_value() && *answer != FALSE;
+            const bool taken = answer.has_value() && *answer != FALSE;
             integration::Log("tray_sent", std::format("command={} id={} version={} color={} taken={}", CommandName(command), _id, _version, ColorField(rgb), taken));
             return taken;
         }
 
-        HWND                          _tray;
-        HWND                          _owner = nullptr;
-        std::uint32_t                 _id;
-        std::uint32_t                 _version;
+        HWND _tray;
+        HWND _owner = nullptr;
+        std::uint32_t _id;
+        std::uint32_t _version;
         std::vector<TrayInputMessage> _received;
     };
 
@@ -274,8 +274,8 @@ tray {
 
 TEST(Tray, PostsALeftAndARightClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
     const integration::RunningBar bar("tray-click", kConfig, kStyle);
-    const TrayApp                 current(1, NOTIFYICON_VERSION_4);
-    const TrayApp                 legacy(2, 0);
+    const TrayApp current(1, NOTIFYICON_VERSION_4);
+    const TrayApp legacy(2, 0);
     ASSERT_TRUE(current.Add(kGreen));
     ASSERT_TRUE(legacy.Add(kOrange));
     UnfoldTray(bar);
@@ -297,7 +297,7 @@ TEST(Tray, PostsALeftAndARightClickOnAnIconToItsCallbackInTheFormOfItsVersion) {
 
 TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
     const integration::RunningBar bar("tray-rect", kConfig, kStyle);
-    const TrayApp                 app(1, NOTIFYICON_VERSION_4);
+    const TrayApp app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
     EXPECT_FALSE(app.IconRect().has_value()) << "the tray answered a rect for an icon no bar shows";
 
@@ -310,7 +310,7 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
         },
         integration::kLimit))
         << "the icon never drew with a rect";
-    const RECT rect    = app.IconRect().value_or(RECT{});
+    const RECT rect = app.IconRect().value_or(RECT{});
     const RECT barRect = integration::ScreenRect(bar.PrimaryBar());
     integration::Log("icon_rect",
                      std::format("left={} top={} right={} bottom={} bar_left={} bar_top={} bar_bottom={} icon_column={:.1f}", rect.left, rect.top, rect.right, rect.bottom,
@@ -324,7 +324,7 @@ TEST(Tray, AnswersTheRectOfAnIconOnTheBar) {
 
 TEST(Tray, DrawsTheNewPixelsOfAModifiedIconThenRemovesItOnceDeleted) {
     const integration::RunningBar bar("tray-modify", kConfig, kStyle);
-    const TrayApp                 app(1, NOTIFYICON_VERSION_4);
+    const TrayApp app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
     UnfoldTray(bar);
     ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit));
@@ -339,7 +339,7 @@ TEST(Tray, DrawsTheNewPixelsOfAModifiedIconThenRemovesItOnceDeleted) {
 
 TEST(Tray, RemovesTheIconOfAClosedOwner) {
     const integration::RunningBar bar("tray-owner", kConfig, kStyle);
-    TrayApp                       app(1, NOTIFYICON_VERSION_4);
+    TrayApp app(1, NOTIFYICON_VERSION_4);
     ASSERT_TRUE(app.Add(kGreen));
     UnfoldTray(bar);
     ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit));

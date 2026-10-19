@@ -12,11 +12,11 @@
 
 namespace {
 
-    constexpr std::uint32_t    kRestColor    = 0x27AE60;
-    constexpr std::uint32_t    kHoverColor   = 0x2E86C1;
-    constexpr std::uint32_t    kProbeColor   = 0x27AE60;
-    constexpr std::uint32_t    kRulerColor   = 0xF39C12;
-    constexpr std::uint32_t    kTooltipColor = 0x3498DB;
+    constexpr std::uint32_t kRestColor = 0x27AE60;
+    constexpr std::uint32_t kHoverColor = 0x2E86C1;
+    constexpr std::uint32_t kProbeColor = 0x27AE60;
+    constexpr std::uint32_t kRulerColor = 0xF39C12;
+    constexpr std::uint32_t kTooltipColor = 0x3498DB;
 
     constexpr std::string_view kModuleConfig = R"(
 return {
@@ -134,7 +134,7 @@ tooltip {
 
 TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
     integration::RunningBar bar("hover-module", kModuleConfig, kModuleStyle);
-    const std::int32_t      probe = bar.DrawnColumn(kRestColor, integration::kLimit);
+    const std::int32_t probe = bar.DrawnColumn(kRestColor, integration::kLimit);
     EXPECT_EQ(bar.PixelCount(kHoverColor), size_t{0}) << "the hover background drew with no cursor over the module";
 
     const integration::SavedCursor saved;
@@ -150,14 +150,14 @@ TEST(Hover, AnimatesAModulesHoverBackgroundInAndOut) {
 TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
     const integration::TestWindow first(L" 1");
     const integration::TestWindow second(L" 2");
-    integration::RunningBar       bar("hover-item", kItemConfig, kItemStyle);
-    std::optional<double>         middle;
-    std::optional<std::int32_t>   span;
+    integration::RunningBar bar("hover-item", kItemConfig, kItemStyle);
+    std::optional<double> middle;
+    std::optional<std::int32_t> span;
     ASSERT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            middle                             = integration::MeanColumn(capture, kRestColor);
-            span                               = integration::ColumnSpan(capture, kRestColor);
+            middle = integration::MeanColumn(capture, kRestColor);
+            span = integration::ColumnSpan(capture, kRestColor);
             return middle.has_value() && span.has_value();
         },
         integration::kLimit))
@@ -171,8 +171,8 @@ TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
     EXPECT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            hovered                            = integration::MeanColumn(capture, kHoverColor);
-            rest                               = integration::MeanColumn(capture, kRestColor);
+            hovered = integration::MeanColumn(capture, kHoverColor);
+            rest = integration::MeanColumn(capture, kRestColor);
             return hovered.has_value() && rest.has_value() && *hovered < *rest;
         },
         integration::kLimit))
@@ -184,19 +184,19 @@ TEST(Hover, DrawsTheHoverBackgroundOfTheItemUnderTheCursorOnly) {
 }
 
 TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
-    integration::RunningBar     bar("tooltip", kTooltipConfig, kTooltipStyle);
-    std::optional<double>       probeColumn;
+    integration::RunningBar bar("tooltip", kTooltipConfig, kTooltipStyle);
+    std::optional<double> probeColumn;
     std::optional<std::int32_t> rulerSpan;
     ASSERT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            probeColumn                        = integration::MeanColumn(capture, kProbeColor);
-            rulerSpan                          = integration::ColumnSpan(capture, kRulerColor);
+            probeColumn = integration::MeanColumn(capture, kProbeColor);
+            rulerSpan = integration::ColumnSpan(capture, kRulerColor);
             return probeColumn.has_value() && rulerSpan.has_value();
         },
         integration::kLimit))
         << "the modules never drew in their colors";
-    const auto                     probeX = static_cast<std::int32_t>(std::lround(probeColumn.value_or(0)));
+    const auto probeX = static_cast<std::int32_t>(std::lround(probeColumn.value_or(0)));
 
     const integration::SavedCursor saved;
     bar.MoveCursorTo(probeX);

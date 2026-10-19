@@ -18,13 +18,13 @@ class Network final : public IconTextModule<NetworkConfig> {
     Network(NetworkConfig config, const INetwork& network);
 
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    std::optional<std::wstring>  TooltipText() override;
+    std::optional<std::wstring> TooltipText() override;
 
   private:
-    ModuleText      Content() override;
+    ModuleText Content() override;
 
     const INetwork& _network;
-    bool            _showsRates;
+    bool _showsRates;
 };
 
 ModuleText FormatNetwork(const NetworkConfig& config, const NetworkState& state);

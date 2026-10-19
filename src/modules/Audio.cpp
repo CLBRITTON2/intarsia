@@ -28,9 +28,9 @@ namespace {
 
 Audio::Audio(AudioConfig config, IAudio& audio) : IconTextModule(std::move(config)), _audio(audio) {
     const std::vector<Placeholder> samples = AudioPlaceholders(AudioDevice{
-        .name   = L"Speakers",
+        .name = L"Speakers",
         .volume = 0.5f,
-        .muted  = false,
+        .muted = false,
     });
     RequirePlaceholders("audio format", Settings().format, samples);
     RequirePlaceholders("audio format_muted", Settings().formatMuted, samples);
@@ -69,9 +69,9 @@ ModuleText FormatAudio(const AudioConfig& config, const std::optional<AudioDevic
     }
     if (device->muted) {
         return ModuleText{
-            .icon       = config.iconMuted,
-            .text       = FormatPlaceholders(config.formatMuted, AudioPlaceholders(*device)),
-            .state      = TextState::Muted,
+            .icon = config.iconMuted,
+            .text = FormatPlaceholders(config.formatMuted, AudioPlaceholders(*device)),
+            .state = TextState::Muted,
             .classIndex = 0,
         };
     }

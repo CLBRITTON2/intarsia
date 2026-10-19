@@ -28,11 +28,11 @@
 
 // The monitor a bar docks to, where it is on the desktop and its scale.
 struct BarPlacement {
-    HMONITOR      monitor;
-    RECT          monitorRect;
+    HMONITOR monitor;
+    RECT monitorRect;
     std::uint32_t dpi;
 
-    bool          operator==(const BarPlacement& other) const;
+    bool operator==(const BarPlacement& other) const;
 };
 
 // Each monitor's placement, in the order given. Throws MonitorGoneError for a monitor that went while it was read.
@@ -49,8 +49,8 @@ class Bar {
     Bar(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, const ModuleSources& sources, Launcher& launcher, const BarPlacement& placement,
         AppBarRoute route, WindowProcError& windowProcError, HWND control, std::uint32_t deviceLostMessage);
     ~Bar();
-    Bar(const Bar&)                   = delete;
-    Bar&        operator=(const Bar&) = delete;
+    Bar(const Bar&) = delete;
+    Bar& operator=(const Bar&) = delete;
 
     static void RegisterWindowClass(HINSTANCE instance);
 
@@ -86,19 +86,19 @@ class Bar {
     LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
-    void    Dock();
-    void    PlaceInZOrder(HWND insertAfter);
+    void Dock();
+    void PlaceInZOrder(HWND insertAfter);
     // The canvas at the window's client size and the bar's DPI, drawn again.
     void ResizeCanvas();
 
     // Sets the time the next frame draws at, in the bar and in every module's context.
-    void                                  StampFrameTime();
+    void StampFrameTime();
     std::chrono::steady_clock::time_point NextFrameTime() const;
-    void                                  ScheduleNextChange();
+    void ScheduleNextChange();
     // How long until the bar next changes by itself: 0 while a box fades, else the earliest module change, null when
     // none is coming.
     std::optional<std::uint32_t> NextChangeWait() const;
-    bool                         BoxFading() const;
+    bool BoxFading() const;
 
     // Every module's context, made again whenever the surface's size changes, since each spans the bar's thickness.
     void BuildContexts();
@@ -106,22 +106,22 @@ class Bar {
     RenderContext ModuleContext(const ModuleStyle& style) const;
 
     // Whether any module's content changed.
-    bool        LayOutModules();
+    bool LayOutModules();
     BarGeometry Geometry() const;
     // Places every module's box for the frame, tells each module where its content lands on screen, and hovers what
     // now lies under a cursor that has not moved.
     PlacedBar PlaceModules();
 
-    void      Draw();
-    void      Paint(const PlacedBar& placed);
-    void      DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
+    void Draw();
+    void Paint(const PlacedBar& placed);
+    void DrawSection(const std::vector<PlacedEntry>& entries, const SectionLayout& layout);
     // The group's box, its hover fading in over the toggle's span alone under the cursor, the toggle, then its members.
     void DrawGroup(const PlacedEntry& placed);
     // The module's box (its background, or fading to its hover under the cursor), then the module.
     void DrawModule(const HitBox& box, const ModuleStyle& style);
     // The box of each section that holds a module.
     std::vector<D2D1_RECT_F> SectionBoxes(const std::vector<const SectionLayout*>& layouts) const;
-    RECT                     WindowRect() const;
+    RECT WindowRect() const;
 
     // The box under a point in client pixels, or null between modules.
     const HitBox* BoxAt(POINT client) const;
@@ -149,42 +149,42 @@ class Bar {
     // The module whose menu action the shown or pending menu belongs to.
     struct MenuOwner {
         IModule* module;
-        Command  onSelect;
+        Command onSelect;
     };
 
-    const GraphicsDevice&                 _graphics;
-    const Config&                         _config;
-    const Axis                            _axis;
-    Launcher&                             _launcher;
-    std::unique_ptr<FrameClock>           _frames; // paced by this bar's monitor, null until the window exists
-    bool                                  _animating = false;
-    std::chrono::steady_clock::time_point _frameTime;       // the RenderContext::frameTime of the frame last drawn
-    std::optional<FrameStats>             _animationFrames; // null while no animation runs
-    IWindowManager&                       _windowManager;   // takes the window_manager actions
-    WindowProcError&                      _windowProcError;
-    HWND                                  _control;
-    std::uint32_t                         _deviceLostMessage;
-    bool                                  _deviceLost = false;
-    bool                                  _presented  = false;
-    BarPlacement                          _placement;
-    AppBarRoute                           _route;
-    Sections<ModuleEntry>                 _modules;
-    std::vector<HitBox>                   _hitBoxes;          // a group's members before the group, since BoxAt takes the first match
-    IModule*                              _hovered = nullptr; // the module under the cursor, null when there is none
-    std::optional<POINT>                  _cursor;            // client pixels where the cursor last moved, null once it left
-    std::uint32_t                         _taskbarCreated;
-    std::optional<MenuOwner>              _menuOwner; // null once any other input came after the menu's
+    const GraphicsDevice& _graphics;
+    const Config& _config;
+    const Axis _axis;
+    Launcher& _launcher;
+    std::unique_ptr<FrameClock> _frames; // paced by this bar's monitor, null until the window exists
+    bool _animating = false;
+    std::chrono::steady_clock::time_point _frameTime; // the RenderContext::frameTime of the frame last drawn
+    std::optional<FrameStats> _animationFrames;       // null while no animation runs
+    IWindowManager& _windowManager;                   // takes the window_manager actions
+    WindowProcError& _windowProcError;
+    HWND _control;
+    std::uint32_t _deviceLostMessage;
+    bool _deviceLost = false;
+    bool _presented = false;
+    BarPlacement _placement;
+    AppBarRoute _route;
+    Sections<ModuleEntry> _modules;
+    std::vector<HitBox> _hitBoxes; // a group's members before the group, since BoxAt takes the first match
+    IModule* _hovered = nullptr;   // the module under the cursor, null when there is none
+    std::optional<POINT> _cursor;  // client pixels where the cursor last moved, null once it left
+    std::uint32_t _taskbarCreated;
+    std::optional<MenuOwner> _menuOwner; // null once any other input came after the menu's
 
     // Before the tooltip and menu, which hold it.
     std::vector<WallpaperBlur> _wallpapers;
     // Null until the constructor has docked the window and knows its size.
-    std::unique_ptr<Canvas>                               _canvas;
-    std::unique_ptr<Tooltip>                              _tooltip;
-    std::unique_ptr<Menu>                                 _menu;
-    std::unique_ptr<MenuLister>                           _lister;   // posts to the window, so it stops before the window goes
+    std::unique_ptr<Canvas> _canvas;
+    std::unique_ptr<Tooltip> _tooltip;
+    std::unique_ptr<Menu> _menu;
+    std::unique_ptr<MenuLister> _lister;                             // posts to the window, so it stops before the window goes
     std::unordered_map<const ModuleStyle*, RenderContext> _contexts; // by the style of the entry it belongs to
-    std::unordered_map<const IModule*, ColorFade>         _boxFades; // every module's box fill, members included
-    Microsoft::WRL::ComPtr<IDWriteTextFormat>             _textFormat;
+    std::unordered_map<const IModule*, ColorFade> _boxFades;         // every module's box fill, members included
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> _textFormat;
 
     // Declared last so every member above is constructed before CreateWindowExW starts sending messages.
     HWND _window;

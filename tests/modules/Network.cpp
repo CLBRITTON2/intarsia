@@ -23,26 +23,26 @@ namespace {
 
     NetworkConfig TestConfig() {
         return NetworkConfig{
-            .formatWifi         = "{ssid} {signal}%",
-            .formatEthernet     = "{interface}",
+            .formatWifi = "{ssid} {signal}%",
+            .formatEthernet = "{interface}",
             .formatDisconnected = "offline",
-            .tooltip            = "{ip} down {down} up {up}",
-            .iconsWifi          = {L"0", L"1", L"2", L"3", L"4"},
-            .iconEthernet       = L"E",
-            .iconDisconnected   = L"X",
-            .actions            = kNoActions,
+            .tooltip = "{ip} down {down} up {up}",
+            .iconsWifi = {L"0", L"1", L"2", L"3", L"4"},
+            .iconEthernet = L"E",
+            .iconDisconnected = L"X",
+            .actions = kNoActions,
         };
     }
 
     NetworkState Wifi(std::optional<std::int32_t> signal) {
         return NetworkState{
-            .link                   = NetworkLink::Wifi,
-            .interfaceName          = L"Wi-Fi",
-            .ssid                   = L"home",
-            .signalPercent          = signal,
-            .ipv4                   = L"192.0.2.7",
+            .link = NetworkLink::Wifi,
+            .interfaceName = L"Wi-Fi",
+            .ssid = L"home",
+            .signalPercent = signal,
+            .ipv4 = L"192.0.2.7",
             .receivedBytesPerSecond = 1'250'000.0,
-            .sentBytesPerSecond     = 800.0,
+            .sentBytesPerSecond = 800.0,
         };
     }
 
@@ -50,8 +50,8 @@ namespace {
 
 TEST(Network, EachLinkHasItsFormatAndIcon) {
     EXPECT_EQ(FormatNetwork(TestConfig(), Wifi(72)), NormalText(L"3", L"home 72%"));
-    NetworkState wired  = Wifi(std::nullopt);
-    wired.link          = NetworkLink::Ethernet;
+    NetworkState wired = Wifi(std::nullopt);
+    wired.link = NetworkLink::Ethernet;
     wired.interfaceName = L"Ethernet 2";
     EXPECT_EQ(FormatNetwork(TestConfig(), wired), NormalText(L"E", L"Ethernet 2"));
     const FakeNetwork none;
@@ -81,31 +81,31 @@ TEST(Network, ARateInAFormatMakesTheModuleTick) {
     const FakeNetwork network;
     EXPECT_FALSE(ShowsRates(TestConfig()));
     EXPECT_EQ(Network(TestConfig(), network).MillisecondsUntilChange(), std::nullopt);
-    NetworkConfig rates  = TestConfig();
+    NetworkConfig rates = TestConfig();
     rates.formatEthernet = "{interface} {down}";
     EXPECT_TRUE(ShowsRates(rates));
     EXPECT_EQ(Network(rates, network).MillisecondsUntilChange(), 1000u);
     NetworkConfig literal = TestConfig();
-    literal.formatWifi    = "{{down}}";
+    literal.formatWifi = "{{down}}";
     EXPECT_FALSE(ShowsRates(literal));
 }
 
 TEST(Network, ATooltipNamingARateNeedsRatesSampledButNoTick) {
     const FakeNetwork network;
-    NetworkConfig     config = TestConfig();
+    NetworkConfig config = TestConfig();
     EXPECT_TRUE(ReadsRates(config));
     EXPECT_FALSE(ShowsRates(config));
     EXPECT_EQ(Network(config, network).MillisecondsUntilChange(), std::nullopt);
     config.tooltip = "{ip}";
     EXPECT_FALSE(ReadsRates(config));
-    config.tooltip    = std::nullopt;
+    config.tooltip = std::nullopt;
     config.formatWifi = "{down}";
     EXPECT_TRUE(ReadsRates(config));
 }
 
 TEST(Network, AFormatNamingAnUnknownValueIsAConfigError) {
-    FakeNetwork   network;
+    FakeNetwork network;
     NetworkConfig config = TestConfig();
-    config.formatWifi    = "{essid}";
+    config.formatWifi = "{essid}";
     EXPECT_THAT([&] { return Network(config, network); }, ThrowsWith<ConfigError>("network format_wifi '{essid}' is not a valid format"));
 }

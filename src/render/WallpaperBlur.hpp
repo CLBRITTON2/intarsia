@@ -27,9 +27,9 @@ class WallpaperBlur {
     void Fill(ID2D1DeviceContext* context, const RECT& windowRect, const std::vector<D2D1_ROUNDED_RECT>& outlines) const;
 
   private:
-    Backdrop                             _backdrop;
-    RECT                                 _monitorRect;
-    std::uint32_t                        _downscale; // monitor pixels per pixel of _blurred
+    Backdrop _backdrop;
+    RECT _monitorRect;
+    std::uint32_t _downscale; // monitor pixels per pixel of _blurred
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> _blurred;
 };
 

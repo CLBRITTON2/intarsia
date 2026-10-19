@@ -58,7 +58,7 @@ namespace {
     APPBARDATA AppBarData(HWND window) {
         APPBARDATA data{};
         data.cbSize = sizeof(data);
-        data.hWnd   = window;
+        data.hWnd = window;
         return data;
     }
 
@@ -66,7 +66,7 @@ namespace {
     struct FreeShared {
         DWORD process;
 
-        void  operator()(HANDLE handle) const {
+        void operator()(HANDLE handle) const {
             SHFreeShared(handle, process);
         }
     };
@@ -75,11 +75,11 @@ namespace {
     void SendToTaskbar(HWND taskbar, DWORD taskbarProcess, std::uint32_t message, APPBARDATA& data) {
         // The taskbar reads the request from the block it answers in, since shell32 sets only the block's size.
         AppBarData32 answer = AppBarRequest(message, data, 0, 0).data;
-        HANDLE       block  = SHAllocShared(&answer, sizeof(answer), taskbarProcess);
+        HANDLE block = SHAllocShared(&answer, sizeof(answer), taskbarProcess);
         if (block == nullptr) {
             ThrowLastError("SHAllocShared(appbar result)");
         }
-        AppBarCommand  request = AppBarRequest(message, data, reinterpret_cast<std::uint64_t>(block), taskbarProcess);
+        AppBarCommand request = AppBarRequest(message, data, reinterpret_cast<std::uint64_t>(block), taskbarProcess);
         COPYDATASTRUCT copy{
             .dwData = kAppBarCopyData,
             .cbData = sizeof(request),
@@ -93,7 +93,7 @@ namespace {
             return;
         }
         const std::unique_ptr<void, FreeShared> answered(block, FreeShared{.process = taskbarProcess});
-        void*                                   view = SHLockShared(block, taskbarProcess);
+        void* view = SHLockShared(block, taskbarProcess);
         if (view == nullptr) {
             ThrowLastError("SHLockShared(appbar result)");
         }
@@ -105,11 +105,11 @@ namespace {
     // QUERYPOS only moves the side facing the edge, so the thickness is reapplied from that side before SETPOS.
     RECT Reserve(HWND window, const RECT& monitorRect, Edge edge, std::int32_t thickness, const std::function<void(std::uint32_t, APPBARDATA&)>& send) {
         APPBARDATA data = AppBarData(window);
-        data.uEdge      = ShellEdge(edge);
-        data.rc         = monitorRect;
+        data.uEdge = ShellEdge(edge);
+        data.rc = monitorRect;
         send(ABM_QUERYPOS, data);
         const RECT queried = data.rc;
-        data.rc            = DockedRect(data.rc, edge, thickness);
+        data.rc = DockedRect(data.rc, edge, thickness);
         send(ABM_SETPOS, data);
         Log(LogLevel::Info, "bar", "appbar_reserved",
             {{.key = "monitor", .value = RectText(monitorRect)},
@@ -123,7 +123,7 @@ namespace {
 
 HWND ExplorerTaskbar(const std::wstring& windowClass) {
     for (HWND candidate = FindWindowExW(nullptr, nullptr, windowClass.c_str(), nullptr); candidate != nullptr;
-         candidate      = FindWindowExW(nullptr, candidate, windowClass.c_str(), nullptr)) {
+         candidate = FindWindowExW(nullptr, candidate, windowClass.c_str(), nullptr)) {
         if (IsExplorer(candidate)) {
             return candidate;
         }
@@ -135,18 +135,18 @@ AppBarCommand AppBarRequest(std::uint32_t message, const APPBARDATA& data, std::
     return AppBarCommand{
         .data =
             AppBarData32{
-                .size            = sizeof(AppBarData32),
-                .window          = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(data.hWnd)),
+                .size = sizeof(AppBarData32),
+                .window = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(data.hWnd)),
                 .callbackMessage = data.uCallbackMessage,
-                .edge            = data.uEdge,
-                .rect            = data.rc,
-                .lParam          = static_cast<std::int64_t>(data.lParam),
+                .edge = data.uEdge,
+                .rect = data.rc,
+                .lParam = static_cast<std::int64_t>(data.lParam),
             },
-        .message       = message,
-        .reserved      = 0,
-        .result        = result,
+        .message = message,
+        .reserved = 0,
+        .result = result,
         .resultProcess = resultProcess,
-        .reserved2     = 0,
+        .reserved2 = 0,
     };
 }
 
@@ -174,7 +174,7 @@ std::uint32_t TaskbarCreatedMessage() {
 }
 
 void RegisterAppBar(HWND window, std::uint32_t callbackMessage) {
-    APPBARDATA data       = AppBarData(window);
+    APPBARDATA data = AppBarData(window);
     data.uCallbackMessage = callbackMessage;
     if (!SHAppBarMessage(ABM_NEW, &data)) {
         throw std::runtime_error("SHAppBarMessage(ABM_NEW) refused the window, it is already an appbar");

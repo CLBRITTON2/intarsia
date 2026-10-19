@@ -19,7 +19,7 @@ namespace {
     constexpr std::string_view kCliUsage = "usage: intarsia-cli check [--config <path>]\n"
                                            "       intarsia-cli monitors [--config <path>]";
 
-    std::string                Check(const std::filesystem::path& configPath) {
+    std::string Check(const std::filesystem::path& configPath) {
         LoadConfig(configPath);
         return std::format("{} and {} load\n", ToUtf8(configPath.wstring()), ToUtf8(StylePath(configPath).wstring()));
     }
@@ -53,7 +53,7 @@ namespace {
 
     void WriteToConsole(HANDLE console, std::string_view utf8) {
         const std::wstring wide = ToWide(utf8);
-        std::wstring_view  text = wide;
+        std::wstring_view text = wide;
         while (!text.empty()) {
             DWORD written = 0;
             if (!WriteConsoleW(console, text.data(), static_cast<DWORD>(text.size()), &written, nullptr)) {

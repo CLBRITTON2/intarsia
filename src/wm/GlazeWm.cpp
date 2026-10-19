@@ -15,11 +15,11 @@ namespace {
 
     constexpr std::chrono::milliseconds kFirstRetry{2000};
     constexpr std::chrono::milliseconds kLongestRetry{10000};
-    constexpr size_t                    kErrorExcerptBytes = 300;
+    constexpr size_t kErrorExcerptBytes = 300;
     // Clicks faster than GlazeWM answers pile up here, and anything past this many is dropped with a warning.
-    constexpr size_t  kMaxQueuedCommands = 16;
-    constexpr wchar_t kName[]            = L"GlazeWM";
-    constexpr wchar_t kImageName[]       = L"glazewm.exe";
+    constexpr size_t kMaxQueuedCommands = 16;
+    constexpr wchar_t kName[] = L"GlazeWM";
+    constexpr wchar_t kImageName[] = L"glazewm.exe";
 
 } // namespace
 
@@ -27,7 +27,7 @@ namespace glazewm {
 
     namespace {
 
-        constexpr size_t      kExcerptBytes = 200;
+        constexpr size_t kExcerptBytes = 200;
 
         const nlohmann::json& Field(const nlohmann::json& object, std::string_view key, std::string_view context) {
             const auto found = object.find(key);
@@ -78,8 +78,8 @@ namespace glazewm {
             }
             for (size_t index = 0; index < id.size(); ++index) {
                 const char character = id[index];
-                const bool dash      = index == 8 || index == 13 || index == 18 || index == 23;
-                const bool hex       = (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
+                const bool dash = index == 8 || index == 13 || index == 18 || index == 23;
+                const bool hex = (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
                 if (dash && character != '-') {
                     return false;
                 }
@@ -119,11 +119,11 @@ namespace glazewm {
         Workspace ReadWorkspace(const nlohmann::json& workspace, std::intptr_t monitor) {
             // A workspace's children are its windows and the split containers holding them, so any child means a window.
             return Workspace{
-                .label    = DisplayLabel(workspace, "workspace"),
-                .name     = StringField(workspace, "name", "workspace"),
-                .focused  = BoolField(workspace, "hasFocus", "workspace"),
+                .label = DisplayLabel(workspace, "workspace"),
+                .name = StringField(workspace, "name", "workspace"),
+                .focused = BoolField(workspace, "hasFocus", "workspace"),
                 .occupied = !ArrayField(workspace, "children", "workspace").empty(),
-                .monitor  = monitor,
+                .monitor = monitor,
             };
         }
 
@@ -177,30 +177,30 @@ namespace glazewm {
         }
 
         const std::string messageType = StringField(message, "messageType", "message");
-        const bool        success     = BoolField(message, "success", "message");
-        std::string       errorText   = ErrorText(message);
+        const bool success = BoolField(message, "success", "message");
+        std::string errorText = ErrorText(message);
         // Moved, never copied: nlohmann copies recursively, so a peer's deeply nested data would overflow the stack.
-        const auto     dataField = message.find("data");
-        nlohmann::json data      = dataField != message.end() ? std::move(*dataField) : nlohmann::json();
+        const auto dataField = message.find("data");
+        nlohmann::json data = dataField != message.end() ? std::move(*dataField) : nlohmann::json();
 
         if (messageType == "client_response") {
             return ServerMessage{
-                .kind          = MessageKind::Response,
+                .kind = MessageKind::Response,
                 .clientMessage = StringField(message, "clientMessage", "response"),
-                .eventType     = "",
-                .success       = success,
-                .error         = std::move(errorText),
-                .data          = std::move(data),
+                .eventType = "",
+                .success = success,
+                .error = std::move(errorText),
+                .data = std::move(data),
             };
         }
         if (messageType == "event_subscription") {
             return ServerMessage{
-                .kind          = MessageKind::Event,
+                .kind = MessageKind::Event,
                 .clientMessage = "",
-                .eventType     = EventType(data),
-                .success       = success,
-                .error         = std::move(errorText),
-                .data          = std::move(data),
+                .eventType = EventType(data),
+                .success = success,
+                .error = std::move(errorText),
+                .data = std::move(data),
             };
         }
         throw ProtocolError(std::format("GlazeWM sent an unknown messageType \"{}\"", LogExcerpt(messageType, kExcerptBytes)));
@@ -236,8 +236,8 @@ namespace glazewm {
                     const std::string type = StringField(node, "type", "workspace child");
                     if (type == "window") {
                         windows.push_back(ManagedWindow{
-                            .id      = StringField(node, "id", "window"),
-                            .handle  = HandleField(node, "handle", "window"),
+                            .id = StringField(node, "id", "window"),
+                            .handle = HandleField(node, "handle", "window"),
                             .focused = BoolField(node, "hasFocus", "window"),
                             .monitor = monitorHandle,
                         });
@@ -290,7 +290,7 @@ namespace glazewm {
 
     bool QueryGate::Answered() {
         _inFlight = _stale;
-        _stale    = false;
+        _stale = false;
         return _inFlight;
     }
 
@@ -298,15 +298,15 @@ namespace glazewm {
 
 GlazeWm::Snapshot GlazeWm::Snapshot::Empty(Connection connection, std::string detail) {
     return Snapshot{
-        .workspaces   = {},
-        .windows      = {},
+        .workspaces = {},
+        .windows = {},
         .bindingModes = {},
-        .direction    = std::nullopt,
+        .direction = std::nullopt,
         .status =
             WindowManagerStatus{
-                .name       = kName,
+                .name = kName,
                 .connection = connection,
-                .detail     = std::move(detail),
+                .detail = std::move(detail),
             },
     };
 }
@@ -324,7 +324,7 @@ GlazeWm::~GlazeWm() {
     {
         const std::scoped_lock lock(_mutex);
         _stopping = true;
-        socket    = _socket;
+        socket = _socket;
     }
     SetEvent(_stopEvent.get());
     _sender.reset();
@@ -404,8 +404,8 @@ void GlazeWm::QueueCommand(const std::function<std::string()>& makeCommand) {
 // Retries forever: restarting GlazeWM must not take the bar down, and the modules show that it is
 // disconnected until it is back. Only the change from up to down is logged, and the wait backs off while it stays down.
 void GlazeWm::Receive() {
-    std::chrono::milliseconds retry     = kFirstRetry;
-    bool                      loggedOut = false;
+    std::chrono::milliseconds retry = kFirstRetry;
+    bool loggedOut = false;
     while (true) {
         try {
             Session();
@@ -419,7 +419,7 @@ void GlazeWm::Receive() {
                 wasConnected = _snapshot.status.connection == Connection::Connected;
             }
             if (wasConnected) {
-                retry     = kFirstRetry;
+                retry = kFirstRetry;
                 loggedOut = false;
             }
             if (!loggedOut) {
@@ -458,7 +458,7 @@ void GlazeWm::Session() {
             const std::scoped_lock lock(owner._mutex);
             owner._socket = nullptr;
         }
-        Registration(const Registration&)            = delete;
+        Registration(const Registration&) = delete;
         Registration& operator=(const Registration&) = delete;
     };
     const Registration registration(*this, socket);
@@ -467,7 +467,7 @@ void GlazeWm::Session() {
     glazewm::QueryGate monitorsGate;
     glazewm::QueryGate bindingModesGate;
     glazewm::QueryGate directionGate;
-    const auto         ask = [this, &socket](glazewm::QueryGate& gate, std::string_view query) {
+    const auto ask = [this, &socket](glazewm::QueryGate& gate, std::string_view query) {
         if (gate.RequestQuery()) {
             SendSerialized(*socket, query);
         }
@@ -484,8 +484,8 @@ void GlazeWm::Session() {
     ask(bindingModesGate, glazewm::kQueryBindingModes);
     ask(directionGate, glazewm::kQueryTilingDirection);
     while (true) {
-        const glazewm::ServerMessage message  = glazewm::ParseServerMessage(socket->Receive());
-        const bool                   response = message.kind == glazewm::MessageKind::Response;
+        const glazewm::ServerMessage message = glazewm::ParseServerMessage(socket->Receive());
+        const bool response = message.kind == glazewm::MessageKind::Response;
         if (!message.success) {
             // A rejected command (a workspace that closed just before the click) is that command's failure alone.
             if (response && glazewm::IsCommand(message.clientMessage)) {
@@ -514,7 +514,7 @@ void GlazeWm::Session() {
             }
         } else if (message.clientMessage == glazewm::kQueryMonitors) {
             current.workspaces = glazewm::WorkspacesFromMonitors(message.data);
-            current.windows    = glazewm::WindowsFromMonitors(message.data);
+            current.windows = glazewm::WindowsFromMonitors(message.data);
             Publish(current);
             answered(monitorsGate, glazewm::kQueryMonitors);
         } else if (message.clientMessage == glazewm::kQueryBindingModes) {

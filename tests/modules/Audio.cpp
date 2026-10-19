@@ -17,8 +17,8 @@ namespace {
     class FakeAudio final : public IAudio {
       public:
         std::optional<AudioDevice> device;
-        std::vector<float>         volumes;
-        std::vector<bool>          mutes;
+        std::vector<float> volumes;
+        std::vector<bool> mutes;
 
         std::optional<AudioDevice> Device() const override {
             return device;
@@ -33,22 +33,22 @@ namespace {
 
     AudioConfig TestConfig() {
         return AudioConfig{
-            .flow        = AudioFlow::Output,
-            .format      = "{volume}%",
+            .flow = AudioFlow::Output,
+            .format = "{volume}%",
             .formatMuted = "muted",
-            .tooltip     = "{device} at {volume}%",
-            .icon        = L"V",
-            .iconMuted   = L"M",
+            .tooltip = "{device} at {volume}%",
+            .icon = L"V",
+            .iconMuted = L"M",
             .stepPercent = 5,
-            .actions     = kNoActions,
+            .actions = kNoActions,
         };
     }
 
     AudioDevice Speakers(float volume, bool muted) {
         return AudioDevice{
-            .name   = L"Speakers",
+            .name = L"Speakers",
             .volume = volume,
-            .muted  = muted,
+            .muted = muted,
         };
     }
 
@@ -58,9 +58,9 @@ TEST(Audio, FormatsTheVolumeOrTheMutedTextWithTheirIcons) {
     EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, false)), NormalText(L"V", L"42%"));
     EXPECT_EQ(FormatAudio(TestConfig(), Speakers(0.42f, true)),
               (ModuleText{
-                  .icon       = L"M",
-                  .text       = L"muted",
-                  .state      = TextState::Muted,
+                  .icon = L"M",
+                  .text = L"muted",
+                  .state = TextState::Muted,
                   .classIndex = 0,
               }));
     EXPECT_EQ(FormatAudio(TestConfig(), std::nullopt), NormalText(L"", L""));
@@ -89,9 +89,9 @@ TEST(Audio, ClickTogglesMuteAndScrollStepsTheVolume) {
 }
 
 TEST(Audio, WithNoDeviceNothingIsShownOrChanged) {
-    FakeAudio            audio;
+    FakeAudio audio;
     const TextOnlyRender render;
-    Audio                module(TestConfig(), audio);
+    Audio module(TestConfig(), audio);
     EXPECT_FALSE(module.Layout(render.Context()));
     EXPECT_FLOAT_EQ(module.Size().width, 0.0f);
     module.Click(D2D1::Point2F(0.0f, 0.0f));
@@ -109,7 +109,7 @@ TEST(Audio, TooltipNamesTheDevice) {
 }
 
 TEST(Audio, ABadFormatIsAConfigError) {
-    FakeAudio   audio;
+    FakeAudio audio;
     AudioConfig config = TestConfig();
     config.formatMuted = "{level}";
     EXPECT_THAT([&] { return Audio(config, audio); },

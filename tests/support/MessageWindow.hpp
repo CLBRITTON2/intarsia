@@ -21,10 +21,10 @@ class MessageWindow {
     ~MessageWindow() {
         DestroyWindow(_window);
     }
-    MessageWindow(const MessageWindow&)            = delete;
+    MessageWindow(const MessageWindow&) = delete;
     MessageWindow& operator=(const MessageWindow&) = delete;
 
-    HWND           Get() const {
+    HWND Get() const {
         return _window;
     }
 
@@ -37,7 +37,7 @@ struct ChangeTarget {
     explicit ChangeTarget(std::uint32_t message) : signal(window.Get(), message) {}
 
     MessageWindow window;
-    ChangeSignal  signal;
+    ChangeSignal signal;
 };
 
 // Polls condition until it holds or limit passes. Leaves this thread's message queue alone, so a test can read what

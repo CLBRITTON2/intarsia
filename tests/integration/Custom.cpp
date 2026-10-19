@@ -10,10 +10,10 @@
 
 namespace {
 
-    constexpr std::uint32_t kGreen  = 0x27AE60;
+    constexpr std::uint32_t kGreen = 0x27AE60;
     constexpr std::uint32_t kOrange = 0xF39C12;
-    constexpr std::uint32_t kRed    = 0xE74C3C;
-    constexpr std::uint32_t kBlue   = 0x2E86C1;
+    constexpr std::uint32_t kRed = 0xE74C3C;
+    constexpr std::uint32_t kBlue = 0x2E86C1;
 
     // left is the Lua list contents of the left section, modules the Lua definitions of the modules it names.
     std::string CustomConfig(std::string_view left, std::string_view modules) {

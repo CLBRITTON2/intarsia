@@ -15,9 +15,9 @@ namespace integration {
 
         UniqueHandle InheritableFile(const std::filesystem::path& path) {
             SECURITY_ATTRIBUTES inherit{
-                .nLength              = sizeof(SECURITY_ATTRIBUTES),
+                .nLength = sizeof(SECURITY_ATTRIBUTES),
                 .lpSecurityDescriptor = nullptr,
-                .bInheritHandle       = TRUE,
+                .bInheritHandle = TRUE,
             };
             return OwnHandle(
                 CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &inherit, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr),
@@ -25,13 +25,13 @@ namespace integration {
         }
 
         struct ProcessWindows {
-            DWORD             processId;
+            DWORD processId;
             std::vector<HWND> windows;
         };
 
         BOOL CALLBACK CollectProcessWindow(HWND window, LPARAM collection) {
             auto* collected = reinterpret_cast<ProcessWindows*>(collection); // NOLINT(performance-no-int-to-ptr)
-            DWORD owner     = 0;
+            DWORD owner = 0;
             GetWindowThreadProcessId(window, &owner);
             if (owner == collected->processId) {
                 collected->windows.push_back(window);
@@ -51,15 +51,15 @@ namespace integration {
                                const std::filesystem::path& stderrPath) : _job(KillOnCloseJob()), _id(0) {
         std::vector<std::wstring> programAndArguments{program.wstring()};
         programAndArguments.insert(programAndArguments.end(), arguments.begin(), arguments.end());
-        std::wstring        commandLine = JoinArguments(programAndArguments);
-        const UniqueHandle  output      = InheritableFile(stdoutPath);
-        const UniqueHandle  errors      = InheritableFile(stderrPath);
+        std::wstring commandLine = JoinArguments(programAndArguments);
+        const UniqueHandle output = InheritableFile(stdoutPath);
+        const UniqueHandle errors = InheritableFile(stderrPath);
         SECURITY_ATTRIBUTES inherit{
-            .nLength              = sizeof(SECURITY_ATTRIBUTES),
+            .nLength = sizeof(SECURITY_ATTRIBUTES),
             .lpSecurityDescriptor = nullptr,
-            .bInheritHandle       = TRUE,
+            .bInheritHandle = TRUE,
         };
-        HANDLE readEnd  = nullptr;
+        HANDLE readEnd = nullptr;
         HANDLE writeEnd = nullptr;
         if (!CreatePipe(&readEnd, &writeEnd, &inherit, 0)) {
             ThrowLastError("CreatePipe(child stdin)");
@@ -70,13 +70,13 @@ namespace integration {
         if (!SetHandleInformation(_input.get(), HANDLE_FLAG_INHERIT, 0)) {
             ThrowLastError("SetHandleInformation(child stdin)");
         }
-        STARTUPINFOW        startup{};
+        STARTUPINFOW startup{};
         PROCESS_INFORMATION started{};
-        startup.cb         = sizeof(startup);
-        startup.dwFlags    = STARTF_USESTDHANDLES;
-        startup.hStdInput  = input.get();
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = input.get();
         startup.hStdOutput = output.get();
-        startup.hStdError  = errors.get();
+        startup.hStdError = errors.get();
         if (!CreateProcessW(program.c_str(), commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &started)) {
             ThrowLastError(std::format("CreateProcessW({})", program.string()));
         }
@@ -117,8 +117,8 @@ namespace integration {
     }
 
     void ChildProcess::WriteLine(std::string_view line) const {
-        const std::string text    = std::string(line) + "\n";
-        DWORD             written = 0;
+        const std::string text = std::string(line) + "\n";
+        DWORD written = 0;
         if (!WriteFile(_input.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) || written != text.size()) {
             ThrowLastError(std::format("WriteFile(child stdin, '{}')", line));
         }

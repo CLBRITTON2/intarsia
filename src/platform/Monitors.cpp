@@ -23,23 +23,23 @@
 
 namespace {
 
-    constexpr size_t                      kBaseBlockBytes = 128;
+    constexpr size_t kBaseBlockBytes = 128;
     constexpr std::array<std::uint8_t, 8> kHeader{0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
-    constexpr size_t                      kFirstDescriptorOffset = 54;
-    constexpr size_t                      kDescriptorBytes       = 18;
-    constexpr size_t                      kDescriptorCount       = 4;
-    constexpr size_t                      kDescriptorTextOffset  = 5;
-    constexpr std::uint8_t                kSerialDescriptor      = 0xFF;
-    constexpr std::uint8_t                kTextEnd               = 0x0A;
-    constexpr size_t                      kModelLetters          = 3;
-    constexpr size_t                      kModelLength           = 7;
+    constexpr size_t kFirstDescriptorOffset = 54;
+    constexpr size_t kDescriptorBytes = 18;
+    constexpr size_t kDescriptorCount = 4;
+    constexpr size_t kDescriptorTextOffset = 5;
+    constexpr std::uint8_t kSerialDescriptor = 0xFF;
+    constexpr std::uint8_t kTextEnd = 0x0A;
+    constexpr size_t kModelLetters = 3;
+    constexpr size_t kModelLength = 7;
     // The longest descriptor text, past the decimal digits of a 32-bit serial.
     constexpr size_t kMaxSerialLength = 13;
 
     // QueryDisplayConfig answers ERROR_INSUFFICIENT_BUFFER when the paths change between sizing and reading.
     constexpr std::uint32_t kQueryAttempts = 8;
 
-    bool                    IsPrintable(char character) {
+    bool IsPrintable(char character) {
         return character >= 0x20 && character <= 0x7E;
     }
 
@@ -53,7 +53,7 @@ namespace {
             }
             text.push_back(static_cast<char>(byte));
         }
-        const size_t end   = text.find_last_not_of(' ');
+        const size_t end = text.find_last_not_of(' ');
         const size_t start = text.find_first_not_of(' ');
         if (end == std::string::npos || !std::ranges::all_of(text, IsPrintable)) {
             return std::nullopt;
@@ -74,7 +74,7 @@ namespace {
 
     // Three letters of five bits each, big-endian, 1 for A.
     std::string ManufacturerLetters(std::uint8_t high, std::uint8_t low) {
-        const auto  packed = static_cast<std::uint16_t>((high << 8) | low);
+        const auto packed = static_cast<std::uint16_t>((high << 8) | low);
         std::string letters;
         for (const std::uint32_t shift : {10U, 5U, 0U}) {
             const std::uint32_t code = (packed >> shift) & 0x1FU;
@@ -104,7 +104,7 @@ namespace {
     }
 
     struct ActivePath {
-        std::wstring  sourceDevice; // equals MONITORINFOEXW::szDevice
+        std::wstring sourceDevice; // equals MONITORINFOEXW::szDevice
         DisplayTarget target;
     };
 
@@ -121,7 +121,7 @@ namespace {
             ThrowIfWin32Failed(static_cast<DWORD>(GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount)), "GetDisplayConfigBufferSizes");
             std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
             std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
-            const LONG                           result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(), &modeCount, modes.data(), nullptr);
+            const LONG result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(), &modeCount, modes.data(), nullptr);
             if (result == ERROR_INSUFFICIENT_BUFFER) {
                 continue;
             }
@@ -161,7 +161,7 @@ namespace {
             ThrowLastError("SetupDiCreateDeviceInfoList(monitor)");
         }
         const UniqueReleased<HDEVINFO, &SetupDiDestroyDeviceInfoList> devices(raw);
-        SP_DEVICE_INTERFACE_DATA                                      deviceInterface{};
+        SP_DEVICE_INTERFACE_DATA deviceInterface{};
         deviceInterface.cbSize = sizeof(deviceInterface);
         if (!SetupDiOpenDeviceInterfaceW(devices.get(), devicePath.c_str(), 0, &deviceInterface)) {
             ThrowLastError(std::format("SetupDiOpenDeviceInterfaceW({})", ToUtf8(devicePath)));
@@ -177,8 +177,8 @@ namespace {
             ThrowLastError("SetupDiOpenDevRegKey(monitor)");
         }
         const UniqueReleased<HKEY, &RegCloseKey> key(rawKey);
-        DWORD                                    size  = 0;
-        const LSTATUS                            sized = RegGetValueW(key.get(), nullptr, L"EDID", RRF_RT_REG_BINARY, nullptr, nullptr, &size);
+        DWORD size = 0;
+        const LSTATUS sized = RegGetValueW(key.get(), nullptr, L"EDID", RRF_RT_REG_BINARY, nullptr, nullptr, &size);
         if (sized == ERROR_FILE_NOT_FOUND) {
             return std::nullopt;
         }
@@ -215,25 +215,25 @@ namespace {
 
     ActivePath ReadPath(const DISPLAYCONFIG_PATH_INFO& path) {
         DISPLAYCONFIG_SOURCE_DEVICE_NAME source{};
-        source.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
-        source.header.size      = sizeof(source);
+        source.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        source.header.size = sizeof(source);
         source.header.adapterId = path.sourceInfo.adapterId;
-        source.header.id        = path.sourceInfo.id;
+        source.header.id = path.sourceInfo.id;
         ThrowIfWin32Failed(static_cast<DWORD>(DisplayConfigGetDeviceInfo(&source.header)), "DisplayConfigGetDeviceInfo(source name)");
 
         DISPLAYCONFIG_TARGET_DEVICE_NAME target{};
-        target.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
-        target.header.size      = sizeof(target);
+        target.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+        target.header.size = sizeof(target);
         target.header.adapterId = path.targetInfo.adapterId;
-        target.header.id        = path.targetInfo.id;
+        target.header.id = path.targetInfo.id;
         ThrowIfWin32Failed(static_cast<DWORD>(DisplayConfigGetDeviceInfo(&target.header)), "DisplayConfigGetDeviceInfo(target name)");
 
         return ActivePath{
             .sourceDevice = source.viewGdiDeviceName,
             .target =
                 DisplayTarget{
-                    .id         = TargetId(target.monitorDevicePath),
-                    .name       = FriendlyName(target),
+                    .id = TargetId(target.monitorDevicePath),
+                    .name = FriendlyName(target),
                     .connection = ConnectionName(target.outputTechnology),
                 },
         };
@@ -311,10 +311,10 @@ std::vector<MonitorDescription> DescribeMonitors(const std::vector<HMONITOR>& mo
     descriptions.reserve(monitors.size());
     for (HMONITOR monitor : monitors) {
         const MONITORINFOEXW info = MonitorInfo(monitor);
-        MonitorDescription   description{
-              .monitor = monitor,
-              .primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0,
-              .targets = {},
+        MonitorDescription description{
+            .monitor = monitor,
+            .primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0,
+            .targets = {},
         };
         for (const ActivePath& path : paths) {
             if (path.sourceDevice == info.szDevice) {

@@ -14,10 +14,10 @@
 
 // Where a tooltip goes: beside the hovered module, on the side of the bar that faces the desktop. Screen pixels.
 struct TooltipAnchor {
-    RECT          target; // the hovered module or item
-    RECT          barRect;
-    RECT          monitorRect;
-    Edge          edge;
+    RECT target; // the hovered module or item
+    RECT barRect;
+    RECT monitorRect;
+    Edge edge;
     std::uint32_t dpi;
 };
 
@@ -31,8 +31,8 @@ class Tooltip {
   public:
     // wallpapers are the bar's, blurred for its monitor.
     Tooltip(HINSTANCE instance, const GraphicsDevice& graphics, const Config& config, IDWriteTextFormat* textFormat, const std::vector<WallpaperBlur>& wallpapers);
-    Tooltip(const Tooltip&)               = delete;
-    Tooltip&    operator=(const Tooltip&) = delete;
+    Tooltip(const Tooltip&) = delete;
+    Tooltip& operator=(const Tooltip&) = delete;
 
     static void RegisterWindowClass(HINSTANCE instance);
 
@@ -41,10 +41,10 @@ class Tooltip {
     void Hide();
 
   private:
-    const GraphicsDevice&                _graphics;
-    const Config&                        _config;
-    IDWriteTextFormat*                   _textFormat;
-    const std::vector<WallpaperBlur>&    _wallpapers;
+    const GraphicsDevice& _graphics;
+    const Config& _config;
+    IDWriteTextFormat* _textFormat;
+    const std::vector<WallpaperBlur>& _wallpapers;
     UniqueReleased<HWND, &DestroyWindow> _window;
     // Only while shown: Show creates it at the text's size and Hide releases it.
     std::unique_ptr<Canvas> _canvas;

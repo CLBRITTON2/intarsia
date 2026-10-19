@@ -31,13 +31,13 @@ namespace {
     // The config once every format is known to be valid. Throws ConfigError.
     NetworkConfig Validated(NetworkConfig config) {
         const std::vector<Placeholder> samples = NetworkPlaceholders(NetworkState{
-            .link                   = NetworkLink::Wifi,
-            .interfaceName          = L"Wi-Fi",
-            .ssid                   = L"home",
-            .signalPercent          = 80,
-            .ipv4                   = L"192.0.2.1",
+            .link = NetworkLink::Wifi,
+            .interfaceName = L"Wi-Fi",
+            .ssid = L"home",
+            .signalPercent = 80,
+            .ipv4 = L"192.0.2.1",
             .receivedBytesPerSecond = 1000.0,
-            .sentBytesPerSecond     = 1000.0,
+            .sentBytesPerSecond = 1000.0,
         });
         RequirePlaceholders("network format_wifi", config.formatWifi, samples);
         RequirePlaceholders("network format_ethernet", config.formatEthernet, samples);

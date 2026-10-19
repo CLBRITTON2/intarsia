@@ -10,12 +10,12 @@
 
 TEST(Memory, TheTooltipValuesAreGibibytesAndAPercent) {
     constexpr std::uint64_t kGibibyte = std::uint64_t{1024} * 1024 * 1024;
-    const MemoryUsage       usage{
-              .totalBytes       = 32 * kGibibyte,
-              .availableBytes   = 8 * kGibibyte,
-              .cachedBytes      = 6 * kGibibyte,
-              .committedBytes   = 30 * kGibibyte,
-              .commitLimitBytes = 37 * kGibibyte,
+    const MemoryUsage usage{
+        .totalBytes = 32 * kGibibyte,
+        .availableBytes = 8 * kGibibyte,
+        .cachedBytes = 6 * kGibibyte,
+        .committedBytes = 30 * kGibibyte,
+        .commitLimitBytes = 37 * kGibibyte,
     };
     EXPECT_EQ(
         FormatPlaceholders("{used:.1f}/{total:.0f} GB {percent}% free {available:.0f} cached {cached:.0f} commit {committed:.0f}/{commit_limit:.0f}", MemoryPlaceholders(usage)),

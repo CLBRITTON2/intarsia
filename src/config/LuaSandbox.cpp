@@ -31,8 +31,8 @@ namespace {
 
     // Lua's own allocator with a ceiling: a refused request raises a memory error inside the lua_pcall.
     void* LimitedAlloc(void* userData, void* block, size_t oldSize, size_t newSize) {
-        auto*        limits = static_cast<LuaLimits*>(userData);
-        const size_t held   = HeldBytes(block, oldSize);
+        auto* limits = static_cast<LuaLimits*>(userData);
+        const size_t held = HeldBytes(block, oldSize);
         if (newSize > held && newSize - held > limits->limitBytes - limits->usedBytes) {
             return nullptr;
         }
@@ -47,7 +47,7 @@ namespace {
     // Puts the limited allocator over the state's own, counting from what the state holds already so that freeing it
     // later balances.
     void LimitAllocations(lua_State* lua, LuaLimits& limits) {
-        limits.allocate  = lua_getallocf(lua, &limits.allocateData);
+        limits.allocate = lua_getallocf(lua, &limits.allocateData);
         limits.usedBytes = (static_cast<size_t>(lua_gc(lua, LUA_GCCOUNT)) << 10) + static_cast<size_t>(lua_gc(lua, LUA_GCCOUNTB));
         lua_setallocf(lua, LimitedAlloc, &limits);
     }
@@ -95,11 +95,11 @@ namespace {
 
 LuaSandbox::LuaSandbox(std::string_view chunk, const std::string& source) :
     _limits{
-        .allocate     = nullptr,
+        .allocate = nullptr,
         .allocateData = nullptr,
-        .usedBytes    = 0,
-        .limitBytes   = kMaxConfigMemoryBytes,
-        .runaway      = false,
+        .usedBytes = 0,
+        .limitBytes = kMaxConfigMemoryBytes,
+        .runaway = false,
     },
     _lua(luaL_newstate()) {
     if (_lua == nullptr) {
@@ -129,8 +129,8 @@ LuaSandbox::LuaSandbox(std::string_view chunk, const std::string& source) :
     // Reload runs on the UI thread, so a config that never finishes would freeze the bar: stop it instead.
     lua_sethook(lua, AbortRunawayConfig, LUA_MASKCOUNT, kMaxConfigInstructions);
 
-    const std::string  chunkName = "@" + source;
-    const std::int32_t loaded    = luaL_loadbufferx(lua, chunk.data(), chunk.size(), chunkName.c_str(), "t");
+    const std::string chunkName = "@" + source;
+    const std::int32_t loaded = luaL_loadbufferx(lua, chunk.data(), chunk.size(), chunkName.c_str(), "t");
     if (loaded != LUA_OK) {
         throw LuaError(lua, loaded, source);
     }

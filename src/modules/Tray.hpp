@@ -23,10 +23,10 @@ class Tray final : public IModule {
   public:
     Tray(const TrayConfig& config, ITray& tray, ModuleStyle style);
     ~Tray() override;
-    Tray(const Tray&)                  = delete;
-    Tray&       operator=(const Tray&) = delete;
+    Tray(const Tray&) = delete;
+    Tray& operator=(const Tray&) = delete;
 
-    bool        Layout(const RenderContext& render) override;
+    bool Layout(const RenderContext& render) override;
     D2D1_SIZE_F Size() const override;
     // Tells the tray where the icons the box's edge fully uncovers are on screen.
     void Place(const ModulePlacement& placement) override;
@@ -34,9 +34,9 @@ class Tray final : public IModule {
     // 0 while unfolding, folding, turning or fading an item, so the bar draws every display frame until the transitions
     // end.
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    void                         Click(D2D1_POINT_2F point) override;
-    void                         RightClick(D2D1_POINT_2F point) override;
-    void                         MiddleClick(D2D1_POINT_2F point) override;
+    void Click(D2D1_POINT_2F point) override;
+    void RightClick(D2D1_POINT_2F point) override;
+    void MiddleClick(D2D1_POINT_2F point) override;
     // Over an icon, also tells its app the cursor moved. Leaving the icon whose popup is open closes it.
     bool Hover(std::optional<D2D1_POINT_2F> point) override;
     // None: clicks go to the icon under the cursor, or fold and unfold the tray.
@@ -49,7 +49,7 @@ class Tray final : public IModule {
   private:
     // One shown icon. The bitmap is made from its pixels on this bar's device.
     struct Slot {
-        TrayIcon                            icon;
+        TrayIcon icon;
         Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
     };
 
@@ -59,34 +59,34 @@ class Tray final : public IModule {
     float RevealedLength() const;
     float ToggleShift() const;
     // A point on the module as a point on the whole row, so the row's items can be hit where they are drawn.
-    D2D1_POINT_2F         RowPoint(D2D1_POINT_2F point) const;
+    D2D1_POINT_2F RowPoint(D2D1_POINT_2F point) const;
     std::optional<size_t> ItemUnder(std::optional<D2D1_POINT_2F> point) const;
     // The shown icon under point, or null over the toggle or between items.
     const Slot* SlotAt(D2D1_POINT_2F point) const;
     // The shown icon at an item's index, or null for the toggle or no item.
     const Slot* SlotOf(std::optional<size_t> item) const;
-    bool        ToggleAt(D2D1_POINT_2F point) const;
+    bool ToggleAt(D2D1_POINT_2F point) const;
     // A bitmap already made from the same pixels is kept: making one costs an upload to the GPU.
     Microsoft::WRL::ComPtr<ID2D1Bitmap> BitmapFor(const RenderContext& render, const TrayIcon& icon) const;
     // Layout's work before the fades follow it.
-    bool                          LayOutItems(const RenderContext& render);
+    bool LayOutItems(const RenderContext& render);
     std::vector<const ItemStyle*> ItemStyles() const;
 
-    std::wstring                  _icon;
-    ITray&                        _tray;
-    ModuleStyle                   _style;
-    Fold                          _fold;
+    std::wstring _icon;
+    ITray& _tray;
+    ModuleStyle _style;
+    Fold _fold;
     // What the last layout read of them, so drawing and hit tests agree with one frame.
-    FoldPosition      _shown{.revealed = 0.0f, .angleDegrees = 0.0f};
+    FoldPosition _shown{.revealed = 0.0f, .angleDegrees = 0.0f};
     std::vector<Slot> _slots; // as last laid out with any icon in sight
-    IconText          _toggle;
+    IconText _toggle;
     // Every icon then the toggle, as if fully unfolded.
-    ItemRow                   _row = EmptyItemRow();
-    HoveredItem               _hovered;
-    ItemFades                 _fades;
+    ItemRow _row = EmptyItemRow();
+    HoveredItem _hovered;
+    ItemFades _fades;
     std::vector<TrayIconRect> _placed; // as last handed to the tray
-    std::optional<TrayIcon>   _popup;  // the icon whose app's popup is open
-    bool                      _laidOut = false;
+    std::optional<TrayIcon> _popup;    // the icon whose app's popup is open
+    bool _laidOut = false;
 };
 
 // The icons a tray shows: those with pixels that their app has not hidden.

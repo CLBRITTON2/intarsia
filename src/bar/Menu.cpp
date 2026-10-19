@@ -52,7 +52,7 @@ namespace {
                 throw OutputError("printed a JSON item field other than id, text, active and tooltip");
             }
         }
-        const auto id   = item.find("id");
+        const auto id = item.find("id");
         const auto text = item.find("text");
         if (id == item.end() || !id->is_string() || text == item.end() || !text->is_string()) {
             throw OutputError("printed a JSON item without an id string and a text string");
@@ -62,9 +62,9 @@ namespace {
             throw OutputError("printed a JSON item active that is not true or false");
         }
         MenuEntry entry{
-            .id      = id->get<std::string>(),
-            .text    = text->get<std::string>(),
-            .active  = active != item.end() && active->get<bool>(),
+            .id = id->get<std::string>(),
+            .text = text->get<std::string>(),
+            .active = active != item.end() && active->get<bool>(),
             .tooltip = TooltipOf(item),
         };
         RequireDrawable(entry.id, "id", L"");
@@ -92,7 +92,7 @@ namespace {
     // Short enough for hundreds of entries, long enough to grab.
     constexpr float kMinThumbDips = 16.0f;
 
-    float           MaxOffset(const MenuScroll& scroll) {
+    float MaxOffset(const MenuScroll& scroll) {
         return std::max(0.0f, scroll.contentDips - (scroll.viewport.bottom - scroll.viewport.top));
     }
 
@@ -214,7 +214,7 @@ void MenuLister::List(const Command& command, std::chrono::seconds timeout) {
     }
     _command = command;
     _timeout = timeout;
-    _thread  = std::make_unique<StoppableThread>("menu lister", [this](HANDLE stopEvent) { Run(stopEvent); });
+    _thread = std::make_unique<StoppableThread>("menu lister", [this](HANDLE stopEvent) { Run(stopEvent); });
 }
 
 std::optional<MenuListing> MenuLister::Take() {
@@ -245,52 +245,52 @@ float MenuTextWidth(const MenuStyle& style, const ItemStyle& row, const RECT& mo
 }
 
 MenuLayout LayOutMenu(std::vector<MenuRow> rows, const MenuStyle& style, const RECT& monitorRect, std::uint32_t dpi) {
-    const ScrollbarStyle& scrollbar     = style.scrollbar;
-    const Insets          insets        = ContentInsets(style.box);
-    const float           gutter        = GutterDips(scrollbar);
-    const std::int32_t    monitorWidth  = monitorRect.right - monitorRect.left;
-    const std::int32_t    monitorHeight = monitorRect.bottom - monitorRect.top;
-    const float           maxHeight     = CappedDips(monitorHeight, dpi, style.maxHeightDips);
+    const ScrollbarStyle& scrollbar = style.scrollbar;
+    const Insets insets = ContentInsets(style.box);
+    const float gutter = GutterDips(scrollbar);
+    const std::int32_t monitorWidth = monitorRect.right - monitorRect.left;
+    const std::int32_t monitorHeight = monitorRect.bottom - monitorRect.top;
+    const float maxHeight = CappedDips(monitorHeight, dpi, style.maxHeightDips);
 
-    float                 inner = 0.0f;
+    float inner = 0.0f;
     for (const MenuRow& row : rows) {
         inner = std::max(inner, row.box.right + (2.0f * row.style->margin.xDips));
     }
     float bottom = insets.top;
     for (MenuRow& row : rows) {
-        const Spacing& margin  = row.style->margin;
+        const Spacing& margin = row.style->margin;
         const Spacing& padding = row.style->padding;
-        const float    top     = bottom + margin.yDips;
-        row.box                = D2D1::RectF(insets.left + margin.xDips, top, insets.left + inner - margin.xDips, top + row.box.bottom);
-        row.textOrigin         = D2D1::Point2F(row.box.left + padding.xDips, row.box.top + padding.yDips);
-        bottom                 = row.box.bottom + margin.yDips;
+        const float top = bottom + margin.yDips;
+        row.box = D2D1::RectF(insets.left + margin.xDips, top, insets.left + inner - margin.xDips, top + row.box.bottom);
+        row.textOrigin = D2D1::Point2F(row.box.left + padding.xDips, row.box.top + padding.yDips);
+        bottom = row.box.bottom + margin.yDips;
     }
 
-    const float       content = bottom - insets.top;
-    const float       height  = content + insets.top + insets.bottom;
-    const SIZE        size{.cx = std::min(DipsToWholePixels(inner + insets.left + insets.right + TakenGutterDips(height, maxHeight, gutter), dpi), monitorWidth),
-                           .cy = std::min(DipsToWholePixels(ShownHeightDips(height, maxHeight), dpi), monitorHeight)};
+    const float content = bottom - insets.top;
+    const float height = content + insets.top + insets.bottom;
+    const SIZE size{.cx = std::min(DipsToWholePixels(inner + insets.left + insets.right + TakenGutterDips(height, maxHeight, gutter), dpi), monitorWidth),
+                    .cy = std::min(DipsToWholePixels(ShownHeightDips(height, maxHeight), dpi), monitorHeight)};
     const D2D1_RECT_F viewport = D2D1::RectF(insets.left, insets.top, insets.left + inner, PixelsToDips(static_cast<float>(size.cy), dpi) - insets.bottom);
     return MenuLayout{
         .rows = std::move(rows),
         .size = size,
         .scroll =
             MenuScroll{
-                .viewport    = viewport,
+                .viewport = viewport,
                 .contentDips = content,
-                .offsetDips  = 0.0f,
+                .offsetDips = 0.0f,
             },
         .gutter = D2D1::RectF(viewport.right, viewport.top, viewport.right + gutter, viewport.bottom),
-        .track  = D2D1::RectF(viewport.right + scrollbar.margin.xDips, viewport.top + scrollbar.margin.yDips, viewport.right + scrollbar.margin.xDips + scrollbar.widthDips,
-                              viewport.bottom - scrollbar.margin.yDips),
+        .track = D2D1::RectF(viewport.right + scrollbar.margin.xDips, viewport.top + scrollbar.margin.yDips, viewport.right + scrollbar.margin.xDips + scrollbar.widthDips,
+                             viewport.bottom - scrollbar.margin.yDips),
     };
 }
 
 MenuScroll ScrolledTo(const MenuScroll& scroll, float offsetDips) {
     return MenuScroll{
-        .viewport    = scroll.viewport,
+        .viewport = scroll.viewport,
         .contentDips = scroll.contentDips,
-        .offsetDips  = std::clamp(offsetDips, 0.0f, MaxOffset(scroll)),
+        .offsetDips = std::clamp(offsetDips, 0.0f, MaxOffset(scroll)),
     };
 }
 
@@ -307,9 +307,9 @@ std::optional<D2D1_RECT_F> ThumbRect(const MenuScroll& scroll, const D2D1_RECT_F
         return std::nullopt;
     }
     const float trackLength = track.bottom - track.top;
-    const float shown       = (scroll.viewport.bottom - scroll.viewport.top) / scroll.contentDips;
+    const float shown = (scroll.viewport.bottom - scroll.viewport.top) / scroll.contentDips;
     const float thumbLength = std::min(trackLength, std::max(kMinThumbDips, trackLength * shown));
-    const float top         = track.top + ((trackLength - thumbLength) * scroll.offsetDips / maxOffset);
+    const float top = track.top + ((trackLength - thumbLength) * scroll.offsetDips / maxOffset);
     return D2D1::RectF(track.left, top, track.right, top + thumbLength);
 }
 
@@ -330,7 +330,7 @@ std::optional<size_t> EntryAt(const std::vector<MenuRow>& rows, const MenuScroll
         return std::nullopt;
     }
     const D2D1_POINT_2F unscrolled = D2D1::Point2F(point.x, point.y + scroll.offsetDips);
-    const auto          row = std::ranges::find_if(rows, [unscrolled](const MenuRow& candidate) { return candidate.entry.has_value() && Contains(candidate.box, unscrolled); });
+    const auto row = std::ranges::find_if(rows, [unscrolled](const MenuRow& candidate) { return candidate.entry.has_value() && Contains(candidate.box, unscrolled); });
     if (row == rows.end()) {
         return std::nullopt;
     }
@@ -359,11 +359,11 @@ std::optional<size_t> StepHighlight(std::optional<size_t> current, size_t count,
 // The tooltip's rect treats the row as a bar on the monitor's top or bottom edge, placing it below or above the row.
 TooltipAnchor RowTooltipAnchor(const RECT& row, const RECT& monitorRect, std::uint32_t dpi) {
     return TooltipAnchor{
-        .target      = row,
-        .barRect     = row,
+        .target = row,
+        .barRect = row,
         .monitorRect = monitorRect,
-        .edge        = RowBarEdge(row, monitorRect),
-        .dpi         = dpi,
+        .edge = RowBarEdge(row, monitorRect),
+        .dpi = dpi,
     };
 }
 
@@ -452,14 +452,14 @@ LRESULT Menu::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) 
 
 // The row's box is sized to its text here, and LayOutMenu places it and stretches it to the widest row.
 MenuRow Menu::LayOutRow(std::wstring_view text, const ItemStyle& style, std::optional<size_t> entry, float maxWidthDips, IDWriteInlineObject* ellipsis) const {
-    const float               textWidth = std::max(maxWidthDips, 1.0f);
+    const float textWidth = std::max(maxWidthDips, 1.0f);
     ComPtr<IDWriteTextLayout> layout;
     ThrowIfFailed(_graphics.dwrite->CreateTextLayout(text.data(), static_cast<std::uint32_t>(text.size()), _textFormat, textWidth, std::numeric_limits<float>::max(), &layout),
                   "IDWriteFactory::CreateTextLayout(menu)");
     ThrowIfFailed(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP), "IDWriteTextLayout::SetWordWrapping(menu)");
     const DWRITE_TRIMMING trimming{
-        .granularity    = DWRITE_TRIMMING_GRANULARITY_CHARACTER,
-        .delimiter      = 0,
+        .granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+        .delimiter = 0,
         .delimiterCount = 0,
     };
     ThrowIfFailed(layout->SetTrimming(&trimming, ellipsis), "IDWriteTextLayout::SetTrimming(menu)");
@@ -467,31 +467,31 @@ MenuRow Menu::LayOutRow(std::wstring_view text, const ItemStyle& style, std::opt
                   "IDWriteTextLayout::SetFontWeight(menu)");
     DWRITE_TEXT_METRICS metrics{};
     ThrowIfFailed(layout->GetMetrics(&metrics), "IDWriteTextLayout::GetMetrics(menu)");
-    const float width  = std::min(metrics.widthIncludingTrailingWhitespace, textWidth) + (2.0f * style.padding.xDips);
+    const float width = std::min(metrics.widthIncludingTrailingWhitespace, textWidth) + (2.0f * style.padding.xDips);
     const float height = metrics.height + (2.0f * style.padding.yDips);
     return MenuRow{
         .text = layout,
         .box =
             D2D1_RECT_F{
-                .left   = 0,
-                .top    = 0,
-                .right  = width,
+                .left = 0,
+                .top = 0,
+                .right = width,
                 .bottom = height,
             },
         .textOrigin = D2D1::Point2F(0, 0),
-        .style      = &style,
-        .entry      = entry,
+        .style = &style,
+        .entry = entry,
     };
 }
 
 void Menu::Show(const MenuListing& listing, const Command& onSelect, const TooltipAnchor& anchor) {
-    const MenuStyle&            style     = _config.style.menu;
-    const auto                  textWidth = [&style, &anchor](const ItemStyle& row) { return MenuTextWidth(style, row, anchor.monitorRect, anchor.dpi); };
+    const MenuStyle& style = _config.style.menu;
+    const auto textWidth = [&style, &anchor](const ItemStyle& row) { return MenuTextWidth(style, row, anchor.monitorRect, anchor.dpi); };
 
     ComPtr<IDWriteInlineObject> ellipsis;
     ThrowIfFailed(_graphics.dwrite->CreateEllipsisTrimmingSign(_textFormat, &ellipsis), "IDWriteFactory::CreateEllipsisTrimmingSign(menu)");
     std::vector<MenuEntry> entries;
-    std::vector<MenuRow>   rows;
+    std::vector<MenuRow> rows;
     if (const auto* failure = std::get_if<MenuFailure>(&listing)) {
         rows.push_back(LayOutRow(ToWide(failure->reason), style.item, std::nullopt, textWidth(style.item), ellipsis.Get()));
     } else {
@@ -509,19 +509,19 @@ void Menu::Show(const MenuListing& listing, const Command& onSelect, const Toolt
         }
     }
 
-    _layout         = LayOutMenu(std::move(rows), style, anchor.monitorRect, anchor.dpi);
+    _layout = LayOutMenu(std::move(rows), style, anchor.monitorRect, anchor.dpi);
     const SIZE size = _layout.size;
     // A window takes one composition target at a time, so the old surface goes before the new one is made.
     _canvas.reset();
-    _entries   = std::move(entries);
+    _entries = std::move(entries);
     _highlight = std::nullopt;
-    _onSelect  = onSelect;
-    _dpi       = anchor.dpi;
+    _onSelect = onSelect;
+    _dpi = anchor.dpi;
     _thumbGrabDips.reset();
     _canvas = std::make_unique<Canvas>(_graphics, _window.get(), static_cast<std::uint32_t>(size.cx), static_cast<std::uint32_t>(size.cy), anchor.dpi);
-    _shown  = true;
+    _shown = true;
     // Before drawing, which places the wallpaper's blur by it.
-    _rect        = TooltipRect(anchor, size);
+    _rect = TooltipRect(anchor, size);
     _monitorRect = anchor.monitorRect;
     Draw();
 
@@ -556,9 +556,9 @@ bool Menu::Shown() const {
 
 void Menu::Draw() {
     ID2D1DeviceContext* context = _canvas->surface.Context();
-    const MenuStyle&    style   = _config.style.menu;
-    const D2D1_SIZE_F   area    = context->GetSize();
-    const D2D1_RECT_F   whole   = D2D1::RectF(0, 0, area.width, area.height);
+    const MenuStyle& style = _config.style.menu;
+    const D2D1_SIZE_F area = context->GetSize();
+    const D2D1_RECT_F whole = D2D1::RectF(0, 0, area.width, area.height);
     context->BeginDraw();
     context->Clear(D2D1::ColorF(0, 0, 0, 0));
     DrawBackdrops(_canvas->surface, _wallpapers, style.backdrop, {whole}, style.box, _rect);
@@ -573,28 +573,28 @@ void Menu::Draw() {
             continue;
         }
         const ItemStyle& itemStyle = *row.style;
-        const RowColors  colors    = RowColorsOf(itemStyle, row.entry.has_value() && row.entry == _highlight);
-        const BoxStyle   box{
-              .background = itemStyle.background,
-              .border     = {},
-              .radiusDips = itemStyle.radiusDips,
-              .padding    = itemStyle.padding,
-              .shadows    = itemStyle.shadows,
+        const RowColors colors = RowColorsOf(itemStyle, row.entry.has_value() && row.entry == _highlight);
+        const BoxStyle box{
+            .background = itemStyle.background,
+            .border = {},
+            .radiusDips = itemStyle.radiusDips,
+            .padding = itemStyle.padding,
+            .shadows = itemStyle.shadows,
         };
         DrawBox(context, _canvas->brushes, _canvas->boxes, row.box, box, colors.background);
         context->DrawTextLayout(row.textOrigin, row.text.Get(), _canvas->brushes.Get(colors.text));
     }
     context->SetTransform(D2D1::Matrix3x2F::Identity());
     context->PopAxisAlignedClip();
-    const ScrollbarStyle&            scrollbar = style.scrollbar;
-    const std::optional<D2D1_RECT_F> thumb     = ThumbRect(_layout.scroll, _layout.track);
+    const ScrollbarStyle& scrollbar = style.scrollbar;
+    const std::optional<D2D1_RECT_F> thumb = ThumbRect(_layout.scroll, _layout.track);
     if (thumb.has_value() && scrollbar.widthDips > 0.0f) {
         const BoxStyle box{
             .background = scrollbar.background,
-            .border     = {},
+            .border = {},
             .radiusDips = scrollbar.radiusDips,
-            .padding    = {},
-            .shadows    = {},
+            .padding = {},
+            .shadows = {},
         };
         DrawBox(context, _canvas->brushes, _canvas->boxes, *thumb, box, scrollbar.background);
     }
@@ -634,8 +634,8 @@ void Menu::Wheel(std::int16_t delta) {
     if (!SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0)) {
         ThrowLastError("SystemParametersInfoW(SPI_GETWHEELSCROLLLINES)");
     }
-    const float notches  = static_cast<float>(delta) / WHEEL_DELTA;
-    const float rowDips  = _layout.scroll.contentDips / static_cast<float>(_layout.rows.size());
+    const float notches = static_cast<float>(delta) / WHEEL_DELTA;
+    const float rowDips = _layout.scroll.contentDips / static_cast<float>(_layout.rows.size());
     const float pageDips = _layout.scroll.viewport.bottom - _layout.scroll.viewport.top;
     Scroll(ScrolledTo(_layout.scroll, _layout.scroll.offsetDips - (notches * WheelStepDips(lines, pageDips, rowDips))));
     // The rows moved under a cursor that did not.
@@ -655,7 +655,7 @@ void Menu::Step(MenuStep step) {
     }
     _tooltip.Hide();
     const std::optional<size_t> entry = StepHighlight(_highlight, _entries.size(), step);
-    const auto                  row   = std::ranges::find(_layout.rows, entry, &MenuRow::entry);
+    const auto row = std::ranges::find(_layout.rows, entry, &MenuRow::entry);
     if (entry.has_value() && row != _layout.rows.end()) {
         _layout.scroll = ScrolledToShow(_layout.scroll, row->box);
     }
@@ -676,9 +676,9 @@ void Menu::GrabThumb(D2D1_POINT_2F point) {
 void Menu::RestartHover() {
     _tooltip.Hide();
     TRACKMOUSEEVENT track{
-        .cbSize      = sizeof(TRACKMOUSEEVENT),
-        .dwFlags     = TME_HOVER | TME_LEAVE,
-        .hwndTrack   = _window.get(),
+        .cbSize = sizeof(TRACKMOUSEEVENT),
+        .dwFlags = TME_HOVER | TME_LEAVE,
+        .hwndTrack = _window.get(),
         .dwHoverTime = HOVER_DEFAULT,
     };
     if (!TrackMouseEvent(&track)) {

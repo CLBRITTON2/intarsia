@@ -19,11 +19,11 @@
 
 namespace {
 
-    constexpr size_t         kValueExcerptBytes = 1000;
-    constexpr size_t         kComponentWidth    = 12;
-    constexpr std::uintmax_t kMaxLogBytes       = std::uintmax_t{8} * 1024 * 1024;
+    constexpr size_t kValueExcerptBytes = 1000;
+    constexpr size_t kComponentWidth = 12;
+    constexpr std::uintmax_t kMaxLogBytes = std::uintmax_t{8} * 1024 * 1024;
 
-    std::string_view         LevelName(LogLevel level) {
+    std::string_view LevelName(LogLevel level) {
         switch (level) {
             case LogLevel::Info: return "INFO";
             case LogLevel::Warning: return "WARN";
@@ -53,10 +53,10 @@ namespace {
     }
 
     struct LogFile {
-        std::mutex            mutex;
+        std::mutex mutex;
         std::filesystem::path path;
-        std::FILE*            file  = nullptr;
-        std::uintmax_t        bytes = 0;
+        std::FILE* file = nullptr;
+        std::uintmax_t bytes = 0;
     };
 
     // Every thread logs, so the one file is shared state by nature.
@@ -106,7 +106,7 @@ namespace {
     // A crash can come while its own thread holds the mutex, so the crash path never waits for it.
     void LogCrash(const std::string& line) {
         std::fputs(line.c_str(), stderr);
-        LogFile&                           sink = Sink();
+        LogFile& sink = Sink();
         const std::unique_lock<std::mutex> lock(sink.mutex, std::try_to_lock);
         if (lock.owns_lock()) {
             WriteToFile(sink, line);
@@ -158,7 +158,7 @@ std::string LogHead(LogLevel level, std::string_view component, std::string_view
 void Log(LogLevel level, std::string_view component, std::string_view event, std::initializer_list<LogField> fields) {
     const std::string line = FormatLine(level, component, event, fields);
     std::fputs(line.c_str(), stderr);
-    LogFile&               sink = Sink();
+    LogFile& sink = Sink();
     const std::scoped_lock lock(sink.mutex);
     WriteToFile(sink, line);
 }
@@ -168,7 +168,7 @@ std::filesystem::path DefaultLogPath() {
 }
 
 void LogToFile(const std::filesystem::path& path) {
-    LogFile&               sink = Sink();
+    LogFile& sink = Sink();
     const std::scoped_lock lock(sink.mutex);
     sink.path = path;
     StartFile(sink);

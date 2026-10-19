@@ -43,8 +43,8 @@ bool Tray::Layout(const RenderContext& render) {
 
 bool Tray::LayOutItems(const RenderContext& render) {
     const FoldPosition position = _fold.At(render.frameTime);
-    bool               changed  = !_laidOut || position != _shown;
-    _shown                      = position;
+    bool changed = !_laidOut || position != _shown;
+    _shown = position;
 
     // Folded, the icons wait out of sight as last shown, so unfolding uploads only those that are new or redrawn since.
     const size_t count = _slots.size();
@@ -52,7 +52,7 @@ bool Tray::LayOutItems(const RenderContext& render) {
         const std::vector<TrayIcon> shown = ShownIcons(_tray.Icons());
         if (!std::ranges::equal(shown, _slots, {}, {}, &Slot::icon)) {
             const auto samePixels = [](const TrayIcon& icon, const Slot& slot) { return icon.pixels == slot.icon.pixels; };
-            changed               = changed || !std::ranges::equal(shown, _slots, samePixels);
+            changed = changed || !std::ranges::equal(shown, _slots, samePixels);
             std::vector<Slot> slots;
             slots.reserve(shown.size());
             for (size_t index = 0; index < shown.size(); ++index) {
@@ -72,7 +72,7 @@ bool Tray::LayOutItems(const RenderContext& render) {
     }
     _laidOut = true;
 
-    const float              icon = _style.icon.sizeDips;
+    const float icon = _style.icon.sizeDips;
     std::vector<D2D1_SIZE_F> contents(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon});
     contents.push_back(_toggle.size);
     _row = ArrangeItems(contents, ItemStyles(), render.axis);
@@ -91,14 +91,14 @@ D2D1_SIZE_F Tray::Size() const {
 
 void Tray::Place(const ModulePlacement& placement) {
     std::vector<TrayIconRect> rects;
-    const float               revealed = RevealedLength();
-    const D2D1_POINT_2F       origin   = placement.contentOrigin;
+    const float revealed = RevealedLength();
+    const D2D1_POINT_2F origin = placement.contentOrigin;
     for (size_t index = 0; index < _slots.size() && MainEnd(_row.boxes[index], _row.axis) <= revealed; ++index) {
         const D2D1_RECT_F& box = _row.boxes[index];
         rects.push_back(TrayIconRect{
             .owner = _slots[index].icon.owner,
-            .id    = _slots[index].icon.id,
-            .rect  = DipsToScreen(placement.windowRect, Offset(box, origin), placement.dpi),
+            .id = _slots[index].icon.id,
+            .rect = DipsToScreen(placement.windowRect, Offset(box, origin), placement.dpi),
         });
     }
     if (!std::ranges::equal(rects, _placed, SamePlace)) {
@@ -109,7 +109,7 @@ void Tray::Place(const ModulePlacement& placement) {
 
 void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const ItemStyle& style = _style.item;
-    const float      icon  = _style.icon.sizeDips;
+    const float icon = _style.icon.sizeDips;
     if (_shown.revealed > 0.0f) {
         // The icons stay where the unfolded row puts them, and the box's edge uncovers them.
         const D2D1_SIZE_F revealed = MainCrossSize(_row.axis, RevealedLength(), CrossLength(_row.size, _row.axis));
@@ -122,9 +122,9 @@ void Tray::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
         render.context->PopAxisAlignedClip();
     }
 
-    const ItemStyle&    toggleStyle = _style.toggle;
-    const size_t        toggle      = _slots.size();
-    const D2D1_POINT_2F shifted     = MovedAlong(origin, -ToggleShift(), _row.axis);
+    const ItemStyle& toggleStyle = _style.toggle;
+    const size_t toggle = _slots.size();
+    const D2D1_POINT_2F shifted = MovedAlong(origin, -ToggleShift(), _row.axis);
     DrawItemBackground(render, _row.boxes[toggle], toggleStyle, _fades.Background(toggle, render.frameTime), _fades.Shadows(toggle, render.frameTime), shifted);
     DrawTurnedIconText(render, ItemContentOrigin(_row.boxes[toggle], toggleStyle, shifted), _toggle, _shown.angleDegrees, render.accent, render.foreground);
 }
@@ -158,8 +158,8 @@ void Tray::MiddleClick(D2D1_POINT_2F point) {
 }
 
 bool Tray::Hover(std::optional<D2D1_POINT_2F> point) {
-    const bool  changed = _hovered.Set(ItemUnder(point));
-    const Slot* slot    = SlotOf(_hovered.Get());
+    const bool changed = _hovered.Set(ItemUnder(point));
+    const Slot* slot = SlotOf(_hovered.Get());
     if (_popup.has_value() && (slot == nullptr || !SameIcon(slot->icon, *_popup))) {
         _tray.ClosePopup(*_popup);
         _popup.reset();

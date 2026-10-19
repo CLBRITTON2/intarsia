@@ -42,15 +42,15 @@ struct InternalMonitor {
 struct MonitorWithId {
     std::string id; // MonitorId's form
 
-    bool        operator==(const MonitorWithId& other) const = default;
+    bool operator==(const MonitorWithId& other) const = default;
 };
 using MonitorMatch = std::variant<AllMonitors, PrimaryMonitor, InternalMonitor, MonitorWithId>;
 
 struct BarConfig {
-    Edge                      edge;
-    Layer                     layer;
-    Space                     space;
-    float                     thicknessDips;
+    Edge edge;
+    Layer layer;
+    Space space;
+    float thicknessDips;
     std::vector<MonitorMatch> monitors;
 };
 
@@ -88,9 +88,9 @@ struct WindowManagerCommand {
 // A popup menu of what command prints, killed after timeout like an interval custom command. Picking an entry starts
 // onSelect with the entry's id as one more argument.
 struct MenuAction {
-    Command              command;
+    Command command;
     std::chrono::seconds timeout;
-    Command              onSelect;
+    Command onSelect;
 };
 
 // What an input does: start a program, send the window manager a command, or open a menu.
@@ -119,17 +119,17 @@ const std::optional<ModuleAction>& ActionFor(const ModuleActions& actions, Modul
 
 // A module that shows an icon and one formatted value, redrawn every interval: clock, cpu, memory.
 struct TextModuleConfig {
-    std::string                format;  // the module's value by name, such as "{time:%H:%M}" or "{usage}%"
+    std::string format;                 // the module's value by name, such as "{time:%H:%M}" or "{usage}%"
     std::optional<std::string> tooltip; // a second format for the same value, shown on hover, none when absent
-    std::wstring               icon;
-    std::chrono::seconds       interval;
-    ModuleActions              actions;
+    std::wstring icon;
+    std::chrono::seconds interval;
+    ModuleActions actions;
 };
 
 struct WindowConfig {
-    size_t                     maxLength; // UTF-16 code units of title shown before it is cut with an ellipsis
-    std::optional<std::string> tooltip;   // a format of {title}, the full title, shown on hover, none when absent
-    ModuleActions              actions;
+    size_t maxLength;                   // UTF-16 code units of title shown before it is cut with an ellipsis
+    std::optional<std::string> tooltip; // a format of {title}, the full title, shown on hover, none when absent
+    ModuleActions actions;
 };
 
 // What the tiling_direction module shows for each direction, such as a Nerd Font arrow.
@@ -155,12 +155,12 @@ struct ContinuousRun {};
 
 // A program whose output is shown through format.
 struct CustomConfig {
-    Command                                  command;
+    Command command;
     std::variant<IntervalRun, ContinuousRun> run;
-    CustomOutput                             output;
+    CustomOutput output;
     // What the json output's "class" may name, each drawn in the module's .name colors. Output naming any other fails.
     std::vector<std::string> classes;
-    TextModuleConfig         text;
+    TextModuleConfig text;
 };
 
 // How a counter's instances make one value.
@@ -174,51 +174,51 @@ enum class CounterCombine : std::uint8_t {
 // {value} (the combined value, a number for a spec such as "{value:.0f}") and {rate} (the value read as bytes per
 // second, as "3.4 MB/s").
 struct CounterConfig {
-    std::wstring     path; // English, local: "\GPU Engine(*engtype_3D)\Utilization Percentage"
-    CounterCombine   combine;
+    std::wstring path; // English, local: "\GPU Engine(*engtype_3D)\Utilization Percentage"
+    CounterCombine combine;
     TextModuleConfig text;
 };
 
 // The default output or input device's volume. The formats and tooltip can use {volume} (a whole percent) and {device}
 // (its name).
 struct AudioConfig {
-    AudioFlow                  flow;
-    std::string                format;
-    std::string                formatMuted;
+    AudioFlow flow;
+    std::string format;
+    std::string formatMuted;
     std::optional<std::string> tooltip;
-    std::wstring               icon;
-    std::wstring               iconMuted;
-    std::int32_t               stepPercent; // the volume change per scroll notch
-    ModuleActions              actions;     // on_click replaces toggling mute, on_scroll_up and on_scroll_down the volume change
+    std::wstring icon;
+    std::wstring iconMuted;
+    std::int32_t stepPercent; // the volume change per scroll notch
+    ModuleActions actions;    // on_click replaces toggling mute, on_scroll_up and on_scroll_down the volume change
 };
 
 // The interface the default route leaves through. The formats and tooltip can use {ssid}, {signal} (a percent),
 // {ip}, {interface}, {down} and {up} (rates such as "1.2 MB/s"). An empty format shows the icon alone.
 struct NetworkConfig {
-    std::string                formatWifi;
-    std::string                formatEthernet; // every link that is not Wi-Fi
-    std::string                formatDisconnected;
+    std::string formatWifi;
+    std::string formatEthernet; // every link that is not Wi-Fi
+    std::string formatDisconnected;
     std::optional<std::string> tooltip;
-    std::vector<std::wstring>  iconsWifi; // weakest signal to strongest, the range split evenly between them
-    std::wstring               iconEthernet;
-    std::wstring               iconDisconnected;
-    ModuleActions              actions;
+    std::vector<std::wstring> iconsWifi; // weakest signal to strongest, the range split evenly between them
+    std::wstring iconEthernet;
+    std::wstring iconDisconnected;
+    ModuleActions actions;
 };
 
 // The system's batteries taken together. The formats and tooltip can use {capacity} (the charge as a whole percent),
 // {time} (hours and minutes left on battery, as "1:05", empty until Windows has an estimate) and {health} (full
 // charge capacity against design capacity as a whole percent, empty when the batteries do not report it).
 struct BatteryConfig {
-    std::string                formatDischarging;
-    std::string                formatCharging;
-    std::string                formatPlugged; // on external power and not charging: full, or held by a charge limit
+    std::string formatDischarging;
+    std::string formatCharging;
+    std::string formatPlugged; // on external power and not charging: full, or held by a charge limit
     std::optional<std::string> tooltip;
-    std::vector<std::wstring>  icons; // emptiest to fullest while discharging, the range split evenly between them
-    std::wstring               iconCharging;
-    std::wstring               iconPlugged;
+    std::vector<std::wstring> icons; // emptiest to fullest while discharging, the range split evenly between them
+    std::wstring iconCharging;
+    std::wstring iconPlugged;
     // Discharging at or under these charges draws the module in warning, then critical, colors.
-    std::int32_t  warningAtPercent;
-    std::int32_t  criticalAtPercent; // under warningAtPercent
+    std::int32_t warningAtPercent;
+    std::int32_t criticalAtPercent; // under warningAtPercent
     ModuleActions actions;
 };
 
@@ -232,7 +232,7 @@ struct ModuleInstance;
 // A toggle, such as a Nerd Font glyph, that folds its members away and unfolds them after it. Each member is a module
 // no _modules list and no other group shows, and none is a group.
 struct GroupConfig {
-    std::wstring                icon;
+    std::wstring icon;
     std::vector<ModuleInstance> members; // in the order the group's modules key lists them
 };
 
@@ -242,10 +242,10 @@ using ModuleSettings = std::variant<std::monostate, TextModuleConfig, WindowConf
 
 // One entry of a _modules list: a name the user chose, defined in the config's modules table with its type.
 struct ModuleInstance {
-    std::string    name;
-    ModuleKind     kind;
+    std::string name;
+    ModuleKind kind;
     ModuleSettings settings;
-    ModuleStyle    style;
+    ModuleStyle style;
 };
 
 // The three sections a bar lays out along its edge: left and center and right on a horizontal bar, top and center and
@@ -272,15 +272,15 @@ void ForEachInSections(const Sections<T>& sections, Visit visit) {
 
 // The sections a bar shows in place of the config's own lists once its edge is at least minLengthDips long.
 struct LayoutConfig {
-    float                    minLengthDips{};
+    float minLengthDips{};
     Sections<ModuleInstance> modules;
 };
 
 struct Config {
-    BarConfig                 bar;
-    StyleConfig               style;
-    WindowManagerKind         windowManager;
-    Sections<ModuleInstance>  modules; // for a bar whose edge no layout's minimum reaches
+    BarConfig bar;
+    StyleConfig style;
+    WindowManagerKind windowManager;
+    Sections<ModuleInstance> modules;  // for a bar whose edge no layout's minimum reaches
     std::vector<LayoutConfig> layouts; // ascending by minLengthDips
 };
 

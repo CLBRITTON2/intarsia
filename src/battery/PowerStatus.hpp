@@ -21,17 +21,17 @@ using UniquePowerNotification = UniqueReleased<HPOWERNOTIFY, &PowerSettingUnregi
 class PowerStatus final : public IBattery {
   public:
     explicit PowerStatus(ChangeSignal& changes);
-    PowerStatus(const PowerStatus&)                           = delete;
-    PowerStatus&                operator=(const PowerStatus&) = delete;
+    PowerStatus(const PowerStatus&) = delete;
+    PowerStatus& operator=(const PowerStatus&) = delete;
 
     std::optional<BatteryState> State() const override;
 
   private:
-    void                        Run(HANDLE stopEvent);
+    void Run(HANDLE stopEvent);
 
-    ChangeSignal&               _changes;
-    UniqueHandle                _wakeEvent; // set by the power notifications
-    mutable std::mutex          _mutex;     // guards _state
+    ChangeSignal& _changes;
+    UniqueHandle _wakeEvent;   // set by the power notifications
+    mutable std::mutex _mutex; // guards _state
     std::optional<BatteryState> _state;
     // Unregistered before _wakeEvent closes, since their callbacks set it.
     UniquePowerNotification _powerSourceNotification;

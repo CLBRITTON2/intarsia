@@ -22,10 +22,10 @@ namespace {
 // The tooltip releases its surface on every hide and makes a new one on the next show, on the same window.
 TEST(Surface, AWindowTakesANewSurfaceOnlyOnceTheOldOneIsGone) {
     const CompositionThread compositionThread;
-    const GraphicsDevice    graphics = CreateGraphicsDevice();
-    HWND                    window   = CreatePopup();
+    const GraphicsDevice graphics = CreateGraphicsDevice();
+    HWND window = CreatePopup();
 
-    auto                    first = std::make_unique<Surface>(graphics, window, 64, 32, USER_DEFAULT_SCREEN_DPI);
+    auto first = std::make_unique<Surface>(graphics, window, 64, 32, USER_DEFAULT_SCREEN_DPI);
     EXPECT_ANY_THROW(Surface(graphics, window, 64, 32, USER_DEFAULT_SCREEN_DPI));
     first.reset();
     EXPECT_NO_THROW(Surface(graphics, window, 640, 320, USER_DEFAULT_SCREEN_DPI));
@@ -37,27 +37,27 @@ TEST(Surface, AWindowTakesANewSurfaceOnlyOnceTheOldOneIsGone) {
 // every brush, and a wallpaper backdrop shows none.
 TEST(Surface, BackdropsFollowTheBoxesAndToneOfEachCall) {
     const CompositionThread compositionThread;
-    const GraphicsDevice    graphics = CreateGraphicsDevice();
-    HWND                    window   = CreatePopup();
+    const GraphicsDevice graphics = CreateGraphicsDevice();
+    HWND window = CreatePopup();
 
-    Surface                 surface(graphics, window, 200, 40, USER_DEFAULT_SCREEN_DPI);
-    const D2D1_ROUNDED_RECT first  = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, 80.0f, 40.0f), 8.0f, 8.0f);
+    Surface surface(graphics, window, 200, 40, USER_DEFAULT_SCREEN_DPI);
+    const D2D1_ROUNDED_RECT first = D2D1::RoundedRect(D2D1::RectF(0.0f, 0.0f, 80.0f, 40.0f), 8.0f, 8.0f);
     const D2D1_ROUNDED_RECT second = D2D1::RoundedRect(D2D1::RectF(100.0f, 4.0f, 180.0f, 36.0f), 4.0f, 4.0f);
-    const D2D1_ROUNDED_RECT empty  = D2D1::RoundedRect(D2D1::RectF(190.0f, 0.0f, 190.0f, 40.0f), 0.0f, 0.0f);
-    const Backdrop          plain{
-                 .source     = BackdropSource::System,
-                 .radiusDips = 0.0f,
-                 .brightness = 1.0f,
-                 .saturation = 1.0f,
+    const D2D1_ROUNDED_RECT empty = D2D1::RoundedRect(D2D1::RectF(190.0f, 0.0f, 190.0f, 40.0f), 0.0f, 0.0f);
+    const Backdrop plain{
+        .source = BackdropSource::System,
+        .radiusDips = 0.0f,
+        .brightness = 1.0f,
+        .saturation = 1.0f,
     };
     const Backdrop toned{
-        .source     = BackdropSource::System,
+        .source = BackdropSource::System,
         .radiusDips = 0.0f,
         .brightness = 0.4f,
         .saturation = 1.8f,
     };
     const Backdrop wallpaper{
-        .source     = BackdropSource::Wallpaper,
+        .source = BackdropSource::Wallpaper,
         .radiusDips = 8.0f,
         .brightness = 1.0f,
         .saturation = 1.0f,

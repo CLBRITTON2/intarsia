@@ -11,14 +11,14 @@ namespace {
 
     const std::vector<std::string> kClasses{"sunny", "rain"};
 
-    CommandResult                  Succeeded(std::string text, std::optional<std::string> tooltip, bool alert) {
+    CommandResult Succeeded(std::string text, std::optional<std::string> tooltip, bool alert) {
         return CommandResult{
-                             .outcome    = CommandOutcome::Succeeded,
-                             .text       = std::move(text),
-                             .tooltip    = std::move(tooltip),
-                             .alert      = alert,
-                             .classIndex = std::nullopt,
-                             .detail     = {},
+            .outcome = CommandOutcome::Succeeded,
+            .text = std::move(text),
+            .tooltip = std::move(tooltip),
+            .alert = alert,
+            .classIndex = std::nullopt,
+            .detail = {},
         };
     }
 

@@ -21,7 +21,7 @@ class PdhError : public std::runtime_error {
 // One instance's value at a sample, such as logical processor "3" or "_Total".
 struct CounterInstance {
     std::wstring name;
-    double       value;
+    double value;
 };
 
 // One counter by its English path, such as "\GPU Engine(*engtype_3D)\Utilization Percentage", on a PDH query of its
@@ -46,5 +46,5 @@ class PerformanceCounter {
 
   private:
     UniqueReleased<PDH_HQUERY, &PdhCloseQuery> _query;
-    PDH_HCOUNTER                               _counter = nullptr;
+    PDH_HCOUNTER _counter = nullptr;
 };

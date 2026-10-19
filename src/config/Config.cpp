@@ -50,10 +50,10 @@ namespace {
         // path is the table's own key path, empty for the table the config returns.
         TableReader(lua_State* lua, std::int32_t index, std::string source, std::string path);
 
-        bool        Has(std::string_view key) const;
+        bool Has(std::string_view key) const;
         TableReader Table(std::string_view key) const;
         std::string String(std::string_view key) const;
-        float       Number(std::string_view key) const;
+        float Number(std::string_view key) const;
 
         // A sequence of strings such as { "clock", "cpu" }.
         std::vector<std::string> StringList(std::string_view key) const;
@@ -64,9 +64,9 @@ namespace {
         // Every key of the table, which must all be strings.
         std::vector<std::string> Keys() const;
 
-        void                     RejectUnknownKeys(const std::vector<std::string_view>& known) const;
-        std::string              KeyPath(std::string_view key) const;
-        ConfigError              Error(std::string_view message) const;
+        void RejectUnknownKeys(const std::vector<std::string_view>& known) const;
+        std::string KeyPath(std::string_view key) const;
+        ConfigError Error(std::string_view message) const;
 
       private:
         std::string TableName() const;
@@ -74,20 +74,20 @@ namespace {
         // ReadFile checked the source, but a Lua escape ("\xff", "\u{D800}") still builds any bytes.
         std::string StringAt(std::int32_t index, std::string_view name) const;
 
-        size_t      CountKeys(std::int32_t tableIndex) const;
-        void        RequirePlainList(std::int32_t listIndex, std::string_view key, lua_Integer length) const;
+        size_t CountKeys(std::int32_t tableIndex) const;
+        void RequirePlainList(std::int32_t listIndex, std::string_view key, lua_Integer length) const;
 
         // Every table read stays on the stack while its TableReader lives, one slot per module, so the stack can grow past
         // the LUA_MINSTACK slots Lua guarantees. Pushing past the allocated stack is unchecked in a release build.
         void Reserve(std::int32_t slots) const;
 
         // Leaves room for StringList's element on top of the field.
-        void         PushField(std::string_view key, std::int32_t expectedType, std::string_view expectedName) const;
+        void PushField(std::string_view key, std::int32_t expectedType, std::string_view expectedName) const;
 
-        lua_State*   _lua;
+        lua_State* _lua;
         std::int32_t _index;
-        std::string  _source;
-        std::string  _path;
+        std::string _source;
+        std::string _path;
     };
 
     TableReader::TableReader(lua_State* lua, std::int32_t index, std::string source, std::string path) :
@@ -123,7 +123,7 @@ namespace {
     std::vector<std::string> TableReader::StringList(std::string_view key) const {
         PushField(key, LUA_TTABLE, "a list of strings");
         const std::int32_t listIndex = lua_gettop(_lua);
-        const auto         length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+        const auto length = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
         RequirePlainList(listIndex, key, length);
         std::vector<std::string> values;
         values.reserve(static_cast<size_t>(length));
@@ -141,7 +141,7 @@ namespace {
     std::vector<TableReader> TableReader::TableList(std::string_view key) const {
         PushField(key, LUA_TTABLE, "a list of tables");
         const std::int32_t listIndex = lua_gettop(_lua);
-        const auto         length    = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
+        const auto length = static_cast<lua_Integer>(lua_rawlen(_lua, listIndex));
         RequirePlainList(listIndex, key, length);
         std::vector<TableReader> entries;
         entries.reserve(static_cast<size_t>(length));
@@ -196,8 +196,8 @@ namespace {
     }
 
     std::string TableReader::StringAt(std::int32_t index, std::string_view name) const {
-        size_t                 length = 0;
-        const char*            data   = lua_tolstring(_lua, index, &length);
+        size_t length = 0;
+        const char* data = lua_tolstring(_lua, index, &length);
         const std::string_view value(data, length);
         if (!IsValidUtf8(value)) {
             throw Error(std::format("{} is not valid UTF-8", name));
@@ -280,13 +280,13 @@ namespace {
     template <typename Value>
     struct Keyword {
         std::string_view name;
-        Value            value;
+        Value value;
     };
 
     template <typename Value, size_t Count>
     Value ParseKeyword(const TableReader& table, std::string_view key, const std::array<Keyword<Value>, Count>& keywords) {
         const std::string value = table.String(key);
-        const auto        entry = std::ranges::find(keywords, value, &Keyword<Value>::name);
+        const auto entry = std::ranges::find(keywords, value, &Keyword<Value>::name);
         if (entry == keywords.end()) {
             throw table.Error(std::format("{} must be one of {}, got '{}'", table.KeyPath(key), JoinNames(keywords | std::views::transform(&Keyword<Value>::name)), value));
         }
@@ -295,7 +295,7 @@ namespace {
 
     // Many times any real file. The style's is smaller because vars multiply it (each value is capped, not the sheet).
     constexpr size_t kMaxConfigFileBytes = size_t{1} << 20;
-    constexpr size_t kMaxStyleFileBytes  = size_t{64} << 10;
+    constexpr size_t kMaxStyleFileBytes = size_t{64} << 10;
 
     // what names the file in the error, as "config" or "style". Every string the file holds is then valid UTF-8, so
     // converting one later cannot fail.
@@ -323,17 +323,17 @@ namespace {
         {{.name = "windows", .value = WindowManagerKind::Windows}, {.name = "glazewm", .value = WindowManagerKind::GlazeWm}}};
     constexpr std::array<Keyword<Edge>, 4> kEdges{
         {{.name = "top", .value = Edge::Top}, {.name = "bottom", .value = Edge::Bottom}, {.name = "left", .value = Edge::Left}, {.name = "right", .value = Edge::Right}}};
-    constexpr std::array<Keyword<Layer>, 2>        kLayers{{{.name = "top", .value = Layer::Top}, {.name = "bottom", .value = Layer::Bottom}}};
-    constexpr std::array<Keyword<Space>, 2>        kSpaces{{{.name = "reserve", .value = Space::Reserve}, {.name = "share", .value = Space::Share}}};
+    constexpr std::array<Keyword<Layer>, 2> kLayers{{{.name = "top", .value = Layer::Top}, {.name = "bottom", .value = Layer::Bottom}}};
+    constexpr std::array<Keyword<Space>, 2> kSpaces{{{.name = "reserve", .value = Space::Reserve}, {.name = "share", .value = Space::Share}}};
     constexpr std::array<Keyword<CustomOutput>, 2> kCustomOutputs{{{.name = "text", .value = CustomOutput::Text}, {.name = "json", .value = CustomOutput::Json}}};
     enum class CustomRun : std::uint8_t {
         Interval,
         Continuous
     };
-    constexpr std::array<Keyword<CustomRun>, 2>      kCustomRuns{{{.name = "interval", .value = CustomRun::Interval}, {.name = "continuous", .value = CustomRun::Continuous}}};
+    constexpr std::array<Keyword<CustomRun>, 2> kCustomRuns{{{.name = "interval", .value = CustomRun::Interval}, {.name = "continuous", .value = CustomRun::Continuous}}};
     constexpr std::array<Keyword<CounterCombine>, 3> kCounterCombines{
         {{.name = "sum", .value = CounterCombine::Sum}, {.name = "max", .value = CounterCombine::Max}, {.name = "average", .value = CounterCombine::Average}}};
-    constexpr std::array<Keyword<AudioFlow>, 2>   kAudioFlows{{{.name = "output", .value = AudioFlow::Output}, {.name = "input", .value = AudioFlow::Input}}};
+    constexpr std::array<Keyword<AudioFlow>, 2> kAudioFlows{{{.name = "output", .value = AudioFlow::Output}, {.name = "input", .value = AudioFlow::Input}}};
     constexpr std::array<Keyword<ModuleKind>, 15> kModuleTypes{{
         {.name = "clock", .value = ModuleKind::Clock},
         {.name = "window", .value = ModuleKind::Window},
@@ -355,7 +355,7 @@ namespace {
     // Far past any monitor, and small enough that the bar's edges in device pixels fit 32-bit coordinates.
     constexpr float kThickestBarDips = 10000.0f;
 
-    float           BarThickness(const TableReader& bar) {
+    float BarThickness(const TableReader& bar) {
         const float value = PositiveNumber(bar, "thickness");
         if (value > kThickestBarDips) {
             throw bar.Error(std::format("{} must be at most {}, got {}", bar.KeyPath("thickness"), kThickestBarDips, value));
@@ -417,8 +417,8 @@ namespace {
     // One line of text: a line break or other control character would reach the window manager's command parser.
     WindowManagerCommand ReadWindowManagerCommand(const TableReader& action) {
         action.RejectUnknownKeys({"window_manager"});
-        std::string text    = action.String("window_manager");
-        const bool  control = std::ranges::any_of(text, IsControlByte);
+        std::string text = action.String("window_manager");
+        const bool control = std::ranges::any_of(text, IsControlByte);
         if (text.empty() || control) {
             throw action.Error(std::format("{} must be a command on one line, as \"focus --next-workspace\"", action.KeyPath("window_manager")));
         }
@@ -432,8 +432,8 @@ namespace {
         const TableReader menu = action.Table("menu");
         menu.RejectUnknownKeys({"command", "timeout", "on_select"});
         MenuAction read{
-            .command  = ReadCommand(menu, "command"),
-            .timeout  = Seconds(menu, "timeout"),
+            .command = ReadCommand(menu, "command"),
+            .timeout = Seconds(menu, "timeout"),
             .onSelect = ReadCommand(menu, "on_select"),
         };
         if (SameFileName(read.onSelect.program.filename().wstring(), L"cmd.exe")) {
@@ -461,11 +461,11 @@ namespace {
 
     ModuleActions ReadActions(const TableReader& module) {
         return ModuleActions{
-            .click       = ReadAction(module, "on_click"),
-            .rightClick  = ReadAction(module, "on_right_click"),
+            .click = ReadAction(module, "on_click"),
+            .rightClick = ReadAction(module, "on_right_click"),
             .middleClick = ReadAction(module, "on_middle_click"),
-            .scrollUp    = ReadAction(module, "on_scroll_up"),
-            .scrollDown  = ReadAction(module, "on_scroll_down"),
+            .scrollUp = ReadAction(module, "on_scroll_up"),
+            .scrollDown = ReadAction(module, "on_scroll_down"),
         };
     }
 
@@ -485,11 +485,11 @@ namespace {
 
     TextModuleConfig ReadTextFields(const TableReader& module) {
         return TextModuleConfig{
-            .format   = module.String("format"),
-            .tooltip  = ReadTooltip(module),
-            .icon     = ToWide(module.String("icon")),
+            .format = module.String("format"),
+            .tooltip = ReadTooltip(module),
+            .icon = ToWide(module.String("icon")),
             .interval = Seconds(module, "interval"),
-            .actions  = ReadActions(module),
+            .actions = ReadActions(module),
         };
     }
 
@@ -532,10 +532,10 @@ namespace {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "command", "run", "timeout", "output", "classes", "format", "icon", "interval"}));
         return CustomConfig{
             .command = ReadCommand(module, "command"),
-            .run     = ReadCustomRun(module),
-            .output  = ParseKeyword(module, "output", kCustomOutputs),
+            .run = ReadCustomRun(module),
+            .output = ParseKeyword(module, "output", kCustomOutputs),
             .classes = ReadCustomClasses(module, "classes"),
-            .text    = ReadTextFields(module),
+            .text = ReadTextFields(module),
         };
     }
 
@@ -557,9 +557,9 @@ namespace {
     CounterConfig ReadCounterConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "counter", "combine", "format", "icon", "interval"}));
         return CounterConfig{
-            .path    = ReadCounterPath(module, "counter"),
+            .path = ReadCounterPath(module, "counter"),
             .combine = ParseKeyword(module, "combine", kCounterCombines),
-            .text    = ReadTextFields(module),
+            .text = ReadTextFields(module),
         };
     }
 
@@ -570,14 +570,14 @@ namespace {
             throw module.Error(std::format("{} is a percent of full volume, from 1 to 100, got {}", module.KeyPath("step"), step));
         }
         return AudioConfig{
-            .flow        = ParseKeyword(module, "flow", kAudioFlows),
-            .format      = module.String("format"),
+            .flow = ParseKeyword(module, "flow", kAudioFlows),
+            .format = module.String("format"),
             .formatMuted = module.String("format_muted"),
-            .tooltip     = ReadTooltip(module),
-            .icon        = ToWide(module.String("icon")),
-            .iconMuted   = ToWide(module.String("icon_muted")),
+            .tooltip = ReadTooltip(module),
+            .icon = ToWide(module.String("icon")),
+            .iconMuted = ToWide(module.String("icon_muted")),
             .stepPercent = static_cast<std::int32_t>(step),
-            .actions     = ReadActions(module),
+            .actions = ReadActions(module),
         };
     }
 
@@ -596,14 +596,14 @@ namespace {
     NetworkConfig ReadNetworkConfig(const TableReader& module) {
         module.RejectUnknownKeys(WithOptionalKeys({"type", "format_wifi", "format_ethernet", "format_disconnected", "icons_wifi", "icon_ethernet", "icon_disconnected"}));
         return NetworkConfig{
-            .formatWifi         = module.String("format_wifi"),
-            .formatEthernet     = module.String("format_ethernet"),
+            .formatWifi = module.String("format_wifi"),
+            .formatEthernet = module.String("format_ethernet"),
             .formatDisconnected = module.String("format_disconnected"),
-            .tooltip            = ReadTooltip(module),
-            .iconsWifi          = ReadLevelIcons(module, "icons_wifi", "weakest signal"),
-            .iconEthernet       = ToWide(module.String("icon_ethernet")),
-            .iconDisconnected   = ToWide(module.String("icon_disconnected")),
-            .actions            = ReadActions(module),
+            .tooltip = ReadTooltip(module),
+            .iconsWifi = ReadLevelIcons(module, "icons_wifi", "weakest signal"),
+            .iconEthernet = ToWide(module.String("icon_ethernet")),
+            .iconDisconnected = ToWide(module.String("icon_disconnected")),
+            .actions = ReadActions(module),
         };
     }
 
@@ -618,7 +618,7 @@ namespace {
     BatteryConfig ReadBatteryConfig(const TableReader& module) {
         module.RejectUnknownKeys(
             WithOptionalKeys({"type", "format_discharging", "format_charging", "format_plugged", "icons", "icon_charging", "icon_plugged", "warning_at", "critical_at"}));
-        const std::int64_t warningAt  = ChargePercent(module, "warning_at");
+        const std::int64_t warningAt = ChargePercent(module, "warning_at");
         const std::int64_t criticalAt = ChargePercent(module, "critical_at");
         if (criticalAt >= warningAt) {
             throw module.Error(std::format("{} ({}) must be under {} ({}), since a battery runs low before it is nearly empty", module.KeyPath("critical_at"), criticalAt,
@@ -626,15 +626,15 @@ namespace {
         }
         return BatteryConfig{
             .formatDischarging = module.String("format_discharging"),
-            .formatCharging    = module.String("format_charging"),
-            .formatPlugged     = module.String("format_plugged"),
-            .tooltip           = ReadTooltip(module),
-            .icons             = ReadLevelIcons(module, "icons", "emptiest"),
-            .iconCharging      = ToWide(module.String("icon_charging")),
-            .iconPlugged       = ToWide(module.String("icon_plugged")),
-            .warningAtPercent  = static_cast<std::int32_t>(warningAt),
+            .formatCharging = module.String("format_charging"),
+            .formatPlugged = module.String("format_plugged"),
+            .tooltip = ReadTooltip(module),
+            .icons = ReadLevelIcons(module, "icons", "emptiest"),
+            .iconCharging = ToWide(module.String("icon_charging")),
+            .iconPlugged = ToWide(module.String("icon_plugged")),
+            .warningAtPercent = static_cast<std::int32_t>(warningAt),
             .criticalAtPercent = static_cast<std::int32_t>(criticalAt),
-            .actions           = ReadActions(module),
+            .actions = ReadActions(module),
         };
     }
 
@@ -642,8 +642,8 @@ namespace {
         window.RejectUnknownKeys(WithOptionalKeys({"type", "max_length"}));
         return WindowConfig{
             .maxLength = static_cast<size_t>(PositiveWholeNumber(window, "max_length")),
-            .tooltip   = ReadTooltip(window),
-            .actions   = ReadActions(window),
+            .tooltip = ReadTooltip(window),
+            .actions = ReadActions(window),
         };
     }
 
@@ -684,12 +684,12 @@ namespace {
     ModuleInstance ReadModuleInstance(const TableReader& definitions, const std::string& name, const TableReader& module, ModuleKind kind, const StyleSheet& sheet,
                                       const StyleConfig& style) {
         ModuleSettings settings = ReadModuleSettings(module, kind, definitions, sheet, style);
-        ModuleStyle    styled   = ResolveModuleStyle(sheet, style, kind, name, ClassesOf(settings));
+        ModuleStyle styled = ResolveModuleStyle(sheet, style, kind, name, ClassesOf(settings));
         return ModuleInstance{
-            .name     = name,
-            .kind     = kind,
+            .name = name,
+            .kind = kind,
             .settings = std::move(settings),
-            .style    = std::move(styled),
+            .style = std::move(styled),
         };
     }
 
@@ -727,7 +727,7 @@ namespace {
         members.reserve(names.size());
         for (const std::string& name : names) {
             const TableReader module = DefinedModule(group, "modules", definitions, name);
-            const ModuleKind  kind   = ParseKeyword(module, "type", kModuleTypes);
+            const ModuleKind kind = ParseKeyword(module, "type", kModuleTypes);
             if (kind == ModuleKind::Group) {
                 throw group.Error(std::format("{} lists '{}', which is a group: groups do not nest", group.KeyPath("modules"), name));
             }
@@ -738,9 +738,9 @@ namespace {
 
     Sections<ModuleInstance> ReadSections(const TableReader& lists, const TableReader& definitions, const StyleSheet& sheet, const StyleConfig& style) {
         return Sections<ModuleInstance>{
-            .left   = ReadModuleList(lists, definitions, "modules_left", sheet, style),
+            .left = ReadModuleList(lists, definitions, "modules_left", sheet, style),
             .center = ReadModuleList(lists, definitions, "modules_center", sheet, style),
-            .right  = ReadModuleList(lists, definitions, "modules_right", sheet, style),
+            .right = ReadModuleList(lists, definitions, "modules_right", sheet, style),
         };
     }
 
@@ -783,7 +783,7 @@ namespace {
 
     // A member shows only through its group: listed in a _modules list or in a second group as well, it would show twice.
     void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
-        std::set<std::string, std::less<>>              listed;
+        std::set<std::string, std::less<>> listed;
         std::map<std::string, std::string, std::less<>> groupOf;
         // Notes each module a list shows, and the one group each member belongs to.
         const auto recordShown = [&listed, &groupOf, &definitions](const ModuleInstance& instance) {
@@ -892,34 +892,34 @@ std::filesystem::path StylePath(const std::filesystem::path& configPath) {
 
 Config LoadConfig(const std::filesystem::path& path) {
     const std::string source = ToUtf8(path.wstring());
-    const LuaSandbox  sandbox(ReadFile(path, "config", kMaxConfigFileBytes), source);
+    const LuaSandbox sandbox(ReadFile(path, "config", kMaxConfigFileBytes), source);
     const TableReader root(sandbox.State(), lua_gettop(sandbox.State()), source, "");
     root.RejectUnknownKeys({"bar", "window_manager", "modules_left", "modules_center", "modules_right", "layouts", "modules"});
 
-    const std::filesystem::path stylePath   = StylePath(path);
-    const StyleSheet            sheet       = ParseStyleSheet(ReadFile(stylePath, "style", kMaxStyleFileBytes), ToUtf8(stylePath.wstring()));
-    StyleConfig                 style       = ResolveBarStyle(sheet);
-    const TableReader           definitions = root.Table("modules");
+    const std::filesystem::path stylePath = StylePath(path);
+    const StyleSheet sheet = ParseStyleSheet(ReadFile(stylePath, "style", kMaxStyleFileBytes), ToUtf8(stylePath.wstring()));
+    StyleConfig style = ResolveBarStyle(sheet);
+    const TableReader definitions = root.Table("modules");
     RequireValidModuleNames(definitions);
-    Sections<ModuleInstance>  modules = ReadSections(root, definitions, sheet, style);
+    Sections<ModuleInstance> modules = ReadSections(root, definitions, sheet, style);
     std::vector<LayoutConfig> layouts = ReadLayouts(root, definitions, sheet, style);
 
-    const TableReader         bar = root.Table("bar");
+    const TableReader bar = root.Table("bar");
     bar.RejectUnknownKeys({"edge", "layer", "space", "thickness", "monitors"});
     BarConfig barConfig{
-        .edge          = ParseKeyword(bar, "edge", kEdges),
-        .layer         = ParseKeyword(bar, "layer", kLayers),
-        .space         = ParseKeyword(bar, "space", kSpaces),
+        .edge = ParseKeyword(bar, "edge", kEdges),
+        .layer = ParseKeyword(bar, "layer", kLayers),
+        .space = ParseKeyword(bar, "space", kSpaces),
         .thicknessDips = BarThickness(bar),
-        .monitors      = ReadMonitorMatches(bar),
+        .monitors = ReadMonitorMatches(bar),
     };
 
     Config config{
-        .bar           = std::move(barConfig),
-        .style         = std::move(style),
+        .bar = std::move(barConfig),
+        .style = std::move(style),
         .windowManager = ParseKeyword(root, "window_manager", kWindowManagers),
-        .modules       = std::move(modules),
-        .layouts       = std::move(layouts),
+        .modules = std::move(modules),
+        .layouts = std::move(layouts),
     };
     RejectUnshownModules(definitions, config);
     RequireMembersInOneGroup(definitions, config);

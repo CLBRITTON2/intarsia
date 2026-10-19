@@ -33,10 +33,10 @@ enum class TextState : std::uint8_t {
 struct ModuleText {
     std::wstring icon;
     std::wstring text;
-    TextState    state;
-    size_t       classIndex; // Classed: which of the module's declared classes, in their order, else 0
+    TextState state;
+    size_t classIndex; // Classed: which of the module's declared classes, in their order, else 0
 
-    bool         operator==(const ModuleText&) const = default;
+    bool operator==(const ModuleText&) const = default;
 };
 
 ModuleText NormalText(std::wstring icon, std::wstring text);
@@ -45,13 +45,13 @@ ModuleText NormalText(std::wstring icon, std::wstring text);
 class TextLine {
   public:
     // Whether content differs from the last update's.
-    bool        Update(const RenderContext& render, ModuleText content);
+    bool Update(const RenderContext& render, ModuleText content);
     D2D1_SIZE_F Size() const;
-    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
+    void Draw(const RenderContext& render, D2D1_POINT_2F origin) const;
 
   private:
     ModuleText _shown = NormalText(L"", L""); // what _text holds
-    IconText   _text  = EmptyIconText();
+    IconText _text = EmptyIconText();
 };
 
 // A module that shows one ModuleText, laid out again only when it changes, and runs the actions its config binds.
@@ -86,7 +86,7 @@ class IconTextModule : public IModule {
     virtual ModuleText Content() = 0;
 
   private:
-    Config   _config;
+    Config _config;
     TextLine _line;
 };
 
@@ -110,7 +110,7 @@ class SampledTexts {
     const std::wstring& Of(const std::string& spec, const std::function<std::wstring()>& format);
 
   private:
-    std::chrono::steady_clock::time_point             _sampledAt;
+    std::chrono::steady_clock::time_point _sampledAt;
     std::vector<std::pair<std::string, std::wstring>> _texts;
 };
 
@@ -119,7 +119,7 @@ class SampledTexts {
 class TextModule : public IconTextModule<TextModuleConfig> {
   public:
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    std::optional<std::wstring>  TooltipText() override;
+    std::optional<std::wstring> TooltipText() override;
 
   protected:
     // Throws ConfigError when the format or tooltip names a value samples lacks or has a spec that does not fit it.

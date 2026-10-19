@@ -24,20 +24,20 @@ using UniqueMibNotification = std::unique_ptr<void, CancelMibNotification>;
 class IpHelper final : public INetwork {
   public:
     IpHelper(ChangeSignal& changes, bool samplesRates);
-    IpHelper(const IpHelper&)               = delete;
-    IpHelper&    operator=(const IpHelper&) = delete;
+    IpHelper(const IpHelper&) = delete;
+    IpHelper& operator=(const IpHelper&) = delete;
 
     NetworkState State() const override;
-    bool         SamplesRates() const;
+    bool SamplesRates() const;
 
   private:
-    void               Run(HANDLE stopEvent);
+    void Run(HANDLE stopEvent);
 
-    ChangeSignal&      _changes;
-    const bool         _samplesRates;
-    UniqueHandle       _linkEvent; // set by the change notifications
-    mutable std::mutex _mutex;     // guards _state
-    NetworkState       _state;
+    ChangeSignal& _changes;
+    const bool _samplesRates;
+    UniqueHandle _linkEvent;   // set by the change notifications
+    mutable std::mutex _mutex; // guards _state
+    NetworkState _state;
     // Canceled before _linkEvent closes, since their callbacks set it.
     UniqueMibNotification _interfaceNotification;
     UniqueMibNotification _addressNotification;

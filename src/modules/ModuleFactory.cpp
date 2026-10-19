@@ -72,19 +72,19 @@ namespace {
         if (settings == nullptr) {
             std::unique_ptr<IModule> module = CreateModule(instance, sources);
             return ModuleEntry{
-                .module  = std::move(module),
-                .style   = instance.style,
-                .group   = nullptr,
+                .module = std::move(module),
+                .style = instance.style,
+                .group = nullptr,
                 .members = {},
             };
         }
-        auto                     group   = std::make_unique<Group>(*settings, instance.style);
-        const Group*             view    = group.get();
+        auto group = std::make_unique<Group>(*settings, instance.style);
+        const Group* view = group.get();
         std::vector<ModuleEntry> members = CreateEntries(settings->members, sources);
         return ModuleEntry{
-            .module  = std::move(group),
-            .style   = instance.style,
-            .group   = view,
+            .module = std::move(group),
+            .style = instance.style,
+            .group = view,
             .members = std::move(members),
         };
     }
@@ -102,8 +102,8 @@ namespace {
 
 Sections<ModuleEntry> CreateModules(const Sections<ModuleInstance>& modules, const ModuleSources& sources) {
     return Sections<ModuleEntry>{
-        .left   = CreateEntries(modules.left, sources),
+        .left = CreateEntries(modules.left, sources),
         .center = CreateEntries(modules.center, sources),
-        .right  = CreateEntries(modules.right, sources),
+        .right = CreateEntries(modules.right, sources),
     };
 }

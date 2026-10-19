@@ -26,10 +26,10 @@ namespace {
 
     // What a program started with this command line sees as its arguments, split the way the C runtime splits them.
     std::vector<std::wstring> RoundTrip(const std::vector<std::wstring>& arguments) {
-        const std::wstring        line  = L"program.exe " + JoinArguments(arguments);
-        std::int32_t              count = 0;
-        LPWSTR*                   argv  = CommandLineToArgvW(line.c_str(), &count);
-        const UniqueLocal         owned(static_cast<HLOCAL>(argv));
+        const std::wstring line = L"program.exe " + JoinArguments(arguments);
+        std::int32_t count = 0;
+        LPWSTR* argv = CommandLineToArgvW(line.c_str(), &count);
+        const UniqueLocal owned(static_cast<HLOCAL>(argv));
         std::vector<std::wstring> split;
         for (std::int32_t index = 1; index < count; ++index) {
             split.emplace_back(argv[index]);
@@ -62,9 +62,9 @@ namespace {
     class OutsideProcess {
       public:
         OutsideProcess() {
-            const std::wstring  program = Ping().program.wstring();
-            std::wstring        line    = L"ping -n 60 127.0.0.1";
-            STARTUPINFOW        startup{.cb = sizeof(STARTUPINFOW)};
+            const std::wstring program = Ping().program.wstring();
+            std::wstring line = L"ping -n 60 127.0.0.1";
+            STARTUPINFOW startup{.cb = sizeof(STARTUPINFOW)};
             PROCESS_INFORMATION started{};
             if (!CreateProcessW(program.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &started)) {
                 throw std::runtime_error("could not start the outside process");
@@ -77,16 +77,16 @@ namespace {
             TerminateProcess(_process.get(), 1);
             WaitForSingleObject(_process.get(), INFINITE);
         }
-        OutsideProcess(const OutsideProcess&)            = delete;
+        OutsideProcess(const OutsideProcess&) = delete;
         OutsideProcess& operator=(const OutsideProcess&) = delete;
 
-        DWORD           Id() const {
+        DWORD Id() const {
             return _id;
         }
 
       private:
         UniqueHandle _process;
-        DWORD        _id = 0;
+        DWORD _id = 0;
     };
 
     constexpr std::wstring_view kStubName = L"intarsia-path-stub";
@@ -108,8 +108,8 @@ namespace {
             std::filesystem::current_path(_previousDirectory, error);
             std::filesystem::remove_all(_path, error);
         }
-        StubDirectory(const StubDirectory&)                          = delete;
-        StubDirectory&               operator=(const StubDirectory&) = delete;
+        StubDirectory(const StubDirectory&) = delete;
+        StubDirectory& operator=(const StubDirectory&) = delete;
 
         const std::filesystem::path& Get() const {
             return _path;
@@ -124,7 +124,7 @@ namespace {
 
         std::filesystem::path _path;
         std::filesystem::path _previousDirectory;
-        std::wstring          _previousPath;
+        std::wstring _previousPath;
     };
 
 } // namespace
@@ -139,7 +139,7 @@ TEST(Process, ArgumentsSurviveTheRoundTripUnchanged) {
 // SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
 // when the file exists there.
 TEST(Process, MissingProgramsAndRelativePathsWithDirectoriesDoNotResolve) {
-    const std::filesystem::path     cmd = SystemProgram(L"cmd");
+    const std::filesystem::path cmd = SystemProgram(L"cmd");
     const std::vector<std::wstring> names{
         L"intarsia-no-such-program",
         L"C:\\intarsia\\no-such-program.exe",
@@ -187,13 +187,13 @@ TEST(Process, CaptureOutputStopsWhenCancelled) {
 // The job cannot kill a process outside it, so the read of a pipe such a process holds open ends with the job.
 TEST(Process, CaptureOutputEndsWhenItsCommandExitsWhileAProcessOutsideTheJobHoldsItsOutput) {
     std::future<std::string> captured;
-    std::future_status       status = std::future_status::timeout;
+    std::future_status status = std::future_status::timeout;
     {
         const OutsideProcess holder;
         captured = std::async(std::launch::async, [&holder] {
             return CaptureOutput(Command{.program = INTARSIA_PIPE_HOLDER, .arguments = {std::to_wstring(holder.Id())}}, std::chrono::seconds(10), 1024, NeverSignaled().get());
         });
-        status   = captured.wait_for(std::chrono::seconds(5));
+        status = captured.wait_for(std::chrono::seconds(5));
     }
     // The holder is gone by now, so a read that waited for the pipe to close has ended too and get cannot hang.
     EXPECT_EQ(status, std::future_status::ready);
@@ -212,7 +212,7 @@ TEST(Process, CaptureOutputFailsPastTheOutputCap) {
 
 TEST(Process, StreamLinesDeliversEachLineAndReturnsTheExitCode) {
     std::vector<std::string> lines;
-    const std::uint32_t      exitCode =
+    const std::uint32_t exitCode =
         StreamLines(Cmd({L"/c", L"echo one& echo two& exit 4"}), 1024, NeverSignaled().get(), [&lines](std::string_view line) { lines.emplace_back(line); });
     EXPECT_EQ(lines, (std::vector<std::string>{"one", "two"}));
     EXPECT_EQ(exitCode, 4u);
@@ -230,8 +230,8 @@ TEST(Process, StreamLinesFailsPastTheLineCap) {
 }
 
 TEST(Process, StreamLinesStopsARunningCommandWhenCancelled) {
-    const UniqueHandle cancel  = NeverSignaled();
-    const auto         started = std::chrono::steady_clock::now();
+    const UniqueHandle cancel = NeverSignaled();
+    const auto started = std::chrono::steady_clock::now();
     EXPECT_THAT([&cancel] { return StreamLines(Cmd({L"/c", L"echo up& ping -n 60 127.0.0.1"}), 1024, cancel.get(), [&cancel](std::string_view) { SetEvent(cancel.get()); }); },
                 ThrowsWith<CommandError>("cancelled"));
     EXPECT_LT(std::chrono::steady_clock::now() - started, std::chrono::seconds(30));

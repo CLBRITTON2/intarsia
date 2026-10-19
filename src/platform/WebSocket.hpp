@@ -22,13 +22,13 @@ class WebSocket {
   public:
     // Connects and completes the upgrade, throwing Win32Error with the failing WinHTTP call.
     WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_view path);
-    WebSocket(const WebSocket&)            = delete;
+    WebSocket(const WebSocket&) = delete;
     WebSocket& operator=(const WebSocket&) = delete;
 
     // This end's port, which names the connection in the OS's TCP table.
     std::uint16_t LocalPort() const;
 
-    void          Send(std::string_view text);
+    void Send(std::string_view text);
 
     // One whole message as text. Throws when the connection fails, is closed, or the server closes it.
     std::string Receive();
@@ -41,7 +41,7 @@ class WebSocket {
     UniqueInternet _session;
     UniqueInternet _connection;
     UniqueInternet _socket;
-    std::uint16_t  _localPort = 0;
+    std::uint16_t _localPort = 0;
 };
 
 // Loopback TCP has no authentication of its own, so a client learns who it reached by asking the OS which process

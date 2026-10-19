@@ -19,7 +19,7 @@ class Group final : public IModule {
     bool Layout(const RenderContext& render) override;
     // The toggle alone: the bar adds the members' share.
     D2D1_SIZE_F Size() const override;
-    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    void Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
     // 0 while unfolding, folding or turning, so the bar draws every display frame until the transitions end.
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
     // Any click that reaches the group folds or unfolds it: its members take clicks on themselves.
@@ -32,8 +32,8 @@ class Group final : public IModule {
 
   private:
     std::wstring _icon;
-    Fold         _fold;
+    Fold _fold;
     FoldPosition _shown{.revealed = 0.0f, .angleDegrees = 0.0f}; // as of the last layout, so drawing and placing agree
-    IconText     _toggle;
-    bool         _laidOut = false;
+    IconText _toggle;
+    bool _laidOut = false;
 };

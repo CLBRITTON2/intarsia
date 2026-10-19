@@ -18,8 +18,8 @@ struct EndInsets {
 
 // Where one section's box sits along the bar's main axis, and where each of its modules' boxes starts.
 struct SectionLayout {
-    float              start;
-    float              length; // 0 for a section with no modules
+    float start;
+    float length; // 0 for a section with no modules
     std::vector<float> offsets;
 };
 
@@ -36,9 +36,9 @@ BarLayout ArrangeBar(const Sections<float>& lengths, float barLength, float marg
 
 // A group's box along the main axis, and where each of its members' boxes starts, from the start of the group's.
 struct GroupLayout {
-    float              length;
-    float              toggleLength; // the toggle inside the insets at both ends, the whole box while folded
-    float              shownLength;  // the span of the members the fold uncovers, from toggleLength
+    float length;
+    float toggleLength; // the toggle inside the insets at both ends, the whole box while folded
+    float shownLength;  // the span of the members the fold uncovers, from toggleLength
     std::vector<float> offsets;
 };
 
@@ -58,9 +58,9 @@ D2D1_POINT_2F ContentOrigin(Axis axis, const D2D1_RECT_F& box, const Insets& ins
 
 // What placing a bar's modules reads of the bar: the way it runs, its section style and its size in DIPs.
 struct BarGeometry {
-    Axis                axis;
+    Axis axis;
     const SectionStyle& section;
-    D2D1_SIZE_F         size;
+    D2D1_SIZE_F size;
 };
 
 // How far across the bar a module's box may reach before its own margin: the bar's thickness inside the section's
@@ -72,24 +72,24 @@ D2D1_RECT_F SectionBounds(const BarGeometry& bar, const SectionLayout& layout);
 
 // Where a module's box is drawn, and where its content starts, for routing clicks to it.
 struct HitBox {
-    IModule*      module;
-    D2D1_RECT_F   bounds;
+    IModule* module;
+    D2D1_RECT_F bounds;
     D2D1_POINT_2F contentOrigin;
 };
 
 // One entry as placed for a frame: its box and, for a group, its toggle's span, its members' boxes in its members'
 // order, and the span the fold uncovers of them, outside of which they neither draw nor take the cursor.
 struct PlacedEntry {
-    const ModuleEntry*  entry;
-    HitBox              box;
-    D2D1_RECT_F         toggleBounds;
+    const ModuleEntry* entry;
+    HitBox box;
+    D2D1_RECT_F toggleBounds;
     std::vector<HitBox> members;
-    D2D1_RECT_F         shownBounds;
+    D2D1_RECT_F shownBounds;
 };
 
 // Every module's box for a frame, and the sections' boxes they sit in.
 struct PlacedBar {
-    BarLayout             layout;
+    BarLayout layout;
     Sections<PlacedEntry> entries;
 };
 

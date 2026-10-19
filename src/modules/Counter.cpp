@@ -32,8 +32,8 @@ CounterSampler::CounterSampler(std::string name, const CounterConfig& config, Ch
     _name(std::move(name)), _path(config.path), _combine(config.combine), _interval(config.text.interval), _changes(changes),
     _reading{
         .outcome = CounterOutcome::Pending,
-        .value   = 0.0,
-        .detail  = {},
+        .value = 0.0,
+        .detail = {},
     },
     _thread("counter sampler", [this](HANDLE stopEvent) { Run(stopEvent); }) {}
 
@@ -58,8 +58,8 @@ void CounterSampler::Run(HANDLE stopEvent) {
                 if (values.has_value()) {
                     Publish(CounterReading{
                         .outcome = CounterOutcome::Sampled,
-                        .value   = CombineCounterValues(*values, _combine),
-                        .detail  = {},
+                        .value = CombineCounterValues(*values, _combine),
+                        .detail = {},
                     });
                 }
             }
@@ -67,8 +67,8 @@ void CounterSampler::Run(HANDLE stopEvent) {
             counter.reset();
             Publish(CounterReading{
                 .outcome = CounterOutcome::Failed,
-                .value   = 0.0,
-                .detail  = error.what(),
+                .value = 0.0,
+                .detail = error.what(),
             });
         }
         const auto wait = std::max(std::chrono::duration_cast<std::chrono::milliseconds>(started + _interval - std::chrono::steady_clock::now()), std::chrono::milliseconds(0));
@@ -86,8 +86,8 @@ bool ChangesOutcome(const CounterReading& previous, const CounterReading& next) 
 void CounterSampler::Publish(const CounterReading& reading) {
     {
         const std::scoped_lock lock(_mutex);
-        const bool             changesOutcome = ChangesOutcome(_reading, reading);
-        _reading                              = reading;
+        const bool changesOutcome = ChangesOutcome(_reading, reading);
+        _reading = reading;
         if (!changesOutcome) {
             return;
         }
@@ -116,9 +116,9 @@ ModuleText Counter::Format(const std::string& spec) {
         case CounterOutcome::Sampled: return NormalText(Settings().icon, FormatPlaceholders(spec, CounterPlaceholders(reading.value)));
         case CounterOutcome::Failed:
             return ModuleText{
-                .icon       = Settings().icon,
-                .text       = L"unavailable",
-                .state      = TextState::Alert,
+                .icon = Settings().icon,
+                .text = L"unavailable",
+                .state = TextState::Alert,
                 .classIndex = 0,
             };
     }

@@ -4,7 +4,7 @@ BasedOnStyle: LLVM
 AccessModifierOffset: -2
 AlignAfterOpenBracket: Align
 AlignConsecutiveMacros: true
-AlignConsecutiveAssignments: true
+AlignConsecutiveAssignments: false
 AlignEscapedNewlines: Right
 AlignOperands: false
 AlignTrailingComments: true
@@ -59,7 +59,7 @@ AllowShortEnumsOnASingleLine: false
 BraceWrapping:
   AfterEnum: false
 
-AlignConsecutiveDeclarations: AcrossEmptyLines
+AlignConsecutiveDeclarations: None
 
 NamespaceIndentation: All
 

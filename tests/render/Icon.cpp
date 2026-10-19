@@ -11,13 +11,13 @@ namespace {
 
     // A blank icon of the given size, which the caller destroys.
     HICON BlankIcon(std::int32_t side) {
-        HBITMAP  color = CreateBitmap(side, side, 1, 32, nullptr);
-        HBITMAP  mask  = CreateBitmap(side, side, 1, 1, nullptr);
+        HBITMAP color = CreateBitmap(side, side, 1, 32, nullptr);
+        HBITMAP mask = CreateBitmap(side, side, 1, 1, nullptr);
         ICONINFO info{
-            .fIcon    = TRUE,
+            .fIcon = TRUE,
             .xHotspot = 0,
             .yHotspot = 0,
-            .hbmMask  = mask,
+            .hbmMask = mask,
             .hbmColor = color,
         };
         HICON icon = CreateIconIndirect(&info);
@@ -28,12 +28,12 @@ namespace {
 
     // A monochrome icon of the given size: no color bitmap, and a mask twice as tall holding both masks.
     HICON MonochromeIcon(std::int32_t side) {
-        HBITMAP  mask = CreateBitmap(side, side * 2, 1, 1, nullptr);
+        HBITMAP mask = CreateBitmap(side, side * 2, 1, 1, nullptr);
         ICONINFO info{
-            .fIcon    = TRUE,
+            .fIcon = TRUE,
             .xHotspot = 0,
             .yHotspot = 0,
-            .hbmMask  = mask,
+            .hbmMask = mask,
             .hbmColor = nullptr,
         };
         HICON icon = CreateIconIndirect(&info);
@@ -49,7 +49,7 @@ namespace {
         }
 
       private:
-        ComScope                                   _com{ComThreading::Multi, "icon test"};
+        ComScope _com{ComThreading::Multi, "icon test"};
         Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging = CreateImagingFactory();
     };
 
@@ -65,7 +65,7 @@ TEST_F(IconReading, IconToPixelsGivesPremultipliedPixelsAtTheIconSize) {
 // Any process can hand the tray an icon of any size, and each would be held in full by every bar.
 TEST_F(IconReading, IconsLargerThanTheCapAreRefused) {
     HICON largest = BlankIcon(static_cast<std::int32_t>(kMaxIconSide));
-    HICON tooBig  = BlankIcon(static_cast<std::int32_t>(kMaxIconSide) + 1);
+    HICON tooBig = BlankIcon(static_cast<std::int32_t>(kMaxIconSide) + 1);
     ASSERT_NE(largest, nullptr);
     ASSERT_NE(tooBig, nullptr);
     EXPECT_EQ(IconToPixels(Imaging(), largest).width, kMaxIconSide);
@@ -76,7 +76,7 @@ TEST_F(IconReading, IconsLargerThanTheCapAreRefused) {
 
 TEST_F(IconReading, MonochromeIconsAreMeasuredByHalfTheirMask) {
     HICON largest = MonochromeIcon(static_cast<std::int32_t>(kMaxIconSide));
-    HICON tooBig  = MonochromeIcon(static_cast<std::int32_t>(kMaxIconSide) + 1);
+    HICON tooBig = MonochromeIcon(static_cast<std::int32_t>(kMaxIconSide) + 1);
     ASSERT_NE(largest, nullptr);
     ASSERT_NE(tooBig, nullptr);
     const IconPixels pixels = IconToPixels(Imaging(), largest);

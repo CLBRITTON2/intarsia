@@ -25,7 +25,7 @@ class Native final : public IWindowManager {
     // None, for the same reason: they belong to workspaces. The config loader rejects a windows module here too.
     std::vector<ManagedWindow> Windows() const override;
     // None: binding modes and tiling belong to a tiling window manager. The config loader rejects their modules here.
-    std::vector<std::wstring>      BindingModes() const override;
+    std::vector<std::wstring> BindingModes() const override;
     std::optional<TilingDirection> Direction() const override;
     // Always connected: the WinEvents come from the OS itself.
     WindowManagerStatus Status() const override;
@@ -44,24 +44,24 @@ class Native final : public IWindowManager {
       public:
         explicit ActiveInstance(Native* instance);
         ~ActiveInstance();
-        ActiveInstance(const ActiveInstance&)            = delete;
+        ActiveInstance(const ActiveInstance&) = delete;
         ActiveInstance& operator=(const ActiveInstance&) = delete;
     };
 
     using UniqueHook = UniqueReleased<HWINEVENTHOOK, &UnhookWinEvent>;
 
-    static UniqueHook    HookEvent(std::uint32_t event, std::uint32_t process, std::uint32_t thread);
-    static UniqueHook    HookTitleChanges(HWND window);
+    static UniqueHook HookEvent(std::uint32_t event, std::uint32_t process, std::uint32_t thread);
+    static UniqueHook HookTitleChanges(HWND window);
     static void CALLBACK OnWinEvent(HWINEVENTHOOK hook, DWORD event, HWND window, LONG object, LONG child, DWORD thread, DWORD time);
-    void                 Refocus(HWND window);
-    void                 Retitle();
+    void Refocus(HWND window);
+    void Retitle();
 
-    ActiveInstance       _active;
-    ChangeSignal&        _changes;
-    HWND                 _foreground;
-    std::wstring         _title;
-    UniqueHook           _foregroundHook;
-    UniqueHook           _titleHook;
+    ActiveInstance _active;
+    ChangeSignal& _changes;
+    HWND _foreground;
+    std::wstring _title;
+    UniqueHook _foregroundHook;
+    UniqueHook _titleHook;
 };
 
 // The text of a window's title bar, empty when it has none, made safe to draw (DrawableText), since any process can put

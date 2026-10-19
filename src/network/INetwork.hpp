@@ -14,24 +14,24 @@ enum class NetworkLink : std::uint8_t {
 
 // The interface the default route leaves through, as the network module shows it.
 struct NetworkState {
-    NetworkLink                 link;
-    std::wstring                interfaceName; // as network settings name it, such as "Wi-Fi"
-    std::wstring                ssid;          // Wi-Fi only, empty when Windows withholds it
+    NetworkLink link;
+    std::wstring interfaceName;                // as network settings name it, such as "Wi-Fi"
+    std::wstring ssid;                         // Wi-Fi only, empty when Windows withholds it
     std::optional<std::int32_t> signalPercent; // Wi-Fi only, 0 to 100
-    std::wstring                ipv4;          // empty when the interface has none
-    double                      receivedBytesPerSecond;
-    double                      sentBytesPerSecond;
+    std::wstring ipv4;                         // empty when the interface has none
+    double receivedBytesPerSecond;
+    double sentBytesPerSecond;
 
     // No link, as before the first sample or after a failed one.
     static NetworkState None() {
         return {
-            .link                   = NetworkLink::None,
-            .interfaceName          = {},
-            .ssid                   = {},
-            .signalPercent          = std::nullopt,
-            .ipv4                   = {},
+            .link = NetworkLink::None,
+            .interfaceName = {},
+            .ssid = {},
+            .signalPercent = std::nullopt,
+            .ipv4 = {},
             .receivedBytesPerSecond = 0.0,
-            .sentBytesPerSecond     = 0.0,
+            .sentBytesPerSecond = 0.0,
         };
     }
 };

@@ -68,7 +68,7 @@ void ChangeSignal::Notify(std::string_view component) {
     }
     if (!PostMessageW(_target, _message, 0, 0)) {
         const DWORD error = GetLastError();
-        _pending          = false;
+        _pending = false;
         Log(LogLevel::Warning, component, "post_failed", {{.key = "error", .value = std::to_string(error)}});
     }
 }

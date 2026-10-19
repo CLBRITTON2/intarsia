@@ -20,11 +20,11 @@
 class FrameClock {
   public:
     FrameClock(HWND target, std::uint32_t frameMessage, std::uint32_t failedMessage, Microsoft::WRL::ComPtr<IDXGIOutput> output);
-    FrameClock(const FrameClock&)            = delete;
+    FrameClock(const FrameClock&) = delete;
     FrameClock& operator=(const FrameClock&) = delete;
 
-    void        Start();
-    void        Stop();
+    void Start();
+    void Stop();
     // The UI thread, once it has drawn the frame, so the next frame posts again at the following vertical blank.
     void Acknowledge();
     // On failedMessage, rethrows the error that stopped the thread.
@@ -33,15 +33,15 @@ class FrameClock {
     std::chrono::steady_clock::time_point LastVBlank() const;
 
   private:
-    void                                               Run(HANDLE stopEvent);
+    void Run(HANDLE stopEvent);
 
-    HWND                                               _target;
-    std::uint32_t                                      _frameMessage;
-    Microsoft::WRL::ComPtr<IDXGIOutput>                _output;
-    UniqueHandle                                       _runningEvent; // set while started
-    std::atomic<bool>                                  _pending = false;
+    HWND _target;
+    std::uint32_t _frameMessage;
+    Microsoft::WRL::ComPtr<IDXGIOutput> _output;
+    UniqueHandle _runningEvent; // set while started
+    std::atomic<bool> _pending = false;
     std::atomic<std::chrono::steady_clock::time_point> _lastVBlank;
-    ThreadFailure                                      _failure;
+    ThreadFailure _failure;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };
@@ -50,15 +50,15 @@ class FrameClock {
 // display never showed and refreshes that showed a frame again are counted from the swap chain's statistics, which the
 // presents' own timing cannot show.
 struct FrameStats {
-    std::uint32_t                         frames;
+    std::uint32_t frames;
     std::chrono::steady_clock::time_point first;
     std::chrono::steady_clock::time_point last;
-    std::chrono::steady_clock::duration   longestInterval;
-    std::chrono::steady_clock::duration   longestPresent;
-    std::uint32_t                         droppedFrames;
-    std::uint32_t                         repeatedRefreshes;
-    std::uint32_t                         firstPresent; // the swap chain's number for the animation's first present
-    std::optional<ShownPresent>           lastShown;    // null until the swap chain has statistics
+    std::chrono::steady_clock::duration longestInterval;
+    std::chrono::steady_clock::duration longestPresent;
+    std::uint32_t droppedFrames;
+    std::uint32_t repeatedRefreshes;
+    std::uint32_t firstPresent;            // the swap chain's number for the animation's first present
+    std::optional<ShownPresent> lastShown; // null until the swap chain has statistics
 };
 
 // stats with one more frame, the swap chain's present `presented`, made at `at` by a present that took `present`, once

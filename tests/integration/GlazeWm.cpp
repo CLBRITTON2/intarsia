@@ -66,10 +66,10 @@ module {
 )";
 
     // The ids the test server gives the windows it lists, in its order (tests/support/GlazeWmServer.cpp).
-    constexpr std::string_view kFirstWindowId  = "00000000-0000-4000-8000-000000000000";
+    constexpr std::string_view kFirstWindowId = "00000000-0000-4000-8000-000000000000";
     constexpr std::string_view kSecondWindowId = "00000000-0000-4000-8000-000000000001";
 
-    std::string                FocusWindow(std::string_view id) {
+    std::string FocusWindow(std::string_view id) {
         return "command focus --container-id " + std::string(id);
     }
 
@@ -91,7 +91,7 @@ return {
 }
 )";
 
-    constexpr std::uint32_t    kFocusedColor = 0x2E86C1;
+    constexpr std::uint32_t kFocusedColor = 0x2E86C1;
 
     // The test server shows the binding mode "resize" and the vertical direction while the focus index is odd.
     constexpr std::string_view kModesConfig = R"(
@@ -109,8 +109,8 @@ return {
 }
 )";
 
-    constexpr std::uint32_t    kModeColor   = 0xF39C12;
-    constexpr std::uint32_t    kTilingColor = 0x2E86C1;
+    constexpr std::uint32_t kModeColor = 0xF39C12;
+    constexpr std::uint32_t kTilingColor = 0x2E86C1;
 
     constexpr std::string_view kModesStyle = R"(
 bar {
@@ -195,11 +195,11 @@ TEST(GlazeWm, StaysConnectedThroughARejectedCommandAndDirectionQuery) {
 TEST(GlazeWm, RefusesAServerThatIsNotGlazeWmAndSendsItNothing) {
     const std::filesystem::path impostor = integration::NewWorkDirectory("impostor-server") / "impostor.exe";
     std::filesystem::copy_file(integration::GlazeWmTestServer(L"integration").program, impostor, std::filesystem::copy_options::overwrite_existing);
-    const integration::RunningBar  bar("impostor", ClicksConfig("top"), kStyle,
-                                       integration::TestServer{
-                                           .program    = impostor,
-                                           .scenario   = L"integration",
-                                           .readyEvent = "disconnected",
+    const integration::RunningBar bar("impostor", ClicksConfig("top"), kStyle,
+                                      integration::TestServer{
+                                          .program = impostor,
+                                          .scenario = L"integration",
+                                          .readyEvent = "disconnected",
                                       });
 
     const std::vector<std::string> refused = bar.Events("disconnected");
@@ -259,7 +259,7 @@ TEST(GlazeWm, ShowsABindingModeOnlyWhileItIsActiveAndTheConfiguredTextForTheTili
 
 namespace {
 
-    constexpr std::uint32_t    kEmptyColor = 0xF39C12;
+    constexpr std::uint32_t kEmptyColor = 0xF39C12;
 
     constexpr std::string_view kStatesStyle = R"(
 bar {
@@ -290,13 +290,13 @@ module {
 
 TEST(GlazeWm, StylesAnEmptyWorkspaceApartFromTheFocusedOne) {
     integration::RunningBar bar("workspace-states", kWorkspacesConfig, kStatesStyle);
-    std::optional<double>   empty;
-    std::optional<double>   focused;
+    std::optional<double> empty;
+    std::optional<double> focused;
     EXPECT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            empty                              = integration::MeanColumn(capture, kEmptyColor);
-            focused                            = integration::MeanColumn(capture, kFocusedColor);
+            empty = integration::MeanColumn(capture, kEmptyColor);
+            focused = integration::MeanColumn(capture, kFocusedColor);
             return empty.has_value() && focused.has_value() && *empty < *focused;
         },
         integration::kLimit))
@@ -306,7 +306,7 @@ TEST(GlazeWm, StylesAnEmptyWorkspaceApartFromTheFocusedOne) {
 
 namespace {
 
-    constexpr std::uint32_t kTextColor  = 0xE0DEF4;
+    constexpr std::uint32_t kTextColor = 0xE0DEF4;
     constexpr std::uint32_t kAlertColor = 0xE74C3C;
 
     // Large text, so glyph stems cover whole pixels in the exact color.
@@ -337,7 +337,7 @@ TEST(GlazeWm, DrawsTheAlertColorWithinTwoSecondsOfTheServerClosingAndTakesClicks
     ASSERT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            connectedPixels                    = integration::CountPixels(capture, kAlertColor);
+            connectedPixels = integration::CountPixels(capture, kAlertColor);
             return integration::CountPixels(capture, kTextColor) > 0 && connectedPixels == 0;
         },
         integration::kLimit))
@@ -397,9 +397,9 @@ module {
 TEST(GlazeWm, MovesTheFocusedColorToTheWindowAPushedFocusNames) {
     const integration::TestWindow first(L" 1");
     const integration::TestWindow second(L" 2");
-    integration::RunningBar       bar("focus", kWindowsConfig, kFocusedStyle);
+    integration::RunningBar bar("focus", kWindowsConfig, kFocusedStyle);
 
-    const std::int32_t            firstColumn = bar.DrawnColumn(kFocusedColor, integration::kLimit);
+    const std::int32_t firstColumn = bar.DrawnColumn(kFocusedColor, integration::kLimit);
     integration::Log("focused_color_found", std::format("color=#{:06x} column={}", kFocusedColor, firstColumn));
 
     bar.PushFocus(1);

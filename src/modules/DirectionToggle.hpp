@@ -14,17 +14,17 @@ class DirectionToggle final : public IModule {
   public:
     DirectionToggle(TilingDirectionConfig config, IWindowManager& windowManager);
 
-    bool        Layout(const RenderContext& render) override;
+    bool Layout(const RenderContext& render) override;
     D2D1_SIZE_F Size() const override;
-    void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
-    void        Click(D2D1_POINT_2F point) override;
+    void Draw(const RenderContext& render, D2D1_POINT_2F origin) const override;
+    void Click(D2D1_POINT_2F point) override;
     // None: a left click toggles the direction.
     const ModuleActions& Actions() const override;
 
   private:
     TilingDirectionConfig _config;
-    IWindowManager&       _windowManager;
-    TextLine              _glyph;
+    IWindowManager& _windowManager;
+    TextLine _glyph;
 };
 
 // What the module shows for a direction.

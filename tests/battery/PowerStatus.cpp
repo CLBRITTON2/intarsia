@@ -11,21 +11,21 @@ namespace {
 
     constexpr std::uint32_t kChanged = WM_APP + 12;
 
-    SYSTEM_POWER_STATUS     Status(BYTE acLine, BYTE flag, BYTE percent, DWORD secondsLeft) {
+    SYSTEM_POWER_STATUS Status(BYTE acLine, BYTE flag, BYTE percent, DWORD secondsLeft) {
         SYSTEM_POWER_STATUS power{};
-        power.ACLineStatus       = acLine;
-        power.BatteryFlag        = flag;
+        power.ACLineStatus = acLine;
+        power.BatteryFlag = flag;
         power.BatteryLifePercent = percent;
-        power.BatteryLifeTime    = secondsLeft;
+        power.BatteryLifeTime = secondsLeft;
         return power;
     }
 
     // BatteryFromPowerStatus never knows the batteries' health.
     BatteryState WithoutHealth(ChargeState charge, std::int32_t percent, std::optional<std::int32_t> secondsLeft) {
         return BatteryState{
-            .charge        = charge,
-            .percent       = percent,
-            .secondsLeft   = secondsLeft,
+            .charge = charge,
+            .percent = percent,
+            .secondsLeft = secondsLeft,
             .healthPercent = std::nullopt,
         };
     }
@@ -57,7 +57,7 @@ TEST(PowerStatus, HealthSumsEveryBatteryAndCanPassFull) {
 
 TEST(PowerStatus, StopsPromptlyRightAfterStarting) {
     ChangeTarget target(kChanged);
-    const auto   started = std::chrono::steady_clock::now();
+    const auto started = std::chrono::steady_clock::now();
     for (std::int32_t round = 0; round < 10; ++round) {
         const PowerStatus battery(target.signal);
     }

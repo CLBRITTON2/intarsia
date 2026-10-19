@@ -32,7 +32,7 @@ namespace {
         ~ThreadNoter() {
             *_destroyedOn = std::this_thread::get_id();
         }
-        ThreadNoter(const ThreadNoter&)            = delete;
+        ThreadNoter(const ThreadNoter&) = delete;
         ThreadNoter& operator=(const ThreadNoter&) = delete;
 
       private:
@@ -43,8 +43,8 @@ namespace {
 
     // Removes every kPosted message queued for target and counts them.
     std::int32_t TakePosted(HWND target) {
-        std::int32_t count   = 0;
-        MSG          message = {};
+        std::int32_t count = 0;
+        MSG message = {};
         while (PeekMessageW(&message, target, kPosted, kPosted, PM_REMOVE)) {
             ++count;
         }
@@ -61,10 +61,10 @@ namespace {
 } // namespace
 
 TEST(WorkQueue, RejectsAnItemPastCapacity) {
-    std::promise<void>       started;
-    std::promise<void>       release;
+    std::promise<void> started;
+    std::promise<void> release;
     const std::shared_future released = release.get_future().share();
-    WorkQueue<std::int32_t>  queue(2, Handling([&](const std::int32_t& item) {
+    WorkQueue<std::int32_t> queue(2, Handling([&](const std::int32_t& item) {
                                       if (item == 0) {
                                           started.set_value();
                                           released.wait();
@@ -80,15 +80,15 @@ TEST(WorkQueue, RejectsAnItemPastCapacity) {
 
 // A queued item can block for seconds (a send to a peer that stopped reading), so stopping must not wait for them all.
 TEST(WorkQueue, StopsAfterTheItemInProgressAndDropsTheRest) {
-    std::mutex                mutex;
+    std::mutex mutex;
     std::vector<std::int32_t> processed;
-    std::promise<void>        firstStarted;
-    std::promise<void>        firstRelease;
-    const std::shared_future  firstReleased = firstRelease.get_future().share();
-    std::promise<void>        secondStarted;
-    std::promise<void>        secondRelease;
-    const std::shared_future  secondReleased = secondRelease.get_future().share();
-    auto                      queue          = std::make_unique<WorkQueue<std::int32_t>>(8, Handling([&](const std::int32_t& item) {
+    std::promise<void> firstStarted;
+    std::promise<void> firstRelease;
+    const std::shared_future firstReleased = firstRelease.get_future().share();
+    std::promise<void> secondStarted;
+    std::promise<void> secondRelease;
+    const std::shared_future secondReleased = secondRelease.get_future().share();
+    auto queue = std::make_unique<WorkQueue<std::int32_t>>(8, Handling([&](const std::int32_t& item) {
                                                                if (item == 0) {
                                                                    firstStarted.set_value();
                                                                    firstReleased.wait();
@@ -119,13 +119,13 @@ TEST(WorkQueue, StopsAfterTheItemInProgressAndDropsTheRest) {
 
 // A process can own what is bound to a thread (a COM apartment), so it is made and destroyed where the items run.
 TEST(WorkQueue, MakesAndDestroysItsProcessOnItsOwnThread) {
-    std::thread::id    madeOn;
-    std::thread::id    processedOn;
-    std::thread::id    destroyedOn;
+    std::thread::id madeOn;
+    std::thread::id processedOn;
+    std::thread::id destroyedOn;
     std::promise<void> done;
     {
         WorkQueue<std::int32_t> queue(8, [&] {
-            madeOn     = std::this_thread::get_id();
+            madeOn = std::this_thread::get_id();
             auto noter = std::make_shared<ThreadNoter>(&destroyedOn);
             return WorkQueue<std::int32_t>::Process([&processedOn, &done, noter](const std::int32_t&) {
                 processedOn = std::this_thread::get_id();
@@ -143,7 +143,7 @@ TEST(WorkQueue, MakesAndDestroysItsProcessOnItsOwnThread) {
 // A worker that fails again while stopping must not replace the cause the UI thread ends the process with.
 TEST(ThreadFailure, KeepsAndPostsOnlyTheFirstError) {
     const MessageWindow target;
-    ThreadFailure       failure(target.Get(), kPosted, "test");
+    ThreadFailure failure(target.Get(), kPosted, "test");
 
     failure.Report(std::make_exception_ptr(std::runtime_error("first")));
     failure.Report(std::make_exception_ptr(std::runtime_error("second")));
@@ -155,7 +155,7 @@ TEST(ThreadFailure, KeepsAndPostsOnlyTheFirstError) {
 // Any process can post the message, so one with nothing reported behind it returns instead of throwing.
 TEST(ThreadFailure, AMessageWithNothingReportedDoesNotThrow) {
     const MessageWindow target;
-    ThreadFailure       failure(target.Get(), kPosted, "test");
+    ThreadFailure failure(target.Get(), kPosted, "test");
     EXPECT_NO_THROW(failure.RethrowReported());
 }
 

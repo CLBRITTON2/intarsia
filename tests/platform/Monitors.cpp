@@ -18,11 +18,11 @@ namespace {
 
     // A base block for DEL41A8 with numeric serial 0 and no text serial.
     std::vector<std::uint8_t> BaseBlock() {
-        std::vector<std::uint8_t>             edid(128, 0);
+        std::vector<std::uint8_t> edid(128, 0);
         constexpr std::array<std::uint8_t, 8> kHeader{0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
         std::ranges::copy(kHeader, edid.begin());
-        edid[8]  = 0x10;
-        edid[9]  = 0xAC;
+        edid[8] = 0x10;
+        edid[9] = 0xAC;
         edid[10] = 0xA8;
         edid[11] = 0x41;
         // A detailed timing descriptor first, as real monitors have, so the tag search must skip it.
@@ -88,10 +88,10 @@ TEST(Edid, RefusesAShortBlockABadHeaderAndABadLetter) {
     const std::vector<std::uint8_t> edid = BaseBlock();
     EXPECT_THROW(ParseEdid(std::span(edid).first(127)), EdidError);
     std::vector<std::uint8_t> badHeader = edid;
-    badHeader[0]                        = 0xFF;
+    badHeader[0] = 0xFF;
     EXPECT_THROW(ParseEdid(badHeader), EdidError);
     std::vector<std::uint8_t> badLetter = edid;
-    badLetter[8]                        = 0x00;
+    badLetter[8] = 0x00;
     EXPECT_THROW(ParseEdid(badLetter), EdidError);
 }
 

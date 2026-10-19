@@ -9,14 +9,14 @@
 // A backend whose state a test sets directly, recording the workspace modules focus.
 class FakeWindowManager final : public IWindowManager {
   public:
-    std::optional<FocusedWindow>   focused;
-    std::vector<Workspace>         workspaces;
-    std::vector<ManagedWindow>     windows;
-    std::vector<std::wstring>      bindingModes;
+    std::optional<FocusedWindow> focused;
+    std::vector<Workspace> workspaces;
+    std::vector<ManagedWindow> windows;
+    std::vector<std::wstring> bindingModes;
     std::optional<TilingDirection> direction;
-    std::string                    focusedWorkspace;
+    std::string focusedWorkspace;
 
-    std::optional<FocusedWindow>   Focused() const override {
+    std::optional<FocusedWindow> Focused() const override {
         return focused;
     }
     std::vector<Workspace> Workspaces() const override {
@@ -33,9 +33,9 @@ class FakeWindowManager final : public IWindowManager {
     }
     WindowManagerStatus Status() const override {
         return WindowManagerStatus{
-            .name       = L"fake",
+            .name = L"fake",
             .connection = Connection::Connected,
-            .detail     = "",
+            .detail = "",
         };
     }
     void FocusWorkspace(const std::string& name) override {

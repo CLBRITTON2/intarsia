@@ -14,14 +14,14 @@ namespace {
 
     // PDH's messages live in pdh.dll, not the system's table.
     std::string PdhMessage(PDH_STATUS status) {
-        wchar_t*    buffer = nullptr;
+        wchar_t* buffer = nullptr;
         const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_HMODULE | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                             GetModuleHandleW(L"pdh.dll"), static_cast<DWORD>(status), 0, reinterpret_cast<wchar_t*>(&buffer), 0, nullptr);
         if (length == 0) {
             return "no message";
         }
         const UniqueLocal owned(static_cast<HLOCAL>(buffer));
-        std::wstring      message(buffer, length);
+        std::wstring message(buffer, length);
         while (!message.empty() && (message.back() == L'\r' || message.back() == L'\n' || message.back() == L' ')) {
             message.pop_back();
         }
@@ -53,7 +53,7 @@ PdhError::PdhError(std::string_view call, PDH_STATUS status) :
     std::runtime_error(std::format("{} failed with 0x{:08X}: {}", call, static_cast<std::uint32_t>(status), PdhMessage(status))) {}
 
 PerformanceCounter::PerformanceCounter(const std::wstring& path) {
-    PDH_HQUERY       query  = nullptr;
+    PDH_HQUERY query = nullptr;
     const PDH_STATUS opened = PdhOpenQueryW(nullptr, 0, &query);
     if (opened != ERROR_SUCCESS) {
         throw PdhError("PdhOpenQueryW", opened);
@@ -87,11 +87,11 @@ std::optional<std::vector<double>> PerformanceCounter::Values() const {
 }
 
 std::optional<std::vector<CounterInstance>> PerformanceCounter::Instances() const {
-    constexpr DWORD           kFormat = PDH_FMT_DOUBLE | PDH_FMT_NOCAP100; // a sum over GPU engines passes 100
+    constexpr DWORD kFormat = PDH_FMT_DOUBLE | PDH_FMT_NOCAP100; // a sum over GPU engines passes 100
     std::vector<std::uint8_t> buffer;
-    DWORD                     bytes  = 0;
-    DWORD                     count  = 0;
-    PDH_STATUS                status = PdhGetFormattedCounterArrayW(_counter, kFormat, &bytes, &count, nullptr);
+    DWORD bytes = 0;
+    DWORD count = 0;
+    PDH_STATUS status = PdhGetFormattedCounterArrayW(_counter, kFormat, &bytes, &count, nullptr);
     // Instances can appear between asking the size and reading, so the read asks again until the buffer holds them.
     while (IsStatus(status, PDH_MORE_DATA)) {
         buffer.resize(bytes);

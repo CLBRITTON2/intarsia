@@ -32,10 +32,10 @@
 
 namespace {
 
-    constexpr std::int32_t  kExitHung   = 2;
-    constexpr std::int32_t  kExitNoTray = 3;
-    constexpr size_t        kOwners     = 4;
-    constexpr std::uint32_t kIds        = 4;
+    constexpr std::int32_t kExitHung = 2;
+    constexpr std::int32_t kExitNoTray = 3;
+    constexpr size_t kOwners = 4;
+    constexpr std::uint32_t kIds = 4;
     // About ten messages a second across every owner.
     constexpr std::chrono::milliseconds kMessageGap{100};
 
@@ -107,9 +107,9 @@ namespace {
     // Explorer does, so the icon can go right after.
     bool SendIcon(HWND tray, HWND owner, std::uint32_t command, std::uint32_t id, std::mt19937& random) {
         TrayNotifyData data = NotifyData(command, Handle32(owner), id, 0, kTrayAppCallback);
-        HICON          icon = CreateSolidIcon(static_cast<std::uint32_t>(random()));
-        data.data.flags     = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
-        data.data.icon      = Handle32(icon);
+        HICON icon = CreateSolidIcon(static_cast<std::uint32_t>(random()));
+        data.data.flags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+        data.data.icon = Handle32(icon);
         SetTip(data, AppTip(random));
         const bool taken = Send(tray, owner, data);
         DestroyIcon(icon);
@@ -118,8 +118,8 @@ namespace {
 
     // One message of a random kind from a random owner.
     bool SendOne(HWND tray, const std::array<HWND, kOwners>& owners, std::mt19937& random) {
-        HWND                owner = owners[random() % owners.size()];
-        const std::uint32_t id    = random() % kIds;
+        HWND owner = owners[random() % owners.size()];
+        const std::uint32_t id = random() % kIds;
         switch (random() % 8) {
             case 0:
             case 1: return SendIcon(tray, owner, NIM_ADD, id, random);
@@ -127,13 +127,13 @@ namespace {
             case 3:
             case 4: {
                 TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kTrayAppCallback);
-                data.data.flags     = NIF_TIP | NIF_SHOWTIP;
+                data.data.flags = NIF_TIP | NIF_SHOWTIP;
                 SetTip(data, AppTip(random));
                 return Send(tray, owner, data);
             }
             case 5: {
                 TrayNotifyData data = NotifyData(NIM_MODIFY, Handle32(owner), id, 0, kTrayAppCallback);
-                data.data.flags     = NIF_STATE;
+                data.data.flags = NIF_STATE;
                 data.data.stateMask = static_cast<std::uint32_t>(NIS_HIDDEN);
                 if ((random() % 2) == 0) {
                     data.data.state = static_cast<std::uint32_t>(NIS_HIDDEN);
@@ -165,17 +165,17 @@ namespace {
 
     [[noreturn]] void Run(const std::wstring& windowClass) {
         const std::uint32_t seed = GetCurrentProcessId();
-        std::mt19937        random(seed);
-        HWND                tray = FindTray(windowClass);
+        std::mt19937 random(seed);
+        HWND tray = FindTray(windowClass);
         std::cout << std::format("sending to the tray with seed {}", seed) << std::endl;
 
         std::array<HWND, kOwners> owners{};
         for (HWND& owner : owners) {
             owner = CreateOwner();
         }
-        std::uint64_t sent   = 0;
-        std::uint64_t taken  = 0;
-        auto          report = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        std::uint64_t sent = 0;
+        std::uint64_t taken = 0;
+        auto report = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (true) {
             if (SendOne(tray, owners, random)) {
                 ++taken;

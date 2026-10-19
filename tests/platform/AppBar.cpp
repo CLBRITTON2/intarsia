@@ -13,9 +13,9 @@ namespace {
 
     RECT Rect(std::int32_t left, std::int32_t top, std::int32_t right, std::int32_t bottom) {
         return RECT{
-            .left   = left,
-            .top    = top,
-            .right  = right,
+            .left = left,
+            .top = top,
+            .right = right,
             .bottom = bottom,
         };
     }
@@ -45,11 +45,11 @@ TEST(AppBar, DockedRectTakesAStripAlongEachEdge) {
 // An ABM_SETPOS for a 3440x54 strip at the top, byte for byte as shell32 sent it to the taskbar window.
 TEST(AppBar, AppBarRequestIsWhatShell32Sends) {
     constexpr std::array<std::uint32_t, 16> kSent{0x28, 0x002b0848, 0, ABE_TOP, 0, 0, 3440, 54, 0, 0, ABM_SETPOS, 0, 0x669b7a70, 0x19f, 0x8dbc, 0};
-    APPBARDATA                              data{};
-    data.cbSize                 = sizeof(data);
-    data.hWnd                   = ToWindow(0x002b0848);
-    data.uEdge                  = ABE_TOP;
-    data.rc                     = Rect(0, 0, 3440, 54);
+    APPBARDATA data{};
+    data.cbSize = sizeof(data);
+    data.hWnd = ToWindow(0x002b0848);
+    data.uEdge = ABE_TOP;
+    data.rc = Rect(0, 0, 3440, 54);
     const AppBarCommand request = AppBarRequest(ABM_SETPOS, data, 0x19f669b7a70, 0x8dbc);
     ASSERT_EQ(sizeof(request), sizeof(kSent));
     EXPECT_EQ(std::memcmp(&request, kSent.data(), sizeof(request)), 0);

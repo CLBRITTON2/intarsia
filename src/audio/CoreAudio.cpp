@@ -38,7 +38,7 @@ namespace {
 
     constexpr DWORD kRetryMs = 2000;
 
-    EDataFlow       CoreAudioFlow(AudioFlow flow) {
+    EDataFlow CoreAudioFlow(AudioFlow flow) {
         if (flow == AudioFlow::Output) {
             return eRender;
         }
@@ -87,7 +87,7 @@ namespace {
 
       private:
         CoreAudio& _audio;
-        EDataFlow  _flow;
+        EDataFlow _flow;
     };
 
     // Carries every volume or mute change on the device, whoever made it, into the snapshot.
@@ -133,8 +133,8 @@ namespace {
         ~Endpoint() {
             _volume->UnregisterControlChangeNotify(_callback.Get());
         }
-        Endpoint(const Endpoint&)              = delete;
-        Endpoint&   operator=(const Endpoint&) = delete;
+        Endpoint(const Endpoint&) = delete;
+        Endpoint& operator=(const Endpoint&) = delete;
 
         AudioDevice Read() const {
             float volume = 0.0f;
@@ -142,9 +142,9 @@ namespace {
             BOOL muted = FALSE;
             ThrowIfFailed(_volume->GetMute(&muted), "IAudioEndpointVolume::GetMute");
             return AudioDevice{
-                .name   = _name,
+                .name = _name,
                 .volume = volume,
-                .muted  = muted != FALSE,
+                .muted = muted != FALSE,
             };
         }
 
@@ -157,9 +157,9 @@ namespace {
         }
 
       private:
-        std::wstring                         _name;
+        std::wstring _name;
         ComPtr<IAudioEndpointVolumeCallback> _callback;
-        ComPtr<IAudioEndpointVolume>         _volume;
+        ComPtr<IAudioEndpointVolume> _volume;
     };
 
     // The device enumerator, with the default device notifications of one flow registered for as long as it lives.
@@ -172,13 +172,13 @@ namespace {
         ~Devices() {
             _enumerator->UnregisterEndpointNotificationCallback(_callback.Get());
         }
-        Devices(const Devices&)            = delete;
+        Devices(const Devices&) = delete;
         Devices& operator=(const Devices&) = delete;
 
         // The default device's control, or null when the system has no device of the flow.
         std::unique_ptr<Endpoint> DefaultEndpoint(CoreAudio& audio) const {
             ComPtr<IMMDevice> device;
-            const HRESULT     found = _enumerator->GetDefaultAudioEndpoint(_flow, eConsole, &device);
+            const HRESULT found = _enumerator->GetDefaultAudioEndpoint(_flow, eConsole, &device);
             if (found == E_NOTFOUND) {
                 return nullptr;
             }
@@ -187,9 +187,9 @@ namespace {
         }
 
       private:
-        EDataFlow                     _flow;
+        EDataFlow _flow;
         ComPtr<IMMNotificationClient> _callback;
-        ComPtr<IMMDeviceEnumerator>   _enumerator;
+        ComPtr<IMMDeviceEnumerator> _enumerator;
     };
 
 } // namespace
@@ -230,7 +230,7 @@ void CoreAudio::OnVolumeNotified(float volume, bool muted) {
             return;
         }
         _device->volume = volume;
-        _device->muted  = muted;
+        _device->muted = muted;
     }
     _changes.Notify("audio");
 }
@@ -256,10 +256,10 @@ void CoreAudio::Run(HANDLE stopEvent) {
         Log(LogLevel::Error, "audio", "com_init_failed", {{.key = "flow", .value = FlowName(_flow)}, {.key = "reason", .value = error.what()}});
         return;
     }
-    std::unique_ptr<Devices>    devices;
-    std::unique_ptr<Endpoint>   endpoint;
-    bool                        attachDue = true;
-    bool                        failing   = false;
+    std::unique_ptr<Devices> devices;
+    std::unique_ptr<Endpoint> endpoint;
+    bool attachDue = true;
+    bool failing = false;
     const std::array<HANDLE, 3> waits{stopEvent, _deviceEvent.get(), _requestEvent.get()};
     while (true) {
         if (attachDue) {
@@ -301,11 +301,11 @@ void CoreAudio::Run(HANDLE stopEvent) {
         }
         if (woke == WAIT_OBJECT_0 + 2) {
             std::optional<float> volume;
-            std::optional<bool>  muted;
+            std::optional<bool> muted;
             {
                 const std::scoped_lock lock(_mutex);
                 volume = std::exchange(_pendingVolume, std::nullopt);
-                muted  = std::exchange(_pendingMuted, std::nullopt);
+                muted = std::exchange(_pendingMuted, std::nullopt);
             }
             // A request while there is no device has nothing to change.
             if (endpoint == nullptr) {

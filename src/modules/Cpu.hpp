@@ -28,9 +28,9 @@ std::string FormatCoreUsage(const std::vector<CounterInstance>& instances);
 // What one cpu sample holds.
 struct CpuSample {
     std::int32_t usagePercent;
-    double       gigahertz;      // 0 until the performance counter's second sample
+    double gigahertz;            // 0 until the performance counter's second sample
     std::int32_t maxCorePercent; // the busiest logical processor, 0 until its second sample
-    std::string  cores;          // FormatCoreUsage, empty until its second sample
+    std::string cores;           // FormatCoreUsage, empty until its second sample
 };
 
 // The values a cpu format can name: {usage}, a whole percent, {ghz}, the current clock speed as a double, {max_core},
@@ -46,20 +46,20 @@ class Cpu final : public TextModule {
     explicit Cpu(TextModuleConfig config);
 
   private:
-    ModuleText   Format(const std::string& spec) override;
-    void         Sample();
+    ModuleText Format(const std::string& spec) override;
+    void Sample();
 
-    CpuTimes     _previous;
+    CpuTimes _previous;
     SampledTexts _texts;
     // Null unless a format names their value.
     std::unique_ptr<PerformanceCounter> _baseFrequency;
     std::unique_ptr<PerformanceCounter> _performance;
     std::unique_ptr<PerformanceCounter> _cores;
-    CpuSample                           _sample{
-                                  .usagePercent   = 0,
-                                  .gigahertz      = 0.0,
-                                  .maxCorePercent = 0,
-                                  .cores          = {},
+    CpuSample _sample{
+        .usagePercent = 0,
+        .gigahertz = 0.0,
+        .maxCorePercent = 0,
+        .cores = {},
     };
     FailureLog _counterLog{"cpu"};
 };

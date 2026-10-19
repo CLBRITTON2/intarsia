@@ -31,8 +31,8 @@ namespace {
         ComPtr<IDWriteInlineObject> ellipsis;
         ThrowIfFailed(render.dwrite->CreateEllipsisTrimmingSign(render.textFormat, &ellipsis), "IDWriteFactory::CreateEllipsisTrimmingSign");
         const DWRITE_TRIMMING trimming{
-            .granularity    = DWRITE_TRIMMING_GRANULARITY_CHARACTER,
-            .delimiter      = 0,
+            .granularity = DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+            .delimiter = 0,
             .delimiterCount = 0,
         };
         ThrowIfFailed(layout->SetTrimming(&trimming, ellipsis.Get()), "IDWriteTextLayout::SetTrimming");
@@ -60,7 +60,7 @@ namespace {
         ThrowIfFailed(layout->SetMaxHeight(size.height), "IDWriteTextLayout::SetMaxHeight");
         DWRITE_OVERHANG_METRICS overhang{};
         ThrowIfFailed(layout->GetOverhangMetrics(&overhang), "IDWriteTextLayout::GetOverhangMetrics");
-        const float inkTop    = -overhang.top;
+        const float inkTop = -overhang.top;
         const float inkBottom = size.height + overhang.bottom;
         // A glyph with no ink, such as a space, has nothing to center.
         if (inkBottom <= inkTop) {
@@ -85,22 +85,22 @@ namespace {
     }
 
     IconText Combined(Axis axis, ComPtr<IDWriteTextLayout> icon, ComPtr<IDWriteTextLayout> text, float iconGapDips) {
-        const D2D1_SIZE_F         iconSize    = SizeOf(Metrics(icon.Get()));
-        const float               inkShift    = InkShift(icon.Get(), iconSize);
+        const D2D1_SIZE_F iconSize = SizeOf(Metrics(icon.Get()));
+        const float inkShift = InkShift(icon.Get(), iconSize);
         const DWRITE_TEXT_METRICS textMetrics = Metrics(text.Get());
-        const D2D1_SIZE_F         textSize    = SizeOf(textMetrics);
-        const float               gap         = GapDips(icon.Get(), text.Get(), iconGapDips);
-        const D2D1_SIZE_F         size        = CombinedSize(axis, iconSize, gap, textSize);
+        const D2D1_SIZE_F textSize = SizeOf(textMetrics);
+        const float gap = GapDips(icon.Get(), text.Get(), iconGapDips);
+        const D2D1_SIZE_F size = CombinedSize(axis, iconSize, gap, textSize);
         return IconText{
-            .icon             = std::move(icon),
-            .text             = std::move(text),
-            .axis             = axis,
-            .iconSize         = iconSize,
+            .icon = std::move(icon),
+            .text = std::move(text),
+            .axis = axis,
+            .iconSize = iconSize,
             .iconInkShiftDips = inkShift,
-            .textSize         = textSize,
-            .textLeftDips     = textMetrics.left,
-            .gapDips          = gap,
-            .size             = size,
+            .textSize = textSize,
+            .textLeftDips = textMetrics.left,
+            .gapDips = gap,
+            .size = size,
         };
     }
 
@@ -160,7 +160,7 @@ void DrawIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconT
 
 void DrawTurnedIconText(const RenderContext& render, D2D1_POINT_2F origin, const IconText& laidOut, float degrees, ID2D1Brush* iconBrush, ID2D1Brush* textBrush) {
     const D2D1_POINT_2F center = D2D1::Point2F(origin.x + (laidOut.size.width / 2.0f), origin.y + (laidOut.size.height / 2.0f));
-    D2D1_MATRIX_3X2_F   transform{};
+    D2D1_MATRIX_3X2_F transform{};
     render.context->GetTransform(&transform);
     render.context->SetTransform(D2D1::Matrix3x2F::Rotation(degrees, center) * *D2D1::Matrix3x2F::ReinterpretBaseType(&transform));
     DrawIconText(render, origin, laidOut, iconBrush, textBrush);
@@ -169,14 +169,14 @@ void DrawTurnedIconText(const RenderContext& render, D2D1_POINT_2F origin, const
 
 IconText EmptyIconText() {
     return IconText{
-        .icon             = nullptr,
-        .text             = nullptr,
-        .axis             = Axis::Horizontal,
-        .iconSize         = {.width = 0.0f, .height = 0.0f},
+        .icon = nullptr,
+        .text = nullptr,
+        .axis = Axis::Horizontal,
+        .iconSize = {.width = 0.0f, .height = 0.0f},
         .iconInkShiftDips = 0.0f,
-        .textSize         = {.width = 0.0f, .height = 0.0f},
-        .textLeftDips     = 0.0f,
-        .gapDips          = 0.0f,
-        .size             = {.width = 0.0f, .height = 0.0f},
+        .textSize = {.width = 0.0f, .height = 0.0f},
+        .textLeftDips = 0.0f,
+        .gapDips = 0.0f,
+        .size = {.width = 0.0f, .height = 0.0f},
     };
 }

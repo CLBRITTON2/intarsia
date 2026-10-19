@@ -12,7 +12,7 @@
 
 namespace {
 
-    constexpr size_t kColumns   = 5;
+    constexpr size_t kColumns = 5;
     constexpr size_t kColumnGap = 2;
 
     using Row = std::array<std::string, kColumns>;
@@ -37,7 +37,7 @@ namespace {
         std::vector<Row> rows{Row{"id", "name", "connection", "primary", "bar"}};
         for (const MonitorDescription& description : descriptions) {
             const std::string primaryCell = YesOrNo(description.primary);
-            const std::string barCell     = YesOrNo(ShowsBarOn(bar, description));
+            const std::string barCell = YesOrNo(ShowsBarOn(bar, description));
             if (description.targets.empty()) {
                 rows.push_back(Row{"none", "none", "none", primaryCell, barCell});
             }
@@ -79,7 +79,7 @@ CliOptions ParseCliOptions(const std::vector<std::wstring>& arguments, const std
 }
 
 std::string MonitorTable(const std::vector<MonitorDescription>& descriptions, const BarConfig& bar) {
-    const std::vector<Row>       rows = Rows(descriptions, bar);
+    const std::vector<Row> rows = Rows(descriptions, bar);
     std::array<size_t, kColumns> widths{};
     for (const Row& row : rows) {
         for (size_t column = 0; column < kColumns; ++column) {

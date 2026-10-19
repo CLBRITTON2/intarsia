@@ -10,7 +10,7 @@
 
 // The callback message the test tray apps give their icons.
 inline constexpr std::uint32_t kTrayAppCallback = WM_APP + 9;
-inline constexpr std::uint32_t kTrayAnswerMs    = 5000;
+inline constexpr std::uint32_t kTrayAnswerMs = 5000;
 
 // Sends the tray window one WM_COPYDATA from sender, as shell32 sends the taskbar one. The tray's answer, or nullopt
 // when it gives none within kTrayAnswerMs. Throws Win32Error when the send fails for any other reason.

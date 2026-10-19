@@ -26,12 +26,12 @@
 // Everything the server sends is untrusted: errors quote at most a short escaped excerpt of it.
 namespace glazewm {
 
-    inline constexpr std::string_view kQueryMonitors         = "query monitors";
-    inline constexpr std::string_view kQueryBindingModes     = "query binding-modes";
-    inline constexpr std::string_view kQueryTilingDirection  = "query tiling-direction";
+    inline constexpr std::string_view kQueryMonitors = "query monitors";
+    inline constexpr std::string_view kQueryBindingModes = "query binding-modes";
+    inline constexpr std::string_view kQueryTilingDirection = "query tiling-direction";
     inline constexpr std::string_view kToggleTilingDirection = "command toggle-tiling-direction";
 
-    inline constexpr std::string_view kBindingModesChanged    = "binding_modes_changed";
+    inline constexpr std::string_view kBindingModesChanged = "binding_modes_changed";
     inline constexpr std::string_view kTilingDirectionChanged = "tiling_direction_changed";
 
     // The events that can change the workspace list, the windows on displayed workspaces, or focus. Subscribing to
@@ -51,11 +51,11 @@ namespace glazewm {
     };
 
     struct ServerMessage {
-        MessageKind    kind;
-        std::string    clientMessage; // the exact text the client sent, for responses
-        std::string    eventType;     // for events, such as "focus_changed"
-        bool           success;
-        std::string    error;
+        MessageKind kind;
+        std::string clientMessage; // the exact text the client sent, for responses
+        std::string eventType;     // for events, such as "focus_changed"
+        bool success;
+        std::string error;
         nlohmann::json data;
     };
 
@@ -92,7 +92,7 @@ namespace glazewm {
     // The direction in the data of a "query tiling-direction" response.
     TilingDirection TilingDirectionFromResponse(const nlohmann::json& data);
 
-    bool            ChangesWorkspaces(std::string_view eventType);
+    bool ChangesWorkspaces(std::string_view eventType);
     // Focus moving to another container changes the direction shown, as does flipping it.
     bool ChangesTilingDirection(std::string_view eventType);
 
@@ -107,7 +107,7 @@ namespace glazewm {
 
       private:
         bool _inFlight = false;
-        bool _stale    = false;
+        bool _stale = false;
     };
 
 } // namespace glazewm
@@ -121,15 +121,15 @@ class GlazeWm final : public IWindowManager {
     // or is null when nothing shows it, since its hooks wake the bar for every focus change and retitle.
     GlazeWm(ChangeSignal& changes, std::uint16_t port, std::unique_ptr<Native> focus);
     ~GlazeWm() override;
-    GlazeWm(const GlazeWm&)                                  = delete;
-    GlazeWm&                       operator=(const GlazeWm&) = delete;
+    GlazeWm(const GlazeWm&) = delete;
+    GlazeWm& operator=(const GlazeWm&) = delete;
 
-    std::optional<FocusedWindow>   Focused() const override;
-    std::vector<Workspace>         Workspaces() const override;
-    std::vector<ManagedWindow>     Windows() const override;
-    std::vector<std::wstring>      BindingModes() const override;
+    std::optional<FocusedWindow> Focused() const override;
+    std::vector<Workspace> Workspaces() const override;
+    std::vector<ManagedWindow> Windows() const override;
+    std::vector<std::wstring> BindingModes() const override;
     std::optional<TilingDirection> Direction() const override;
-    WindowManagerStatus            Status() const override;
+    WindowManagerStatus Status() const override;
     // A name GlazeWM's parser cannot take safely is logged and dropped.
     void FocusWorkspace(const std::string& name) override;
     // An id that is not a UUID is logged and dropped.
@@ -141,15 +141,15 @@ class GlazeWm final : public IWindowManager {
   private:
     // Everything the backend reports, replaced whole so readers never see half of one update.
     struct Snapshot {
-        std::vector<Workspace>         workspaces;
-        std::vector<ManagedWindow>     windows;
-        std::vector<std::wstring>      bindingModes;
+        std::vector<Workspace> workspaces;
+        std::vector<ManagedWindow> windows;
+        std::vector<std::wstring> bindingModes;
         std::optional<TilingDirection> direction;
-        WindowManagerStatus            status;
+        WindowManagerStatus status;
 
         // No workspaces, windows, binding modes or direction yet.
         static Snapshot Empty(Connection connection, std::string detail);
-        bool            operator==(const Snapshot&) const = default;
+        bool operator==(const Snapshot&) const = default;
     };
 
     void Receive();
@@ -159,18 +159,18 @@ class GlazeWm final : public IWindowManager {
     void SendSerialized(WebSocket& socket, std::string_view text);
     void Publish(const Snapshot& snapshot);
     // Queues a command built by makeCommand, which throws ProtocolError for an argument GlazeWM cannot take.
-    void                    QueueCommand(const std::function<std::string()>& makeCommand);
+    void QueueCommand(const std::function<std::string()>& makeCommand);
 
     std::unique_ptr<Native> _focus;
-    std::uint16_t           _port;
-    ChangeSignal&           _changes;
-    UniqueHandle            _stopEvent;
-    mutable std::mutex      _mutex; // guards the members below it up to _sendMutex
-    Snapshot                _snapshot;
-    bool                    _stopping = false;
+    std::uint16_t _port;
+    ChangeSignal& _changes;
+    UniqueHandle _stopEvent;
+    mutable std::mutex _mutex; // guards the members below it up to _sendMutex
+    Snapshot _snapshot;
+    bool _stopping = false;
     // Shared so the sender or the destructor can still use the socket while the session that opened it is ending.
     std::shared_ptr<WebSocket> _socket;
-    std::mutex                 _sendMutex;
+    std::mutex _sendMutex;
     // Held by pointer so the destructor can stop it, with no send pending, before it closes the socket.
     std::unique_ptr<WorkQueue<std::string>> _sender;
     // Declared last so every member above exists before the thread starts.

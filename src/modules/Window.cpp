@@ -10,7 +10,7 @@ namespace {
 
     constexpr wchar_t kEllipsis = L'…';
 
-    bool              IsHighSurrogate(wchar_t unit) {
+    bool IsHighSurrogate(wchar_t unit) {
         return unit >= 0xD800 && unit <= 0xDBFF;
     }
 

@@ -41,7 +41,7 @@ namespace {
         }
         const UniqueBitmap color(info.hbmColor);
         const UniqueBitmap mask(info.hbmMask);
-        BITMAP             bitmap{};
+        BITMAP bitmap{};
         if (GetObjectW(SizedBitmap(color, mask), sizeof(bitmap), &bitmap) == 0) {
             ThrowLastError("GetObjectW(icon bitmap)");
         }
@@ -73,9 +73,9 @@ IconPixels IconToPixels(IWICImagingFactory& imaging, HICON icon) {
                   "IWICFormatConverter::Initialize");
 
     IconPixels pixels{
-        .width  = 0,
+        .width = 0,
         .height = 0,
-        .pbgra  = {},
+        .pbgra = {},
     };
     ThrowIfFailed(converter->GetSize(&pixels.width, &pixels.height), "IWICFormatConverter::GetSize");
     RequireReadableSize(pixels.width, pixels.height);

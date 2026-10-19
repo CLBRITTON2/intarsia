@@ -9,9 +9,9 @@ Clock::Clock(TextModuleConfig config) : TextModule(std::move(config), "clock", C
 ModuleText Clock::Format(const std::string& spec) {
     const std::chrono::sys_seconds second = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
     if (second != _formattedSecond || spec != _formattedSpec) {
-        _formatted       = FormatPlaceholders(spec, ClockPlaceholders(second));
+        _formatted = FormatPlaceholders(spec, ClockPlaceholders(second));
         _formattedSecond = second;
-        _formattedSpec   = spec;
+        _formattedSpec = spec;
     }
     return NormalText(Settings().icon, _formatted);
 }

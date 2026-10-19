@@ -6,10 +6,10 @@
 
 void RegisterWindowClass(HINSTANCE instance, const wchar_t* className, WNDPROC procedure, HCURSOR cursor, std::string_view what) {
     WNDCLASSEXW windowClass{};
-    windowClass.cbSize        = sizeof(windowClass);
-    windowClass.lpfnWndProc   = procedure;
-    windowClass.hInstance     = instance;
-    windowClass.hCursor       = cursor;
+    windowClass.cbSize = sizeof(windowClass);
+    windowClass.lpfnWndProc = procedure;
+    windowClass.hInstance = instance;
+    windowClass.hCursor = cursor;
     windowClass.lpszClassName = className;
     if (RegisterClassExW(&windowClass) == 0) {
         ThrowLastError(std::format("RegisterClassExW({})", what));

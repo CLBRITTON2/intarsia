@@ -31,13 +31,13 @@ struct AppBarData32 {
     std::uint32_t window;
     std::uint32_t callbackMessage;
     std::uint32_t edge;
-    RECT          rect;
-    std::int64_t  lParam;
+    RECT rect;
+    std::int64_t lParam;
 };
 
 // The WM_COPYDATA payload of an SHAppBarMessage call, as shell32 sends it on 64-bit Windows (no public layout).
 struct AppBarCommand {
-    AppBarData32  data;
+    AppBarData32 data;
     std::uint32_t message; // ABM_*
     std::uint32_t reserved;
     // Where the taskbar writes the AppBarData32 of ABM_QUERYPOS and ABM_SETPOS, zero for the other messages: a
@@ -68,8 +68,8 @@ std::string RectText(const RECT& rect);
 // The message a taskbar broadcasts once it starts. Explorer sends it after a restart, having forgotten every appbar.
 std::uint32_t TaskbarCreatedMessage();
 
-void          RegisterAppBar(HWND window, std::uint32_t callbackMessage);
-void          UnregisterAppBar(HWND window);
+void RegisterAppBar(HWND window, std::uint32_t callbackMessage);
+void UnregisterAppBar(HWND window);
 
 // Asks the shell for space on the monitor and reserves it. The shell may shrink the request around other appbars. Logs
 // each answer and the monitor's work area after it, since the shell never reports a request it ignored.

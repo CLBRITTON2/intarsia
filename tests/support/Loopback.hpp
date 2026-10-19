@@ -21,7 +21,7 @@ namespace loopback {
     class Winsock {
       public:
         Winsock() {
-            WSADATA            data{};
+            WSADATA data{};
             const std::int32_t result = WSAStartup(MAKEWORD(2, 2), &data);
             if (result != 0) {
                 throw std::runtime_error("WSAStartup failed with " + std::to_string(result));
@@ -30,7 +30,7 @@ namespace loopback {
         ~Winsock() {
             WSACleanup();
         }
-        Winsock(const Winsock&)            = delete;
+        Winsock(const Winsock&) = delete;
         Winsock& operator=(const Winsock&) = delete;
     };
 
@@ -47,16 +47,16 @@ namespace loopback {
             }
         }
         Socket(Socket&& other) noexcept : _handle(std::exchange(other._handle, INVALID_SOCKET)) {}
-        Socket(const Socket&)            = delete;
+        Socket(const Socket&) = delete;
         Socket& operator=(const Socket&) = delete;
-        Socket& operator=(Socket&&)      = delete;
+        Socket& operator=(Socket&&) = delete;
 
-        SOCKET  Get() const {
+        SOCKET Get() const {
             return _handle;
         }
 
         std::uint16_t Port() const {
-            sockaddr_in  address{};
+            sockaddr_in address{};
             std::int32_t size = sizeof(address);
             if (getsockname(_handle, reinterpret_cast<sockaddr*>(&address), &size) != 0) {
                 throw std::runtime_error("getsockname failed with " + std::to_string(WSAGetLastError()));
@@ -70,14 +70,14 @@ namespace loopback {
 
     inline sockaddr_in Address(std::uint16_t port) {
         sockaddr_in address{};
-        address.sin_family      = AF_INET;
-        address.sin_port        = htons(port);
+        address.sin_family = AF_INET;
+        address.sin_port = htons(port);
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         return address;
     }
 
     inline Socket ListenOn(std::uint16_t port) {
-        Socket            listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+        Socket listener(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
         const sockaddr_in address = Address(port);
         if (bind(listener.Get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 || listen(listener.Get(), 1) != 0) {
             throw std::runtime_error("bind or listen on port " + std::to_string(port) + " failed with " + std::to_string(WSAGetLastError()));
@@ -103,7 +103,7 @@ namespace loopback {
     // Everything up to and including the blank line that ends an HTTP request's headers.
     inline std::string ReceiveHeaders(const Socket& socket) {
         std::string headers;
-        char        byte = 0;
+        char byte = 0;
         while (!headers.ends_with("\r\n\r\n")) {
             if (recv(socket.Get(), &byte, 1, 0) != 1) {
                 throw std::runtime_error("the client closed before finishing its request headers");
@@ -141,12 +141,12 @@ namespace loopback {
 
     // RFC 6455 section 4.2.2: base64 of the SHA-1 of the client's key and this GUID. WinHTTP checks it.
     inline std::string AcceptKey(const std::string& key) {
-        std::string           input = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+        std::string input = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
         std::array<UCHAR, 20> digest{};
-        const NTSTATUS        status = BCryptHash(BCRYPT_SHA1_ALG_HANDLE, nullptr, 0, reinterpret_cast<PUCHAR>(input.data()), static_cast<ULONG>(input.size()), digest.data(),
-                                                  static_cast<ULONG>(digest.size()));
-        std::array<char, 64>  encoded{};
-        DWORD                 length = static_cast<DWORD>(encoded.size());
+        const NTSTATUS status = BCryptHash(BCRYPT_SHA1_ALG_HANDLE, nullptr, 0, reinterpret_cast<PUCHAR>(input.data()), static_cast<ULONG>(input.size()), digest.data(),
+                                           static_cast<ULONG>(digest.size()));
+        std::array<char, 64> encoded{};
+        DWORD length = static_cast<DWORD>(encoded.size());
         if (status != 0 || !CryptBinaryToStringA(digest.data(), static_cast<DWORD>(digest.size()), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded.data(), &length)) {
             throw std::runtime_error("cannot compute Sec-WebSocket-Accept");
         }
@@ -209,10 +209,10 @@ namespace loopback {
             }
             ReceiveExactly(peer, header.data() + 1, 1);
             const std::uint8_t opcode = static_cast<std::uint8_t>(header[0]) & 0x0Fu;
-            std::uint64_t      length = static_cast<std::uint8_t>(header[1]) & 0x7Fu;
+            std::uint64_t length = static_cast<std::uint8_t>(header[1]) & 0x7Fu;
             if (length == 126 || length == 127) {
                 std::array<char, 8> extended{};
-                const size_t        bytes = ExtendedLengthBytes(length);
+                const size_t bytes = ExtendedLengthBytes(length);
                 ReceiveExactly(peer, extended.data(), bytes);
                 length = 0;
                 for (size_t index = 0; index < bytes; ++index) {

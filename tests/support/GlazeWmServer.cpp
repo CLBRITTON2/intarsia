@@ -37,7 +37,7 @@ namespace {
 
     constexpr std::string_view kRejectedCommand = "command focus --workspace 1";
 
-    bool                       DrivenByStdin(Scenario scenario) {
+    bool DrivenByStdin(Scenario scenario) {
         return scenario == Scenario::Integration || scenario == Scenario::Rejecting;
     }
 
@@ -60,13 +60,13 @@ namespace {
         }
 
       private:
-        std::mutex         _mutex;
+        std::mutex _mutex;
         std::deque<size_t> _pending;
     };
 
     void ReadPushedFocus(PushedFocus& pushed) {
         constexpr std::string_view kFocus = "focus ";
-        std::string                line;
+        std::string line;
         while (std::getline(std::cin, line)) {
             if (!line.starts_with(kFocus)) {
                 std::cerr << std::format("unknown stdin line '{}', use focus <n>", line) << std::endl;
@@ -78,7 +78,7 @@ namespace {
 
     struct Options {
         std::uint16_t port;
-        Scenario      scenario;
+        Scenario scenario;
     };
 
     Scenario ParseScenario(std::string_view name) {
@@ -94,7 +94,7 @@ namespace {
 
     Options ParseOptions(std::int32_t argc, char** argv) {
         std::optional<std::uint16_t> port;
-        std::optional<Scenario>      scenario;
+        std::optional<Scenario> scenario;
         for (std::int32_t index = 1; index + 1 < argc; index += 2) {
             const std::string_view name = argv[index];
             if (name == "--port") {
@@ -115,13 +115,13 @@ namespace {
     constexpr std::wstring_view kIntegrationTitle = L"intarsia integration";
 
     struct WindowCollection {
-        bool              integrationOnly;
+        bool integrationOnly;
         std::vector<HWND> windows;
     };
 
     // Real top-level windows, so the bar's windows module reads real icons.
     BOOL CALLBACK CollectWindow(HWND window, LPARAM collection) {
-        auto*                   collected = reinterpret_cast<WindowCollection*>(collection); // NOLINT(performance-no-int-to-ptr)
+        auto* collected = reinterpret_cast<WindowCollection*>(collection); // NOLINT(performance-no-int-to-ptr)
         std::array<wchar_t, 64> title{};
         GetWindowTextW(window, title.data(), static_cast<std::int32_t>(title.size()));
         const bool wanted = !collected->integrationOnly || std::wstring_view(title.data()).starts_with(kIntegrationTitle);
@@ -149,11 +149,11 @@ namespace {
 
     // Two workspaces on the primary monitor, the displayed one holding real windows inside a split.
     std::string Monitors(size_t focused, bool integrationOnly) {
-        const auto       monitor = reinterpret_cast<std::intptr_t>(MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY));
+        const auto monitor = reinterpret_cast<std::intptr_t>(MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY));
         WindowCollection collection{.integrationOnly = integrationOnly, .windows = {}};
         EnumWindows(CollectWindow, reinterpret_cast<LPARAM>(&collection));
         const std::vector<HWND>& windows = collection.windows;
-        std::string              children;
+        std::string children;
         for (size_t index = 0; index < windows.size(); ++index) {
             if (index > 0) {
                 children += ",";
@@ -195,9 +195,9 @@ namespace {
         loopback::AnswerUpgrade(peer);
 
         std::mt19937 random(static_cast<std::uint32_t>(connection));
-        const auto   dropAt    = std::chrono::steady_clock::now() + std::chrono::milliseconds(200 + (random() % 1800));
-        auto         nextEvent = std::chrono::steady_clock::now();
-        size_t       focused   = 0;
+        const auto dropAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(200 + (random() % 1800));
+        auto nextEvent = std::chrono::steady_clock::now();
+        size_t focused = 0;
         while (true) {
             if (scenario == Scenario::Flap && std::chrono::steady_clock::now() >= dropAt) {
                 return;
@@ -247,9 +247,9 @@ namespace {
 
 int main(int argc, char** argv) {
     try {
-        const Options           options = ParseOptions(argc, argv);
+        const Options options = ParseOptions(argc, argv);
         const loopback::Winsock winsock;
-        const loopback::Socket  listener = loopback::ListenOn(options.port);
+        const loopback::Socket listener = loopback::ListenOn(options.port);
         std::cout << std::format("listening on 127.0.0.1:{}", options.port) << std::endl;
         PushedFocus pushed;
         if (DrivenByStdin(options.scenario)) {

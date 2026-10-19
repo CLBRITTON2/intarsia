@@ -12,11 +12,11 @@ enum class AudioFlow : std::uint8_t {
 
 // The default device of one flow as the audio module shows it.
 struct AudioDevice {
-    std::wstring name;   // as the system's sound settings show it
-    float        volume; // 0 to 1
-    bool         muted;
+    std::wstring name; // as the system's sound settings show it
+    float volume;      // 0 to 1
+    bool muted;
 
-    bool         operator==(const AudioDevice&) const = default;
+    bool operator==(const AudioDevice&) const = default;
 };
 
 // The system's default device of one flow, followed as it changes. Reads come from the UI thread, and changes are

@@ -9,13 +9,13 @@
 #include <string>
 
 TEST(Window, LayoutReportsAChangeOnlyWhenTheTitleChanges) {
-    FakeWindowManager    windowManager;
+    FakeWindowManager windowManager;
     const TextOnlyRender render;
-    Window               window(
+    Window window(
         WindowConfig{
-                          .maxLength = 50,
-                          .tooltip   = std::nullopt,
-                          .actions   = kNoActions,
+            .maxLength = 50,
+            .tooltip = std::nullopt,
+            .actions = kNoActions,
         },
         windowManager);
 

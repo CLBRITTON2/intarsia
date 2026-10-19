@@ -14,7 +14,7 @@ namespace {
 
     std::string ReadAll(const std::filesystem::path& path) {
         const std::ifstream file(path, std::ios::binary);
-        std::stringstream   text;
+        std::stringstream text;
         text << file.rdbuf();
         return text.str();
     }
@@ -24,7 +24,7 @@ namespace {
 // The sink is process-wide, so the rest of the run logs into this file too, which the test leaves in the temp directory.
 TEST(Log, TheFileKeepsTheLastRunsLogAndGetsEveryLineStamped) {
     const std::filesystem::path directory = std::filesystem::temp_directory_path() / ("intarsia-log-test-" + std::to_string(GetCurrentProcessId()));
-    const std::filesystem::path path      = directory / "intarsia.log";
+    const std::filesystem::path path = directory / "intarsia.log";
     std::filesystem::create_directories(directory);
     std::ofstream(path, std::ios::binary) << "the last run\n";
 

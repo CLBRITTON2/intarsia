@@ -72,7 +72,7 @@ namespace {
             return shadows[index];
         }
         InsetShadow clear = partners[index];
-        clear.color       = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+        clear.color = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
         return clear;
     }
 
@@ -85,8 +85,8 @@ float Lerp(float from, float to, float share) {
 // x rises with t for every CSS keyword, so halving finds the t whose x is progress.
 float Eased(TimingFunction timing, float progress) {
     const Bezier curve = CurveOf(timing);
-    float        low   = 0.0f;
-    float        high  = 1.0f;
+    float low = 0.0f;
+    float high = 1.0f;
     for (std::int32_t step = 0; step < 32; ++step) {
         const float middle = (low + high) / 2.0f;
         if (CubicAt(curve.x1, curve.x2, middle) < progress) {
@@ -102,12 +102,12 @@ AnimatedValue::AnimatedValue(float value) : _from(value), _to(value) {}
 
 void AnimatedValue::Retarget(float target, const Transition& transition, std::chrono::steady_clock::time_point now) {
     const float current = Value(now);
-    const float share   = std::abs(target - current);
-    _from               = current;
-    _to                 = target;
-    _duration           = std::chrono::milliseconds(static_cast<std::int64_t>(std::lround(static_cast<float>(transition.duration.count()) * share)));
-    _timing             = transition.timing;
-    _start              = now;
+    const float share = std::abs(target - current);
+    _from = current;
+    _to = target;
+    _duration = std::chrono::milliseconds(static_cast<std::int64_t>(std::lround(static_cast<float>(transition.duration.count()) * share)));
+    _timing = transition.timing;
+    _start = now;
 }
 
 float AnimatedValue::Value(std::chrono::steady_clock::time_point now) const {
@@ -128,8 +128,8 @@ void ColorFade::Retarget(const D2D1_COLOR_F& target, const Transition& transitio
     if (SameColor(target, _to)) {
         return;
     }
-    _from     = Color(now);
-    _to       = target;
+    _from = Color(now);
+    _to = target;
     _progress = AnimatedValue(0.0f);
     _progress.Retarget(1.0f, transition, now);
 }
@@ -148,8 +148,8 @@ void ShadowFade::Retarget(const std::vector<InsetShadow>& target, const Transiti
     if (std::ranges::equal(target, _to, SameShadow)) {
         return;
     }
-    _from     = Shadows(now);
-    _to       = target;
+    _from = Shadows(now);
+    _to = target;
     _progress = AnimatedValue(0.0f);
     _progress.Retarget(1.0f, transition, now);
 }
@@ -159,18 +159,18 @@ std::vector<InsetShadow> ShadowFade::Shadows(std::chrono::steady_clock::time_poi
     if (!Running(now)) {
         return _to;
     }
-    const float              share = _progress.Value(now);
+    const float share = _progress.Value(now);
     std::vector<InsetShadow> mixed;
     mixed.reserve(std::max(_from.size(), _to.size()));
     for (size_t index = 0; index < std::max(_from.size(), _to.size()); ++index) {
         const InsetShadow from = ShadowOrClear(_from, _to, index);
-        const InsetShadow to   = ShadowOrClear(_to, _from, index);
+        const InsetShadow to = ShadowOrClear(_to, _from, index);
         mixed.push_back(InsetShadow{
-            .xDips      = Lerp(from.xDips, to.xDips, share),
-            .yDips      = Lerp(from.yDips, to.yDips, share),
-            .blurDips   = Lerp(from.blurDips, to.blurDips, share),
+            .xDips = Lerp(from.xDips, to.xDips, share),
+            .yDips = Lerp(from.yDips, to.yDips, share),
+            .blurDips = Lerp(from.blurDips, to.blurDips, share),
             .spreadDips = Lerp(from.spreadDips, to.spreadDips, share),
-            .color      = MixColors(from.color, to.color, share),
+            .color = MixColors(from.color, to.color, share),
         });
     }
     return mixed;
@@ -193,7 +193,7 @@ Fold::Fold(const ModuleStyle& style) :
     _revealTransition(style.transition), _turnTransition(style.icon.transition), _foldedDegrees(style.icon.rotationDegrees), _unfoldedDegrees(style.expandedIconRotationDegrees) {}
 
 void Fold::Toggle(std::chrono::steady_clock::time_point now) {
-    _unfolded          = !_unfolded;
+    _unfolded = !_unfolded;
     const float target = _unfolded ? 1.0f : 0.0f;
     _reveal.Retarget(target, _revealTransition, now);
     _turn.Retarget(target, _turnTransition, now);

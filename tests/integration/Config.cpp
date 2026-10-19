@@ -39,11 +39,11 @@ return {{
                            left, right);
     }
 
-    constexpr std::uint32_t kGreen  = 0x27AE60;
+    constexpr std::uint32_t kGreen = 0x27AE60;
     constexpr std::uint32_t kOrange = 0xF39C12;
-    constexpr std::uint32_t kBlue   = 0x2E86C1;
+    constexpr std::uint32_t kBlue = 0x2E86C1;
 
-    std::string             StyleWithRules(std::string_view rules) {
+    std::string StyleWithRules(std::string_view rules) {
         return std::string(R"(
 bar {
   font: Segoe UI
@@ -67,7 +67,7 @@ module {
 
     // The primary monitor's width in DIPs, as the bar measures it against min_length.
     float PrimaryLengthDips() {
-        HMONITOR    primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
+        HMONITOR primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO info{};
         info.cbSize = sizeof(info);
         if (!GetMonitorInfoW(primary, &info)) {
@@ -182,13 +182,13 @@ TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
 
 TEST(Config, DrawsARightBorderPastTheBackground) {
     const integration::RunningBar bar("config-border", OneModuleConfig(R"("mark")", ""), StyleWithRules("mark {\n  background: #27ae60\n  border-right: 8 #2e86c1\n}\n"));
-    std::optional<double>         background;
-    std::optional<double>         border;
+    std::optional<double> background;
+    std::optional<double> border;
     EXPECT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            background                         = integration::MeanColumn(capture, kGreen);
-            border                             = integration::MeanColumn(capture, kBlue);
+            background = integration::MeanColumn(capture, kGreen);
+            border = integration::MeanColumn(capture, kBlue);
             return background.has_value() && border.has_value() && *border > *background;
         },
         integration::kLimit))
@@ -197,17 +197,17 @@ TEST(Config, DrawsARightBorderPastTheBackground) {
 }
 
 TEST(Config, AClickOnAModulesMarginRunsNothing) {
-    constexpr std::string_view  kTestName = "config-margin";
-    const std::filesystem::path record    = integration::WorkDirectoryPath(kTestName) / "argv.txt";
+    constexpr std::string_view kTestName = "config-margin";
+    const std::filesystem::path record = integration::WorkDirectoryPath(kTestName) / "argv.txt";
     // 40 DIPs of margin, so a click 10 pixels before the box lands in it at any scale.
     const integration::RunningBar bar(kTestName, ClickableConfig(record), StyleWithRules("mark {\n  background: #27ae60\n  margin: 0 40\n}\n"));
-    std::optional<double>         middle;
-    std::optional<std::int32_t>   span;
+    std::optional<double> middle;
+    std::optional<std::int32_t> span;
     ASSERT_TRUE(integration::Eventually(
         [&] {
             const integration::Capture capture = integration::CaptureScreenOver(bar.PrimaryBar());
-            middle                             = integration::MeanColumn(capture, kGreen);
-            span                               = integration::ColumnSpan(capture, kGreen);
+            middle = integration::MeanColumn(capture, kGreen);
+            span = integration::ColumnSpan(capture, kGreen);
             return middle.has_value() && span.has_value();
         },
         integration::kLimit))
@@ -226,10 +226,10 @@ TEST(Config, AClickOnAModulesMarginRunsNothing) {
 
 TEST(Config, RedrawsAModuleSavedIntoAnotherSection) {
     integration::RunningBar bar("config-move", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
-    const std::int32_t      left     = bar.DrawnColumn(kGreen, integration::kLimit);
-    const RECT              barRect  = integration::ScreenRect(bar.PrimaryBar());
-    const std::int32_t      barWidth = barRect.right - barRect.left;
-    const double            middle   = static_cast<double>(barWidth) / 2;
+    const std::int32_t left = bar.DrawnColumn(kGreen, integration::kLimit);
+    const RECT barRect = integration::ScreenRect(bar.PrimaryBar());
+    const std::int32_t barWidth = barRect.right - barRect.left;
+    const double middle = static_cast<double>(barWidth) / 2;
     integration::Log("module_column", std::format("section=left column={} bar_width={}", left, barWidth));
     EXPECT_LT(left, middle);
 
@@ -268,8 +268,8 @@ TEST(Config, EndsWithExitCode1AfterAnInvalidSave) {
 }
 
 TEST(Config, ShowsTheLastLayoutTheMonitorsLengthReaches) {
-    const float                   length  = PrimaryLengthDips();
-    const auto                    reached = static_cast<std::uint32_t>(std::floor(length));
+    const float length = PrimaryLengthDips();
+    const auto reached = static_cast<std::uint32_t>(std::floor(length));
     const integration::RunningBar bar("config-layouts", LayoutsConfig(reached),
                                       StyleWithRules("low {\n  background: #27ae60\n}\nreached {\n  background: #f39c12\n}\nbeyond {\n  background: #2e86c1\n}\n"));
     integration::Log("layouts", std::format("primary_length_dips={:.2f} reached_min_length={} beyond_min_length={}", length, reached, reached + 1));
@@ -281,7 +281,7 @@ TEST(Config, ShowsTheLastLayoutTheMonitorsLengthReaches) {
 
 TEST(Monitors, KeepsRunningWithNoBarWhenNoMonitorMatches) {
     const integration::RunningBar bar("monitors-none", MonitorsConfig(R"("*")"), kMonitorsStyle);
-    const size_t                  startLines = bar.Events("monitor").size();
+    const size_t startLines = bar.Events("monitor").size();
     ASSERT_GT(startLines, size_t{0}) << "the bar logged no monitor line at startup";
     integration::Log("monitor_lines", std::format("phase=start lines={}", startLines));
 

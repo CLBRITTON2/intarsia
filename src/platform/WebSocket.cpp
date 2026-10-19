@@ -28,14 +28,14 @@ namespace {
 
     // Loopback connects, sends and upgrades finish at once, so a short bound only matters when the peer has stopped
     // reading or never answers the upgrade. Once upgraded, receives wait forever (0): an idle IPC socket is normal.
-    constexpr std::int32_t kConnectTimeoutMs   = 2000;
-    constexpr std::int32_t kSendTimeoutMs      = 2000;
+    constexpr std::int32_t kConnectTimeoutMs = 2000;
+    constexpr std::int32_t kSendTimeoutMs = 2000;
     constexpr std::int32_t kHandshakeTimeoutMs = 2000;
-    constexpr DWORD        kIdleTimeoutMs      = 0;
+    constexpr DWORD kIdleTimeoutMs = 0;
     // Seconds WinHttpWebSocketClose waits for the server's close frame, which bounds how long shutdown can take.
     constexpr DWORD kCloseTimeoutSeconds = 1;
 
-    HINTERNET       Checked(HINTERNET handle, std::string_view call) {
+    HINTERNET Checked(HINTERNET handle, std::string_view call) {
         if (handle == nullptr) {
             ThrowLastError(call);
         }
@@ -61,8 +61,8 @@ namespace {
 
     std::uint16_t LocalPortOf(HINTERNET request) {
         WINHTTP_CONNECTION_INFO info{};
-        DWORD                   size = sizeof(info);
-        info.cbSize                  = size;
+        DWORD size = sizeof(info);
+        info.cbSize = size;
         if (!WinHttpQueryOption(request, WINHTTP_OPTION_CONNECTION_INFO, &info, &size)) {
             ThrowLastError("WinHttpQueryOption(WINHTTP_OPTION_CONNECTION_INFO)");
         }
@@ -77,7 +77,7 @@ namespace {
     // MIB_TCPROW_OWNER_PID stores address and port in network byte order, the port in the low 16 bits.
     constexpr std::uint32_t kLoopbackAddress = 0x0100007F; // 127.0.0.1
 
-    std::uint16_t           RowPort(std::uint32_t networkPort) {
+    std::uint16_t RowPort(std::uint32_t networkPort) {
         return ntohs(static_cast<u_short>(networkPort));
     }
 
@@ -87,7 +87,7 @@ namespace {
         // The table can grow between the size query and the read, so retry a few times with the size it reports.
         for (std::int32_t attempt = 0; attempt < 4; ++attempt) {
             std::vector<std::byte> table(size);
-            const DWORD            result = GetExtendedTcpTable(table.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+            const DWORD result = GetExtendedTcpTable(table.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
             if (result == NO_ERROR) {
                 return table;
             }
@@ -119,7 +119,7 @@ WebSocket::WebSocket(std::wstring_view host, std::uint16_t port, std::wstring_vi
         ThrowLastError("WinHttpReceiveResponse");
     }
 
-    DWORD status     = 0;
+    DWORD status = 0;
     DWORD statusSize = sizeof(status);
     if (!WinHttpQueryHeaders(request.get(), WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX)) {
         ThrowLastError("WinHttpQueryHeaders(status code)");
@@ -145,10 +145,10 @@ void WebSocket::Send(std::string_view text) {
 }
 
 std::string WebSocket::Receive() {
-    std::string             message;
+    std::string message;
     std::array<char, 16384> chunk{};
     while (true) {
-        DWORD                          read = 0;
+        DWORD read = 0;
         WINHTTP_WEB_SOCKET_BUFFER_TYPE type = WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE;
         ThrowIfWin32Failed(WinHttpWebSocketReceive(_socket.get(), chunk.data(), static_cast<DWORD>(chunk.size()), &read, &type), "WinHttpWebSocketReceive");
         if (type == WINHTTP_WEB_SOCKET_CLOSE_BUFFER_TYPE) {
@@ -185,9 +185,9 @@ std::uint32_t LoopbackPeerProcess(std::uint16_t clientPort, std::uint16_t server
 }
 
 void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName) {
-    const UniqueHandle          process  = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(listener)");
-    const std::filesystem::path image    = ProcessImage(process.get());
-    const std::wstring          fileName = image.filename().wstring();
+    const UniqueHandle process = OwnHandle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId), "OpenProcess(listener)");
+    const std::filesystem::path image = ProcessImage(process.get());
+    const std::wstring fileName = image.filename().wstring();
     if (!SameFileName(fileName, imageName)) {
         throw PeerVerificationError(std::format("the listener is {} (pid {}), not {}", ToUtf8(image.wstring()), processId, ToUtf8(imageName)));
     }
@@ -196,15 +196,15 @@ void RequireSameUserProcess(std::uint32_t processId, std::wstring_view imageName
     if (!OpenProcessToken(process.get(), TOKEN_QUERY, &rawToken)) {
         throw PeerVerificationError(std::format("cannot read the owner of {} (pid {}): OpenProcessToken failed with {}", ToUtf8(image.wstring()), processId, GetLastError()));
     }
-    const UniqueHandle     token(rawToken);
+    const UniqueHandle token(rawToken);
     std::vector<std::byte> peerUser = TokenBuffer(token.get(), TokenUser, "TokenUser");
-    std::vector<std::byte> ourUser  = TokenBuffer(GetCurrentProcessToken(), TokenUser, "TokenUser");
+    std::vector<std::byte> ourUser = TokenBuffer(GetCurrentProcessToken(), TokenUser, "TokenUser");
     if (!EqualSid(UserSid(peerUser), UserSid(ourUser))) {
         throw PeerVerificationError(std::format("{} (pid {}) runs as a different user", ToUtf8(image.wstring()), processId));
     }
     // A sandboxed process of the same user runs at low integrity (so does every AppContainer), and must not pass.
     const std::uint32_t peerLevel = IntegrityLevel(token.get());
-    const std::uint32_t ourLevel  = IntegrityLevel(GetCurrentProcessToken());
+    const std::uint32_t ourLevel = IntegrityLevel(GetCurrentProcessToken());
     if (peerLevel < ourLevel) {
         throw PeerVerificationError(std::format("{} (pid {}) runs at integrity level 0x{:X}, below the bar's 0x{:X}", ToUtf8(image.wstring()), processId, peerLevel, ourLevel));
     }

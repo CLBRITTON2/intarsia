@@ -14,9 +14,9 @@ using testing::ElementsAre;
 
 namespace {
 
-    constexpr std::string_view kClickTestName  = "actions-click";
+    constexpr std::string_view kClickTestName = "actions-click";
     constexpr std::string_view kInputsTestName = "input-buttons";
-    constexpr std::uint32_t    kTextColor      = 0x27AE60;
+    constexpr std::uint32_t kTextColor = 0x27AE60;
 
     // Large text in kTextColor for the module both tests name probe, so glyph stems cover whole pixels in the exact
     // color.
@@ -58,7 +58,7 @@ return {{
     // A bottom bar, so a wheel message's screen point lies far from the same client point.
     std::string InputsConfig(const std::filesystem::path& record) {
         const std::string recorder = integration::LuaPath(integration::ArgvRecorderPath());
-        const std::string file     = integration::LuaPath(record);
+        const std::string file = integration::LuaPath(record);
         return std::format(R"(
 return {{
     bar = {{ edge = "bottom", layer = "top", space = "share", thickness = 40, monitors = {{ "*" }} }},
@@ -90,7 +90,7 @@ return {{
 } // namespace
 
 TEST(Actions, AClickStartsItsProgramWithEachArgumentAsWritten) {
-    const std::filesystem::path   record = integration::WorkDirectoryPath(kClickTestName) / "argv.txt";
+    const std::filesystem::path record = integration::WorkDirectoryPath(kClickTestName) / "argv.txt";
     const integration::RunningBar bar(kClickTestName, ClickConfig(record), kStyle);
     bar.ClickAt(bar.DrawnColumn(kTextColor, integration::kLimit));
     ASSERT_TRUE(integration::Eventually([&] { return !integration::RecordedLines(record).empty(); }, integration::kLimit))
@@ -101,8 +101,8 @@ TEST(Actions, AClickStartsItsProgramWithEachArgumentAsWritten) {
 
 TEST(Input, RightMiddleAndWheelInputsEachRunTheirAction) {
     const std::filesystem::path record = integration::WorkDirectoryPath(kInputsTestName) / "argv.txt";
-    integration::RunningBar     bar(kInputsTestName, InputsConfig(record), kStyle);
-    const std::int32_t          at = bar.DrawnColumn(kTextColor, integration::kLimit);
+    integration::RunningBar bar(kInputsTestName, InputsConfig(record), kStyle);
+    const std::int32_t at = bar.DrawnColumn(kTextColor, integration::kLimit);
 
     EXPECT_TRUE(RecordsAfter(record, 1, [&] { bar.ButtonUpAt(WM_RBUTTONUP, at); }));
     EXPECT_TRUE(RecordsAfter(record, 2, [&] { bar.ButtonUpAt(WM_MBUTTONUP, at); }));

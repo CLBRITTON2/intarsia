@@ -26,24 +26,24 @@ struct StateBrushes {
 // What a module needs to lay out and draw one frame. Non-owning: the bar owns every object here.
 struct RenderContext {
     ID2D1DeviceContext* context;
-    IDWriteFactory*     dwrite;
-    IDWriteTextFormat*  textFormat;
-    const wchar_t*      iconFont;
-    float               iconSizeDips;
-    float               iconGapDips; // between an icon and the text after it
+    IDWriteFactory* dwrite;
+    IDWriteTextFormat* textFormat;
+    const wchar_t* iconFont;
+    float iconSizeDips;
+    float iconGapDips; // between an icon and the text after it
     // The module's own colors: its text and its icon.
-    ID2D1SolidColorBrush*     foreground;
-    ID2D1SolidColorBrush*     accent;
-    ID2D1SolidColorBrush*     alert;
-    StateBrushes              warning;
-    StateBrushes              critical;
-    StateBrushes              muted;
+    ID2D1SolidColorBrush* foreground;
+    ID2D1SolidColorBrush* accent;
+    ID2D1SolidColorBrush* alert;
+    StateBrushes warning;
+    StateBrushes critical;
+    StateBrushes muted;
     std::vector<StateBrushes> classes; // a custom module's declared classes, in their order
     // Any other color a module draws, such as a workspace state's background.
     BrushCache* brushes;
-    BoxCache*   boxes;
-    Axis        axis;         // the bar's
-    float       boxCrossDips; // across the bar, of the box a module draws in: the room a vertical bar cuts text to
+    BoxCache* boxes;
+    Axis axis;          // the bar's
+    float boxCrossDips; // across the bar, of the box a module draws in: the room a vertical bar cuts text to
     // What animations draw at, never the clock: the refresh the frame is paced to, so each frame of a fold or fade moves
     // one refresh on however late the bar gets to draw it.
     std::chrono::steady_clock::time_point frameTime;
@@ -56,7 +56,7 @@ enum class ScrollDirection : std::uint8_t {
 
 // Where a bar put a module's content for the frame it is about to draw.
 struct ModulePlacement {
-    RECT          windowRect;    // the bar's window, in screen pixels
+    RECT windowRect;             // the bar's window, in screen pixels
     D2D1_POINT_2F contentOrigin; // in DIPs from the window's top left corner
     std::uint32_t dpi;
 };
@@ -68,9 +68,9 @@ class IModule {
 
     // Rebuilds what the module draws from its current data. Returns false when that is what the last call built, so the
     // bar can skip a frame no module changed.
-    virtual bool        Layout(const RenderContext& render)                           = 0;
-    virtual D2D1_SIZE_F Size() const                                                  = 0;
-    virtual void        Draw(const RenderContext& render, D2D1_POINT_2F origin) const = 0;
+    virtual bool Layout(const RenderContext& render) = 0;
+    virtual D2D1_SIZE_F Size() const = 0;
+    virtual void Draw(const RenderContext& render, D2D1_POINT_2F origin) const = 0;
 
     // The commands the config binds to this module's inputs. Required, so a module whose config takes actions cannot
     // drop them by leaving this out: one without returns kNoActions.
@@ -118,9 +118,9 @@ class IModule {
 
 // Actions() for a module whose config binds none.
 inline const ModuleActions kNoActions{
-    .click       = std::nullopt,
-    .rightClick  = std::nullopt,
+    .click = std::nullopt,
+    .rightClick = std::nullopt,
     .middleClick = std::nullopt,
-    .scrollUp    = std::nullopt,
-    .scrollDown  = std::nullopt,
+    .scrollUp = std::nullopt,
+    .scrollDown = std::nullopt,
 };

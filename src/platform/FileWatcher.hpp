@@ -19,22 +19,22 @@ class FileWatcher {
   public:
     FileWatcher(const std::filesystem::path& directory, std::vector<std::wstring> fileNames, HWND target, std::uint32_t changedMessage, std::uint32_t failedMessage,
                 std::chrono::milliseconds settle);
-    FileWatcher(const FileWatcher&)            = delete;
+    FileWatcher(const FileWatcher&) = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
 
     // On failedMessage, rethrows the error that stopped the watcher thread.
     void RethrowFailure();
 
   private:
-    void                      Watch(HANDLE stopEvent);
-    void                      WatchUntilStopped(HANDLE stopEvent);
+    void Watch(HANDLE stopEvent);
+    void WatchUntilStopped(HANDLE stopEvent);
 
     std::vector<std::wstring> _fileNames;
-    HWND                      _target;
-    std::uint32_t             _changedMessage;
+    HWND _target;
+    std::uint32_t _changedMessage;
     std::chrono::milliseconds _settle;
-    UniqueHandle              _directory;
-    ThreadFailure             _failure;
+    UniqueHandle _directory;
+    ThreadFailure _failure;
     // Declared last so every member above exists before the thread starts.
     StoppableThread _thread;
 };

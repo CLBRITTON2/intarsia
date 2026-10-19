@@ -30,7 +30,7 @@ class MonitorGoneError : public DeviceLostError {
     using DeviceLostError::DeviceLostError;
 };
 
-void              ThrowIfFailed(HRESULT result, std::string_view call);
+void ThrowIfFailed(HRESULT result, std::string_view call);
 [[noreturn]] void ThrowLastError(std::string_view call);
 
 // For the calls that return a Win32 error code rather than set the last error.

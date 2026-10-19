@@ -17,14 +17,14 @@ class Audio final : public IconTextModule<AudioConfig> {
     // Throws ConfigError when a format is not a valid spec for its values.
     Audio(AudioConfig config, IAudio& audio);
 
-    void                        Click(D2D1_POINT_2F point) override;
-    void                        Scroll(ScrollDirection direction) override;
+    void Click(D2D1_POINT_2F point) override;
+    void Scroll(ScrollDirection direction) override;
     std::optional<std::wstring> TooltipText() override;
 
   private:
     ModuleText Content() override;
 
-    IAudio&    _audio;
+    IAudio& _audio;
 };
 
 // The icon and text for device, empty while there is none.

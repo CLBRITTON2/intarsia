@@ -61,8 +61,8 @@ bar {
                 std::fprintf(stderr, "could not delete temp config %ls: %s\n", _directory.c_str(), error.message().c_str());
             }
         }
-        TempConfig(const TempConfig&)                      = delete;
-        TempConfig&           operator=(const TempConfig&) = delete;
+        TempConfig(const TempConfig&) = delete;
+        TempConfig& operator=(const TempConfig&) = delete;
 
         std::filesystem::path Path() const {
             return _directory / "config.lua";
@@ -74,7 +74,7 @@ bar {
 
     // The config text with one snippet swapped. Throws when the snippet is not there, so a stale case cannot pass.
     std::string Replace(std::string_view config, std::string_view from, std::string_view to) {
-        std::string  text(config);
+        std::string text(config);
         const size_t position = text.find(from);
         if (position == std::string::npos) {
             throw std::invalid_argument("snippet not in the config: " + std::string(from));
@@ -204,15 +204,15 @@ TEST(Config, UnknownKeysAreRejectedAtRootAndInsideTables) {
 
 TEST(Config, ChoicesNameEveryWordTheyTake) {
     struct Choice {
-        std::string      config;
+        std::string config;
         std::string_view error;
     };
     const std::vector<Choice> choices = {
         {.config = Replace(kValidConfig, R"(edge = "top")", R"(edge = "side")"), .error = "bar.edge must be one of top, bottom, left, right, got 'side'"},
         {.config = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "i3")"), .error = "window_manager must be one of windows, glazewm, got 'i3'"},
         {.config = Replace(kValidConfig, R"(type = "clock")", R"(type = "teapot")"),
-         .error  = "modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, network, battery, tray, "
-                   "custom, counter, group, got 'teapot'"},
+         .error = "modules.time.type must be one of clock, window, workspaces, windows, binding_mode, tiling_direction, cpu, memory, audio, network, battery, tray, "
+                  "custom, counter, group, got 'teapot'"},
     };
     for (const Choice& choice : choices) {
         EXPECT_THAT([&choice] { return LoadText(choice.config); }, ThrowsWith<ConfigError>(choice.error));
@@ -278,11 +278,11 @@ TEST(Config, MonitorsRefusesListsThatCannotMeanWhatTheySay) {
 TEST(Config, ShowsBarOnMatchesAnyEntry) {
     const auto bar = [](std::vector<MonitorMatch> monitors) {
         return BarConfig{
-            .edge          = Edge::Top,
-            .layer         = Layer::Top,
-            .space         = Space::Reserve,
+            .edge = Edge::Top,
+            .layer = Layer::Top,
+            .space = Space::Reserve,
             .thicknessDips = 32.0F,
-            .monitors      = std::move(monitors),
+            .monitors = std::move(monitors),
         };
     };
     const MonitorDescription laptop{
@@ -356,7 +356,7 @@ namespace {
         cpu = { type = "cpu", format = "{usage}%", icon = "c", interval = 1 },
         memory = { type = "memory", format = "{used:.1f} GB", icon = "m", interval = 2 },)";
 
-    std::string                WithGroup(std::string_view group) {
+    std::string WithGroup(std::string_view group) {
         return WithRightModules(R"({ "layout" })", group);
     }
 
@@ -414,7 +414,7 @@ TEST(Config, AMemberShowsOnlyThroughItsOneGroup) {
 }
 
 TEST(Config, TheConfigsWalksReachAGroupsMembers) {
-    const Config             config = LoadText(WithGroup(kGroup));
+    const Config config = LoadText(WithGroup(kGroup));
     std::vector<std::string> names;
     ForEachModuleInConfig(config, [&names](const ModuleInstance& instance) { names.push_back(instance.name); });
     EXPECT_EQ(names, (std::vector<std::string>{"title", "time", "layout", "cpu", "memory"}));
@@ -445,7 +445,7 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
         mode = { type = "binding_mode" },
         tiling = { type = "tiling_direction", horizontal = "H", vertical = "V" },)"),
                                           R"(window_manager = "windows")", R"(window_manager = "glazewm")");
-    const Config      config    = LoadText(onGlazeWm);
+    const Config config = LoadText(onGlazeWm);
     EXPECT_EQ(config.windowManager, WindowManagerKind::GlazeWm);
     EXPECT_EQ(Kinds(config.modules.right), (std::vector<ModuleKind>{ModuleKind::Workspaces, ModuleKind::Windows, ModuleKind::BindingMode, ModuleKind::TilingDirection}));
     EXPECT_EQ(SettingsOf<TilingDirectionConfig>(config.modules.right, 3).vertical, L"V");
@@ -455,7 +455,7 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
 TEST(Config, AudioParsesItsFormatsIconsStepAndOptionalTooltip) {
     const std::string audio =
         R"(        volume = { type = "audio", flow = "output", format = "{volume}%", format_muted = "muted", icon = "v", icon_muted = "m", step = 5, tooltip = "{device}" },)";
-    const Config       config   = LoadText(WithRightModules(R"({ "volume" })", audio));
+    const Config config = LoadText(WithRightModules(R"({ "volume" })", audio));
     const AudioConfig& settings = SettingsOf<AudioConfig>(config.modules.right, 0);
     EXPECT_EQ(settings.formatMuted, "muted");
     EXPECT_EQ(settings.iconMuted, L"m");
@@ -467,9 +467,9 @@ TEST(Config, AudioParsesItsFormatsIconsStepAndOptionalTooltip) {
 }
 
 TEST(Config, BatteryParsesItsFormatsIconsAndThresholds) {
-    const std::string    battery  = R"(        power = { type = "battery", format_discharging = "{capacity}%", format_charging = "", format_plugged = "", icons = { "e", "f" }, )"
-                                    R"(icon_charging = "c", icon_plugged = "p", warning_at = 40, critical_at = 15 },)";
-    const Config         config   = LoadText(WithRightModules(R"({ "power" })", battery));
+    const std::string battery = R"(        power = { type = "battery", format_discharging = "{capacity}%", format_charging = "", format_plugged = "", icons = { "e", "f" }, )"
+                                R"(icon_charging = "c", icon_plugged = "p", warning_at = 40, critical_at = 15 },)";
+    const Config config = LoadText(WithRightModules(R"({ "power" })", battery));
     const BatteryConfig& settings = SettingsOf<BatteryConfig>(config.modules.right, 0);
     EXPECT_EQ(settings.formatDischarging, "{capacity}%");
     EXPECT_EQ(settings.icons, (std::vector<std::wstring>{L"e", L"f"}));
@@ -491,7 +491,7 @@ TEST(Config, TrayTakesItsToggleIcon) {
 }
 
 TEST(Config, ActionsResolveToAbsoluteExecutables) {
-    const Config         config  = LoadText(WithClockKeys(kValidConfig, R"(on_click = { "cmd", "/c", "exit 0" }, on_middle_click = { "cmd" })"));
+    const Config config = LoadText(WithClockKeys(kValidConfig, R"(on_click = { "cmd", "/c", "exit 0" }, on_middle_click = { "cmd" })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.click.has_value());
     const Command& click = std::get<Command>(*actions.click);
@@ -509,7 +509,7 @@ TEST(Config, ActionsMustNameAnExistingExecutable) {
 }
 
 TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
-    const TempConfig            scratch(kValidConfig, kValidStyle);
+    const TempConfig scratch(kValidConfig, kValidStyle);
     const std::filesystem::path script = scratch.Path().parent_path() / "action.bat";
     std::ofstream(script) << "@echo off\n";
     const std::string config = WithClockKeys(kValidConfig, "on_click = { [[" + script.string() + "]] }");
@@ -517,8 +517,8 @@ TEST(Config, ActionsRefuseScriptsThatWouldRunThroughCmd) {
 }
 
 TEST(Config, WindowManagerActionsSendTheirTextAsWritten) {
-    const std::string    glazeWm = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
-    const Config         config  = LoadText(WithClockKeys(glazeWm, R"(on_scroll_up = { window_manager = "focus --next-workspace" })"));
+    const std::string glazeWm = Replace(kValidConfig, R"(window_manager = "windows")", R"(window_manager = "glazewm")");
+    const Config config = LoadText(WithClockKeys(glazeWm, R"(on_scroll_up = { window_manager = "focus --next-workspace" })"));
     const ModuleActions& actions = SettingsOf<TextModuleConfig>(config.modules.center, 0).actions;
     ASSERT_TRUE(actions.scrollUp.has_value());
     EXPECT_EQ(std::get<WindowManagerCommand>(*actions.scrollUp).text, "focus --next-workspace");
@@ -548,7 +548,7 @@ TEST(Config, MenuActionsListThroughOneCommandAndSelectThroughAnother) {
 }
 
 TEST(Config, CustomModulesParseTheirCommandAndTimeout) {
-    const Config        config = LoadText(WithRightModules(R"({ "hello" })", CustomDefinition("hello", kIntervalRun, R"({ "sunny", "rain" })")));
+    const Config config = LoadText(WithRightModules(R"({ "hello" })", CustomDefinition("hello", kIntervalRun, R"({ "sunny", "rain" })")));
     const CustomConfig& custom = SettingsOf<CustomConfig>(config.modules.right, 0);
     EXPECT_EQ(custom.command.program.filename(), L"cmd.exe");
     EXPECT_EQ(custom.command.arguments, (std::vector<std::wstring>{L"/c", L"echo hi"}));
@@ -577,7 +577,7 @@ TEST(Config, CustomModulesNeedARun) {
 }
 
 TEST(Config, CounterModulesReadTheirPathAndCombine) {
-    const Config         config  = LoadText(WithRightModules(
+    const Config config = LoadText(WithRightModules(
         R"({ "gpu" })", R"(        gpu = { type = "counter", counter = "\\Processor(*)\\% Processor Time", combine = "max", format = "{value:.0f}%", icon = "", interval = 2 },)"));
     const CounterConfig& counter = SettingsOf<CounterConfig>(config.modules.right, 0);
     EXPECT_EQ(counter.path, L"\\Processor(*)\\% Processor Time");
@@ -596,8 +596,8 @@ TEST(Config, CounterPathsMustNameALocalCounterThisSystemHas) {
 }
 
 TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
-    const Config       config = LoadStyled(kValidConfig, std::string(kValidStyle) + "time {\n  color: #ff0000\n  icon {\n    color: #00ff00\n  }\n}\n");
-    const ModuleStyle& time   = config.modules.center.at(0).style;
+    const Config config = LoadStyled(kValidConfig, std::string(kValidStyle) + "time {\n  color: #ff0000\n  icon {\n    color: #00ff00\n  }\n}\n");
+    const ModuleStyle& time = config.modules.center.at(0).style;
     EXPECT_FLOAT_EQ(time.color.r, 1.0f);
     EXPECT_FLOAT_EQ(time.icon.color.g, 1.0f);
     // The window module takes the bar's color, since no block names it.

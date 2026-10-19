@@ -14,24 +14,24 @@ namespace {
 
 TEST(IpHelper, SameLinkIgnoresTheRatesAlone) {
     const NetworkState first{
-        .link                   = NetworkLink::Wifi,
-        .interfaceName          = L"Wi-Fi",
-        .ssid                   = L"home",
-        .signalPercent          = 70,
-        .ipv4                   = L"192.0.2.7",
+        .link = NetworkLink::Wifi,
+        .interfaceName = L"Wi-Fi",
+        .ssid = L"home",
+        .signalPercent = 70,
+        .ipv4 = L"192.0.2.7",
         .receivedBytesPerSecond = 1.0,
-        .sentBytesPerSecond     = 2.0,
+        .sentBytesPerSecond = 2.0,
     };
-    NetworkState second           = first;
+    NetworkState second = first;
     second.receivedBytesPerSecond = 900.0;
-    second.sentBytesPerSecond     = 0.0;
+    second.sentBytesPerSecond = 0.0;
     EXPECT_TRUE(SameLink(first, second));
     second.signalPercent = 71;
     EXPECT_FALSE(SameLink(first, second));
-    second      = first;
+    second = first;
     second.ssid = L"work";
     EXPECT_FALSE(SameLink(first, second));
-    second      = first;
+    second = first;
     second.link = NetworkLink::Ethernet;
     EXPECT_FALSE(SameLink(first, second));
 }
@@ -44,7 +44,7 @@ TEST(IpHelper, RatesAreBytesPerSecondAndZeroWhenACounterResets) {
 
 TEST(IpHelper, StopsPromptlyRightAfterStarting) {
     ChangeTarget target(kChanged);
-    const auto   started = std::chrono::steady_clock::now();
+    const auto started = std::chrono::steady_clock::now();
     // Without rates the thread waits on no clock at all, so the stop event alone ends it.
     for (std::int32_t round = 0; round < 10; ++round) {
         const IpHelper network(target.signal, round % 2 == 0);

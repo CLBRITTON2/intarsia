@@ -17,15 +17,15 @@
 using Microsoft::WRL::ComPtr;
 
 namespace composition = winrt::Windows::UI::Composition;
-namespace interop     = ABI::Windows::UI::Composition;
+namespace interop = ABI::Windows::UI::Composition;
 
 namespace {
 
     // A backdrop's sprite, the mask surface that rounds it, and the box both were last placed for, none before the first.
     struct BackdropVisual {
-        composition::SpriteVisual              sprite;
+        composition::SpriteVisual sprite;
         composition::CompositionDrawingSurface mask;
-        std::optional<D2D1_ROUNDED_RECT>       box;
+        std::optional<D2D1_ROUNDED_RECT> box;
     };
 
     bool SameBox(const D2D1_ROUNDED_RECT& first, const D2D1_ROUNDED_RECT& second) {
@@ -39,9 +39,9 @@ namespace {
 
     // Opaque inside box and clear outside it, drawn as DrawBox fills a box so the two edges antialias alike.
     void DrawMask(const composition::CompositionDrawingSurface& mask, const D2D1_ROUNDED_RECT& box, std::uint32_t dpi) {
-        const auto                 surface = mask.as<interop::ICompositionDrawingSurfaceInterop>();
+        const auto surface = mask.as<interop::ICompositionDrawingSurfaceInterop>();
         ComPtr<ID2D1DeviceContext> context;
-        POINT                      offset{};
+        POINT offset{};
         ThrowIfDeviceFailed(surface->BeginDraw(nullptr, IID_PPV_ARGS(&context), &offset), "ICompositionDrawingSurfaceInterop::BeginDraw");
         const auto pixelsPerInch = static_cast<float>(dpi);
         context->SetDpi(pixelsPerInch, pixelsPerInch);
@@ -56,9 +56,9 @@ namespace {
     BackdropVisual CreateBackdrop(CompositionDevice& device, const Backdrop& tone) {
         BackdropVisual backdrop{
             .sprite = device.compositor.CreateSpriteVisual(),
-            .mask   = device.graphics.CreateDrawingSurface2({.Width = 0, .Height = 0}, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
-                                                            winrt::Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied),
-            .box    = std::nullopt,
+            .mask = device.graphics.CreateDrawingSurface2({.Width = 0, .Height = 0}, winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
+                                                          winrt::Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied),
+            .box = std::nullopt,
         };
         const composition::CompositionEffectBrush brush = device.backdrops.For(device.compositor, tone).CreateBrush();
         brush.SetSourceParameter(L"backdrop", device.compositor.CreateHostBackdropBrush());
@@ -69,7 +69,7 @@ namespace {
 
     void PlaceBackdrop(BackdropVisual& backdrop, const D2D1_ROUNDED_RECT& box, std::uint32_t dpi) {
         const winrt::Windows::Graphics::SizeInt32 size = PixelSize(box.rect, dpi);
-        backdrop.box                                   = box;
+        backdrop.box = box;
         backdrop.sprite.Offset({static_cast<float>(DipsToPixels(box.rect.left, dpi)), static_cast<float>(DipsToPixels(box.rect.top, dpi)), 0.0f});
         backdrop.sprite.Size({static_cast<float>(std::max(size.Width, 0)), static_cast<float>(std::max(size.Height, 0))});
         if (size.Width <= 0 || size.Height <= 0) {
@@ -93,10 +93,10 @@ namespace {
 // for tone, none before the first.
 struct SurfaceVisuals {
     composition::Desktop::DesktopWindowTarget target{nullptr};
-    composition::ContainerVisual              backdropLayer{nullptr};
-    composition::SpriteVisual                 content{nullptr};
-    std::vector<BackdropVisual>               backdrops{};
-    std::optional<Backdrop>                   tone{};
+    composition::ContainerVisual backdropLayer{nullptr};
+    composition::SpriteVisual content{nullptr};
+    std::vector<BackdropVisual> backdrops{};
+    std::optional<Backdrop> tone{};
 };
 
 Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t width, std::uint32_t height, std::uint32_t dpi) :
@@ -104,14 +104,14 @@ Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t widt
     ThrowIfDeviceFailed(graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &_context), "ID2D1Device::CreateDeviceContext");
 
     DXGI_SWAP_CHAIN_DESC1 description{};
-    description.Width            = width;
-    description.Height           = height;
-    description.Format           = DXGI_FORMAT_B8G8R8A8_UNORM;
+    description.Width = width;
+    description.Height = height;
+    description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     description.SampleDesc.Count = 1;
-    description.BufferUsage      = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    description.BufferCount      = 2;
-    description.SwapEffect       = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-    description.AlphaMode        = DXGI_ALPHA_MODE_PREMULTIPLIED;
+    description.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    description.BufferCount = 2;
+    description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    description.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
     ThrowIfDeviceFailed(graphics.dxgiFactory->CreateSwapChainForComposition(graphics.d3d.Get(), &description, nullptr, &_swapChain),
                         "IDXGIFactory2::CreateSwapChainForComposition");
 
@@ -136,7 +136,7 @@ Surface::Surface(const GraphicsDevice& graphics, HWND window, std::uint32_t widt
         _visuals->content = compositor.CreateSpriteVisual();
         _visuals->content.Brush(contentBrush);
         _visuals->content.Size({static_cast<float>(width), static_cast<float>(height)});
-        _visuals->backdropLayer                 = compositor.CreateContainerVisual();
+        _visuals->backdropLayer = compositor.CreateContainerVisual();
         const composition::ContainerVisual root = compositor.CreateContainerVisual();
         root.Children().InsertAtTop(_visuals->backdropLayer);
         root.Children().InsertAtTop(_visuals->content);
@@ -181,7 +181,7 @@ std::uint32_t Surface::LastPresentCount() const {
 
 std::optional<ShownPresent> Surface::LatestShown() const {
     DXGI_FRAME_STATISTICS statistics{};
-    const HRESULT         read = _swapChain->GetFrameStatistics(&statistics);
+    const HRESULT read = _swapChain->GetFrameStatistics(&statistics);
     if (read == DXGI_ERROR_FRAME_STATISTICS_DISJOINT) {
         return std::nullopt;
     }
@@ -193,7 +193,7 @@ void Surface::ShowBackdrops(const std::vector<D2D1_ROUNDED_RECT>& outlines, cons
     const std::vector<D2D1_ROUNDED_RECT> boxes = SystemBlurBoxes(outlines, backdrop);
     Composing("Surface::ShowBackdrops", [this, &boxes, &backdrop] {
         std::vector<BackdropVisual>& backdrops = _visuals->backdrops;
-        const bool                   retoned   = _visuals->tone != backdrop;
+        const bool retoned = _visuals->tone != backdrop;
         // A new tone takes new brushes, so every backdrop is made again.
         while (!backdrops.empty() && (retoned || backdrops.size() > boxes.size())) {
             _visuals->backdropLayer.Children().Remove(backdrops.back().sprite);
@@ -218,10 +218,10 @@ void Surface::BindRenderTarget() {
     ComPtr<IDXGISurface> surface;
     ThrowIfDeviceFailed(_swapChain->GetBuffer(0, IID_PPV_ARGS(&surface)), "IDXGISwapChain1::GetBuffer");
 
-    const auto                    pixelsPerInch = static_cast<float>(_dpi);
-    const D2D1_BITMAP_PROPERTIES1 properties    = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-                                                                          D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), pixelsPerInch, pixelsPerInch);
-    ComPtr<ID2D1Bitmap1>          target;
+    const auto pixelsPerInch = static_cast<float>(_dpi);
+    const D2D1_BITMAP_PROPERTIES1 properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+                                                                       D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), pixelsPerInch, pixelsPerInch);
+    ComPtr<ID2D1Bitmap1> target;
     ThrowIfDeviceFailed(_context->CreateBitmapFromDxgiSurface(surface.Get(), &properties, &target), "ID2D1DeviceContext::CreateBitmapFromDxgiSurface");
     _context->SetTarget(target.Get());
     _context->SetDpi(pixelsPerInch, pixelsPerInch);

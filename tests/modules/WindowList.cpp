@@ -17,11 +17,11 @@
 
 namespace {
 
-    constexpr std::uint32_t             kIconChanged = WM_APP + 1;
+    constexpr std::uint32_t kIconChanged = WM_APP + 1;
 
     constexpr std::chrono::milliseconds kRetry{50};
 
-    void                                SetStockIcon(const MessageWindow& window) {
+    void SetStockIcon(const MessageWindow& window) {
         SendMessageW(window.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
     }
 
@@ -50,20 +50,20 @@ namespace {
     // Handles no window has, so every icon read finds nothing and no bitmap is ever made.
     const std::vector<ManagedWindow> kWindows{
         {
-            .id      = "a",
-            .handle  = 0x7FFF0001,
+            .id = "a",
+            .handle = 0x7FFF0001,
             .focused = false,
             .monitor = 10,
         },
         {
-            .id      = "b",
-            .handle  = 0x7FFF0002,
+            .id = "b",
+            .handle = 0x7FFF0002,
             .focused = true,
             .monitor = 10,
         },
         {
-            .id      = "c",
-            .handle  = 0x7FFF0003,
+            .id = "c",
+            .handle = 0x7FFF0003,
             .focused = false,
             .monitor = 20,
         },
@@ -74,9 +74,9 @@ namespace {
         WindowListModule() : _target(WM_APP + 1), _icons(_target.signal, std::chrono::milliseconds(10000)) {}
 
       protected:
-        TextOnlyRender    _render;
-        ChangeTarget      _target;
-        WindowIcons       _icons;
+        TextOnlyRender _render;
+        ChangeTarget _target;
+        WindowIcons _icons;
         FakeWindowManager _windowManager;
     };
 
@@ -96,7 +96,7 @@ TEST(WindowIcons, KeepsTheIconOfAWindowThatStillExists) {
     const MessageWindow window;
     SetStockIcon(window);
     ChangeTarget target(kIconChanged);
-    WindowIcons  icons(target.signal, kRetry);
+    WindowIcons icons(target.signal, kRetry);
     EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
     const std::shared_ptr<const IconPixels> pixels = WaitForIcon(icons, window.Get());
     ASSERT_NE(pixels, nullptr);
@@ -106,8 +106,8 @@ TEST(WindowIcons, KeepsTheIconOfAWindowThatStillExists) {
 }
 
 TEST(WindowIcons, ForgetsAClosedWindow) {
-    ChangeTarget  target(kIconChanged);
-    WindowIcons   icons(target.signal, kRetry);
+    ChangeTarget target(kIconChanged);
+    WindowIcons icons(target.signal, kRetry);
     std::intptr_t handle = 0;
     {
         const MessageWindow window;
@@ -123,8 +123,8 @@ TEST(WindowIcons, ForgetsAClosedWindow) {
 // Apps often set their icon after the window appears, so a first read finds none.
 TEST(WindowIcons, ReadsAgainAWindowThatShowedNoIcon) {
     const MessageWindow window;
-    ChangeTarget        target(kIconChanged);
-    WindowIcons         icons(target.signal, kRetry);
+    ChangeTarget target(kIconChanged);
+    WindowIcons icons(target.signal, kRetry);
     EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
     ASSERT_TRUE(WaitForReadToEnd(target));
     EXPECT_EQ(icons.For(reinterpret_cast<std::intptr_t>(window.Get())), nullptr);
@@ -163,14 +163,14 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     const MessageWindow iconWindow;
     SendMessageW(iconWindow.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
     _windowManager.windows = {{
-        .id      = "a",
-        .handle  = reinterpret_cast<std::intptr_t>(iconWindow.Get()),
+        .id = "a",
+        .handle = reinterpret_cast<std::intptr_t>(iconWindow.Get()),
         .focused = true,
         .monitor = 10,
     }};
 
-    const CompositionThread                    compositionThread;
-    const GraphicsDevice                       graphics = CreateGraphicsDevice();
+    const CompositionThread compositionThread;
+    const GraphicsDevice graphics = CreateGraphicsDevice();
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context;
     ASSERT_TRUE(SUCCEEDED(graphics.d2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &context)));
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> target;
@@ -178,12 +178,12 @@ TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
                                                 D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),
                                                 &target)));
     context->SetTarget(target.Get());
-    BrushCache    brushes(context.Get());
-    BoxCache      boxes(context.Get());
+    BrushCache brushes(context.Get());
+    BoxCache boxes(context.Get());
     RenderContext render = _render.Context();
-    render.context       = context.Get();
-    render.brushes       = &brushes;
-    render.boxes         = &boxes;
+    render.context = context.Get();
+    render.brushes = &brushes;
+    render.boxes = &boxes;
 
     WindowList module(_windowManager, _icons, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     EXPECT_TRUE(module.Layout(render));

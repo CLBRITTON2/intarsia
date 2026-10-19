@@ -30,9 +30,9 @@ class BackdropFactories {
 // The compositor every window's visuals belong to, drawing with the graphics device's D2D device. Its objects are
 // created on the UI thread and used only there.
 struct CompositionDevice {
-    winrt::Windows::UI::Composition::Compositor                compositor{nullptr};
+    winrt::Windows::UI::Composition::Compositor compositor{nullptr};
     winrt::Windows::UI::Composition::CompositionGraphicsDevice graphics{nullptr};
-    BackdropFactories                                          backdrops;
+    BackdropFactories backdrops;
 };
 
 // Needs a CompositionThread on the calling thread.

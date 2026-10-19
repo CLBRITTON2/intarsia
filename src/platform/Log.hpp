@@ -15,7 +15,7 @@ enum class LogLevel : std::uint8_t {
 
 struct LogField {
     std::string_view key;
-    std::string      value;
+    std::string value;
 };
 
 // "[<UTC time>] <level> <component> <event>", the level right-aligned and the component padded, so the events of
@@ -50,5 +50,5 @@ class FailureLog {
 
   private:
     std::string_view _component;
-    bool             _failing = false;
+    bool _failing = false;
 };

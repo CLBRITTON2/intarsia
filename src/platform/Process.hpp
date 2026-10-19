@@ -37,10 +37,10 @@ std::uint32_t IntegrityLevel(HANDLE token);
 
 // A program to start with its arguments, never through a shell: the arguments reach the program as they are written.
 struct Command {
-    std::filesystem::path     program; // absolute, resolved when the config loads
+    std::filesystem::path program; // absolute, resolved when the config loads
     std::vector<std::wstring> arguments;
 
-    bool                      operator==(const Command&) const = default;
+    bool operator==(const Command&) const = default;
 };
 
 // The absolute path of a program: as given when it is already absolute, else a bare file name's first match in the

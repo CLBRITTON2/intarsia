@@ -31,9 +31,9 @@ bar {
 }
 )";
 
-    constexpr auto             kExitLimit = std::chrono::seconds(10);
+    constexpr auto kExitLimit = std::chrono::seconds(10);
 
-    std::string                ConfigWithMonitors(std::string_view monitors) {
+    std::string ConfigWithMonitors(std::string_view monitors) {
         return std::string(R"(
 return {
     bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = )") +
@@ -49,7 +49,7 @@ return {
     }
 
     struct CliRun {
-        std::uint32_t            exitCode;
+        std::uint32_t exitCode;
         std::vector<std::string> output;
         std::vector<std::string> errors;
     };
@@ -57,7 +57,7 @@ return {
     // Runs intarsia-cli.exe command --config on config and kStyle written to a new work directory. Throws when it has not
     // exited within kExitLimit.
     CliRun RunCli(std::string_view testName, std::wstring_view command, std::string_view config) {
-        const std::filesystem::path directory  = integration::NewWorkDirectory(testName);
+        const std::filesystem::path directory = integration::NewWorkDirectory(testName);
         const std::filesystem::path configPath = directory / "config.lua";
         integration::WriteText(configPath, config);
         integration::WriteText(directory / "style.conf", kStyle);
@@ -68,8 +68,8 @@ return {
         }
         return CliRun{
             .exitCode = *exitCode,
-            .output   = integration::ReadLines(directory / "stdout.txt"),
-            .errors   = integration::ReadLines(directory / "stderr.txt"),
+            .output = integration::ReadLines(directory / "stdout.txt"),
+            .errors = integration::ReadLines(directory / "stderr.txt"),
         };
     }
 

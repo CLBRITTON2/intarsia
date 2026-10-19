@@ -26,11 +26,11 @@ class CompositionThread {
   public:
     CompositionThread();
     ~CompositionThread();
-    CompositionThread(const CompositionThread&)            = delete;
+    CompositionThread(const CompositionThread&) = delete;
     CompositionThread& operator=(const CompositionThread&) = delete;
 
   private:
-    ComScope                                                                 _com;
+    ComScope _com;
     Microsoft::WRL::ComPtr<ABI::Windows::System::IDispatcherQueueController> _queue;
 };
 
@@ -39,11 +39,11 @@ struct CompositionDevice;
 
 // Shared by every bar: one D3D device feeds all swap chains and one compositor holds all visuals.
 struct GraphicsDevice {
-    Microsoft::WRL::ComPtr<ID3D11Device>   d3d;
-    Microsoft::WRL::ComPtr<IDXGIFactory2>  dxgiFactory;
-    Microsoft::WRL::ComPtr<ID2D1Device>    d2d;
+    Microsoft::WRL::ComPtr<ID3D11Device> d3d;
+    Microsoft::WRL::ComPtr<IDXGIFactory2> dxgiFactory;
+    Microsoft::WRL::ComPtr<ID2D1Device> d2d;
     Microsoft::WRL::ComPtr<IDWriteFactory> dwrite;
-    std::shared_ptr<CompositionDevice>     composition;
+    std::shared_ptr<CompositionDevice> composition;
 };
 
 // Logs the adapter it renders on, which may not be the one showing a given monitor. Needs a CompositionThread on the
@@ -52,8 +52,8 @@ GraphicsDevice CreateGraphicsDevice();
 
 struct MonitorOutput {
     Microsoft::WRL::ComPtr<IDXGIOutput> output;
-    std::wstring                        adapter; // the adapter showing the monitor, not always the one rendering
-    std::uint32_t                       refreshHz;
+    std::wstring adapter; // the adapter showing the monitor, not always the one rendering
+    std::uint32_t refreshHz;
 };
 
 // The DXGI output showing monitor, read from a new factory so a monitor attached since the device was made is listed.
@@ -61,7 +61,7 @@ struct MonitorOutput {
 MonitorOutput OutputForMonitor(HMONITOR monitor);
 
 // ThrowIfFailed, except that the results meaning the device is lost throw DeviceLostError.
-void                                         ThrowIfDeviceFailed(HRESULT result, std::string_view call);
+void ThrowIfDeviceFailed(HRESULT result, std::string_view call);
 
 Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> CreateBrush(ID2D1DeviceContext* context, const D2D1_COLOR_F& color);
 
@@ -81,14 +81,14 @@ class BrushCache {
     using Brushes = std::map<std::uint32_t, Microsoft::WRL::ComPtr<ID2D1SolidColorBrush>>; // keyed by 0xRRGGBBAA
 
     ID2D1DeviceContext* _context;
-    Brushes             _passing;
-    Brushes             _kept;
+    Brushes _passing;
+    Brushes _kept;
 };
 
 // Rounded to the nearest pixel.
 std::int32_t DipsToPixels(float dips, std::uint32_t dpi);
 
-float        PixelsToDips(float pixels, std::uint32_t dpi);
+float PixelsToDips(float pixels, std::uint32_t dpi);
 // A client-area point in pixels, in DIPs.
 D2D1_POINT_2F ClientDips(POINT client, std::uint32_t dpi);
 

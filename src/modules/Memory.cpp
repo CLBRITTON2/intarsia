@@ -22,10 +22,10 @@ namespace {
         // Every count is in pages.
         const std::uint64_t page = info.PageSize;
         return MemoryUsage{
-            .totalBytes       = info.PhysicalTotal * page,
-            .availableBytes   = info.PhysicalAvailable * page,
-            .cachedBytes      = info.SystemCache * page,
-            .committedBytes   = info.CommitTotal * page,
+            .totalBytes = info.PhysicalTotal * page,
+            .availableBytes = info.PhysicalAvailable * page,
+            .cachedBytes = info.SystemCache * page,
+            .committedBytes = info.CommitTotal * page,
             .commitLimitBytes = info.CommitLimit * page,
         };
     }
@@ -40,10 +40,10 @@ namespace {
 Memory::Memory(TextModuleConfig config) :
     TextModule(std::move(config), "memory",
                MemoryPlaceholders(MemoryUsage{
-                   .totalBytes       = 1,
-                   .availableBytes   = 0,
-                   .cachedBytes      = 0,
-                   .committedBytes   = 0,
+                   .totalBytes = 1,
+                   .availableBytes = 0,
+                   .cachedBytes = 0,
+                   .committedBytes = 0,
                    .commitLimitBytes = 0,
                })),
     _usage(ReadMemoryUsage()), _texts(std::chrono::steady_clock::now()) {}

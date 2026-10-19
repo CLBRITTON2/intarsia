@@ -12,41 +12,41 @@ namespace {
 
     const std::vector<Workspace> kWorkspaces{
         {
-            .label    = L"1",
-            .name     = "1",
-            .focused  = false,
+            .label = L"1",
+            .name = "1",
+            .focused = false,
             .occupied = true,
-            .monitor  = 10,
+            .monitor = 10,
         },
         {
-            .label    = L"web",
-            .name     = "5",
-            .focused  = true,
+            .label = L"web",
+            .name = "5",
+            .focused = true,
             .occupied = true,
-            .monitor  = 10,
+            .monitor = 10,
         },
         {
-            .label    = L"3",
-            .name     = "3",
-            .focused  = false,
+            .label = L"3",
+            .name = "3",
+            .focused = false,
             .occupied = false,
-            .monitor  = 10,
+            .monitor = 10,
         },
         {
-            .label    = L"9",
-            .name     = "9",
-            .focused  = false,
+            .label = L"9",
+            .name = "9",
+            .focused = false,
             .occupied = true,
-            .monitor  = 20,
+            .monitor = 20,
         },
     };
 
 } // namespace
 
 TEST(Workspaces, LayoutReportsAChangeOnlyWhenThisMonitorsWorkspacesChange) {
-    FakeWindowManager    windowManager;
+    FakeWindowManager windowManager;
     const TextOnlyRender render;
-    Workspaces           module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
+    Workspaces module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     windowManager.workspaces = kWorkspaces;
     EXPECT_TRUE(module.Layout(render.Context()));
     EXPECT_FALSE(module.Layout(render.Context()));
@@ -57,9 +57,9 @@ TEST(Workspaces, LayoutReportsAChangeOnlyWhenThisMonitorsWorkspacesChange) {
 }
 
 TEST(Workspaces, HoverReportsAChangeOnlyWhenTheCursorMovesToAnotherItem) {
-    FakeWindowManager    windowManager;
+    FakeWindowManager windowManager;
     const TextOnlyRender render;
-    Workspaces           module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
+    Workspaces module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     windowManager.workspaces = {kWorkspaces[0], kWorkspaces[1]};
     module.Layout(render.Context());
     const float middle = module.Size().height / 2.0f;
@@ -73,9 +73,9 @@ TEST(Workspaces, HoverReportsAChangeOnlyWhenTheCursorMovesToAnotherItem) {
 }
 
 TEST(Workspaces, ClickFocusesTheWorkspaceUnderItByNameAndNothingInTheGaps) {
-    FakeWindowManager    windowManager;
+    FakeWindowManager windowManager;
     const TextOnlyRender render;
-    Workspaces           module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
+    Workspaces module(windowManager, reinterpret_cast<HMONITOR>(10), TestModuleStyle());
     windowManager.workspaces = {kWorkspaces[0], kWorkspaces[1]};
     module.Layout(render.Context());
     const float height = module.Size().height;

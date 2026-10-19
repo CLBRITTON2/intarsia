@@ -19,7 +19,7 @@ namespace {
 
     constexpr std::string_view kBar = "bar {\n  font: Some Font\n  size: 15\n  color: #102030\n}\n";
 
-    StyleSheet                 Parse(std::string_view text) {
+    StyleSheet Parse(std::string_view text) {
         return ParseStyleSheet(text, "style.conf");
     }
 
@@ -47,8 +47,8 @@ namespace {
 } // namespace
 
 TEST(Style, TheBarBlockSetsTheFontAndColorEveryModuleInherits) {
-    const StyleSheet  sheet = Parse(kBar);
-    const StyleConfig bar   = ResolveBarStyle(sheet);
+    const StyleSheet sheet = Parse(kBar);
+    const StyleConfig bar = ResolveBarStyle(sheet);
     EXPECT_EQ(bar.font, L"Some Font");
     EXPECT_FLOAT_EQ(bar.fontSizeDips, 15.0f);
     const ModuleStyle clock = ResolveModuleStyle(sheet, bar, ModuleKind::Clock, "time", {});
@@ -92,7 +92,7 @@ TEST(Style, VarsAreReadThroughTheirNames) {
 
 TEST(Style, AModulesOwnBlockWinsOverTheModuleBlock) {
     const std::string blocks = "module {\n  color: #ff0000\n  padding: 2\n}\ncpu {\n  color: #00ff00\n}\n";
-    const ModuleStyle cpu    = StyleOf(blocks, ModuleKind::Cpu, "cpu");
+    const ModuleStyle cpu = StyleOf(blocks, ModuleKind::Cpu, "cpu");
     EXPECT_EQ(Rgba(cpu.color), kGreen);
     EXPECT_FLOAT_EQ(cpu.box.padding.xDips, 2.0f);
     EXPECT_EQ(Rgba(StyleOf(blocks, ModuleKind::Cpu, "other").color), kRed);
@@ -126,7 +126,7 @@ ws {
   }
 }
 )";
-    const ModuleStyle style  = StyleOf(blocks, ModuleKind::Workspaces, "ws");
+    const ModuleStyle style = StyleOf(blocks, ModuleKind::Workspaces, "ws");
     EXPECT_FLOAT_EQ(style.occupied.padding.yDips, 2.0f);
     EXPECT_FLOAT_EQ(style.occupied.padding.xDips, 6.0f);
     EXPECT_FLOAT_EQ(style.focused.margin.xDips, 1.0f);
@@ -154,7 +154,7 @@ tray {
   }
 }
 )";
-    const ModuleStyle style  = StyleOf(blocks, ModuleKind::Tray, "tray");
+    const ModuleStyle style = StyleOf(blocks, ModuleKind::Tray, "tray");
     EXPECT_FLOAT_EQ(style.toggle.padding.yDips, 0.0f);
     EXPECT_FLOAT_EQ(style.toggle.padding.xDips, 9.0f);
     EXPECT_FLOAT_EQ(style.toggle.radiusDips, 10.0f);
@@ -194,7 +194,7 @@ power {
   }
 }
 )";
-    const ModuleStyle style  = StyleOf(blocks, ModuleKind::Battery, "power");
+    const ModuleStyle style = StyleOf(blocks, ModuleKind::Battery, "power");
     EXPECT_EQ(Rgba(style.warning.icon), (std::array<std::int32_t, 4>{255, 255, 0, 255}));
     EXPECT_EQ(Rgba(style.warning.text), Rgba(style.color));
     EXPECT_EQ(Rgba(style.critical.text), kRed);
@@ -236,7 +236,7 @@ ws {
   }
 }
 )";
-    const ModuleStyle style  = StyleOf(blocks, ModuleKind::Workspaces, "ws");
+    const ModuleStyle style = StyleOf(blocks, ModuleKind::Workspaces, "ws");
     EXPECT_EQ(Rgba(style.occupied.hoverBackground), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
     EXPECT_EQ(Rgba(style.occupied.hoverColor), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
     EXPECT_EQ(Rgba(style.occupied.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
@@ -270,7 +270,7 @@ menu {
   }
 }
 )";
-    const MenuStyle   menu   = ResolveBarStyle(WithBar(blocks)).menu;
+    const MenuStyle menu = ResolveBarStyle(WithBar(blocks)).menu;
     EXPECT_EQ(Rgba(menu.box.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
     EXPECT_FLOAT_EQ(menu.box.padding.xDips, 6.0f);
     EXPECT_EQ(Rgba(menu.item.color), (std::array<std::int32_t, 4>{0xee, 0xee, 0xee, 255}));
@@ -289,7 +289,7 @@ menu {
 
 TEST(Style, TheMenuBlockCapsTheMenuAndStylesItsScrollBar) {
     const std::string blocks = "menu {\n  max-width: 480\n  max-height: 360\n  scrollbar {\n    width: 4\n    background: #333333\n    radius: 2\n    margin: 6 3\n  }\n}\n";
-    const MenuStyle   menu   = ResolveBarStyle(WithBar(blocks)).menu;
+    const MenuStyle menu = ResolveBarStyle(WithBar(blocks)).menu;
     EXPECT_EQ(menu.maxWidthDips, 480.0f);
     EXPECT_EQ(menu.maxHeightDips, 360.0f);
     EXPECT_FLOAT_EQ(menu.scrollbar.widthDips, 4.0f);
@@ -338,7 +338,7 @@ TEST(Style, EachSideTakesItsOwnBorderOverItsBlocksAndAMoreSpecificBlocksOverEith
 TEST(Style, ShadowsAreInsetAndKeepTheirOrder) {
     const StyleSheet sheet =
         WithBar("section {\n  shadow: 0 1 2 #ffffff 50%, -1 0 #000000\n}\nworkspaces {\n  item {\n    focused {\n      shadow: 0 -1 1 2 #ff0000\n    }\n  }\n}\n");
-    const StyleConfig               bar     = ResolveBarStyle(sheet);
+    const StyleConfig bar = ResolveBarStyle(sheet);
     const std::vector<InsetShadow>& shadows = bar.section.box.shadows;
     ASSERT_EQ(shadows.size(), 2u);
     EXPECT_FLOAT_EQ(shadows[0].xDips, 0.0f);
@@ -364,15 +364,15 @@ TEST(Style, ShadowsAreInsetAndKeepTheirOrder) {
 
 TEST(Style, SectionsTooltipsAndMenusTakeABlurAndNothingElseDoes) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section {\n  blur: on\n}\nmenu {\n  blur: off\n}\n"));
-    const Backdrop    none{
-           .source     = BackdropSource::None,
-           .radiusDips = 0.0f,
-           .brightness = 1.0f,
-           .saturation = 1.0f,
+    const Backdrop none{
+        .source = BackdropSource::None,
+        .radiusDips = 0.0f,
+        .brightness = 1.0f,
+        .saturation = 1.0f,
     };
     EXPECT_EQ(bar.section.backdrop,
               (Backdrop{
-                  .source     = BackdropSource::System,
+                  .source = BackdropSource::System,
                   .radiusDips = 0.0f,
                   .brightness = 1.0f,
                   .saturation = 1.0f,
@@ -387,7 +387,7 @@ TEST(Style, AWallpaperBlurTakesARadiusOfAtMostAHundred) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section {\n  blur: wallpaper 6\n  brightness: 0.8\n}\ntooltip {\n  blur: wallpaper 0\n}\n"));
     EXPECT_EQ(bar.section.backdrop,
               (Backdrop{
-                  .source     = BackdropSource::Wallpaper,
+                  .source = BackdropSource::Wallpaper,
                   .radiusDips = 6.0f,
                   .brightness = 0.8f,
                   .saturation = 1.0f,
@@ -404,7 +404,7 @@ TEST(Style, BrightnessAndSaturateToneTheBlur) {
     const StyleConfig bar = ResolveBarStyle(WithBar("section {\n  blur: on\n  saturate: 1.8\n  brightness: 0.4\n}\ntooltip {\n  brightness: 0.4\n  blur: on\n}\n"));
     EXPECT_EQ(bar.section.backdrop,
               (Backdrop{
-                  .source     = BackdropSource::System,
+                  .source = BackdropSource::System,
                   .radiusDips = 0.0f,
                   .brightness = 0.4f,
                   .saturation = 1.8f,
@@ -439,7 +439,7 @@ icons {
   }
 }
 )";
-    const ModuleStyle tray   = StyleOf(blocks, ModuleKind::Tray, "icons");
+    const ModuleStyle tray = StyleOf(blocks, ModuleKind::Tray, "icons");
     EXPECT_EQ(tray.transition.duration, std::chrono::milliseconds(400));
     EXPECT_EQ(tray.transition.timing, TimingFunction::EaseOut);
     EXPECT_FLOAT_EQ(tray.icon.rotationDegrees, -90.0f);
@@ -472,7 +472,7 @@ ws {
   }
 }
 )";
-    const ModuleStyle style  = StyleOf(blocks, ModuleKind::Workspaces, "ws");
+    const ModuleStyle style = StyleOf(blocks, ModuleKind::Workspaces, "ws");
     EXPECT_EQ(style.backgroundTransition.duration, std::chrono::milliseconds(150));
     EXPECT_EQ(style.transition.duration, std::chrono::milliseconds(0));
     EXPECT_EQ(style.item.backgroundTransition.duration, std::chrono::milliseconds(100));
@@ -610,7 +610,7 @@ TEST(Style, ClassBlocksMustBeOnesACustomModuleDeclares) {
     EXPECT_THAT([] { RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {}); },
                 ThrowsWith<ConfigError>("style.conf:2: module: active is not a block module holds (icon, item, hover, alert), nor a class a custom module lists"));
     EXPECT_NO_THROW(RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {"active"}));
-    const StyleSheet  sheet   = WithBar("weather {\n  icon {\n    color: #00ff00\n  }\n  sunny {\n    color: #ff0000\n  }\n}\n");
+    const StyleSheet sheet = WithBar("weather {\n  icon {\n    color: #00ff00\n  }\n  sunny {\n    color: #ff0000\n  }\n}\n");
     const ModuleStyle weather = ResolveModuleStyle(sheet, ResolveBarStyle(sheet), ModuleKind::Custom, "weather", {"sunny", "rainy"});
     ASSERT_EQ(weather.classes.size(), 2u);
     EXPECT_EQ(weather.classes[0].name, "sunny");

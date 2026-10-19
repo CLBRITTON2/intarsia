@@ -13,23 +13,23 @@ struct FocusedWindow {
 };
 
 struct Workspace {
-    std::wstring  label; // the display name when the manager has one, else the name
-    std::string   name;  // what commands address the workspace by
-    bool          focused;
-    bool          occupied; // holds at least one window
-    std::intptr_t monitor;  // the HMONITOR the workspace is on
+    std::wstring label; // the display name when the manager has one, else the name
+    std::string name;   // what commands address the workspace by
+    bool focused;
+    bool occupied;         // holds at least one window
+    std::intptr_t monitor; // the HMONITOR the workspace is on
 
-    bool          operator==(const Workspace&) const = default;
+    bool operator==(const Workspace&) const = default;
 };
 
 // A window on a monitor's displayed workspace.
 struct ManagedWindow {
-    std::string   id;     // what commands address the window by
+    std::string id;       // what commands address the window by
     std::intptr_t handle; // the HWND
-    bool          focused;
+    bool focused;
     std::intptr_t monitor; // the HMONITOR the window's workspace is on
 
-    bool          operator==(const ManagedWindow&) const = default;
+    bool operator==(const ManagedWindow&) const = default;
 };
 
 // The workspaces or windows on one monitor, in order.
@@ -54,10 +54,10 @@ enum class Connection : std::uint8_t {
 
 struct WindowManagerStatus {
     std::wstring name; // shown in the disconnected indicator, such as "GlazeWM"
-    Connection   connection;
-    std::string  detail; // why the last connection attempt failed, empty while connected
+    Connection connection;
+    std::string detail; // why the last connection attempt failed, empty while connected
 
-    bool         operator==(const WindowManagerStatus&) const = default;
+    bool operator==(const WindowManagerStatus&) const = default;
 };
 
 // The bar's view of whatever manages windows: a tiling window manager over IPC, or Windows itself. Lives on the UI
@@ -66,15 +66,15 @@ class IWindowManager {
   public:
     virtual ~IWindowManager() = default;
 
-    virtual std::optional<FocusedWindow> Focused() const    = 0;
-    virtual std::vector<Workspace>       Workspaces() const = 0;
+    virtual std::optional<FocusedWindow> Focused() const = 0;
+    virtual std::vector<Workspace> Workspaces() const = 0;
     // The windows on every monitor's displayed workspace, in the manager's tiling order.
     virtual std::vector<ManagedWindow> Windows() const = 0;
     // The display names of the active binding modes, empty when none is active.
     virtual std::vector<std::wstring> BindingModes() const = 0;
     // The focused container's tiling direction, or nullopt when nothing focused has one.
     virtual std::optional<TilingDirection> Direction() const = 0;
-    virtual WindowManagerStatus            Status() const    = 0;
+    virtual WindowManagerStatus Status() const = 0;
 
     // Asks the manager to focus a workspace from Workspaces(). Returns at once: the result arrives as a change.
     virtual void FocusWorkspace(const std::string& name) = 0;

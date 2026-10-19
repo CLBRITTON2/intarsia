@@ -32,7 +32,7 @@ namespace {
         }
 
       private:
-        ComScope                                   _com;
+        ComScope _com;
         Microsoft::WRL::ComPtr<IWICImagingFactory> _imaging; // released before _com leaves COM
     };
 
@@ -80,7 +80,7 @@ WindowIcons::WindowIcons(ChangeSignal& changes, std::chrono::milliseconds retryA
 std::shared_ptr<const IconPixels> WindowIcons::For(std::intptr_t window) {
     {
         const std::scoped_lock lock(_mutex);
-        const auto             icon = _icons.find(window);
+        const auto icon = _icons.find(window);
         if (icon == _icons.end()) {
             _icons.emplace(window, Entry{.pixels = nullptr, .retryAt = std::nullopt});
         } else if (!icon->second.retryAt.has_value() || std::chrono::steady_clock::now() < *icon->second.retryAt) {
@@ -116,7 +116,7 @@ void WindowIcons::Read(IWICImagingFactory* imaging, std::intptr_t window) {
     }
     {
         const std::scoped_lock lock(_mutex);
-        const auto             icon = _icons.find(window);
+        const auto icon = _icons.find(window);
         // ForgetClosed dropped it while it was being read: the window is gone.
         if (icon == _icons.end()) {
             return;
@@ -143,7 +143,7 @@ bool WindowList::Layout(const RenderContext& render) {
 }
 
 bool WindowList::LayOutItems(const RenderContext& render) {
-    const std::vector<ManagedWindow>               shown = OnMonitor(_windowManager.Windows(), _monitor);
+    const std::vector<ManagedWindow> shown = OnMonitor(_windowManager.Windows(), _monitor);
     std::vector<std::shared_ptr<const IconPixels>> pixels;
     pixels.reserve(shown.size());
     for (const ManagedWindow& window : shown) {
@@ -166,7 +166,7 @@ bool WindowList::LayOutItems(const RenderContext& render) {
     _slots = std::move(slots);
 
     const float icon = _style.icon.sizeDips;
-    _row             = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), ItemStyles(), render.axis);
+    _row = ArrangeItems(std::vector<D2D1_SIZE_F>(_slots.size(), D2D1_SIZE_F{.width = icon, .height = icon}), ItemStyles(), render.axis);
     return true;
 }
 
@@ -177,7 +177,7 @@ D2D1_SIZE_F WindowList::Size() const {
 void WindowList::Draw(const RenderContext& render, D2D1_POINT_2F origin) const {
     const float icon = _style.icon.sizeDips;
     for (size_t index = 0; index < _slots.size(); ++index) {
-        const Slot&      slot  = _slots[index];
+        const Slot& slot = _slots[index];
         const ItemStyle& style = StyleOf(slot);
         DrawItemBackground(render, _row.boxes[index], style, _fades.Background(index, render.frameTime), _fades.Shadows(index, render.frameTime), origin);
         if (slot.bitmap != nullptr) {
