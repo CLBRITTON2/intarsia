@@ -3,6 +3,16 @@
 What each release changed, newest first. `scripts/draft-changelog.ps1` starts a version's section from the commits
 since the last release.
 
+## 0.3.1 (2026-10-19)
+
+### Fixes
+
+- The release runs without the Visual C++ Redistributable installed.
+
+### Docs
+
+- `docs/configuration.md` covers running the bar with a window manager it has no backend for.
+
 ## 0.3.0 (2026-10-19)
 
 ### New
