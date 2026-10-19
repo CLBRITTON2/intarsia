@@ -334,6 +334,18 @@ TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeavi
     EXPECT_EQ(_tray.closed, (std::vector<std::uint32_t>{1u, 1u}));
 }
 
+TEST_F(TrayModule, AnOpenPopupClosesWhenTheModuleGoes) {
+    _tray.icons[0].version = 4;
+    {
+        Tray module(kConfig, _tray, TestModuleStyle());
+        Unfold(module);
+        module.Hover(At(module, 19.0f));
+        module.TooltipText();
+        EXPECT_TRUE(_tray.closed.empty());
+    }
+    EXPECT_EQ(_tray.closed, std::vector<std::uint32_t>{1u});
+}
+
 TEST_F(TrayModule, TellsTheTrayWhereItsUncoveredIconsAreOnScreen) {
     const ModulePlacement placement = Placement(192);
     {

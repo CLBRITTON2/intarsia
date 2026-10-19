@@ -88,6 +88,8 @@ class Bar {
 
     void    Dock();
     void    PlaceInZOrder(HWND insertAfter);
+    // The canvas at the window's client size and the bar's DPI, drawn again.
+    void ResizeCanvas();
 
     // Sets the time the next frame draws at, in the bar and in every module's context.
     void                                  StampFrameTime();

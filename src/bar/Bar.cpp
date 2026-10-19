@@ -313,19 +313,14 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     switch (message) {
-        case WM_SIZE:
-            // CreateWindowExW and Dock send sizes before the constructor has built the canvas.
-            if (_canvas != nullptr && !_deviceLost && LOWORD(lParam) != 0 && HIWORD(lParam) != 0) {
-                _canvas->surface.Resize(LOWORD(lParam), HIWORD(lParam), _placement.dpi);
-                BuildContexts();
-                Render();
-            }
-            return 0;
+        case WM_SIZE: ResizeCanvas(); return 0;
         case WM_DPICHANGED:
             _placement.dpi = HIWORD(wParam);
             // The wallpaper's radius is in DIPs, so it blurs over other pixels.
             _wallpapers = BlurWallpapers(_graphics, _config.style, _placement.monitorRect, _placement.dpi);
             Dock();
+            // Dock's WM_SIZE only comes when the bar's pixel size changed with the DPI.
+            ResizeCanvas();
             return 0;
         case WM_PAINT:
             Render();
@@ -405,6 +400,23 @@ void Bar::Dock() {
     if (!MoveWindow(_window, barRect.left, barRect.top, barRect.right - barRect.left, barRect.bottom - barRect.top, TRUE)) {
         ThrowLastError("MoveWindow");
     }
+}
+
+void Bar::ResizeCanvas() {
+    // CreateWindowExW and Dock send sizes before the constructor has built the canvas.
+    if (_canvas == nullptr || _deviceLost) {
+        return;
+    }
+    RECT client{};
+    if (!GetClientRect(_window, &client)) {
+        ThrowLastError("GetClientRect");
+    }
+    if (client.right == 0 || client.bottom == 0) {
+        return;
+    }
+    _canvas->surface.Resize(static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom), _placement.dpi);
+    BuildContexts();
+    Render();
 }
 
 void Bar::PlaceInZOrder(HWND insertAfter) {

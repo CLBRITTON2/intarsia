@@ -9,6 +9,7 @@
 
 #include <d2d1_1.h>
 #include <wincodec.h>
+#include <windows.h>
 #include <wrl/client.h>
 
 #include <cstdint>
@@ -45,19 +46,23 @@ namespace {
         return context;
     }
 
-    // A clear 96 DPI bitmap of kCanvasWidth by kDrawnHeight with one BoxCache, which every box drawn on it shares.
+    // A clear bitmap of kCanvasWidth by kDrawnHeight pixels at pixelsPerDip with one BoxCache, which every box drawn on
+    // it shares.
     class BitmapCanvas {
       public:
-        BitmapCanvas() :
+        explicit BitmapCanvas(float pixelsPerDip) :
             _com(ComThreading::Multi, "box test"), _imaging(CreateImagingFactory()), _bitmap(CreateCanvasBitmap(_imaging.Get())), _context(CreateCanvasContext(_bitmap.Get())),
-            _brushes(_context.Get()), _boxes(_context.Get()) {}
+            _brushes(_context.Get()), _boxes(_context.Get()), _pixelsPerDip(pixelsPerDip) {
+            _context->SetDpi(USER_DEFAULT_SCREEN_DPI * pixelsPerDip, USER_DEFAULT_SCREEN_DPI * pixelsPerDip);
+        }
 
         // The canvas cleared, then style's box from its left edge, widthDips wide and as tall as the canvas, as
         // premultiplied BGRA rows.
         std::vector<std::uint8_t> Draw(const BoxStyle& style, float widthDips) {
             _context->BeginDraw();
             _context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-            DrawBox(_context.Get(), _brushes, _boxes, D2D1::RectF(0.0f, 0.0f, widthDips, static_cast<float>(kDrawnHeight)), style, D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+            DrawBox(_context.Get(), _brushes, _boxes, D2D1::RectF(0.0f, 0.0f, widthDips, static_cast<float>(kDrawnHeight) / _pixelsPerDip), style,
+                    D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
             ThrowIfFailed(_context->EndDraw(), "ID2D1RenderTarget::EndDraw");
             std::vector<std::uint8_t> pixels(static_cast<size_t>(kCanvasWidth) * kDrawnHeight * 4);
             ThrowIfFailed(_bitmap->CopyPixels(nullptr, kCanvasWidth * 4, static_cast<UINT>(pixels.size()), pixels.data()), "IWICBitmap::CopyPixels");
@@ -71,10 +76,11 @@ namespace {
         Microsoft::WRL::ComPtr<ID2D1DeviceContext> _context;
         BrushCache                                 _brushes;
         BoxCache                                   _boxes;
+        float                                      _pixelsPerDip;
     };
 
     std::vector<std::uint8_t> DrawnPixels(const BoxStyle& style) {
-        BitmapCanvas canvas;
+        BitmapCanvas canvas(1.0f);
         return canvas.Draw(style, kDrawnWidth);
     }
 
@@ -227,56 +233,66 @@ TEST(Box, ACornerOfTwoColorsSplitsItsCurveOnTheDiagonal) {
     EXPECT_GT(Red(pixels, 30, 0), 200);
 }
 
-TEST(Box, SnapLinesRoundsShadowOffsetsAndSpreadTowardZeroButNotBlur) {
-    const InsetShadow shadow{
-        .xDips      = 0.0f,
-        .yDips      = 1.0f,
-        .blurDips   = 14.0f,
-        .spreadDips = -6.0f,
-        .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.1f),
-    };
-    const BoxStyle snapped = SnapLines(kFractionalScale, Lined(Uniform(0.0f), {shadow}));
-    ASSERT_EQ(snapped.shadows.size(), 1u);
-    EXPECT_FLOAT_EQ(snapped.shadows[0].xDips, 0.0f);
-    EXPECT_FLOAT_EQ(snapped.shadows[0].yDips, 0.8f);
-    EXPECT_FLOAT_EQ(snapped.shadows[0].spreadDips, -5.6f);
-    EXPECT_FLOAT_EQ(snapped.shadows[0].blurDips, 14.0f);
+// At 150% a DIP is a pixel and a half, so half a DIP of offset and half of spread each round to a pixel of their own.
+TEST(Box, AHardShadowsSideDrawsAsWideAsABorderOfItsWidth) {
+    BitmapCanvas                    canvas(1.5f);
+    const std::vector<std::uint8_t> pixels = canvas.Draw(Lined(
+                                                             Border{
+                                                                 .top    = Side(0.0f),
+                                                                 .right  = Side(0.0f),
+                                                                 .bottom = Side(0.0f),
+                                                                 .left   = BorderSide{.widthDips = 1.0f, .color = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)},
+                                                             },
+                                                             {InsetShadow{
+                                                                 .xDips      = 0.5f,
+                                                                 .yDips      = 0.0f,
+                                                                 .blurDips   = 0.0f,
+                                                                 .spreadDips = 0.5f,
+                                                                 .color      = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
+                                                             }}),
+                                                         kDrawnWidth);
+    EXPECT_GT(Red(pixels, 0, 15), 200);
+    EXPECT_GT(Blue(pixels, 1, 15), 200);
+    EXPECT_LT(Blue(pixels, 2, 15), 50);
+    EXPECT_GT(Blue(pixels, 45, 0), 200);
+    EXPECT_LT(Blue(pixels, 45, 1), 50);
+    EXPECT_LT(Blue(pixels, 89, 15), 50);
 }
 
-// At 150% a DIP is a pixel and a half: a cut of a border beside a shadow must draw both sides one pixel wide.
-TEST(Box, SnapLinesDrawsABorderAndAShadowOfOneLengthEquallyWide) {
-    const PixelGrid oneAndAHalf{
-        .pixelsPerDip = 1.5f,
-        .offsetX      = 0.0f,
-        .offsetY      = 0.0f,
+TEST(Box, AHardShadowsSideNarrowerThanAPixelStillDrawsOne) {
+    BitmapCanvas                    canvas(1.5f);
+    const std::vector<std::uint8_t> pixels = canvas.Draw(Lined(Uniform(0.0f),
+                                                               {InsetShadow{
+                                                                   .xDips      = 0.0f,
+                                                                   .yDips      = 1.0f,
+                                                                   .blurDips   = 0.0f,
+                                                                   .spreadDips = -0.5f,
+                                                                   .color      = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
+                                                               }}),
+                                                         kDrawnWidth);
+    EXPECT_GT(Blue(pixels, 45, 0), 200);
+    EXPECT_LT(Blue(pixels, 45, 1), 50);
+    EXPECT_LT(Blue(pixels, 0, 15), 50);
+}
+
+TEST(Box, ABlurredShadowsSpreadUnderHalfAPixelDrawsAsNone) {
+    BitmapCanvas canvas(1.5f);
+    const auto   blurred = [](float spreadDips) {
+        return Lined(Uniform(0.0f),
+                       {InsetShadow{
+                           .xDips      = 0.0f,
+                           .yDips      = 0.0f,
+                           .blurDips   = 4.0f,
+                           .spreadDips = spreadDips,
+                           .color      = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f),
+                     }});
     };
-    const BoxStyle snapped = SnapLines(oneAndAHalf,
-                                       Lined(Uniform(1.0f),
-                                             {
-                                                 InsetShadow{
-                                                     .xDips      = 1.0f,
-                                                     .yDips      = 0.0f,
-                                                     .blurDips   = 0.0f,
-                                                     .spreadDips = 0.0f,
-                                                     .color      = D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.3f),
-                                                 },
-                                                 InsetShadow{
-                                                     .xDips      = -1.0f,
-                                                     .yDips      = 0.0f,
-                                                     .blurDips   = 0.0f,
-                                                     .spreadDips = 0.0f,
-                                                     .color      = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.8f),
-                                                 },
-                                             }));
-    ASSERT_EQ(snapped.shadows.size(), 2u);
-    EXPECT_FLOAT_EQ(snapped.border.left.widthDips, 1.0f / 1.5f);
-    EXPECT_FLOAT_EQ(snapped.shadows[0].xDips, 1.0f / 1.5f);
-    EXPECT_FLOAT_EQ(snapped.shadows[1].xDips, -1.0f / 1.5f);
+    EXPECT_EQ(canvas.Draw(blurred(0.3f), kDrawnWidth), canvas.Draw(blurred(0.0f), kDrawnWidth));
 }
 
 // A cache key that ignored the shadow's color would draw the first shadow again: a fade frozen on its first frame.
 TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
-    BitmapCanvas                    canvas;
+    BitmapCanvas                    canvas(1.0f);
     const std::vector<std::uint8_t> red  = canvas.Draw(HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)), kDrawnWidth);
     const std::vector<std::uint8_t> blue = canvas.Draw(HardShadowed(D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)), kDrawnWidth);
     EXPECT_GT(Red(red, 30, 4), 200);
@@ -287,7 +303,7 @@ TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
 // A shadow box far longer than its edges reach, both ways, draws from a bitmap of both ends and one row and column
 // between. Both lengths draw from one such bitmap, and each edge of the hard shadow still lands on its own pixel.
 TEST(Box, OneCacheDrawsOneStyleAtTwoLengthsWithEachEdgeInPlace) {
-    BitmapCanvas                    canvas;
+    BitmapCanvas                    canvas(1.0f);
     const BoxStyle                  style  = HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));
     const std::vector<std::uint8_t> narrow = canvas.Draw(style, 60.0f);
     const std::vector<std::uint8_t> wide   = canvas.Draw(style, 100.0f);

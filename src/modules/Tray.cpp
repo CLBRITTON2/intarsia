@@ -25,7 +25,11 @@ namespace {
 
 Tray::Tray(const TrayConfig& config, ITray& tray, ModuleStyle style) : _icon(config.icon), _tray(tray), _style(std::move(style)), _fold(_style), _toggle(EmptyIconText()) {}
 
+// Bars are rebuilt with an app's popup open, and the app keeps it on screen until told the cursor left.
 Tray::~Tray() {
+    if (_popup.has_value()) {
+        _tray.ClosePopup(*_popup);
+    }
     _tray.ReportIconRects(this, {});
 }
 
