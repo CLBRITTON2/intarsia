@@ -82,7 +82,6 @@ class IconTextModule : public IModule {
         return _config;
     }
 
-    // What the module shows now.
     virtual ModuleText Content() = 0;
 
   private:

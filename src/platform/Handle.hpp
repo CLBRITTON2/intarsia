@@ -6,7 +6,7 @@
 #include <string_view>
 #include <type_traits>
 
-// A deleter that hands the pointer to Free and drops its result, as every C API's release function is called.
+// Drops Free's result, which a deleter has no way to report.
 template <auto Free>
 struct ReleaseWith {
     template <typename Pointer>
@@ -15,7 +15,6 @@ struct ReleaseWith {
     }
 };
 
-// Owns a handle or pointer of type Handle, released through Free.
 template <typename Handle, auto Free>
 using UniqueReleased = std::unique_ptr<std::remove_pointer_t<Handle>, ReleaseWith<Free>>;
 
@@ -26,6 +25,6 @@ using UniqueLocal = UniqueReleased<HLOCAL, &LocalFree>;
 // INVALID_HANDLE_VALUE (CreateFileW fails with the latter, most other creators with null).
 UniqueHandle OwnHandle(HANDLE handle, std::string_view call);
 
-// Unsignaled events, named in the CreateEventW error they throw. An auto-reset one wakes one wait per SetEvent.
+// Unsignaled events, named in the CreateEventW error they throw.
 UniqueHandle AutoResetEvent(std::string_view name);
 UniqueHandle ManualResetEvent(std::string_view name);

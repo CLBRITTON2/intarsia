@@ -54,8 +54,6 @@ return {
         std::vector<std::string> errors;
     };
 
-    // Runs intarsia-cli.exe command --config on config and kStyle written to a new work directory. Throws when it has not
-    // exited within kExitLimit.
     CliRun RunCli(std::string_view testName, std::wstring_view command, std::string_view config) {
         const std::filesystem::path directory = integration::NewWorkDirectory(testName);
         const std::filesystem::path configPath = directory / "config.lua";

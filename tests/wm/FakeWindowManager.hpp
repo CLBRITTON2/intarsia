@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-// A backend whose state a test sets directly, recording the workspace modules focus.
 class FakeWindowManager final : public IWindowManager {
   public:
     std::optional<FocusedWindow> focused;

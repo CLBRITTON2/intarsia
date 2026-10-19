@@ -204,7 +204,6 @@ namespace {
         }
     }
 
-    // Nullopt when the target reports no friendly name.
     std::optional<std::string> FriendlyName(const DISPLAYCONFIG_TARGET_DEVICE_NAME& target) {
         std::string name = ToUtf8(target.monitorFriendlyDeviceName);
         if (name.empty()) {

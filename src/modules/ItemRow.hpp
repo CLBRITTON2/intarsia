@@ -20,7 +20,6 @@ struct ItemRow {
     Axis axis;
 };
 
-// Nothing arranged yet.
 ItemRow EmptyItemRow();
 
 // One box per content, in the style at the same index.

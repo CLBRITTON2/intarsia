@@ -19,7 +19,6 @@ namespace {
         };
     }
 
-    // The right of two monitors side by side.
     constexpr RECT kMonitor = Rect(1920, 0, 3840, 1080);
     constexpr RECT kDesktopRect = Rect(0, 0, 3840, 1080);
 

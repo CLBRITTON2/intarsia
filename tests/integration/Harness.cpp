@@ -37,7 +37,6 @@ namespace integration {
             return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
         }
 
-        // Pumps this thread's messages, so the bar's reads of the test's own windows are answered, then sleeps.
         void PumpMessagesAndWait() {
             MSG message{};
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -47,7 +46,6 @@ namespace integration {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
 
-        // Waits until count stops changing, then returns its last value.
         size_t SettledCount(const std::function<size_t()>& count) {
             size_t last = count();
             auto changed = std::chrono::steady_clock::now();
@@ -70,7 +68,7 @@ namespace integration {
             return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
         }
 
-        // The event of a bar log line, the word after its time, level and component.
+        // The word after a bar log line's time, level and component.
         std::string_view EventOf(std::string_view line) {
             size_t at = 0;
             for (std::uint32_t skipped = 0; skipped < 3; ++skipped) {
@@ -100,7 +98,6 @@ namespace integration {
             return client;
         }
 
-        // A bar taller than it is wide runs down a side of the monitor.
         bool Vertical(const RECT& client) {
             return client.bottom - client.top > client.right - client.left;
         }
@@ -132,7 +129,7 @@ namespace integration {
             return loopback::Listen().Port();
         }
 
-        // The bar's window on the primary monitor, where the test server puts every workspace, or null while it has none.
+        // The test server puts every workspace on the primary monitor.
         HWND PrimaryBarWindow(std::uint32_t processId) {
             HMONITOR primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
             HWND window = nullptr;
@@ -146,7 +143,6 @@ namespace integration {
             return nullptr;
         }
 
-        // The process's top-level window of a class while it is shown, or null.
         HWND VisibleWindow(std::uint32_t processId, std::wstring_view className) {
             const std::wstring name(className);
             HWND window = nullptr;
@@ -160,7 +156,6 @@ namespace integration {
             return nullptr;
         }
 
-        // The client point offset pixels along the bar from its start, on the middle line across it.
         POINT AlongBar(HWND bar, std::int32_t offset) {
             const RECT client = ClientRect(bar);
             if (Vertical(client)) {
@@ -186,7 +181,6 @@ namespace integration {
             SendButtonUp(bar, WM_LBUTTONUP, AlongBar(bar, offset));
         }
 
-        // Each run of equal lines folded into one.
         std::vector<std::string> WithoutRepeats(const std::vector<std::string>& lines) {
             std::vector<std::string> folded;
             std::ranges::unique_copy(lines, std::back_inserter(folded));
@@ -605,8 +599,7 @@ namespace integration {
     }
 
     std::vector<std::string> RunningBar::CommandsFromSweep() const {
-        // Sweeps that run before the bar has the server's answers, or while it reconnects, send nothing, so they
-        // repeat until one sends a command. The sweep after that one sees what the bar settled on.
+        // A sweep sends nothing until the bar has answers, so retry, then sweep once more for what it settled on.
         std::uint32_t attempt = 0;
         if (!Eventually([&] { return !Sweep(++attempt).empty(); }, kStartLimit)) {
             Log("sweeps_sent_nothing", std::format("attempts={} limit_s={}", attempt, kStartLimit.count()));

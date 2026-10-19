@@ -52,6 +52,5 @@ TEST(IconText, DownAVerticalBarALineBreakStacksTheLines) {
     const float one = LayOutIconText(render.Along(Axis::Vertical, 40.0f), L"", L"12").textSize.height;
     const IconText two = LayOutIconText(render.Along(Axis::Vertical, 40.0f), L"", L"12\n34");
     EXPECT_FLOAT_EQ(two.textSize.height, 2.0f * one);
-    // The lines are centered in the room, so they start in from its left.
     EXPECT_GT(two.textLeftDips, 0.0f);
 }

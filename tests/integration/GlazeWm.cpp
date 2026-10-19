@@ -17,8 +17,6 @@ using testing::ElementsAreArray;
 
 namespace {
 
-    // Every module that sends GlazeWM a command on a click, one per place along the bar. The test server shows
-    // workspaces 1 and 2 on the primary monitor, 2 displayed and holding the test's windows.
     std::string ClicksConfig(std::string_view edge) {
         return std::string(R"(
 return {
@@ -65,7 +63,7 @@ module {
 }
 )";
 
-    // The ids the test server gives the windows it lists, in its order (tests/support/GlazeWmServer.cpp).
+    // The ids tests/support/GlazeWmServer.cpp gives the windows it lists, in order.
     constexpr std::string_view kFirstWindowId = "00000000-0000-4000-8000-000000000000";
     constexpr std::string_view kSecondWindowId = "00000000-0000-4000-8000-000000000001";
 
@@ -73,7 +71,6 @@ module {
         return "command focus --container-id " + std::string(id);
     }
 
-    // What a sweep along ClicksConfig's bar sends, in order, while the test's two windows are open.
     std::vector<std::string> EveryClickCommand() {
         return {"command focus --workspace 1", "command focus --workspace 2",    FocusWindow(kFirstWindowId),
                 FocusWindow(kSecondWindowId),  "command focus --next-workspace", "command toggle-tiling-direction"};
@@ -153,7 +150,6 @@ TEST(GlazeWm, ClicksDownASideBarSendEachItemsCommandInOrder) {
 
 namespace {
 
-    // A tiling module the rejecting server never gives a direction, styled so any drawing of it shows.
     constexpr std::string_view kRejectedStyle = R"(
 bar {
   font: Segoe UI

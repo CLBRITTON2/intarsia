@@ -11,8 +11,6 @@ namespace {
 
     constexpr wchar_t kOwnerClass[] = L"IntarsiaWindowProcTest";
 
-    // Holds its window the way App holds its control window, and throws once the window exists, as App's constructor
-    // can.
     class FailingOwner {
       public:
         FailingOwner(HWND& created, std::int32_t& messages, std::int32_t& messagesBeforeThrow) : _messages(messages), _window(Create(this)) {

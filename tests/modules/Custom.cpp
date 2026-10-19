@@ -48,7 +48,7 @@ TEST(CommandPoller, TextOutputIsTheFirstLine) {
 TEST(CommandPoller, TextOutputWithControlCharactersFails) {
     ExpectFailure("\x1b[31mred\x1b[0m\n", CustomOutput::Text, "output has control character U+001B");
     ExpectFailure("tab\there", CustomOutput::Text, "output has control character U+0009");
-    // U+202E RIGHT-TO-LEFT OVERRIDE, which can make drawn text read backwards. The test needs the character itself.
+    // U+202E RIGHT-TO-LEFT OVERRIDE itself, which can make drawn text read backwards.
     ExpectFailure("safe\xE2\x80\xAEtxt.exe", CustomOutput::Text, "output has control character U+202E"); // NOLINT(misc-misleading-bidirectional)
     ExpectFailure("\xFF\xFE", CustomOutput::Text, "output is not UTF-8");
 }
@@ -65,7 +65,6 @@ TEST(CommandPoller, AJsonClassIsOneTheModuleDeclares) {
     ExpectFailure(R"({"text": "21C", "class": "snow"})", CustomOutput::Json, "printed a JSON class the module's classes do not list");
     ExpectFailure(R"({"text": "21C", "class": 2})", CustomOutput::Json, "printed a JSON class that is not a string");
     ExpectFailure(R"({"text": "21C", "class": "rain", "alert": true})", CustomOutput::Json, "printed both a JSON class and alert, and a module is in one state at a time");
-    // An alert set false is no state, so a class may come with it.
     EXPECT_EQ(ParseOutput(R"({"text": "21C", "class": "sunny", "alert": false})", CustomOutput::Json).classIndex, std::optional<size_t>(0));
 }
 

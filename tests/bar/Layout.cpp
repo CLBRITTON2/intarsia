@@ -23,7 +23,7 @@ TEST(Layout, ASectionWhoseModulesAllShowNothingHasNoLength) {
     EXPECT_EQ(layout.left.length, 0.0f);
     EXPECT_EQ(layout.center.length, 0.0f);
     EXPECT_TRUE(layout.center.offsets.empty());
-    // An empty module adds nothing, so the section ends one padding after the module before it.
+    // The empty module adds no padding: 4 + 30 + 4.
     EXPECT_EQ(layout.right.length, 38.0f);
     EXPECT_EQ(layout.right.start, 1000.0f - 5.0f - 38.0f);
 }
@@ -82,7 +82,6 @@ TEST(Layout, AFoldedGroupIsItsToggleInsideItsPadding) {
     const GroupLayout group = ArrangeGroup(20.0f, {30.0f, 50.0f}, 0.0f, Both(4.0f));
     EXPECT_EQ(group.length, 28.0f);
     EXPECT_EQ(group.toggleLength, 28.0f);
-    // The members stay where the unfolded group puts them, past the box's end.
     EXPECT_EQ(group.offsets, (std::vector<float>{28.0f, 58.0f}));
     EXPECT_EQ(group.shownLength, 0.0f);
 }

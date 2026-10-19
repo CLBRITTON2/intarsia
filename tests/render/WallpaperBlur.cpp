@@ -51,7 +51,6 @@ namespace {
         };
     }
 
-    // An image as large as the monitor, its left half red and its right half blue.
     ComPtr<IWICBitmap> CreateHalves() {
         std::vector<std::uint8_t> pixels(static_cast<size_t>(kMonitorWidth) * kMonitorHeight * 4);
         for (size_t y = 0; y < kMonitorHeight; ++y) {
@@ -80,7 +79,6 @@ namespace {
         return bitmap;
     }
 
-    // A window's pixels as premultiplied BGRA rows, once blur fills the whole of it.
     class FilledWindow {
       public:
         FilledWindow(const GraphicsDevice& graphics, const WallpaperBlur& blur, const RECT& windowRect, std::uint32_t dpi) :
@@ -110,7 +108,6 @@ namespace {
             ThrowIfFailed(readable->Unmap(), "ID2D1Bitmap1::Unmap");
         }
 
-        // Blue, green, red and alpha at a pixel.
         std::array<std::uint8_t, 4> At(size_t x, size_t y) const {
             const size_t at = ((y * _width) + x) * 4;
             return {_pixels.at(at), _pixels.at(at + 1), _pixels.at(at + 2), _pixels.at(at + 3)};
@@ -134,7 +131,6 @@ TEST(WallpaperBlur, ASolidColorWallpaperFillsWithItsBackground) {
     EXPECT_EQ(window.At(100, 20), (std::array<std::uint8_t, 4>{0, 255, 0, 255}));
 }
 
-// A window shows the slice of the monitor's wallpaper under it, wherever it sits on the monitor and at any scale.
 TEST(WallpaperBlur, AnUnblurredImageLandsBeneathEachWindowAtItsPlaceOnTheMonitor) {
     const CompositionThread compositionThread;
     const GraphicsDevice graphics = CreateGraphicsDevice();

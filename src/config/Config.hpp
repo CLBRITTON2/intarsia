@@ -262,7 +262,6 @@ bool AnyInSections(const Sections<T>& sections, Predicate predicate) {
     return std::ranges::any_of(sections.left, predicate) || std::ranges::any_of(sections.center, predicate) || std::ranges::any_of(sections.right, predicate);
 }
 
-// Every item, left section first.
 template <typename T, typename Visit>
 void ForEachInSections(const Sections<T>& sections, Visit visit) {
     std::ranges::for_each(sections.left, visit);

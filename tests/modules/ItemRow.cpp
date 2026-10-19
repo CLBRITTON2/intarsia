@@ -31,8 +31,7 @@ TEST(ItemRow, DownAVerticalBarItemsStackWithTheirMarginsAndCenterAcrossTheWidest
     wide.margin.yDips = 3.0f;
     const ItemRow row = ArrangeItems({{.width = 10.0f, .height = 10.0f}, {.width = 20.0f, .height = 10.0f}}, {&flat, &wide}, Axis::Vertical);
 
-    // 10 tall padded by 2 above and below, the first with no margin there and the second with 3. The wide item sets
-    // the width: 20 + 8 + 10.
+    // 10 + 4 tall each, the second with 3 of margin either side. The widest is 20 + 8 + 10.
     EXPECT_FLOAT_EQ(row.size.height, 34.0f);
     EXPECT_FLOAT_EQ(row.size.width, 38.0f);
     ASSERT_EQ(row.boxes.size(), 2u);
@@ -68,7 +67,6 @@ TEST(ItemRow, ItemFadesFadeAnItemIntoItsHoverAndStartNewItemsAtTheirColors) {
     fades.Follow({&style, &style}, hovered, start);
     EXPECT_EQ(fades.Wait(start), 0U);
     EXPECT_NEAR(fades.Background(0, start + std::chrono::milliseconds(50)).r, 0.5f, 0.001f);
-    // The text has no transition of its own, so it takes the hover's at once.
     EXPECT_FLOAT_EQ(fades.Text(0, start).r, 1.0f);
     EXPECT_FLOAT_EQ(fades.Background(1, start).r, 0.0f);
     EXPECT_EQ(fades.Wait(start + std::chrono::milliseconds(100)), std::nullopt);
@@ -82,7 +80,6 @@ TEST(ItemRow, ItemFadesFadeAnItemIntoANewStatesColors) {
     const HoveredItem hovered;
     ItemFades fades;
     fades.Follow({&rest}, hovered, start);
-    // The target's transition applies, as in CSS: the focused style's color fades and its background does not.
     fades.Follow({&focused}, hovered, start);
     EXPECT_NEAR(fades.Text(0, start + std::chrono::milliseconds(50)).r, 0.5f, 0.001f);
     EXPECT_FLOAT_EQ(fades.Background(0, start).r, 1.0f);

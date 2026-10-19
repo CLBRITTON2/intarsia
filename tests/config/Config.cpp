@@ -45,7 +45,6 @@ bar {
 }
 )";
 
-    // A config and a style.conf beside it in a directory that deletes itself, so each case runs LoadConfig on real files.
     class TempConfig {
       public:
         TempConfig(std::string_view config, std::string_view style) :
@@ -72,7 +71,6 @@ bar {
         std::filesystem::path _directory;
     };
 
-    // The config text with one snippet swapped. Throws when the snippet is not there, so a stale case cannot pass.
     std::string Replace(std::string_view config, std::string_view from, std::string_view to) {
         std::string text(config);
         const size_t position = text.find(from);
@@ -82,7 +80,6 @@ bar {
         return text.replace(position, from.size(), to);
     }
 
-    // kValidConfig with extra modules defined, and shown on the right.
     std::string WithRightModules(std::string_view names, std::string_view definitions) {
         return Replace(Replace(kValidConfig, "modules_right = {},", std::string("modules_right = ") + std::string(names) + ","), "    modules = {\n",
                        "    modules = {\n" + std::string(definitions) + "\n");
@@ -92,14 +89,12 @@ bar {
         return Replace(kValidConfig, "layouts = {},", "layouts = " + std::string(layouts) + ",");
     }
 
-    // kValidConfig's clock module with more keys.
     std::string WithClockKeys(std::string_view config, std::string_view keys) {
         return Replace(config, "interval = 60 }", "interval = 60, " + std::string(keys) + " }");
     }
 
     constexpr std::string_view kIntervalRun = R"(run = "interval", timeout = 5,)";
 
-    // A custom module's definition line. run is its run key and any timeout, each followed by a comma, as kIntervalRun.
     std::string CustomDefinition(std::string_view name, std::string_view run, std::string_view classes) {
         return std::format(
             R"(        {} = {{ type = "custom", command = {{ "cmd", "/c", "echo hi" }}, {} output = "json", classes = {}, format = "{{text}}", icon = "", interval = 30 }},)", name,
@@ -124,7 +119,6 @@ bar {
         return kinds;
     }
 
-    // Throws std::bad_variant_access, failing the test, when the instance holds other settings.
     template <typename Settings>
     const Settings& SettingsOf(const std::vector<ModuleInstance>& instances, size_t index) {
         return std::get<Settings>(instances.at(index).settings);
@@ -132,7 +126,6 @@ bar {
 
 } // namespace
 
-// The shipped configs must load with their style, so neither drifts from the loader. What they show is theirs to change.
 TEST(Config, ShippedConfigsLoad) {
     EXPECT_NO_THROW(LoadConfig(INTARSIA_WINDOWS_CONFIG));
     EXPECT_NO_THROW(LoadConfig(INTARSIA_GLAZEWM_CONFIG));
@@ -233,7 +226,6 @@ TEST(Config, ModuleTableKeysMustBeStrings) {
                 ThrowsWith<ConfigError>("modules has a key that is not a string"));
 }
 
-// Lua escapes in valid UTF-8 source still build any bytes.
 TEST(Config, ConfigStringsMustBeUtf8) {
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"(icon = "x")", R"(icon = "\xff")")); }, ThrowsWith<ConfigError>("modules.time.icon is not valid UTF-8"));
     EXPECT_THAT([] { return LoadText(Replace(kValidConfig, R"({ "title" })", R"({ "\u{D800}" })")); }, ThrowsWith<ConfigError>("modules_left[1] is not valid UTF-8"));
@@ -408,7 +400,6 @@ TEST(Config, AMemberShowsOnlyThroughItsOneGroup) {
         other = { type = "group", icon = "-", modules = { "cpu" } },)"));
         },
         ThrowsWith<ConfigError>("modules.cpu is a member of both group 'layout' and group 'other'"));
-    // One group any number of lists show is still one group.
     EXPECT_NO_THROW(
         LoadText(Replace(WithGroup(kGroup), "layouts = {},", R"(layouts = { { min_length = 1921, modules_left = { "layout" }, modules_center = {}, modules_right = {} } },)")));
 }
@@ -422,7 +413,6 @@ TEST(Config, TheConfigsWalksReachAGroupsMembers) {
     EXPECT_FALSE(AnyModuleInConfig(config, [](const ModuleInstance& instance) { return instance.kind == ModuleKind::Battery; }));
 }
 
-// The member's classes style its own block, and the module block's too.
 TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
     const std::string config =
         WithGroup(Replace(kGroup, R"({ "cpu", "memory" })", R"({ "cpu", "memory", "weather" })") + "\n" + CustomDefinition("weather", kIntervalRun, R"({ "sunny" })"));
@@ -432,7 +422,6 @@ TEST(Config, AGroupsCustomMembersDeclareTheirClasses) {
 TEST(Config, TilingModulesNeedATilingWindowManager) {
     EXPECT_THAT([] { return LoadText(WithRightModules(R"({ "tiled" })", R"(        tiled = { type = "workspaces" },)")); },
                 ThrowsWith<ConfigError>("workspaces needs a tiling window manager, window_manager 'windows' is none"));
-    // Through a layout's lists too, not only the top-level ones.
     EXPECT_THAT(
         [] {
             return LoadText(Replace(WithLayouts(R"({ { min_length = 1921, modules_left = { "spaces" }, modules_center = {}, modules_right = {} } })"), "    modules = {\n",
@@ -451,7 +440,6 @@ TEST(Config, TilingModulesNeedATilingWindowManager) {
     EXPECT_EQ(SettingsOf<TilingDirectionConfig>(config.modules.right, 3).vertical, L"V");
 }
 
-// Audio needs no window manager, so it loads with window_manager "windows".
 TEST(Config, AudioParsesItsFormatsIconsStepAndOptionalTooltip) {
     const std::string audio =
         R"(        volume = { type = "audio", flow = "output", format = "{volume}%", format_muted = "muted", icon = "v", icon_muted = "m", step = 5, tooltip = "{device}" },)";
@@ -600,11 +588,9 @@ TEST(Config, ModulesAreStyledByTheirNameInTheConfig) {
     const ModuleStyle& time = config.modules.center.at(0).style;
     EXPECT_FLOAT_EQ(time.color.r, 1.0f);
     EXPECT_FLOAT_EQ(time.icon.color.g, 1.0f);
-    // The window module takes the bar's color, since no block names it.
     EXPECT_FLOAT_EQ(config.modules.left.at(0).style.color.r, 0xe0 / 255.0f);
 }
 
-// The style's own errors, which carry the style file's name and line, reach the user through LoadConfig.
 TEST(Config, StyleIdsMustNameADefinedModule) {
     EXPECT_THAT([] { return LoadStyled(kValidConfig, std::string(kValidStyle) + "tmie {\n  color: #ff0000\n}\n"); },
                 ThrowsWith<ConfigError>("style.conf:7: tmie: names no module"));
@@ -621,7 +607,6 @@ namespace {
 TEST(Config, AClassNoCustomModuleDeclaresIsAnError) {
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "module {\n  snowy {\n    color: #ff0000\n  }\n}\n"); },
                 ThrowsWith<ConfigError>("module: snowy is not a block module holds"));
-    // Declared by the weather module, but the block names a clock.
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "time {\n  sunny {\n    color: #ff0000\n  }\n}\n"); },
                 ThrowsWith<ConfigError>("time: sunny is not a block a module holds"));
     EXPECT_THAT([] { return LoadStyled(WithWeather(R"({ "sunny" })"), std::string(kValidStyle) + "weather {\n  sunny {\n    item {\n      color: #ff0000\n    }\n  }\n}\n"); },

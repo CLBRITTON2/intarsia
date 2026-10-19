@@ -307,7 +307,6 @@ void CoreAudio::Run(HANDLE stopEvent) {
                 volume = std::exchange(_pendingVolume, std::nullopt);
                 muted = std::exchange(_pendingMuted, std::nullopt);
             }
-            // A request while there is no device has nothing to change.
             if (endpoint == nullptr) {
                 continue;
             }

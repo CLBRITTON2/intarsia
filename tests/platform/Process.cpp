@@ -24,7 +24,6 @@
 
 namespace {
 
-    // What a program started with this command line sees as its arguments, split the way the C runtime splits them.
     std::vector<std::wstring> RoundTrip(const std::vector<std::wstring>& arguments) {
         const std::wstring line = L"program.exe " + JoinArguments(arguments);
         std::int32_t count = 0;
@@ -58,7 +57,6 @@ namespace {
         return ManualResetEvent("test cancel");
     }
 
-    // A process outside any job CaptureOutput makes, killed when this goes.
     class OutsideProcess {
       public:
         OutsideProcess() {
@@ -91,8 +89,6 @@ namespace {
 
     constexpr std::wstring_view kStubName = L"intarsia-path-stub";
 
-    // A directory holding an empty kStubName.exe, current for as long as it lives, with PATH and the current directory
-    // put back when it goes.
     class StubDirectory {
       public:
         StubDirectory() :
@@ -136,8 +132,7 @@ TEST(Process, ArgumentsSurviveTheRoundTripUnchanged) {
     EXPECT_EQ(RoundTrip(arguments), arguments);
 }
 
-// SearchPathW resolves a name with a directory part against the current directory, so such names never resolve, even
-// when the file exists there.
+// SearchPathW resolves a name with a directory part against the current directory, so none may resolve.
 TEST(Process, MissingProgramsAndRelativePathsWithDirectoriesDoNotResolve) {
     const std::filesystem::path cmd = SystemProgram(L"cmd");
     const std::vector<std::wstring> names{
@@ -155,8 +150,6 @@ TEST(Process, MissingProgramsAndRelativePathsWithDirectoriesDoNotResolve) {
     }
 }
 
-// A relative PATH entry (".", an empty one, "bin") names wherever the bar happened to start, never a place a program is
-// installed.
 TEST(Process, RelativePathEntriesAreNotSearched) {
     const StubDirectory directory;
     SetEnvironmentVariableW(L"PATH", (L".;;..\\" + directory.Get().filename().wstring()).c_str());
@@ -200,7 +193,6 @@ TEST(Process, CaptureOutputEndsWhenItsCommandExitsWhileAProcessOutsideTheJobHold
     EXPECT_EQ(captured.get(), "");
 }
 
-// A process the command starts is in its job, so its output still counts after the command exits.
 TEST(Process, CaptureOutputWaitsForWhatTheCommandStarted) {
     EXPECT_EQ(CaptureOutput(Cmd({L"/c", L"start /b cmd /c ping -n 2 127.0.0.1 ^>nul ^& echo late"}), std::chrono::seconds(10), 1024, NeverSignaled().get()), "late\r\n");
 }

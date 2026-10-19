@@ -12,7 +12,6 @@
 
 namespace {
 
-    // Empty while the batteries do not report it.
     std::string HealthText(std::optional<std::int32_t> healthPercent) {
         if (!healthPercent.has_value()) {
             return std::string();
@@ -20,15 +19,12 @@ namespace {
         return std::to_string(*healthPercent);
     }
 
-    // The values every battery format can name, from the state.
     std::vector<Placeholder> BatteryPlaceholders(const BatteryState& state) {
         return {{.name = "capacity", .value = std::int64_t{state.percent}},
                 {.name = "time", .value = FormatTimeLeft(state.secondsLeft)},
                 {.name = "health", .value = HealthText(state.healthPercent)}};
     }
 
-    // The colors a discharging battery draws in at percent: critical at or under critical_at, then warning at or under
-    // warning_at.
     TextState DischargingState(const BatteryConfig& config, std::int32_t percent) {
         if (percent <= config.criticalAtPercent) {
             return TextState::Critical;

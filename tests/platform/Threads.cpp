@@ -20,12 +20,10 @@
 
 namespace {
 
-    // A makeProcess that hands the queue process as it is.
     std::function<WorkQueue<std::int32_t>::Process()> Handling(const WorkQueue<std::int32_t>::Process& process) {
         return [process] { return process; };
     }
 
-    // Notes the thread it is destroyed on.
     class ThreadNoter {
       public:
         explicit ThreadNoter(std::thread::id* destroyedOn) : _destroyedOn(destroyedOn) {}
@@ -41,7 +39,6 @@ namespace {
 
     constexpr std::uint32_t kPosted = WM_APP + 7;
 
-    // Removes every kPosted message queued for target and counts them.
     std::int32_t TakePosted(HWND target) {
         std::int32_t count = 0;
         MSG message = {};

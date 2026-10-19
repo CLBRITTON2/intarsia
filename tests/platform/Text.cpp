@@ -8,8 +8,8 @@
 namespace {
 
     // Bidi marks as bytes, which a string literal must not hold as text.
-    const std::string kOverride{'\xE2', '\x80', '\xAE'}; // U+202E
-    const std::string kIsolate{'\xE2', '\x81', '\xA6'};  // U+2066
+    const std::string kOverride{'\xE2', '\x80', '\xAE'};
+    const std::string kIsolate{'\xE2', '\x81', '\xA6'};
 
 } // namespace
 
@@ -32,12 +32,10 @@ TEST(Text, LogExcerptEscapesQuotesBackslashesAndControlBytes) {
 TEST(Text, LogExcerptCutsLongTextAndSaysHowMuchWasDropped) {
     EXPECT_EQ(LogExcerpt("abcdef", 4), "abcd...(2 more bytes)");
     EXPECT_EQ(LogExcerpt("abc", 4), "abc");
-    // "a" then U+00E9 (two bytes): a cut after its first byte backs off to before it.
     EXPECT_EQ(LogExcerpt("a\xC3\xA9z", 2), "a...(3 more bytes)");
 }
 
 TEST(Text, LogExcerptEscapesBytesThatAreNotUtf8AndKeepsThoseThatAre) {
-    // A stray continuation byte, a truncated sequence, an overlong '/', then a valid U+00E9.
     const std::string excerpt = LogExcerpt("a\x80"
                                            "b\xE2\x82"
                                            "c\xC0\xAF"
@@ -47,7 +45,6 @@ TEST(Text, LogExcerptEscapesBytesThatAreNotUtf8AndKeepsThoseThatAre) {
     EXPECT_NO_THROW(ToWide(excerpt));
 }
 
-// A C1 control, a bidi override and a line separator are valid UTF-8 and would still reorder or break the log line.
 TEST(Text, LogExcerptEscapesUnsafeCodePointsThatAreValidUtf8) {
     std::string text = "a\xC2\x85"
                        "b";

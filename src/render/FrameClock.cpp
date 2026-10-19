@@ -20,7 +20,6 @@ namespace {
         std::uint32_t repeated;
     };
 
-    // How far count runs past limit, 0 when it does not.
     std::uint32_t Excess(std::uint32_t count, std::uint32_t limit) {
         if (count > limit) {
             return count - limit;

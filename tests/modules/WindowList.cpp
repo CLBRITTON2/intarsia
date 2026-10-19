@@ -25,7 +25,7 @@ namespace {
         SendMessageW(window.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));
     }
 
-    // Asks until the icon arrives. The reader thread's WM_GETICON waits on this thread.
+    // The reader thread's WM_GETICON waits on this thread.
     std::shared_ptr<const IconPixels> WaitForIcon(WindowIcons& icons, HWND window) {
         std::shared_ptr<const IconPixels> pixels;
         AnsweringUntil(
@@ -37,7 +37,6 @@ namespace {
         return pixels;
     }
 
-    // Waits for a read to end, whether or not it found an icon.
     bool WaitForReadToEnd(ChangeTarget& target) {
         MSG message{};
         if (!AnsweringUntil([&] { return PeekMessageW(&message, target.window.Get(), kIconChanged, kIconChanged, PM_REMOVE) != FALSE; }, std::chrono::seconds(5))) {
@@ -91,7 +90,6 @@ TEST(WindowIcons, AWindowThatIsGoneHasNoIcon) {
     EXPECT_EQ(WindowIcon(gone, 100), nullptr);
 }
 
-// A workspace switch hides a window without closing it, and switching back must find its icon without a new read.
 TEST(WindowIcons, KeepsTheIconOfAWindowThatStillExists) {
     const MessageWindow window;
     SetStockIcon(window);
@@ -116,7 +114,6 @@ TEST(WindowIcons, ForgetsAClosedWindow) {
         ASSERT_NE(WaitForIcon(icons, window.Get()), nullptr);
     }
     icons.ForgetClosed();
-    // Forgotten, so the ask starts a new read.
     EXPECT_EQ(icons.For(handle), nullptr);
 }
 
@@ -141,7 +138,6 @@ TEST_F(WindowListModule, LayoutReportsAChangeOnlyWhenTheWindowsChange) {
 
     _windowManager.windows[0].focused = true;
     EXPECT_TRUE(module.Layout(_render.Context()));
-    // A window on another monitor is not this bar's to show.
     _windowManager.windows[2].focused = true;
     EXPECT_FALSE(module.Layout(_render.Context()));
     _windowManager.windows.pop_back();
@@ -158,7 +154,6 @@ TEST_F(WindowListModule, EachItemHoldsASquareOfTheStylesIconSize) {
     EXPECT_FLOAT_EQ(module.Size().height, 24.0f);
 }
 
-// The icon's pixels go up to the GPU as a bitmap and draw: a real device, a real window's icon.
 TEST_F(WindowListModule, AnIconThatArrivesIsLaidOutAndDrawn) {
     const MessageWindow iconWindow;
     SendMessageW(iconWindow.Get(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIconW(nullptr, IDI_APPLICATION)));

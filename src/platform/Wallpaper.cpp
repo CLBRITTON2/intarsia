@@ -45,7 +45,6 @@ namespace {
         };
     }
 
-    // An image of width by height pixels with its center on areaRect's.
     RECT CenteredIn(const RECT& areaRect, double width, double height) {
         const double left = static_cast<double>(areaRect.left) + ((static_cast<double>(areaRect.right - areaRect.left) - width) / 2.0);
         const double top = static_cast<double>(areaRect.top) + ((static_cast<double>(areaRect.bottom - areaRect.top) - height) / 2.0);
@@ -74,13 +73,11 @@ namespace {
         return CenteredIn(areaRect, static_cast<double>(imageSize.width) * scale, static_cast<double>(imageSize.height) * scale);
     }
 
-    // As large as fits inside areaRect.
     RECT FitIn(const RECT& areaRect, D2D1_SIZE_U imageSize) {
         const Scales scales = ScalesTo(areaRect, imageSize);
         return ScaledIn(areaRect, imageSize, std::min(scales.width, scales.height));
     }
 
-    // As small as covers areaRect.
     RECT FillIn(const RECT& areaRect, D2D1_SIZE_U imageSize) {
         const Scales scales = ScalesTo(areaRect, imageSize);
         return ScaledIn(areaRect, imageSize, std::max(scales.width, scales.height));

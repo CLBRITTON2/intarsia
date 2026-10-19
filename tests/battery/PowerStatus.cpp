@@ -20,7 +20,6 @@ namespace {
         return power;
     }
 
-    // BatteryFromPowerStatus never knows the batteries' health.
     BatteryState WithoutHealth(ChargeState charge, std::int32_t percent, std::optional<std::int32_t> secondsLeft) {
         return BatteryState{
             .charge = charge,

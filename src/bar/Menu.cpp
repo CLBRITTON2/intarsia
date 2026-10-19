@@ -103,7 +103,6 @@ namespace {
         return 0.0f;
     }
 
-    // The width the scroll bar's gutter adds to the window: all of it once the rows' height passes maxHeight, else none.
     float TakenGutterDips(float height, float maxHeight, float gutterDips) {
         if (height > maxHeight) {
             return gutterDips;
@@ -111,7 +110,6 @@ namespace {
         return 0.0f;
     }
 
-    // The window's height: the rows' height, cut to maxHeight past which the rows scroll.
     float ShownHeightDips(float height, float maxHeight) {
         if (height > maxHeight) {
             return maxHeight;
@@ -136,7 +134,6 @@ namespace {
 
     constexpr wchar_t kWindowClass[] = L"IntarsiaMenu";
 
-    // The colors a row draws in.
     struct RowColors {
         D2D1_COLOR_F text;
         D2D1_COLOR_F background;

@@ -46,7 +46,6 @@ namespace {
 
     constexpr std::string_view kSpace = " \t\r";
 
-    // text without the spaces, tabs and carriage returns around it.
     std::string_view Trim(std::string_view text) {
         const size_t first = text.find_first_not_of(kSpace);
         if (first == std::string_view::npos) {
@@ -74,7 +73,6 @@ namespace {
         return parts;
     }
 
-    // The words from index on, rejoined by single spaces.
     std::string JoinFrom(const std::vector<std::string_view>& words, size_t index) {
         std::string joined;
         for (size_t word = index; word < words.size(); ++word) {
@@ -231,7 +229,6 @@ namespace {
         return *value;
     }
 
-    // 0 or more.
     float ParseLength(std::string_view text) {
         const float value = ParseSignedNumber(text);
         if (value < 0.0f) {
@@ -253,7 +250,6 @@ namespace {
         return ParsePositiveLength(text);
     }
 
-    // One number for every side, or two: above and below, then left and right.
     Spacing ParseSpacing(std::string_view text) {
         const std::vector<std::string_view> numbers = Split(text, kSpace);
         if (numbers.size() == 1) {
@@ -321,7 +317,6 @@ namespace {
     // D2D's Gaussian blur takes a standard deviation of at most 250 pixels, which this keeps clear of at any scale.
     constexpr float kLargestWallpaperBlur = 100.0f;
 
-    // on (the system's blur), off, or wallpaper and the radius to blur it at.
     Blur ParseBlur(std::string_view text) {
         const std::vector<std::string_view> words = Split(text, kSpace);
         if (words.size() == 1 && words[0] == "on") {
@@ -340,8 +335,6 @@ namespace {
         throw std::invalid_argument("must be on, off, or wallpaper and a radius, as wallpaper 8");
     }
 
-    // none, or transitions separated by commas, each a property, a duration and an optional timing function (ease when
-    // left out). none animates nothing.
     std::vector<TransitionValue> ParseTransitionValues(std::string_view text) {
         return ParseCommaList<TransitionValue>(text, kTransitionForm, ParseTransitionValue);
     }
@@ -360,7 +353,6 @@ namespace {
     constexpr std::string_view kShadowForm = "must be none, or shadows separated by commas, each an x and y offset, an optional blur and spread, and a color, "
                                              "as 0 1 2 #ffffff 18%";
 
-    // The optional number at index, 0 when the shadow leaves it out.
     float OptionalNumber(const std::vector<float>& numbers, size_t index) {
         if (index < numbers.size()) {
             return numbers[index];
@@ -368,7 +360,6 @@ namespace {
         return 0.0f;
     }
 
-    // Numbers, then a color.
     InsetShadow ParseShadow(std::string_view text) {
         const std::vector<std::string_view> words = Split(text, kSpace);
         std::vector<float> numbers;
@@ -391,12 +382,10 @@ namespace {
         };
     }
 
-    // none, or shadows separated by commas, each numbers then a color.
     std::vector<InsetShadow> ParseShadows(std::string_view text) {
         return ParseCommaList<InsetShadow>(text, kShadowForm, ParseShadow);
     }
 
-    // none, or a width then a color.
     BorderSide ParseBorderSide(std::string_view text) {
         if (text == "none") {
             return kNoBorder;
@@ -454,7 +443,7 @@ namespace {
         {.key = "saturate", .kind = ValueKind::Length},
     }};
 
-    // Checks value as what key is read as. A key means the same in every block that takes it.
+    // A key means the same in every block that takes it.
     void CheckValue(std::string_view key, std::string_view value) {
         const auto entry = std::ranges::find(kProperties, key, &PropertyKind::key);
         if (entry == kProperties.end()) {
@@ -590,7 +579,6 @@ namespace {
             }
         }
 
-        // One block or property, from its key.
         StyleNode ParseEntry(size_t level) {
             const std::uint32_t line = _line;
             RefuseCssAtKey();
@@ -1058,7 +1046,6 @@ namespace {
         return joined;
     }
 
-    // The first property named key in the chain.
     const StyleNode* FirstSet(const Chain& chain, std::string_view key) {
         for (const StyleNode* block : chain) {
             if (const StyleNode* property = Child(block, key); property != nullptr && !IsBlock(*property)) {

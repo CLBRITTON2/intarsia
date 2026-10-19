@@ -41,7 +41,6 @@ namespace {
         return scenario == Scenario::Integration || scenario == Scenario::Rejecting;
     }
 
-    // Focus changes read from stdin, waiting for a connection to send them on.
     class PushedFocus {
       public:
         void Add(size_t index) {
@@ -147,7 +146,6 @@ namespace {
         return std::format(R"({{"messageType":"event_subscription","subscriptionId":"s","success":true,"error":null,"data":{{"eventType":"{}"}}}})", eventType);
     }
 
-    // Two workspaces on the primary monitor, the displayed one holding real windows inside a split.
     std::string Monitors(size_t focused, bool integrationOnly) {
         const auto monitor = reinterpret_cast<std::intptr_t>(MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY));
         WindowCollection collection{.integrationOnly = integrationOnly, .windows = {}};
@@ -167,7 +165,6 @@ namespace {
                            monitor, children);
     }
 
-    // The binding mode "resize" is active while the focus index is odd.
     std::string_view BindingModes(size_t focused) {
         if (focused % 2 == 0) {
             return R"({"bindingModes":[]})";
@@ -175,7 +172,6 @@ namespace {
         return R"({"bindingModes":[{"name":"resize","displayName":null}]})";
     }
 
-    // The direction is vertical while the focus index is odd.
     std::string_view TilingDirection(size_t focused) {
         if (focused % 2 == 0) {
             return "horizontal";
@@ -190,7 +186,6 @@ namespace {
         }
     }
 
-    // Serves one connection until the bar closes it or the scenario drops it.
     void Serve(const loopback::Socket& peer, Scenario scenario, size_t connection, PushedFocus& pushed) {
         loopback::AnswerUpgrade(peer);
 

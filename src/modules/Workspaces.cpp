@@ -8,7 +8,6 @@
 
 namespace {
 
-    // The style a workspace draws in: focused before occupied before empty.
     const ItemStyle& WorkspaceStyle(const Workspace& workspace, const ModuleStyle& style) {
         if (workspace.focused) {
             return style.focused;
@@ -19,7 +18,6 @@ namespace {
         return style.empty;
     }
 
-    // "<name> disconnected" while the window manager is unreachable, empty while connected.
     std::wstring DisconnectedText(const WindowManagerStatus& status) {
         if (status.connection == Connection::Disconnected) {
             return status.name + L" disconnected";
@@ -27,7 +25,6 @@ namespace {
         return std::wstring();
     }
 
-    // None while the window manager is unreachable.
     std::vector<Workspace> ShownWorkspaces(const IWindowManager& windowManager, const WindowManagerStatus& status, std::intptr_t monitor) {
         if (status.connection == Connection::Disconnected) {
             return std::vector<Workspace>();

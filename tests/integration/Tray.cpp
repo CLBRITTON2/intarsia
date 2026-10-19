@@ -116,7 +116,6 @@ tray {
         }
     }
 
-    // The icon color a send's log line names, none for a send without an icon.
     std::string ColorField(std::optional<std::uint32_t> rgb) {
         if (!rgb.has_value()) {
             return "none";
@@ -132,9 +131,7 @@ tray {
         return static_cast<std::int16_t>(HIWORD(static_cast<DWORD>(value)));
     }
 
-    // An app with one tray icon of a solid color. It sends the bar's tray window what shell32 sends the taskbar for
-    // Shell_NotifyIcon and Shell_NotifyIconGetRect, and records what the tray posts to its callback, which arrives while
-    // Eventually pumps this thread's messages.
+    // Sends what shell32 sends the taskbar. Its callbacks arrive only while Eventually pumps this thread's messages.
     class TrayApp {
       public:
         TrayApp(std::uint32_t id, std::uint32_t version) : _tray(FindWindowW(std::wstring(integration::kTrayClass).c_str(), nullptr)), _id(id), _version(version) {
@@ -171,7 +168,6 @@ tray {
         TrayApp(const TrayApp&) = delete;
         TrayApp& operator=(const TrayApp&) = delete;
 
-        // Each returns whether the tray took the message. Add also sets the icon's version.
         bool Add(std::uint32_t rgb) const {
             return SendNotify(NIM_ADD, NIF_MESSAGE | NIF_ICON, rgb) && SendNotify(NIM_SETVERSION, 0, std::nullopt);
         }
@@ -182,7 +178,7 @@ tray {
             return SendNotify(NIM_DELETE, 0, std::nullopt);
         }
 
-        // Destroys the owner window without deleting the icon, as a killed app leaves it.
+        // Leaves the icon behind, as a killed app does.
         void CloseOwner() {
             if (!DestroyWindow(_owner)) {
                 ThrowLastError("DestroyWindow(tray app owner)");
@@ -191,7 +187,6 @@ tray {
             _owner = nullptr;
         }
 
-        // The icon's rect on screen as the tray answers it, or nullopt while it answers 0.
         std::optional<RECT> IconRect() const {
             NotifyIconIdentifier32 query{
                 .signature = kTrayNotifySignature,
@@ -246,7 +241,6 @@ tray {
         std::vector<TrayInputMessage> _received;
     };
 
-    // Clicks the tray's toggle, which the tray starts folded behind.
     void UnfoldTray(const integration::RunningBar& bar) {
         bar.ClickAt(bar.DrawnColumn(kToggleColor, integration::kLimit));
     }

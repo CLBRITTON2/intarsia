@@ -23,7 +23,6 @@ namespace {
         return ParseStyleSheet(text, "style.conf");
     }
 
-    // The bar block, then text.
     StyleSheet WithBar(std::string_view text) {
         return Parse(std::string(kBar) + std::string(text));
     }
@@ -33,7 +32,6 @@ namespace {
         return ResolveModuleStyle(sheet, ResolveBarStyle(sheet), kind, name, {});
     }
 
-    // Channels as 0 to 255 so a failure reads like the style that caused it.
     std::array<std::int32_t, 4> Rgba(const D2D1_COLOR_F& color) {
         return {static_cast<std::int32_t>(std::lround(color.r * 255.0f)), static_cast<std::int32_t>(std::lround(color.g * 255.0f)),
                 static_cast<std::int32_t>(std::lround(color.b * 255.0f)), static_cast<std::int32_t>(std::lround(color.a * 255.0f))};
@@ -136,7 +134,6 @@ ws {
     EXPECT_EQ(Rgba(style.focused.background), (std::array<std::int32_t, 4>{0x9c, 0xcf, 0xd8, 255}));
     EXPECT_EQ(Rgba(style.occupied.background), kNone);
     EXPECT_EQ(Rgba(style.empty.color), (std::array<std::int32_t, 4>{0x90, 0x8c, 0xaa, 255}));
-    // Another module's blocks stay with that module.
     EXPECT_EQ(Rgba(StyleOf(blocks, ModuleKind::Workspaces, "other").empty.color), kBarColor);
 }
 
@@ -172,7 +169,6 @@ TEST(Style, HoverSetsTheBoxUnderTheCursorAndAlertTheTextThatNeedsAttention) {
     EXPECT_EQ(Rgba(style.hover), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
     EXPECT_EQ(Rgba(style.alertColor), kRed);
     EXPECT_EQ(Rgba(style.color), kBarColor);
-    // With no hover block the box keeps its background under the cursor.
     EXPECT_EQ(Rgba(StyleOf("module {\n  background: #111111\n}\n", ModuleKind::Cpu, "cpu").hover), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
     EXPECT_THAT([] { return Parse("cpu {\n  hover {\n    color: #fff\n  }\n}\n"); },
                 ThrowsWith<ConfigError>("cpu > hover: color is not a property cpu > hover takes, which are: background"));
@@ -198,7 +194,6 @@ power {
     EXPECT_EQ(Rgba(style.warning.icon), (std::array<std::int32_t, 4>{255, 255, 0, 255}));
     EXPECT_EQ(Rgba(style.warning.text), Rgba(style.color));
     EXPECT_EQ(Rgba(style.critical.text), kRed);
-    // Nothing colors the critical icon, so the module's own icon color still applies to it.
     EXPECT_EQ(Rgba(style.critical.icon), (std::array<std::int32_t, 4>{0, 255, 255, 255}));
     const ModuleStyle bare = StyleOf("power {\n  critical {\n    color: #ff0000\n  }\n}\n", ModuleKind::Battery, "power");
     EXPECT_EQ(Rgba(bare.critical.icon), kRed);
@@ -241,7 +236,6 @@ ws {
     EXPECT_EQ(Rgba(style.occupied.hoverColor), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
     EXPECT_EQ(Rgba(style.occupied.background), (std::array<std::int32_t, 4>{0x11, 0x11, 0x11, 255}));
     EXPECT_EQ(Rgba(style.focused.hoverBackground), (std::array<std::int32_t, 4>{0x9c, 0xcf, 0xd8, 255}));
-    // With no hover block an item keeps its colors under the cursor.
     const ModuleStyle plain = StyleOf("module {\n  item {\n    color: #ff0000\n  }\n}\n", ModuleKind::Windows, "apps");
     EXPECT_EQ(Rgba(plain.item.hoverColor), kRed);
     EXPECT_THAT([] { return Parse("module {\n  item {\n    hover {\n      padding: 2\n    }\n  }\n}\n"); }, ThrowsWith<ConfigError>("which are: color, background"));
@@ -281,7 +275,6 @@ menu {
     EXPECT_EQ(Rgba(menu.active.hoverColor), (std::array<std::int32_t, 4>{255, 255, 255, 255}));
     EXPECT_EQ(Rgba(menu.active.hoverBackground), (std::array<std::int32_t, 4>{0x22, 0x22, 0x22, 255}));
     EXPECT_FLOAT_EQ(menu.active.padding.xDips, 8.0f);
-    // With no menu block the entries take the bar's color.
     EXPECT_EQ(Rgba(ResolveBarStyle(Parse(kBar)).menu.item.color), kBarColor);
     EXPECT_THAT([] { return Parse("menu {\n  icon {\n    color: #fff\n  }\n}\n"); }, ThrowsWith<ConfigError>("menu: icon is not a block menu holds, which are: item, scrollbar"));
     EXPECT_THAT([] { return Parse("menu {\n  item {\n    transition: color 1s\n  }\n}\n"); }, ThrowsWith<ConfigError>("menu > item: transition is not a property"));
@@ -297,7 +290,6 @@ TEST(Style, TheMenuBlockCapsTheMenuAndStylesItsScrollBar) {
     EXPECT_FLOAT_EQ(menu.scrollbar.radiusDips, 2.0f);
     EXPECT_FLOAT_EQ(menu.scrollbar.margin.yDips, 6.0f);
     EXPECT_FLOAT_EQ(menu.scrollbar.margin.xDips, 3.0f);
-    // Without caps the monitor bounds the menu, and without a width no thumb draws.
     const MenuStyle plain = ResolveBarStyle(Parse(kBar)).menu;
     EXPECT_EQ(plain.maxWidthDips, std::nullopt);
     EXPECT_EQ(plain.maxHeightDips, std::nullopt);
@@ -331,7 +323,6 @@ TEST(Style, EachSideTakesItsOwnBorderOverItsBlocksAndAMoreSpecificBlocksOverEith
     const Border layered = StyleOf("module {\n  border-top: 3 #ff0000\n}\ncpu {\n  border: 1 #00ff00\n}\n", ModuleKind::Cpu, "cpu").box.border;
     EXPECT_FLOAT_EQ(layered.top.widthDips, 1.0f);
     EXPECT_EQ(Rgba(layered.top.color), kGreen);
-    // No border unless a block draws one.
     EXPECT_FLOAT_EQ(StyleOf("", ModuleKind::Cpu, "cpu").box.border.right.widthDips, 0.0f);
 }
 
@@ -444,7 +435,6 @@ icons {
     EXPECT_EQ(tray.transition.timing, TimingFunction::EaseOut);
     EXPECT_FLOAT_EQ(tray.icon.rotationDegrees, -90.0f);
     EXPECT_EQ(tray.icon.transition.duration, std::chrono::milliseconds(300));
-    // A transition with no timing function eases.
     EXPECT_EQ(tray.icon.transition.timing, TimingFunction::Ease);
     EXPECT_FLOAT_EQ(tray.expandedIconRotationDegrees, 90.0f);
     EXPECT_FLOAT_EQ(StyleOf(blocks, ModuleKind::Group, "icons").expandedIconRotationDegrees, 90.0f);
@@ -454,7 +444,6 @@ TEST(Style, ATrayWithoutTransitionsChangesAtOnce) {
     const ModuleStyle tray = StyleOf("icons {\n  icon {\n    rotate: 30\n    transition: none\n  }\n}\n", ModuleKind::Tray, "icons");
     EXPECT_EQ(tray.transition.duration, std::chrono::milliseconds(0));
     EXPECT_EQ(tray.icon.transition.duration, std::chrono::milliseconds(0));
-    // With no expanded block the icon keeps its rotation unfolded.
     EXPECT_FLOAT_EQ(tray.expandedIconRotationDegrees, 30.0f);
 }
 
@@ -479,7 +468,6 @@ ws {
     EXPECT_EQ(style.item.backgroundTransition.timing, TimingFunction::Linear);
     EXPECT_EQ(style.item.colorTransition.duration, std::chrono::milliseconds(200));
     EXPECT_EQ(style.item.colorTransition.timing, TimingFunction::EaseIn);
-    // A state's transition replaces the item's whole list, so the focused item fades no background.
     EXPECT_EQ(style.focused.colorTransition.duration, std::chrono::milliseconds(50));
     EXPECT_EQ(style.focused.backgroundTransition.duration, std::chrono::milliseconds(0));
     EXPECT_EQ(
@@ -606,7 +594,6 @@ TEST(Style, ATopLevelBlockMustNameAModuleTheConfigDefines) {
 }
 
 TEST(Style, ClassBlocksMustBeOnesACustomModuleDeclares) {
-    // A class block under module parses, as a custom module may declare it, and fails once no module does.
     EXPECT_THAT([] { RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {}); },
                 ThrowsWith<ConfigError>("style.conf:2: module: active is not a block module holds (icon, item, hover, alert), nor a class a custom module lists"));
     EXPECT_NO_THROW(RequireDeclaredClasses(Parse("module {\n  active {\n    color: #fff\n  }\n}\n"), {"active"}));

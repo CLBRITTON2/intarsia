@@ -16,7 +16,6 @@ namespace {
         std::wstring name;
     };
 
-    // The last record's offset is 0, which ends the buffer.
     DWORD NextEntryOffset(size_t index, size_t count, size_t recordBytes) {
         if (index + 1 == count) {
             return 0;

@@ -100,7 +100,6 @@ TEST_F(Sampler, AStartedSamplerReadsTheCounterAfterOneInterval) {
     EXPECT_TRUE(PeekMessageW(&message, _target.window.Get(), kChanged, kChanged, PM_REMOVE));
 }
 
-// Only the module's own tick shows a new value, so the sampler stores it without a notify.
 TEST_F(Sampler, ANewValueOfTheSameOutcomeIsReadWithoutANotify) {
     const CounterSampler sampler("uptime", SumOf(L"\\System\\System Up Time"), _target.signal);
     ASSERT_TRUE(Eventually([&sampler] { return sampler.Reading().outcome == CounterOutcome::Sampled; }, std::chrono::seconds(3)));
@@ -125,7 +124,6 @@ TEST_F(CounterModule, FormatsAreCheckedAgainstTheValues) {
     EXPECT_THROW(Counter(WithFormat(config.path, "{rate:.1f}"), sampler), ConfigError);
 }
 
-// The sampler notifies only on a new outcome, so this tick is what redraws a new value.
 TEST_F(CounterModule, ChangesByItsNextIntervalTick) {
     const CounterConfig config = WithFormat(L"\\Processor(_Total)\\% Processor Time", "{value}");
     const CounterSampler sampler("cpu", config, _target.signal);

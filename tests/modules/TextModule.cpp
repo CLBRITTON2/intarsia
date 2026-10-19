@@ -15,7 +15,6 @@ namespace {
 } // namespace
 
 TEST(Ticks, AlignsToEachInterval) {
-    // On a boundary the wait is a full interval.
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'000), std::chrono::seconds(60)), std::chrono::milliseconds(60'000));
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(120'001), std::chrono::seconds(60)), std::chrono::milliseconds(59'999));
     EXPECT_EQ(TimeUntilNextTick(AtMilliseconds(1'250), std::chrono::seconds(1)), std::chrono::milliseconds(750));
@@ -49,7 +48,6 @@ TEST(Ticks, EachSpecIsFormattedOncePerSample) {
     EXPECT_EQ(samples, 1);
     EXPECT_EQ(texts.Of("{usage}", format), L"3");
     EXPECT_EQ(texts.Of("{usage}", format), L"3");
-    // The interval counts from the last sample, not the first.
     texts.SampleIfDue(start + std::chrono::seconds(3), std::chrono::seconds(2), sample);
     EXPECT_EQ(samples, 1);
     EXPECT_EQ(formats, 3);

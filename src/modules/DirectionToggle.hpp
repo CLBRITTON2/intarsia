@@ -27,5 +27,4 @@ class DirectionToggle final : public IModule {
     TextLine _glyph;
 };
 
-// What the module shows for a direction.
 std::wstring DirectionText(const TilingDirectionConfig& config, std::optional<TilingDirection> direction);

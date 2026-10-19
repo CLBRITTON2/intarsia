@@ -10,7 +10,7 @@
 
 namespace {
 
-    // Samples every 200 ms until a sample has a value: PDH cannot calculate a rate from an occasional pair of samples.
+    // PDH cannot calculate a rate from an occasional pair of samples, so this retries.
     std::vector<double> NextValues(PerformanceCounter& counter) {
         constexpr std::uint32_t kSamples = 10;
         for (std::uint32_t sample = 0; sample < kSamples; ++sample) {

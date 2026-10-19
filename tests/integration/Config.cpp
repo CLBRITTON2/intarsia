@@ -23,7 +23,6 @@ using testing::HasSubstr;
 
 namespace {
 
-    // left and right are the Lua list contents of those sections.
     std::string OneModuleConfig(std::string_view left, std::string_view right) {
         return std::format(R"(
 return {{
@@ -65,7 +64,6 @@ module {
         return StyleWithRules(std::format("mark {{\n  background: {}\n}}\n", background));
     }
 
-    // The primary monitor's width in DIPs, as the bar measures it against min_length.
     float PrimaryLengthDips() {
         HMONITOR primary = MonitorFromPoint(POINT{.x = 0, .y = 0}, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO info{};
@@ -79,8 +77,6 @@ module {
         return static_cast<float>(info.rcMonitor.right - info.rcMonitor.left) * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(dpiX);
     }
 
-    // The top-level lists show low, a layout the primary monitor just reaches shows reached, and one a DIP past it
-    // shows beyond.
     std::string LayoutsConfig(std::uint32_t reachedLength) {
         return std::format(R"(
 return {{
@@ -103,7 +99,6 @@ return {{
                            reachedLength, reachedLength + 1);
     }
 
-    // mark records "mark" in record on a click.
     std::string ClickableConfig(const std::filesystem::path& record) {
         return std::format(R"(
 return {{
@@ -120,7 +115,6 @@ return {{
                            integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(record));
     }
 
-    // monitors is the Lua list contents of bar.monitors.
     std::string MonitorsConfig(std::string_view monitors) {
         return std::format(R"(
 return {{
@@ -147,7 +141,6 @@ mark {
 }
 )";
 
-    // The monitor lines logged after the first skipped ones, once there are at least count of them.
     std::vector<std::string> MonitorLinesAfter(const integration::RunningBar& bar, size_t skipped, size_t count) {
         std::vector<std::string> lines;
         integration::Eventually(
@@ -166,7 +159,6 @@ TEST(Config, KeepsRunningWhenAnInvalidSaveIsSoonReplaced) {
     integration::RunningBar bar("config-resave", OneModuleConfig(R"("mark")", ""), MarkStyleWithBackground("#27ae60"));
     ASSERT_TRUE(bar.Draws(kGreen, integration::kLimit));
 
-    // Cut short, as a reload can read a file an editor is still writing.
     const std::string valid = OneModuleConfig(R"("mark")", "");
     bar.SaveConfig(std::string_view(valid).substr(0, valid.size() / 2));
     ASSERT_TRUE(integration::Eventually([&] { return !bar.Events("config_invalid").empty(); }, integration::kLimit)) << "the cut-short save was not logged as invalid";

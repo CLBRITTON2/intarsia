@@ -33,8 +33,6 @@ TEST(Surface, AWindowTakesANewSurfaceOnlyOnceTheOldOneIsGone) {
     DestroyWindow(window);
 }
 
-// Boxes come and go, change size, an empty one draws no mask, a DPI change re-places every box, a new tone remakes
-// every brush, and a wallpaper backdrop shows none.
 TEST(Surface, BackdropsFollowTheBoxesAndToneOfEachCall) {
     const CompositionThread compositionThread;
     const GraphicsDevice graphics = CreateGraphicsDevice();
@@ -69,7 +67,6 @@ TEST(Surface, BackdropsFollowTheBoxesAndToneOfEachCall) {
     EXPECT_NO_THROW(surface.ShowBackdrops({second, first}, toned));
     EXPECT_NO_THROW(surface.ShowBackdrops({}, plain));
     EXPECT_NO_THROW(surface.ShowBackdrops({first}, plain));
-    // The wallpaper's blur is drawn in the content, so the system's goes.
     EXPECT_NO_THROW(surface.ShowBackdrops({first, second}, wallpaper));
     EXPECT_NO_THROW(surface.ShowBackdrops({first}, plain));
 

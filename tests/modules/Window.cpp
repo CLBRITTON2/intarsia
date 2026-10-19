@@ -37,7 +37,6 @@ TEST(Window, LongTitleEndsInAnEllipsisAtTheLimit) {
 }
 
 TEST(Window, TruncationNeverSplitsASurrogatePair) {
-    // "ab" then U+F1441 as a surrogate pair then "cd": a cut after the high surrogate drops the whole pair.
     const std::wstring title = L"ab\U000F1441cd";
     EXPECT_EQ(TruncateTitle(title, 4), L"ab…");
 }

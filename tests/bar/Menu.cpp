@@ -24,7 +24,6 @@ namespace {
         };
     }
 
-    // A 100 DIP viewport over contentDips of rows, beside a track as tall as the viewport.
     MenuScroll ScrollOver(float contentDips, float offsetDips) {
         return MenuScroll{
             .viewport = D2D1::RectF(4, 4, 104, 104),
@@ -53,7 +52,6 @@ namespace {
         .margin = Spacing{.yDips = 2, .xDips = 1},
     };
 
-    // A 4 DIP padded box of rows 2 DIPs apart vertically and 3 DIPs in from its sides, with no scroll bar.
     MenuStyle PaddedMenu() {
         MenuStyle style{};
         style.box.padding = Spacing{.yDips = 4, .xDips = 4};
@@ -62,7 +60,6 @@ namespace {
         return style;
     }
 
-    // A row as LayOutRow measures it: sized to its text, at the origin.
     MenuRow MeasuredRow(float width, const ItemStyle& style, std::optional<size_t> entry) {
         return MenuRow{
             .text = nullptr,
@@ -185,7 +182,6 @@ TEST(MenuLayout, EntryAtFindsTheRowUnderThePoint) {
     const std::vector<MenuRow> rows{RowAt(4, 0), RowAt(28, 1)};
     EXPECT_EQ(EntryAt(rows, ScrollAt(0), D2D1::Point2F(50, 10)), 0u);
     EXPECT_EQ(EntryAt(rows, ScrollAt(0), D2D1::Point2F(50, 30)), 1u);
-    // Between rows and in the menu's padding there is nothing to pick.
     EXPECT_EQ(EntryAt(rows, ScrollAt(0), D2D1::Point2F(50, 25)), std::nullopt);
     EXPECT_EQ(EntryAt(rows, ScrollAt(0), D2D1::Point2F(2, 10)), std::nullopt);
 }
@@ -194,7 +190,6 @@ TEST(MenuLayout, EntryAtFollowsTheScrolledRows) {
     const std::vector<MenuRow> rows{RowAt(4, 0), RowAt(28, 1), RowAt(110, 2)};
     EXPECT_EQ(EntryAt(rows, ScrollAt(24), D2D1::Point2F(50, 10)), 1u);
     EXPECT_EQ(EntryAt(rows, ScrollAt(100), D2D1::Point2F(50, 12)), 2u);
-    // A row scrolled up into the padding above the viewport cannot be picked there.
     EXPECT_EQ(EntryAt(rows, ScrollAt(24), D2D1::Point2F(50, 2)), std::nullopt);
 }
 
@@ -217,7 +212,6 @@ TEST(MenuLayout, AnEntrysTooltipGoesUnderItsRowOrAboveItNearTheMonitorsBottom) {
     };
     const RECT above = TooltipRect(RowTooltipAnchor(nearBottomRowRect, kMonitor, 96), kSize);
     EXPECT_EQ(above.top, 870);
-    // A tooltip wider than its row near the monitor's edge stays on the monitor.
     const RECT nearRightRowRect{
         .left = 1700,
         .top = 300,
@@ -246,13 +240,9 @@ TEST(MenuLayout, ScrollingStopsAtTheFirstAndLastRows) {
 }
 
 TEST(MenuLayout, ScrollingToShowARowMovesTheLeast) {
-    // Below the viewport: its bottom comes to the viewport's bottom.
     EXPECT_FLOAT_EQ(ScrolledToShow(ScrollAt(0), D2D1::RectF(4, 120, 104, 140)).offsetDips, 36.0f);
-    // Above it: its top comes to the viewport's top.
     EXPECT_FLOAT_EQ(ScrolledToShow(ScrollAt(100), D2D1::RectF(4, 54, 104, 74)).offsetDips, 50.0f);
-    // Already shown: nothing moves.
     EXPECT_FLOAT_EQ(ScrolledToShow(ScrollAt(100), D2D1::RectF(4, 120, 104, 140)).offsetDips, 100.0f);
-    // Taller than the viewport: its top shows.
     EXPECT_FLOAT_EQ(ScrolledToShow(ScrollAt(0), D2D1::RectF(4, 54, 104, 254)).offsetDips, 50.0f);
 }
 

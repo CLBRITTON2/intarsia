@@ -7,7 +7,7 @@
 
 namespace {
 
-    // The output of a color matrix for one opaque color, as D2D applies it to a row vector.
+    // D2D applies a color matrix to a row vector.
     std::array<float, 4> Apply(const std::array<float, 20>& matrix, const std::array<float, 4>& color) {
         std::array<float, 4> result{};
         for (size_t column = 0; column < 4; ++column) {
@@ -47,7 +47,6 @@ TEST(Composition, BackdropColorMatrixGreysByLuminanceAndScalesByBrightnessButNev
     EXPECT_NEAR(grey[1], 0.1065f, 1e-6f);
     EXPECT_NEAR(grey[2], 0.1065f, 1e-6f);
     EXPECT_FLOAT_EQ(grey[3], 1.0f);
-    // A grey stays grey at any saturation.
     const std::array<float, 4> kept = Apply(BackdropColorMatrix({
                                                 .source = BackdropSource::System,
                                                 .radiusDips = 0.0f,

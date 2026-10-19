@@ -16,7 +16,6 @@ namespace {
 
     constexpr size_t kSerialDescriptorOffset = 54 + (18 * 2);
 
-    // A base block for DEL41A8 with numeric serial 0 and no text serial.
     std::vector<std::uint8_t> BaseBlock() {
         std::vector<std::uint8_t> edid(128, 0);
         constexpr std::array<std::uint8_t, 8> kHeader{0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
@@ -72,7 +71,6 @@ TEST(Edid, TreatsABlankOrUnprintableTextSerialAsNone) {
     EXPECT_EQ(ParseEdid(WithTextSerial(WithNumericSerial(BaseBlock(), 42), "AB\x1B[2J")).serial, std::optional<std::string>("42"));
 }
 
-// An id the reader makes that the config refused could be listed by intarsia-cli monitors and still never match.
 TEST(Edid, MakesOnlyIdsAConfigAccepts) {
     const std::string longestText = MonitorId(ParseEdid(WithTextSerial(BaseBlock(), "ABCDEFGHIJ 12")));
     EXPECT_EQ(longestText, "DEL41A8-ABCDEFGHIJ 12");

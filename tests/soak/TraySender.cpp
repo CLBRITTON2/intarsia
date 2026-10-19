@@ -39,7 +39,6 @@ namespace {
     // About ten messages a second across every owner.
     constexpr std::chrono::milliseconds kMessageGap{100};
 
-    // The tray answering no message for this long is a hang.
     class TrayHung : public std::runtime_error {
       public:
         using std::runtime_error::runtime_error;
@@ -76,7 +75,6 @@ namespace {
         return owner;
     }
 
-    // Tooltips as apps write them: a name, a status with a changing number, or two lines.
     std::wstring AppTip(std::mt19937& random) {
         const std::uint32_t value = random() % 101;
         switch (random() % 4) {
@@ -91,7 +89,6 @@ namespace {
         std::memcpy(data.data.tip.data(), tip.data(), std::min(tip.size(), data.data.tip.size() - 1) * sizeof(wchar_t));
     }
 
-    // Returns whether the tray took the message. Throws TrayHung when it does not answer in time.
     bool Send(HWND tray, HWND sender, TrayNotifyData data) {
         std::optional<LRESULT> answer;
         try {
@@ -103,8 +100,7 @@ namespace {
         return *answer != FALSE;
     }
 
-    // An add or an icon change, with pixels the tray has not seen. The tray reads them while the send waits, as
-    // Explorer does, so the icon can go right after.
+    // The tray reads the pixels while the send waits, as Explorer does, so the icon can go right after.
     bool SendIcon(HWND tray, HWND owner, std::uint32_t command, std::uint32_t id, std::mt19937& random) {
         TrayNotifyData data = NotifyData(command, Handle32(owner), id, 0, kTrayAppCallback);
         HICON icon = CreateSolidIcon(static_cast<std::uint32_t>(random()));
@@ -116,7 +112,6 @@ namespace {
         return taken;
     }
 
-    // One message of a random kind from a random owner.
     bool SendOne(HWND tray, const std::array<HWND, kOwners>& owners, std::mt19937& random) {
         HWND owner = owners[random() % owners.size()];
         const std::uint32_t id = random() % kIds;

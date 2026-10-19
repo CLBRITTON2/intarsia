@@ -17,13 +17,11 @@ namespace {
     constexpr std::uint32_t kTextColor = 0x27AE60;
     constexpr std::uint32_t kMenuColor = 0x8E44AD;
 
-    // A command that records each run in listing and prints two entries, ids "one" and "two".
     std::string ListingCommand(const std::filesystem::path& listing) {
         return std::format("{{ {}, {}, {} }}", integration::LuaPath(integration::ArgvRecorderPath()), integration::LuaPath(listing),
                            integration::LuaString(R"({"items":[{"id":"one","text":"One"},{"id":"two","text":"Two"}]})"));
     }
 
-    // A clock whose click lists command's entries in a menu and records the picked id in selected.
     std::string MenuConfig(std::string_view command, const std::filesystem::path& selected) {
         return std::format(R"(
 return {{
@@ -115,7 +113,6 @@ TEST(Menu, EscapeAndASecondClickOnItsModuleEachCloseIt) {
     bar.ClickAt(column);
     EXPECT_TRUE(MenuHidden(bar)) << "a second click on the menu's module left it shown";
 
-    // Each showing runs the command once, and the closing click runs it no more.
     integration::PumpFor(std::chrono::seconds(1));
     EXPECT_EQ(integration::RecordedLines(listing).size(), size_t{2});
     EXPECT_EQ(integration::RecordedLines(selected).size(), size_t{0});

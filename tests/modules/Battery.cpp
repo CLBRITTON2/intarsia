@@ -10,7 +10,6 @@
 
 namespace {
 
-    // A battery state a test sets directly. No battery until it does.
     class FakeBattery final : public IBattery {
       public:
         std::optional<BatteryState> state;

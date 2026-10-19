@@ -15,7 +15,6 @@ namespace {
         return static_cast<std::int32_t>(std::lround(volume * 100.0f));
     }
 
-    // A whole percent as a volume, within 0 to 1.
     float PercentVolume(std::int32_t percent) {
         return static_cast<float>(std::clamp(percent, 0, 100)) / 100.0f;
     }

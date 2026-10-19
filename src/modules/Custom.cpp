@@ -29,7 +29,6 @@ namespace {
         };
     }
 
-    // The first line of text, without its line ending.
     std::string_view FirstLine(std::string_view text) {
         std::string_view line = text.substr(0, text.find('\n'));
         if (line.ends_with('\r')) {
@@ -120,12 +119,10 @@ namespace {
         return result;
     }
 
-    // The values a custom format can name: {text}, what the command printed.
     std::vector<Placeholder> CustomPlaceholders(const std::string& text) {
         return {{.name = "text", .value = text}};
     }
 
-    // A json alert draws in the alert color, a json class in that class's colors.
     TextState SucceededState(const CommandResult& result) {
         if (result.alert) {
             return TextState::Alert;

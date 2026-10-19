@@ -67,7 +67,6 @@ TEST(Workspaces, HoverReportsAChangeOnlyWhenTheCursorMovesToAnotherItem) {
     EXPECT_TRUE(module.Hover(D2D1::Point2F(6.0f, middle)));
     EXPECT_FALSE(module.Hover(D2D1::Point2F(7.0f, middle)));
     EXPECT_TRUE(module.Hover(D2D1::Point2F(module.Size().width - 6.0f, middle)));
-    // Into the margin between items, then off the module.
     EXPECT_TRUE(module.Hover(D2D1::Point2F(module.Size().width - 2.0f, middle)));
     EXPECT_FALSE(module.Hover(std::nullopt));
 }

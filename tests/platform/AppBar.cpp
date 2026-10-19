@@ -38,7 +38,6 @@ TEST(AppBar, DockedRectTakesAStripAlongEachEdge) {
         SCOPED_TRACE(static_cast<std::int32_t>(test.edge));
         EXPECT_EQ(DockedRect(monitorRect, test.edge, 54), test.expected);
     }
-    // A secondary monitor keeps its offset from the primary.
     EXPECT_EQ(DockedRect(Rect(1920, -200, 4480, 1240), Edge::Top, 81), Rect(1920, -200, 4480, -119));
 }
 

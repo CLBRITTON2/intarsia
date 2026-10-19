@@ -31,7 +31,6 @@ namespace {
 
     // Windows 11 sends this many bytes for every call, the layout followed by bytes nothing reads.
     constexpr size_t kSentBytes = 1484;
-    // {6B29FC40-CA47-1067-B31D-00DD010662DA}
     constexpr GUID kGuid{0x6B29FC40, 0xCA47, 0x1067, {0xB3, 0x1D, 0x00, 0xDD, 0x01, 0x06, 0x62, 0xDA}};
     constexpr std::wstring_view kAppImage = L"C:\\Program Files\\App\\app.exe";
     constexpr std::wstring_view kOtherImage = L"C:\\Users\\someone\\other.exe";
@@ -54,7 +53,6 @@ namespace {
         });
     }
 
-    // The icons after a message from kAppImage the tray must take. A refusal fails the test and leaves no icons.
     std::vector<TrayIcon> Applied(const std::vector<TrayIcon>& icons, const NotifyIconMessage& message, std::shared_ptr<const IconPixels> pixels) {
         std::optional<std::vector<TrayIcon>> applied = ApplyNotifyIcon(icons, message, kAppImage, std::move(pixels));
         if (!applied.has_value()) {
@@ -153,7 +151,6 @@ namespace {
         HWND _window = FindWindowW(kTestClass, nullptr);
     };
 
-    // Stores the last icon or icon rect message shell32 sends the taskbar window.
     LRESULT CALLBACK CaptureCopyData(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_NCCREATE) {
             SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(IntToPointer<CREATESTRUCTW>(lParam)->lpCreateParams));
@@ -180,10 +177,8 @@ namespace {
         };
     }
 
-    // A monitor above the primary has negative coordinates.
     constexpr RECT kAbovePrimary = Rect(100, -2100, 130, -2070);
 
-    // Answers every icon rect query with kAbovePrimary, as the tray answers one.
     LRESULT CALLBACK AnswerAbovePrimary(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_COPYDATA) {
             const auto* data = IntToPointer<const COPYDATASTRUCT>(lParam);
@@ -194,7 +189,7 @@ namespace {
         return DefWindowProcW(window, message, wParam, lParam);
     }
 
-    // Runs call on a desktop of the test's own, where no Explorer runs, with a taskbar window of the given procedure.
+    // A desktop of the test's own, where no Explorer runs.
     void RunWithTaskbar(WNDPROC procedure, void* state, const std::function<void(HWND taskbar)>& call) {
         std::thread([procedure, state, &call] {
             HDESK desktop = CreateDesktopW(L"intarsia-tray-test", nullptr, nullptr, 0, GENERIC_ALL, nullptr);
@@ -216,8 +211,6 @@ namespace {
         }).join();
     }
 
-    // Runs call on a desktop of the test's own, where no Explorer runs, with a taskbar window that captures what shell32
-    // sends it.
     std::vector<std::byte> CaptureFromShell32(const std::function<void(HWND taskbar)>& call) {
         std::vector<std::byte> captured;
         RunWithTaskbar(CaptureCopyData, &captured, call);
@@ -251,7 +244,6 @@ TEST(NotifyIconProtocol, AddModifyAndDeleteEachChangeTheTraysIcons) {
     EXPECT_EQ(added[0].tooltip, L"first");
     ASSERT_NE(added[0].pixels, nullptr);
 
-    // Only the tip is set, so the callback and pixels stay.
     NotifyIconMessage modify = Message(NIM_MODIFY, 5, 1, NIF_TIP);
     modify.tip = L"second";
     const std::vector<TrayIcon> modified = Applied(added, modify, nullptr);
@@ -297,7 +289,6 @@ TEST(NotifyIconProtocol, AGuidIdentifiesAnIconWhateverItsOwner) {
     add.guid = kGuid;
     const std::vector<TrayIcon> added = Applied({}, add, nullptr);
 
-    // The app's window was recreated: the GUID still finds the icon, which follows the new window.
     NotifyIconMessage modify = Message(NIM_MODIFY, 9, 4, NIF_GUID | NIF_TIP);
     modify.guid = kGuid;
     modify.tip = L"moved";
@@ -319,7 +310,6 @@ TEST(NotifyIconProtocol, AGuidStaysWithTheExecutableThatGaveIt) {
         EXPECT_FALSE(ApplyNotifyIcon(added, takeover, kOtherImage, nullptr).has_value()) << command;
     }
 
-    // Paths compare as Windows compares them, ignoring case.
     NotifyIconMessage modify = Message(NIM_MODIFY, 9, 1, NIF_GUID);
     modify.guid = kGuid;
     EXPECT_TRUE(ApplyNotifyIcon(added, modify, L"c:\\program files\\app\\APP.EXE", nullptr).has_value());
@@ -354,7 +344,6 @@ TEST(NotifyIconProtocol, ShowTipIsReadOnAddAndOnModifiesThatSetTheTip) {
     const std::vector<TrayIcon> added = Applied({}, Message(NIM_ADD, 5, 1, NIF_TIP | NIF_SHOWTIP), nullptr);
     ASSERT_EQ(added.size(), 1u);
     EXPECT_TRUE(added[0].standardTooltip);
-    // Swapping only the icon keeps the standard tooltip.
     const std::vector<TrayIcon> iconOnly = Applied(added, Message(NIM_MODIFY, 5, 1, NIF_ICON), nullptr);
     ASSERT_EQ(iconOnly.size(), 1u);
     EXPECT_TRUE(iconOnly[0].standardTooltip);
@@ -372,7 +361,6 @@ TEST(NotifyIconProtocol, TheSamePixelsKeepTheirPointer) {
     const std::vector<TrayIcon> other = Applied({icon}, Message(NIM_MODIFY, 5, 1, NIF_ICON), Pixels(8));
     ASSERT_EQ(other.size(), 1u);
     EXPECT_NE(other[0].pixels, icon.pixels);
-    // An icon that did not read clears the old one.
     const std::vector<TrayIcon> cleared = Applied({icon}, Message(NIM_MODIFY, 5, 1, NIF_ICON), nullptr);
     ASSERT_EQ(cleared.size(), 1u);
     EXPECT_EQ(cleared[0].pixels, nullptr);
@@ -493,7 +481,6 @@ TEST(NotifyIconProtocol, AnIconWithAGuidIsFoundByIt) {
 
 TEST(NotifyIconProtocol, AnIconNoBarShowsHasNoRect) {
     const std::vector<TrayIconRect> rects{Shown(5, 8, Rect(0, 0, 30, 30))};
-    // Folded away, an icon the tray never had, and a GUID no icon has.
     EXPECT_FALSE(QueriedIconRect(Query(5, 7, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, GUID{}), {Icon(5, 7)}, rects, POINT{.x = 0, .y = 0}).has_value());
     EXPECT_FALSE(QueriedIconRect(Query(5, 8, kGuid), {Icon(5, 8)}, rects, POINT{.x = 0, .y = 0}).has_value());
@@ -607,15 +594,12 @@ TEST_F(ShellNotifyIconTray, MalformedMessagesAreRefusedAndTheTrayKeepsWorking) {
 }
 
 TEST_F(ShellNotifyIconTray, AppBarMessagesAreNotTrayIcons) {
-    // An icon's payload under the appbar kind goes only to Explorer, and with no taskbar of this class the answer is its
-    // absence.
     std::vector<std::byte> appBar = AddPayload(_owner.Get(), 1, nullptr);
     EXPECT_EQ(Send(_window, kAppBarCopyData, appBar), FALSE);
     EXPECT_TRUE(_tray.Icons().empty());
 }
 
 TEST_F(ShellNotifyIconTray, StaysFirstOfItsClassAndOutlivesWmClose) {
-    // Another window of the class rises above it, as Explorer's taskbar does when it activates.
     HWND rival = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, kTestClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     ASSERT_NE(rival, nullptr);
     ASSERT_TRUE(SetWindowPos(rival, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE));

@@ -13,7 +13,6 @@ namespace {
 
     constexpr std::uint32_t kChanged = WM_APP + 9;
 
-    // Whether the system has a default output device, asked of Core Audio directly.
     bool HasDefaultOutput() {
         const ComScope com(ComThreading::Multi, "audio test");
         Microsoft::WRL::ComPtr<IMMDeviceEnumerator> enumerator;

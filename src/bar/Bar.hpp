@@ -26,7 +26,6 @@
 #include <unordered_map>
 #include <vector>
 
-// The monitor a bar docks to, where it is on the desktop and its scale.
 struct BarPlacement {
     HMONITOR monitor;
     RECT monitorRect;

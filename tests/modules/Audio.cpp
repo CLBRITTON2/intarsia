@@ -13,7 +13,6 @@
 
 namespace {
 
-    // A default device a test sets directly, recording the changes modules ask for.
     class FakeAudio final : public IAudio {
       public:
         std::optional<AudioDevice> device;

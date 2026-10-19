@@ -104,7 +104,7 @@ Cpu::Cpu(TextModuleConfig config) :
     _performance(CounterIfNamed(Settings(), {"ghz"}, L"\\Processor Information(_Total)\\% Processor Performance")),
     _cores(CounterIfNamed(Settings(), {"max_core", "cores"}, L"\\Processor(*)\\% Processor Time")) {}
 
-// A sample over a few milliseconds would also swing between 0 and 100.
+// Samples at most once per interval: a sample over a few milliseconds swings between 0 and 100.
 ModuleText Cpu::Format(const std::string& spec) {
     _texts.SampleIfDue(std::chrono::steady_clock::now(), Settings().interval, [this] { Sample(); });
     return NormalText(Settings().icon, _texts.Of(spec, [this, &spec] { return FormatPlaceholders(spec, CpuPlaceholders(_sample)); }));

@@ -45,7 +45,6 @@ namespace {
         return window;
     }
 
-    // A spinner frame, a bar and a percentage that climbs and wraps.
     std::wstring ProgressTitle(std::uint64_t tick) {
         constexpr std::array<wchar_t, 10> kSpinner{L'⠋', L'⠙', L'⠹', L'⠸', L'⠼', L'⠴', L'⠦', L'⠧', L'⠇', L'⠏'};
         const std::uint64_t percent = (tick / 6) % 101;
@@ -54,7 +53,6 @@ namespace {
         return std::format(L"{} building [{}{}] {}%", kSpinner[tick % kSpinner.size()], filled, empty, percent);
     }
 
-    // The foreground window's class and process, which say what took the foreground from the sender.
     std::string ForegroundOwner() {
         HWND foreground = GetForegroundWindow();
         if (foreground == nullptr) {

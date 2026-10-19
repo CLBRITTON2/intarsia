@@ -49,7 +49,6 @@ namespace {
         .bottom = 80,
     };
 
-    // A bar window at kBarRect on screen, with the module's content at 100, 4 DIPs in it.
     ModulePlacement Placement(std::uint32_t dpi) {
         return ModulePlacement{
             .windowRect = kBarRect,
@@ -58,7 +57,6 @@ namespace {
         };
     }
 
-    // Icons a test sets directly, recording every press and move.
     class FakeTray final : public ITray {
       public:
         struct Pressed {
@@ -68,10 +66,10 @@ namespace {
 
         std::vector<TrayIcon> icons;
         std::vector<Pressed> presses;
-        std::vector<std::uint32_t> moves;  // the id of each icon moved over
-        std::vector<std::uint32_t> opened; // the id of each icon whose popup opened
+        std::vector<std::uint32_t> moves;
+        std::vector<std::uint32_t> opened;
         std::vector<std::uint32_t> closed;
-        std::vector<TrayIconRect> rects; // the last a view showed
+        std::vector<TrayIconRect> rects;
 
         std::vector<TrayIcon> Icons() const override {
             return icons;
@@ -98,7 +96,6 @@ namespace {
         }
     };
 
-    // Bitmaps need a device, and the toggle's text needs DirectWrite.
     class TrayModule : public testing::Test {
       public:
         TrayModule() : _graphics(CreateGraphicsDevice()) {
@@ -120,12 +117,10 @@ namespace {
         }
 
       protected:
-        // The middle of the module, across and along.
         D2D1_POINT_2F At(const Tray& module, float x) const {
             return D2D1::Point2F(x, module.Size().height / 2.0f);
         }
 
-        // Lays the module out folded, clicks its toggle and lays it out unfolded.
         void Unfold(Tray& module) const {
             module.Layout(RenderNow(Axis::Horizontal));
             module.Click(At(module, module.Size().width / 2.0f));
@@ -138,7 +133,6 @@ namespace {
             EXPECT_TRUE(SUCCEEDED(_context->EndDraw()));
         }
 
-        // A frame drawn now, as a bar outside any animation draws one.
         RenderContext RenderNow(Axis axis) const {
             RenderContext render = _render;
             render.axis = axis;
@@ -179,7 +173,7 @@ TEST_F(TrayModule, TheToggleTakesItsOwnStyleAndTheIconsKeepTheItemStyle) {
     EXPECT_TRUE(_tray.presses.empty());
     ExpectDraws(padded, Axis::Horizontal);
 
-    // The toggle is last, and its own margin is where the icons end, so a click just inside its box folds the tray.
+    // The toggle is last, with 1 of margin, so 2 in from the end is inside its box.
     padded.Click(At(padded, padded.Size().width - 2.0f));
     EXPECT_TRUE(padded.Layout(RenderNow(Axis::Horizontal)));
     EXPECT_FLOAT_EQ(padded.Size().width, folded);
@@ -203,7 +197,6 @@ TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
     EXPECT_LT(midway, folded + (2.0f * 38.0f));
     ExpectDraws(module, Axis::Horizontal);
 
-    // The toggle moved right with the box's edge, and a click on it there folds the tray back.
     module.Click(At(module, midway - 6.0f));
     EXPECT_TRUE(_tray.presses.empty());
     RenderContext later = RenderNow(Axis::Horizontal);
@@ -212,7 +205,6 @@ TEST_F(TrayModule, UnfoldsOverItsTransitionAndAsksForEveryFrameMeanwhile) {
     EXPECT_FLOAT_EQ(module.Size().width, folded);
 }
 
-// A frame paced to a refresh from before the click still shows the tray folded, however late it is drawn.
 TEST_F(TrayModule, TheFoldMovesByTheFrameTimeNotTheClock) {
     ModuleStyle style = TestModuleStyle();
     style.transition = Transition{.duration = std::chrono::milliseconds(300), .timing = TimingFunction::Linear};
@@ -246,7 +238,6 @@ TEST_F(TrayModule, ClicksReachTheIconsApp) {
     EXPECT_EQ(_tray.presses[1].id, 4u);
     EXPECT_EQ(_tray.presses[1].button, TrayButton::Right);
 
-    // A right click on the toggle does nothing.
     module.RightClick(At(module, module.Size().width - 6.0f));
     EXPECT_EQ(_tray.presses.size(), 2u);
 
@@ -270,7 +261,6 @@ TEST_F(TrayModule, DownAVerticalBarTheIconsUnfoldDownwardAndAreClickedWhereTheyS
     EXPECT_EQ(_tray.presses[0].id, 4u);
     ExpectDraws(module, Axis::Vertical);
 
-    // The toggle is last, below the icons.
     module.Click(D2D1::Point2F(module.Size().width / 2.0f, module.Size().height - 2.0f));
     module.Layout(RenderNow(Axis::Vertical));
     EXPECT_FLOAT_EQ(module.Size().height, folded.height);
@@ -300,7 +290,6 @@ TEST_F(TrayModule, TheIconUnderTheCursorGivesTheTooltip) {
     module.Layout(RenderNow(Axis::Horizontal));
     EXPECT_TRUE(module.Hover(At(module, 57.0f)));
     EXPECT_EQ(module.TooltipText(), L"fourth");
-    // The tooltip sits against the second icon's box, not the whole module.
     const D2D1_RECT_F itemBox = module.TooltipItemBox().value_or(D2D1::RectF(0.0f, 0.0f, 0.0f, 0.0f));
     EXPECT_FLOAT_EQ(itemBox.left, 43.0f);
     EXPECT_FLOAT_EQ(itemBox.right, 71.0f);
@@ -316,13 +305,11 @@ TEST_F(TrayModule, AnIconWhoseAppDrawsItsOwnPopupOpensItOnRestAndClosesItOnLeavi
 
     module.Hover(At(module, 19.0f));
     EXPECT_EQ(module.TooltipText(), std::nullopt);
-    // Resting again opens nothing more.
     EXPECT_EQ(module.TooltipText(), std::nullopt);
     EXPECT_EQ(_tray.opened, std::vector<std::uint32_t>{1u});
     module.Hover(At(module, 20.0f));
     EXPECT_TRUE(_tray.closed.empty());
 
-    // The next icon has the bar's tooltip, and moving to it closes the popup.
     module.Hover(At(module, 57.0f));
     EXPECT_EQ(_tray.closed, std::vector<std::uint32_t>{1u});
     EXPECT_EQ(module.TooltipText(), L"icon");

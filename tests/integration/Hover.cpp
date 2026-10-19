@@ -89,7 +89,6 @@ module {
 }
 )";
 
-    // The ruler prints the probe's tooltip text in the bar, so the two spans can be compared.
     constexpr std::string_view kTooltipConfig = R"(
 return {
     bar = { edge = "top", layer = "top", space = "share", thickness = 40, monitors = { "*" } },
@@ -213,7 +212,7 @@ TEST(Tooltip, OpensWithTheModulesTextAndClosesWhenTheCursorMovesOff) {
         integration::kLimit))
         << "resting over the module never showed its tooltip text";
     integration::Log("tooltip_shown", std::format("text_columns={} ruler_columns={}", tooltipSpan.value_or(-1), rulerSpan.value_or(-1)));
-    // The same text in the same font spans the same columns, give or take antialiasing at its ends.
+    // The tolerance covers antialiasing at the text's ends.
     EXPECT_NEAR(tooltipSpan.value_or(0), rulerSpan.value_or(0), 2) << "the tooltip does not show the module's tooltip text";
 
     bar.MoveCursorTo(bar.OffsetPastLastModule());

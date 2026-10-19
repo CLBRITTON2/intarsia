@@ -55,10 +55,9 @@ namespace {
         std::string String(std::string_view key) const;
         float Number(std::string_view key) const;
 
-        // A sequence of strings such as { "clock", "cpu" }.
         std::vector<std::string> StringList(std::string_view key) const;
 
-        // A sequence of tables such as { { min_length = 1921 } }, each read as layouts[1] and so on.
+        // Each entry's errors name it as key[1], key[2] and so on.
         std::vector<TableReader> TableList(std::string_view key) const;
 
         // Every key of the table, which must all be strings.
@@ -265,8 +264,7 @@ namespace {
         return std::chrono::seconds(value);
     }
 
-    // Rejects a list that names one entry twice. A set rather than a scan of the entries before each one, since a
-    // config's loop can build a list of any length.
+    // A set rather than a scan of the entries before each one, since a config's loop can build a list of any length.
     void RejectRepeats(const TableReader& table, std::string_view key, const std::vector<std::string>& entries) {
         std::set<std::string_view> seen;
         for (const std::string& entry : entries) {
@@ -673,7 +671,6 @@ namespace {
         throw std::invalid_argument(std::format("unknown module kind {}", static_cast<std::int32_t>(kind)));
     }
 
-    // The classes a custom module declares, none for any other module.
     std::vector<std::string> ClassesOf(const ModuleSettings& settings) {
         if (const auto* custom = std::get_if<CustomConfig>(&settings)) {
             return custom->classes;
@@ -693,7 +690,6 @@ namespace {
         };
     }
 
-    // The table of a module a list shows, which must be defined in the modules table, one table per module.
     TableReader DefinedModule(const TableReader& lists, std::string_view listKey, const TableReader& definitions, const std::string& name) {
         if (!definitions.Has(name)) {
             throw lists.Error(std::format("{} shows '{}', which is not defined in modules", lists.KeyPath(listKey), name));
@@ -785,7 +781,6 @@ namespace {
     void RequireMembersInOneGroup(const TableReader& definitions, const Config& config) {
         std::set<std::string, std::less<>> listed;
         std::map<std::string, std::string, std::less<>> groupOf;
-        // Notes each module a list shows, and the one group each member belongs to.
         const auto recordShown = [&listed, &groupOf, &definitions](const ModuleInstance& instance) {
             listed.insert(instance.name);
             const auto* group = std::get_if<GroupConfig>(&instance.settings);

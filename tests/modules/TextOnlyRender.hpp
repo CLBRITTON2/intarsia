@@ -8,7 +8,6 @@
 
 #include <chrono>
 
-// Enough to lay text out: nothing here draws, so there is no device context or brush.
 struct TextOnlyRender {
     Microsoft::WRL::ComPtr<IDWriteFactory> dwrite;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
@@ -23,7 +22,6 @@ struct TextOnlyRender {
         return Along(Axis::Horizontal, 24.0f);
     }
 
-    // For a bar along axis whose module boxes are boxCrossDips across it.
     RenderContext Along(Axis axis, float boxCrossDips) const {
         return RenderContext{
             .context = nullptr,

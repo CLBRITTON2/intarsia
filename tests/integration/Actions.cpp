@@ -18,8 +18,7 @@ namespace {
     constexpr std::string_view kInputsTestName = "input-buttons";
     constexpr std::uint32_t kTextColor = 0x27AE60;
 
-    // Large text in kTextColor for the module both tests name probe, so glyph stems cover whole pixels in the exact
-    // color.
+    // Large text, so glyph stems cover whole pixels in the exact color.
     constexpr std::string_view kStyle = R"(
 bar {
   font: Segoe UI
@@ -36,7 +35,6 @@ probe {
 }
 )";
 
-    // Arguments that need quoting on a command line: a space, quotes, a trailing backslash and an empty one.
     std::string ClickConfig(const std::filesystem::path& record) {
         return std::format(R"(
 return {{
@@ -79,7 +77,7 @@ return {{
                            recorder, file);
     }
 
-    // Sends one input and waits until the record holds lines lines, so each action's line lands in order.
+    // Waits for each action's line before the next send, so the record keeps their order.
     bool RecordsAfter(const std::filesystem::path& record, size_t lines, const std::function<void()>& send) {
         send();
         const bool recorded = integration::Eventually([&] { return integration::RecordedLines(record).size() >= lines; }, integration::kLimit);

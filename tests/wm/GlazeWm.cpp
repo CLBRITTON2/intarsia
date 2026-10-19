@@ -26,7 +26,6 @@ namespace {
 
     constexpr char kFirstWindowId[] = "0b7c6a8e-5f0e-4c1a-9d3b-2a1f0e9c8b7a";
 
-    // Windows directly under a displayed workspace and inside a split, and one on a hidden workspace the bar skips.
     constexpr std::string_view kWindowsResponse = R"json({
         "messageType": "client_response", "clientMessage": "query monitors", "success": true, "error": null,
         "data": { "monitors": [
@@ -83,7 +82,6 @@ TEST(GlazeWmProtocol, WorkspacesCarryTheirMonitorAndPreferTheDisplayName) {
     EXPECT_EQ(workspaces[1].label, L"web");
     EXPECT_EQ(workspaces[1].name, "5");
     EXPECT_TRUE(workspaces[1].focused);
-    // An empty display name falls back to the name, as a null one does.
     EXPECT_EQ(workspaces[2].label, L"9");
     EXPECT_EQ(workspaces[2].monitor, 131073);
 }
@@ -196,11 +194,9 @@ TEST(GlazeWmProtocol, GateSendsTheFirstQueryAndHoldsTheRestOfABurst) {
     EXPECT_TRUE(gate.RequestQuery());
     EXPECT_FALSE(gate.RequestQuery());
     EXPECT_FALSE(gate.RequestQuery());
-    // Events arrived while the query was out, so exactly one more goes out.
     EXPECT_TRUE(gate.Answered());
     EXPECT_FALSE(gate.Answered());
     EXPECT_TRUE(gate.RequestQuery());
-    // An answer with no events behind it sends nothing more.
     EXPECT_FALSE(gate.Answered());
     EXPECT_TRUE(gate.RequestQuery());
 }

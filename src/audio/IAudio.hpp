@@ -10,7 +10,6 @@ enum class AudioFlow : std::uint8_t {
     Input
 };
 
-// The default device of one flow as the audio module shows it.
 struct AudioDevice {
     std::wstring name; // as the system's sound settings show it
     float volume;      // 0 to 1

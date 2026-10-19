@@ -366,7 +366,6 @@ void ShellNotifyIcon::Press(const TrayIcon& icon, TrayButton button) {
         IsDoubleClick(_lastClick, click, std::chrono::milliseconds(GetDoubleClickTime()), SIZE{.cx = GetSystemMetrics(SM_CXDOUBLECLK), .cy = GetSystemMetrics(SM_CYDOUBLECLK)});
     std::vector<std::uint32_t> events;
     if (doubled) {
-        // A third click after a double click starts a new pair, as Windows counts them.
         _lastClick = std::nullopt;
         events = DoubleClickEvents(button);
     } else {

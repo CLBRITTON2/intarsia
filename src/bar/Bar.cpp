@@ -73,7 +73,6 @@ namespace {
         return PixelsToDips(EdgeLengthPixels(placement.monitorRect, edge), placement.dpi);
     }
 
-    // Where SetWindowPos puts a bar of layer in the z-order.
     HWND LayerZOrder(Layer layer) {
         switch (layer) {
             case Layer::Top: return HWND_TOPMOST;
@@ -82,9 +81,7 @@ namespace {
         throw std::invalid_argument(std::format("unknown layer {}", static_cast<std::int32_t>(layer)));
     }
 
-    // The bar window's rect on monitorRect, thickness pixels across, reserved with the shell through route when bar
-    // reserves space. A shared bar stays a registered appbar, so the shell still tells it of fullscreen apps and of other
-    // appbars moving.
+    // A shared bar stays a registered appbar, so the shell still tells it of fullscreen apps and of other appbars moving.
     RECT BarRect(HWND window, const RECT& monitorRect, const BarConfig& bar, std::int32_t thickness, AppBarRoute route) {
         switch (bar.space) {
             case Space::Reserve: return ReserveRect(window, monitorRect, bar.edge, thickness, route);
@@ -357,7 +354,6 @@ LRESULT Bar::Dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
             _cursor = std::nullopt;
             FadeBoxesToHover();
             _tooltip->Hide();
-            // Draws the box that was under the cursor without its hover.
             Redraw();
             return 0;
         case WM_LBUTTONUP: HandleInput(ClientPoint(lParam), ModuleInput::LeftClick); return 0;

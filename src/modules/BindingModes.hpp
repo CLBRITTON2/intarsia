@@ -22,7 +22,6 @@ class BindingModes final : public IModule {
     bool Hover(std::optional<D2D1_POINT_2F> point) override;
     // 0 while an item fades, so the bar draws every display frame until the fades end.
     std::optional<std::uint32_t> MillisecondsUntilChange() const override;
-    // None: the module takes no actions.
     const ModuleActions& Actions() const override;
 
   private:

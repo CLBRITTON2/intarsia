@@ -21,8 +21,6 @@ namespace {
         return (std::round((dips + offset) * pixelsPerDip) / pixelsPerDip) - offset;
     }
 
-    // A line's width rounded down to whole device pixels but never to none. A width of zero or less draws no line and
-    // stays as it is.
     float SnapLineWidth(float pixelsPerDip, float dips) {
         if (dips <= 0.0f) {
             return dips;
@@ -281,7 +279,6 @@ namespace {
         return SameSide(first.top, second.top) && SameSide(first.right, second.right) && SameSide(first.bottom, second.bottom) && SameSide(first.left, second.left);
     }
 
-    // The ring between outer and inner, or the whole of outer when the border leaves no inside.
     std::vector<Figure> BorderRingFigures(const Figure& outer, const Figure& inner) {
         if (IsEmpty(inner.rect)) {
             return {outer};

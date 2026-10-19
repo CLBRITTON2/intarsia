@@ -16,7 +16,6 @@ inline std::uint32_t Handle32(const void* handle) {
     return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(handle));
 }
 
-// A notify icon message for owner's icon id with every other field empty, as an app's Shell_NotifyIconW sends it.
 inline TrayNotifyData NotifyData(std::uint32_t command, std::uint32_t owner, std::uint32_t id, std::uint32_t flags, std::uint32_t callbackMessage) {
     TrayNotifyData data{};
     data.signature = kTrayNotifySignature;
@@ -29,7 +28,7 @@ inline TrayNotifyData NotifyData(std::uint32_t command, std::uint32_t owner, std
     return data;
 }
 
-// A 16 pixel icon of one opaque color, which the caller destroys with DestroyIcon.
+// The caller destroys it with DestroyIcon.
 inline HICON CreateSolidIcon(std::uint32_t rgb) {
     constexpr std::uint32_t kSide = 16;
     const std::vector<std::uint32_t> pixels(size_t{kSide} * kSide, rgb | 0xFF000000U);

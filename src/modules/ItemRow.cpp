@@ -19,7 +19,6 @@ namespace {
         D2D1_COLOR_F text;
     };
 
-    // The colors an item fades to: its hover colors under the cursor.
     ItemColors TargetColors(const ItemStyle& style, bool hovered) {
         if (hovered) {
             return ItemColors{.background = style.hoverBackground, .text = style.hoverColor};

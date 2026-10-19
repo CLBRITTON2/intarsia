@@ -18,7 +18,6 @@ namespace {
     // How often a rate shown on the bar is read again, the backend's own sampling interval.
     constexpr std::uint32_t kRateTickMs = 1000;
 
-    // The values every network format can name, from the state.
     std::vector<Placeholder> NetworkPlaceholders(const NetworkState& state) {
         return {{.name = "ssid", .value = ToUtf8(state.ssid)},
                 {.name = "signal", .value = std::int64_t{state.signalPercent.value_or(0)}},

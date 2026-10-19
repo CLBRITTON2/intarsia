@@ -10,7 +10,6 @@
 
 namespace {
 
-    // The std::format pattern for one value formatted by spec.
     std::string FieldPattern(std::string_view spec) {
         if (spec.empty()) {
             return "{}";
@@ -39,8 +38,8 @@ namespace {
         return names;
     }
 
-    // Walks the format, giving literal text to onText and each {name:spec} field to onField, with an empty spec when
-    // the field has none. Throws std::format_error for an unmatched brace.
+    // Literal text goes to onText and each {name:spec} field to onField, with an empty spec when the field has none.
+    // Throws std::format_error for an unmatched brace.
     void WalkFormat(std::string_view format, const std::function<void(std::string_view)>& onText, const std::function<void(std::string_view, std::string_view)>& onField) {
         size_t index = 0;
         while (index < format.size()) {

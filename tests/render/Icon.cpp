@@ -9,7 +9,6 @@
 
 namespace {
 
-    // A blank icon of the given size, which the caller destroys.
     HICON BlankIcon(std::int32_t side) {
         HBITMAP color = CreateBitmap(side, side, 1, 32, nullptr);
         HBITMAP mask = CreateBitmap(side, side, 1, 1, nullptr);
@@ -26,7 +25,7 @@ namespace {
         return icon;
     }
 
-    // A monochrome icon of the given size: no color bitmap, and a mask twice as tall holding both masks.
+    // Without a color bitmap, the mask holds both masks and is twice as tall.
     HICON MonochromeIcon(std::int32_t side) {
         HBITMAP mask = CreateBitmap(side, side * 2, 1, 1, nullptr);
         ICONINFO info{
@@ -41,7 +40,6 @@ namespace {
         return icon;
     }
 
-    // A COM apartment and a WIC factory for the test's thread, as a thread that reads icons holds them.
     class IconReading : public testing::Test {
       protected:
         IWICImagingFactory& Imaging() const {

@@ -76,7 +76,6 @@ namespace {
         return 0.0f;
     }
 
-    // The icon, the gap and the text side by side along a horizontal bar, stacked down a vertical one.
     D2D1_SIZE_F CombinedSize(Axis axis, D2D1_SIZE_F iconSize, float gapDips, D2D1_SIZE_F textSize) {
         if (axis == Axis::Horizontal) {
             return D2D1::SizeF(iconSize.width + gapDips + textSize.width, std::max(iconSize.height, textSize.height));

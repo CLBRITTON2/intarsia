@@ -18,7 +18,6 @@ namespace {
     constexpr std::uint32_t kGroupColor = 0x8E44AD;
     constexpr std::uint32_t kMemberColor = 0x27AE60;
 
-    // A group whose one member records "member" in record on a click.
     std::string GroupConfig(const std::filesystem::path& record) {
         return std::format(R"(
 return {{

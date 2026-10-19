@@ -15,7 +15,6 @@
 #include <string_view>
 #include <utility>
 
-// Test-only TCP on 127.0.0.1, for playing the far end of a connection the code under test makes.
 namespace loopback {
 
     class Winsock {
@@ -85,7 +84,6 @@ namespace loopback {
         return listener;
     }
 
-    // Listening on a port the OS picks.
     inline Socket Listen() {
         return ListenOn(0);
     }
@@ -100,7 +98,6 @@ namespace loopback {
         }
     }
 
-    // Everything up to and including the blank line that ends an HTTP request's headers.
     inline std::string ReceiveHeaders(const Socket& socket) {
         std::string headers;
         char byte = 0;
@@ -113,7 +110,6 @@ namespace loopback {
         return headers;
     }
 
-    // Blocks until the other end closes, reading and dropping whatever it sends.
     inline void DrainUntilClosed(const Socket& socket) {
         char buffer[256];
         while (recv(socket.Get(), buffer, sizeof(buffer), 0) > 0) {}
@@ -130,7 +126,6 @@ namespace loopback {
         }
     }
 
-    // Whether data waits to be read within wait.
     inline bool Readable(const Socket& socket, std::chrono::milliseconds wait) {
         fd_set readable;
         FD_ZERO(&readable);
@@ -162,7 +157,6 @@ namespace loopback {
         return headers.substr(valueStart, headers.find("\r\n", valueStart) - valueStart);
     }
 
-    // Reads the client's upgrade request and accepts it.
     inline void AnswerUpgrade(const Socket& peer) {
         const std::string key = HeaderValue(ReceiveHeaders(peer), "Sec-WebSocket-Key");
         SendAll(peer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " + AcceptKey(key) + "\r\n\r\n");
@@ -199,8 +193,7 @@ namespace loopback {
         return 8;
     }
 
-    // The next text message from the client, answering pings on the way, or nullopt once it closes. Assumes the client
-    // never fragments, which WinHTTP does not for the short commands the bar sends.
+    // nullopt once the client closes. Assumes WinHTTP never fragments the short commands the bar sends.
     inline std::optional<std::string> ReceiveText(const Socket& peer) {
         while (true) {
             std::array<char, 2> header{};

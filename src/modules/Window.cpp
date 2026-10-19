@@ -14,7 +14,6 @@ namespace {
         return unit >= 0xD800 && unit <= 0xDBFF;
     }
 
-    // The values a window tooltip can name: {title}, the whole title.
     std::vector<Placeholder> WindowPlaceholders(std::wstring_view title) {
         return {{.name = "title", .value = ToUtf8(title)}};
     }

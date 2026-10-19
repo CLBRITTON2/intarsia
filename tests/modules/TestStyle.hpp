@@ -7,7 +7,6 @@
 #include <string>
 #include <utility>
 
-// An item in a test style: padded 4 across and 2 down, 5 of margin across on each side, so two items are 10 apart.
 inline ItemStyle TestItemStyle(std::uint32_t color, std::uint32_t background) {
     return ItemStyle{
         .color = D2D1::ColorF(color),
@@ -63,7 +62,6 @@ inline ModuleStyle TestModuleStyle() {
     };
 }
 
-// A text module config showing format every second, with no tooltip, icon or actions.
 inline TextModuleConfig TextConfigWithFormat(std::string format) {
     return TextModuleConfig{
         .format = std::move(format),

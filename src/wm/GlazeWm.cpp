@@ -99,7 +99,6 @@ namespace glazewm {
             return DrawableText(StringField(object, "name", context));
         }
 
-        // Empty unless the message carries an error string.
         std::string ErrorText(const nlohmann::json& message) {
             const auto error = message.find("error");
             if (error != message.end() && error->is_string()) {
@@ -108,7 +107,6 @@ namespace glazewm {
             return {};
         }
 
-        // Empty when the event's data is not an object.
         std::string EventType(const nlohmann::json& data) {
             if (!data.is_object()) {
                 return {};

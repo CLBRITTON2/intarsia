@@ -14,18 +14,15 @@
 #include <string_view>
 #include <vector>
 
-// Runs the real intarsia.exe against the test GlazeWM server (tests/support/GlazeWmServer.cpp) and observes it only
-// from outside the process: the commands the server receives, the bar's windows and its log.
+// Observes the real intarsia.exe only from outside the process: the server's commands, the bar's windows and its log.
 namespace integration {
 
     // The test server lists only windows whose title starts with this (tests/support/GlazeWmServer.cpp).
     inline constexpr std::wstring_view kWindowTitle = L"intarsia integration";
     // The bar's --tray-class, one no app uses, so the bar never takes the desktop's tray.
     inline constexpr std::wstring_view kTrayClass = L"IntarsiaIntegrationTray";
-    // How long a test waits for the bar to draw, log or run something.
     inline constexpr std::chrono::seconds kLimit{5};
 
-    // A visible, minimized top-level window titled kWindowTitle plus suffix, so the test server lists it.
     class TestWindow {
       public:
         explicit TestWindow(std::wstring_view suffix);
@@ -37,32 +34,24 @@ namespace integration {
         HWND _window;
     };
 
-    // Prints a line in the bar's log layout to stdout, component harness, the fields as key=value pairs.
     void Log(std::string_view event, std::string_view fields);
-    // value as one key=value field value, quoted when it is empty or holds a space.
     std::string LogValue(std::string_view value);
 
-    // Where NewWorkDirectory(name), and so a RunningBar named name, keeps its files, known before either makes it.
     std::filesystem::path WorkDirectoryPath(std::string_view name);
-    // A new empty directory under the temp directory, kept after the test so its logs can be read.
+    // Kept after the test so its logs can be read.
     std::filesystem::path NewWorkDirectory(std::string_view name);
     void WriteText(const std::filesystem::path& path, std::string_view text);
     std::vector<std::string> ReadLines(const std::filesystem::path& path);
-    // ReadLines of a file a child may not have written yet, empty until it has.
     std::vector<std::string> RecordedLines(const std::filesystem::path& path);
 
-    // Polls condition until it holds or limit passes, pumping this thread's messages meanwhile so the bar's reads of
-    // the test's own windows are answered.
+    // Pumps this thread's messages while it polls, so the bar's reads of the test's own windows are answered.
     bool Eventually(const std::function<bool()>& condition, std::chrono::milliseconds limit);
-    // Pumps this thread's messages for duration, for a test that checks something did not happen.
     void PumpFor(std::chrono::milliseconds duration);
 
-    // Sends a left click every few pixels along the bar's middle line, from its start, each handled before the next is
-    // sent. The number of clicks sent.
+    // Clicks every few pixels along the bar's middle line, each handled before the next, and returns the count.
     std::uint32_t SweepClicks(HWND bar);
-    // Sends WM_KEYDOWN for a virtual key and waits until the window has handled it.
+    // Waits until the window has handled the key.
     void SendKey(HWND window, std::uint32_t virtualKey);
-    // Where the real cursor was when made, where it goes back to when destroyed.
     class SavedCursor {
       public:
         SavedCursor();
@@ -74,7 +63,7 @@ namespace integration {
         POINT _position;
     };
 
-    // What the screen shows over a window, as 0xRRGGBB per pixel, row by row.
+    // 0xRRGGBB per pixel, row by row.
     struct Capture {
         std::int32_t width;
         std::int32_t height;
@@ -85,32 +74,25 @@ namespace integration {
     // Copies the window's rect from the screen, since a DirectComposition window draws nothing into its own DC.
     Capture CaptureScreenOver(HWND window);
     size_t CountPixels(const Capture& capture, std::uint32_t rgb);
-    // Columns from the leftmost pixel in rgb to the rightmost, both counted, or nullopt when there are none.
     std::optional<std::int32_t> ColumnSpan(const Capture& capture, std::uint32_t rgb);
-    // The mean column of the pixels in rgb, or nullopt when there are none.
     std::optional<double> MeanColumn(const Capture& capture, std::uint32_t rgb);
 
-    // argv_recorder.exe (tests/integration/ArgvRecorder.cpp), for a config's actions and custom commands to name.
     std::filesystem::path ArgvRecorderPath();
     std::filesystem::path CliPath();
-    // text as a Lua long string, which takes backslashes and quotes as they are.
+    // A Lua long string, which takes backslashes and quotes as they are.
     std::string LuaString(std::string_view text);
     std::string LuaPath(const std::filesystem::path& path);
 
-    // The server a RunningBar starts and the bar log event that shows the bar has reached it.
     struct TestServer {
         std::filesystem::path program;
         std::wstring scenario;
         std::string readyEvent;
     };
 
-    // tests/support/GlazeWmServer.cpp, run with its scenario of that name, which the bar trusts and connects to.
     TestServer GlazeWmTestServer(std::wstring_view scenario);
 
-    // The test server and a bar connected to it, both started from config and style text written to a work directory.
     class RunningBar {
       public:
-        // Against GlazeWmTestServer(L"integration").
         RunningBar(std::string_view testName, std::string_view config, std::string_view style);
         RunningBar(std::string_view testName, std::string_view config, std::string_view style, TestServer server);
         // Closes the bar unless the test already has, and records a test failure unless it exits 0.
@@ -119,57 +101,42 @@ namespace integration {
         RunningBar& operator=(const RunningBar&) = delete;
 
         HWND PrimaryBar() const;
-        // Each sends its input offset pixels along the primary bar's middle line and logs it.
+        // Offsets are pixels along the primary bar's middle line from its start.
         void ClickAt(std::int32_t offset) const;
         void ButtonUpAt(std::uint32_t message, std::int32_t offset) const;
         void WheelAt(std::int32_t offset, std::int16_t delta) const;
-        // Moves the real cursor offset pixels along the primary bar's middle line and logs it. Hover and leave come only
-        // from the real cursor: a sent WM_MOUSEMOVE starts TrackMouseEvent, which posts WM_MOUSELEAVE at once while the
-        // cursor is elsewhere.
+        // A sent WM_MOUSEMOVE's TrackMouseEvent posts WM_MOUSELEAVE at once while the real cursor is elsewhere.
         void MoveCursorTo(std::int32_t offset) const;
-        // An offset 2 pixels before the primary bar's end, where no module lies while the right section is empty.
+        // No module lies there only while the right section is empty.
         std::int32_t OffsetPastLastModule() const;
-        // Each is the bar's window of that kind while it is shown, or null.
         HWND Tooltip() const;
         HWND Menu() const;
-        // Each is nullopt while the primary bar has no window, as between the bars a reload replaces and their new
-        // ones.
+        // nullopt between the bars a reload replaces and their new ones.
         std::optional<size_t> PixelCount(std::uint32_t rgb) const;
         std::optional<double> MeanColumnOf(std::uint32_t rgb) const;
-        // MeanColumnOf rounded to a pixel once the primary bar draws rgb. Throws std::runtime_error, failing the test,
-        // when it does not within limit.
+        // Throws std::runtime_error when the primary bar does not draw rgb within limit.
         std::int32_t DrawnColumn(std::uint32_t rgb, std::chrono::milliseconds limit) const;
-        // Each waits until the primary bar draws some pixel in rgb, or none, within limit and logs the count.
         bool Draws(std::uint32_t rgb, std::chrono::milliseconds limit) const;
         bool StopsDrawing(std::uint32_t rgb, std::chrono::milliseconds limit) const;
-        // Every command the server has received so far, across its restarts.
+        // Across the server's restarts.
         std::vector<std::string> Commands() const;
-        // Commands sent after a sweep of clicks along the primary bar, with repeats folded. Waits until the stream
-        // has been quiet for a moment, since the bar sends them from a thread of its own.
+        // Repeats folded. Waits for the stream to go quiet, since the bar sends from a thread of its own.
         std::vector<std::string> CommandsFromSweep() const;
-        // Lines of the bar's structured stderr log that contain text.
         std::vector<std::string> LogLines(std::string_view text) const;
-        // Lines of the bar's structured stderr log whose event is event.
         std::vector<std::string> Events(std::string_view event) const;
         void StopServer();
         void StartServer();
-        // Has the server focus its indexth listed window and waits until it has sent the bar the events for it.
+        // Waits until the server has sent the bar the events for focusing its indexth listed window.
         void PushFocus(size_t index);
-        // Each writes over its file in one save, as an editor does, which the running bar reloads.
         void SaveConfig(std::string_view config) const;
         void SaveStyle(std::string_view style) const;
-        // Closes the bar as a user would, posting WM_CLOSE to its message box too after a fatal error. Its exit code,
-        // or nullopt when it still ran after the limit and was killed.
+        // nullopt when the bar outlived the exit limit and was killed.
         std::optional<std::uint32_t> Close();
 
       private:
-        // The bar's process. Throws std::logic_error once the test has closed it.
         const ChildProcess& OpenBar() const;
-        // Sweeps once, logs each command it sent with how many clicks sent it, and returns them all.
         std::vector<std::string> Sweep(std::uint32_t attempt) const;
-        // Prints the bar's log and every server's stderr, each line tagged with its file.
         void PrintLogs() const;
-        // The bar's structured stderr log.
         std::filesystem::path BarErrors() const;
         std::filesystem::path ServerOutput(std::uint32_t start) const;
         std::filesystem::path ServerErrors(std::uint32_t start) const;

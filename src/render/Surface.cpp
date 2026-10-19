@@ -79,7 +79,6 @@ namespace {
         DrawMask(backdrop.mask, box, dpi);
     }
 
-    // Only the system's blur is a composition visual. The other sources draw into the content, and show none here.
     std::vector<D2D1_ROUNDED_RECT> SystemBlurBoxes(const std::vector<D2D1_ROUNDED_RECT>& boxes, const Backdrop& backdrop) {
         if (backdrop.source != BackdropSource::System) {
             return {};

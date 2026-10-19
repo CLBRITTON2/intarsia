@@ -61,7 +61,6 @@ TEST(ColorFade, RetargetedMidwayItStartsFromWhereItIs) {
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     ColorFade fade(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), kLinear100, start);
-    // The same target again neither restarts nor stalls the fade.
     fade.Retarget(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), kLinear100, start + std::chrono::milliseconds(50));
     EXPECT_NEAR(fade.Color(start + std::chrono::milliseconds(75)).r, 0.75f, 0.001f);
     fade.Retarget(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), kLinear100, start + std::chrono::milliseconds(75));
@@ -109,7 +108,6 @@ TEST(ShadowFade, RetargetedMidwayItKeepsNoMoreShadowsThanEitherEndHolds) {
         }
     }
     EXPECT_EQ(fade.Shadows(start + std::chrono::milliseconds(95)).size(), 1u);
-    // The same target again neither restarts nor stalls the fade.
     fade.Retarget({kLine}, kLinear100, start + std::chrono::milliseconds(95));
     EXPECT_FALSE(fade.Running(start + std::chrono::milliseconds(190)));
 }
@@ -121,7 +119,6 @@ TEST(AnimatedValue, TimingFunctionsRunFromZeroToOneInTheirCssShapes) {
     }
     EXPECT_NEAR(Eased(TimingFunction::Linear, 0.5f), 0.5f, 0.001f);
     EXPECT_NEAR(Eased(TimingFunction::EaseInOut, 0.5f), 0.5f, 0.001f);
-    // ease-out is fast first and ease-in slow first, by CSS's control points.
     EXPECT_GT(Eased(TimingFunction::EaseOut, 0.25f), 0.35f);
     EXPECT_LT(Eased(TimingFunction::EaseIn, 0.25f), 0.15f);
     EXPECT_NEAR(Eased(TimingFunction::Ease, 0.5f), 0.8024f, 0.002f);
@@ -146,7 +143,6 @@ TEST(Fold, StartsFoldedThenUnfoldsOverTheWidthTransitionAndTurnsOverTheIcons) {
     fold.Toggle(kStart);
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(50)).revealed, 0.5f);
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(50)).angleDegrees, -45.0f);
-    // Unfolded, and still turning.
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(100)).revealed, 1.0f);
     EXPECT_TRUE(fold.Running(kStart + milliseconds(150)));
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(200)).angleDegrees, 90.0f);
@@ -157,7 +153,6 @@ TEST(Fold, ToggledMidWayFoldsBackFromWhereItIs) {
     Fold fold(TurningStyle());
     fold.Toggle(kStart);
     fold.Toggle(kStart + milliseconds(50));
-    // Half open, it folds over half the duration.
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(75)).revealed, 0.25f);
     EXPECT_FLOAT_EQ(fold.At(kStart + milliseconds(100)).revealed, 0.0f);
 }

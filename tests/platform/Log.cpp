@@ -33,7 +33,7 @@ TEST(Log, TheFileKeepsTheLastRunsLogAndGetsEveryLineStamped) {
 
     EXPECT_EQ(ReadAll(directory / "intarsia.1.log"), "the last run\n");
     const std::string written = ReadAll(path);
-    // [2026-09-28T17:38:07.062Z], then the line as stderr has it, its value escaped onto one line.
+    // The stamp looks like [2026-09-28T17:38:07.062Z].
     EXPECT_EQ(written.find("Z]"), 24u);
     EXPECT_NE(written.find(R"(Z]  WARN test         written value="one\x0atwo")"), std::string::npos);
 }

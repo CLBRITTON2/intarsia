@@ -34,7 +34,6 @@ namespace {
         return std::wstring(path.data(), length);
     }
 
-    // A primary token like this process's, lowered to low integrity the way a sandbox runs.
     UniqueHandle LowIntegrityToken() {
         HANDLE own = nullptr;
         if (!OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_ASSIGN_PRIMARY, &own)) {
@@ -153,7 +152,6 @@ TEST(WebSocket, LocalPortNamesTheConnectionForThePeerCheck) {
 TEST(PeerProcess, RejectsAConnectionThatIsNotOpen) {
     const loopback::Winsock winsock;
     const loopback::Socket listener = loopback::Listen();
-    // A listener with nobody connected: there is no server end to find.
     EXPECT_THROW(LoopbackPeerProcess(1, listener.Port()), PeerVerificationError);
 }
 

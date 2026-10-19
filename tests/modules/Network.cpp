@@ -11,7 +11,6 @@
 
 namespace {
 
-    // A network state a test sets directly.
     class FakeNetwork final : public INetwork {
       public:
         NetworkState state = NetworkState::None();
@@ -76,7 +75,6 @@ TEST(Network, TooltipCarriesTheAddressAndRates) {
     EXPECT_EQ(module.TooltipText(), L"192.0.2.7 down 1.2 MB/s up 800 B/s");
 }
 
-// The backend tells of link changes only, so a rate on the bar is read on a tick, and one only in the tooltip is not.
 TEST(Network, ARateInAFormatMakesTheModuleTick) {
     const FakeNetwork network;
     EXPECT_FALSE(ShowsRates(TestConfig()));

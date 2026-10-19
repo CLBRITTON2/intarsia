@@ -10,7 +10,7 @@
 #include <functional>
 #include <thread>
 
-// A message-only window for code under test to post to, destroyed with the object on the thread that made it.
+// Must be destroyed on the thread that made it.
 class MessageWindow {
   public:
     MessageWindow() : _window(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr)) {
@@ -32,7 +32,6 @@ class MessageWindow {
     HWND _window;
 };
 
-// A message window and a ChangeSignal posting message to it, for code under test that announces changes.
 struct ChangeTarget {
     explicit ChangeTarget(std::uint32_t message) : signal(window.Get(), message) {}
 
@@ -40,8 +39,7 @@ struct ChangeTarget {
     ChangeSignal signal;
 };
 
-// Polls condition until it holds or limit passes. Leaves this thread's message queue alone, so a test can read what
-// was posted to it.
+// Leaves this thread's message queue alone, so a test can read what was posted to it.
 inline bool Eventually(const std::function<bool()>& condition, std::chrono::milliseconds limit) {
     const auto deadline = std::chrono::steady_clock::now() + limit;
     while (std::chrono::steady_clock::now() < deadline) {
@@ -53,8 +51,7 @@ inline bool Eventually(const std::function<bool()>& condition, std::chrono::mill
     return condition();
 }
 
-// Eventually, answering the messages other threads send this one meanwhile (a reader thread's WM_GETICON waits on
-// it). Posted messages stay queued, so condition can read them.
+// Eventually, but answers sent messages (a reader thread's WM_GETICON waits on it) and leaves posted ones queued.
 inline bool AnsweringUntil(const std::function<bool()>& condition, std::chrono::milliseconds limit) {
     const auto deadline = std::chrono::steady_clock::now() + limit;
     while (std::chrono::steady_clock::now() < deadline) {

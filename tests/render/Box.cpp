@@ -46,8 +46,6 @@ namespace {
         return context;
     }
 
-    // A clear bitmap of kCanvasWidth by kDrawnHeight pixels at pixelsPerDip with one BoxCache, which every box drawn on
-    // it shares.
     class BitmapCanvas {
       public:
         explicit BitmapCanvas(float pixelsPerDip) :
@@ -56,8 +54,6 @@ namespace {
             _context->SetDpi(USER_DEFAULT_SCREEN_DPI * pixelsPerDip, USER_DEFAULT_SCREEN_DPI * pixelsPerDip);
         }
 
-        // The canvas cleared, then style's box from its left edge, widthDips wide and as tall as the canvas, as
-        // premultiplied BGRA rows.
         std::vector<std::uint8_t> Draw(const BoxStyle& style, float widthDips) {
             _context->BeginDraw();
             _context->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
@@ -115,8 +111,7 @@ namespace {
         };
     }
 
-    // An unblurred shadow whose hole is the box moved down 2 and shrunk 3: rows 5 to height - 2, columns 3 to
-    // width - 4.
+    // Its hole is rows 5 to height - 2 and columns 3 to width - 4.
     BoxStyle HardShadowed(const D2D1_COLOR_F& color) {
         return Lined(Uniform(0.0f),
                      {InsetShadow{
@@ -145,7 +140,6 @@ TEST(PixelGrid, SnapRectCountsTheTransformsTranslation) {
         .offsetY = 0.0f,
     };
     const D2D1_RECT_F snapped = SnapRect(scrolled, D2D1::RectF(10.3f, 0.0f, 20.0f, 10.0f));
-    // 10.3 DIPs lands on device pixel 13.5 once moved by the translation, which rounds to 14.
     EXPECT_FLOAT_EQ(snapped.left, 10.7f);
 }
 
@@ -212,8 +206,7 @@ TEST(Box, BackdropOutlinesAreTheSnappedBoxesRoundedNoMoreThanHalfTheirShorterSid
                     .empty());
 }
 
-// A 1px ring round a 14 radius corner, red on top and blue on the left: CSS splits the curve where it meets the
-// diagonal from the corner, so the curve is the top's color down to it and the left's from there, with no gap between.
+// CSS splits a two-color corner's curve on the diagonal from the corner, with no gap between.
 TEST(Box, ACornerOfTwoColorsSplitsItsCurveOnTheDiagonal) {
     const BorderSide red{.widthDips = 1.0f, .color = D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f)};
     const BorderSide blue{.widthDips = 1.0f, .color = D2D1::ColorF(0.0f, 0.0f, 1.0f, 1.0f)};
@@ -300,8 +293,7 @@ TEST(Box, OneCacheRedrawsAShadowWhoseColorChanged) {
     EXPECT_LT(Red(blue, 30, 4), 50);
 }
 
-// A shadow box far longer than its edges reach, both ways, draws from a bitmap of both ends and one row and column
-// between. Both lengths draw from one such bitmap, and each edge of the hard shadow still lands on its own pixel.
+// A box far longer than its edges reach draws from a cached bitmap of both ends and one row and column between.
 TEST(Box, OneCacheDrawsOneStyleAtTwoLengthsWithEachEdgeInPlace) {
     BitmapCanvas canvas(1.0f);
     const BoxStyle style = HardShadowed(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));

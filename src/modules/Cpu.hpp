@@ -25,7 +25,6 @@ std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
 // are not a processor's number (_Total) are left out.
 std::string FormatCoreUsage(const std::vector<CounterInstance>& instances);
 
-// What one cpu sample holds.
 struct CpuSample {
     std::int32_t usagePercent;
     double gigahertz;            // 0 until the performance counter's second sample

@@ -47,10 +47,8 @@ struct GroupLayout {
 // the share of the members' total length the box takes, so members past it lie outside the shown span.
 GroupLayout ArrangeGroup(float toggleLength, const std::vector<float>& memberLengths, float revealed, EndInsets insets);
 
-// The style's content insets at the start and end along axis.
 EndInsets MainInsets(const BoxStyle& style, Axis axis);
 
-// The style's content insets at the start and end across axis.
 EndInsets CrossInsets(const BoxStyle& style, Axis axis);
 
 // Where a module's content starts in its box: past the insets along the bar, centered between them across it.
