@@ -20,6 +20,9 @@ configure_file(src/intarsia.rc.in ${CMAKE_BINARY_DIR}/intarsia-cli.rc @ONLY)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# The static C runtime for every target, Lua and the tests included, so the executables need nothing but Windows.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 # SDL checks, Control Flow Guard and CET shadow stack compatibility for every target, Lua and the tests included.
 # An incremental relink can leave the Control Flow Guard table stale, so an indirect call into an object it did not
 # recompile fails fast in ntdll (FAST_FAIL_GUARD_ICALL_CHECK_FAILURE).
@@ -135,8 +138,8 @@ endif()
 
 add_executable(intarsia WIN32 src/main.cpp src/intarsia.manifest ${CMAKE_BINARY_DIR}/intarsia.rc)
 target_link_libraries(intarsia PRIVATE intarsia_core)
-# 0x800 is LOAD_LIBRARY_SEARCH_SYSTEM32: the loader resolves the executable's imports (d2d1, winhttp, the C runtime)
-# from System32 only, never from a DLL planted beside it.
+# 0x800 is LOAD_LIBRARY_SEARCH_SYSTEM32: the loader resolves the executable's imports (d2d1, winhttp) from System32
+# only, never from a DLL planted beside it.
 target_link_options(intarsia PRIVATE /DEPENDENTLOADFLAG:0x800)
 
 # A console program, since a shell waits only for one and the bar has to stay a GUI program.
@@ -151,8 +154,6 @@ if(BUILD_TESTING)
     URL_HASH SHA256=6e3191c1455468b3fc35a417fb565c1c5071aee1b7e7f85e30cf48a98d37d8b5
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
-  # Link the CRT the same way as the code under test (/MD), and keep GoogleTest out of any install.
-  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googletest)
 
