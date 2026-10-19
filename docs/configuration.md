@@ -60,9 +60,12 @@ no EDID, such as a virtual display, has no id. The bar's log names each monitor 
 
 ## window_manager
 
-- `windows`: no window manager. Window titles and focus come from Windows.
+- `windows`: no window manager, or one intarsia has no backend for. Window titles and focus come from Windows.
 - `glazewm`: connects to GlazeWM, and retries while it's down. Required for `workspaces`, `windows`, `binding_mode` and
   `tiling_direction`.
+
+With another window manager, use `windows`. Whether its windows stop at the bar depends on it: try `space = "reserve"`
+first, and if it tiles over the bar, use `share` and give it a gap the bar's thickness on that edge.
 
 ## Sections
 
