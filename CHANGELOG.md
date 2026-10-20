@@ -3,11 +3,12 @@
 What each release changed, newest first. `scripts/draft-changelog.ps1` starts a version's section from the commits
 since the last release.
 
-## 0.3.1 (2026-10-19)
+## 0.3.1 (2026-10-20)
 
 ### Fixes
 
 - The release runs without the Visual C++ Redistributable installed.
+- The bar no longer exits at startup when a console window has focus.
 
 ### Docs
 
