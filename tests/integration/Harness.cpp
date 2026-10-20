@@ -537,6 +537,11 @@ namespace integration {
         return VisibleWindow(OpenBar().Id(), L"IntarsiaMenu");
     }
 
+    // #32770 is the dialog class MessageBox creates.
+    HWND RunningBar::ErrorBox() const {
+        return VisibleWindow(OpenBar().Id(), L"#32770");
+    }
+
     std::optional<size_t> RunningBar::PixelCount(std::uint32_t rgb) const {
         HWND window = PrimaryBar();
         if (window == nullptr) {

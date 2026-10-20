@@ -5,14 +5,22 @@
 #include "platform/Text.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace {
 
     Native* activeInstance = nullptr;
+
+    bool IsConsoleWindow(HWND window) {
+        std::array<wchar_t, 32> name{};
+        const std::int32_t length = GetClassNameW(window, name.data(), static_cast<std::int32_t>(name.size()));
+        return std::wstring_view(name.data(), static_cast<size_t>(std::max(length, 0))) == L"ConsoleWindowClass";
+    }
 
 } // namespace
 
@@ -88,12 +96,16 @@ Native::UniqueHook Native::HookEvent(std::uint32_t event, std::uint32_t process,
 }
 
 // Hooks only the window's own thread: a wider hook wakes the bar for each name change of every other window and
-// control there.
+// control there. A console window is the exception: Windows reports its client's process and thread while conhost
+// raises its events, so a hook on those fails with ERROR_INVALID_THREAD_ID and only a hook on every thread sees it.
 Native::UniqueHook Native::HookTitleChanges(HWND window) {
     DWORD process = 0;
     const DWORD thread = GetWindowThreadProcessId(window, &process);
     if (thread == 0 || process == 0) {
         return UniqueHook(nullptr);
+    }
+    if (IsConsoleWindow(window)) {
+        return HookEvent(EVENT_OBJECT_NAMECHANGE, 0, 0);
     }
     return HookEvent(EVENT_OBJECT_NAMECHANGE, process, thread);
 }

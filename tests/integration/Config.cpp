@@ -256,6 +256,8 @@ TEST(Config, EndsWithExitCode1AfterAnInvalidSave) {
     integration::Log("bar_logged", std::format("event=fatal lines={}", fatal.size()));
     EXPECT_THAT(fatal.front(), HasSubstr("missing"));
     EXPECT_EQ(bar.PrimaryBar(), nullptr) << "a bar still showed after the fatal error";
+    // The fatal line is logged before the error box opens, and a close sent between the two reaches no window.
+    ASSERT_TRUE(integration::Eventually([&] { return bar.ErrorBox() != nullptr; }, integration::kLimit)) << "the bar showed no error box after the fatal error";
     EXPECT_EQ(bar.Close(), std::optional<std::uint32_t>(1));
 }
 

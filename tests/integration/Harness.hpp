@@ -111,6 +111,7 @@ namespace integration {
         std::int32_t OffsetPastLastModule() const;
         HWND Tooltip() const;
         HWND Menu() const;
+        HWND ErrorBox() const;
         // nullopt between the bars a reload replaces and their new ones.
         std::optional<size_t> PixelCount(std::uint32_t rgb) const;
         std::optional<double> MeanColumnOf(std::uint32_t rgb) const;

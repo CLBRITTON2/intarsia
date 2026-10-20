@@ -18,7 +18,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $pinnedLlvmMajor = 19
-$gbPerUnit       = 2
+$gbPerUnit       = 1.25
+$reserveGb       = 1
 $repoRoot        = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot 'vs-dev-shell.ps1')
@@ -83,10 +84,11 @@ try {
 }
 
 $buildDir = Join-Path $repoRoot 'build\lint'
-# The static analyzer takes up to about 2 GB per unit, so free memory, not the core count, bounds how many run at once.
-# Half of it stays with the rest of the desktop.
+# The static analyzer peaks at about 1.1 GB on the largest units, so free memory, not the core count, bounds how many
+# run at once. The reserve is fixed rather than a share of free memory: a CI runner has about 6 GB free and needs three
+# at once to finish within the lint job's hour.
 $freeGb   = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB
-$jobs     = [Math]::Max(1, [Math]::Min([Environment]::ProcessorCount, [Math]::Floor($freeGb / 2 / $gbPerUnit)))
+$jobs     = [Math]::Max(1, [Math]::Min([Environment]::ProcessorCount, [Math]::Floor(($freeGb - $reserveGb) / $gbPerUnit)))
 Write-Host "clang-tidy running $jobs at once ($([Math]::Round($freeGb, 1)) GB free)"
 $results  = $units | ForEach-Object -ThrottleLimit $jobs -Parallel {
     # DirectXMath (through C++/WinRT's numerics) includes clang's cpuid.h under clang, and VS's clang tools ship no
