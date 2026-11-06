@@ -2,6 +2,7 @@
 
 #include "modules/TextModule.hpp"
 #include "platform/Errors.hpp"
+#include "platform/Log.hpp"
 
 #include <windows.h>
 
@@ -13,7 +14,6 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -79,11 +79,14 @@ namespace {
 
 } // namespace
 
-std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
+std::optional<std::int32_t> CpuUsagePercent(const CpuTimes& before, const CpuTimes& after) {
+    if (after.idle < before.idle || after.kernel < before.kernel || after.user < before.user) {
+        return std::nullopt;
+    }
     const std::uint64_t idle = after.idle - before.idle;
     const std::uint64_t total = (after.kernel - before.kernel) + (after.user - before.user);
     if (idle > total) {
-        throw std::runtime_error(std::format("GetSystemTimes reported more idle time ({}) than kernel plus user time ({}) between samples", idle, total));
+        return std::nullopt;
     }
     if (total == 0) {
         return 0;
@@ -112,7 +115,18 @@ ModuleText Cpu::Format(const std::string& spec) {
 
 void Cpu::Sample() {
     const CpuTimes current = ReadCpuTimes();
-    _sample.usagePercent = CpuUsagePercent(_previous, current);
+    const std::optional<std::int32_t> usagePercent = CpuUsagePercent(_previous, current);
+    if (usagePercent.has_value()) {
+        _sample.usagePercent = *usagePercent;
+    } else {
+        Log(LogLevel::Warning, "cpu", "usage_sample_skipped",
+            {{.key = "idle_before", .value = std::to_string(_previous.idle)},
+             {.key = "idle_after", .value = std::to_string(current.idle)},
+             {.key = "kernel_before", .value = std::to_string(_previous.kernel)},
+             {.key = "kernel_after", .value = std::to_string(current.kernel)},
+             {.key = "user_before", .value = std::to_string(_previous.user)},
+             {.key = "user_after", .value = std::to_string(current.user)}});
+    }
     _previous = current;
     // A failed sample blanks the counters' values until one succeeds, rather than ending the bar over a tooltip. A
     // sample without a value keeps the last one.

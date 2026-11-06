@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -35,6 +36,42 @@ TEST(Cpu, UsageIsTheBusyShareOfKernelPlusUserTime) {
                       .user = 2,
                   }),
               67);
+}
+
+TEST(Cpu, UsageHasNoValueWhenATimeRunsBackwardsOrIdlePassesKernelPlusUser) {
+    const CpuTimes before{
+        .idle = 1000,
+        .kernel = 5000,
+        .user = 2000,
+    };
+    EXPECT_EQ(CpuUsagePercent(before,
+                              CpuTimes{
+                                  .idle = 900,
+                                  .kernel = 5300,
+                                  .user = 2100,
+                              }),
+              std::nullopt);
+    EXPECT_EQ(CpuUsagePercent(before,
+                              CpuTimes{
+                                  .idle = 1100,
+                                  .kernel = 4900,
+                                  .user = 2100,
+                              }),
+              std::nullopt);
+    EXPECT_EQ(CpuUsagePercent(before,
+                              CpuTimes{
+                                  .idle = 1100,
+                                  .kernel = 5300,
+                                  .user = 1900,
+                              }),
+              std::nullopt);
+    EXPECT_EQ(CpuUsagePercent(before,
+                              CpuTimes{
+                                  .idle = 1500,
+                                  .kernel = 5300,
+                                  .user = 2000,
+                              }),
+              std::nullopt);
 }
 
 TEST(Cpu, TheTooltipCanNameTheClockSpeedAndTheBusiestCore) {

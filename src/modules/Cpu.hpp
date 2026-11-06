@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,8 +19,9 @@ struct CpuTimes {
     std::uint64_t user;
 };
 
-// Busy share of the time between two samples, 0 to 100.
-std::int32_t CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
+// Busy share of the time between two samples, 0 to 100. None when a time ran backwards or idle passed kernel plus user,
+// which GetSystemTimes can report right after boot.
+std::optional<std::int32_t> CpuUsagePercent(const CpuTimes& before, const CpuTimes& after);
 
 // Each logical processor's usage in its number's order, four to a line, as "0:  12%  1:   3%  ...". Instances that
 // are not a processor's number (_Total) are left out.
